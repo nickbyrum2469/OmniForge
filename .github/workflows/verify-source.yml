@@ -1,0 +1,67 @@
+name: Verify OmniForge Source
+
+on:
+  push:
+    branches:
+      - main
+      - "milestone-**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect source
+        id: source
+        shell: pwsh
+        run: |
+          if (Test-Path package.json) {
+            "present=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "present=false" >> $env:GITHUB_OUTPUT
+            Write-Host "OmniForge source has not been imported yet; repository tooling only."
+          }
+
+      - name: Set up Node.js
+        if: steps.source.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        if: steps.source.outputs.present == 'true'
+        shell: pwsh
+        run: |
+          if (Test-Path package-lock.json) {
+            npm ci
+          } else {
+            npm install
+          }
+
+      - name: Verify source and tests
+        if: steps.source.outputs.present == 'true'
+        shell: pwsh
+        run: npm run verify --if-present
+
+      - name: Audit packaged workers
+        if: steps.source.outputs.present == 'true'
+        shell: pwsh
+        run: |
+          $registered = @()
+          if (Test-Path workers) {
+            $registered = Get-ChildItem workers -File -Recurse
+          }
+          Write-Host "Worker files found: $($registered.Count)"
+          if (Test-Path app/workers) {
+            Write-Host "app/workers files: $((Get-ChildItem app/workers -File -Recurse).Count)"
+          }
