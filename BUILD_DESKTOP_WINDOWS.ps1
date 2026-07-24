@@ -13,6 +13,12 @@ $RceditSha256 = '3E7801DB1A5EDBEC91B49A24A094AAD776CB4515488EA5A4CA2289C400EADE2
 $DistRoot = Join-Path $PSScriptRoot 'dist'
 $Output = Join-Path $DistRoot 'OmniForge-win32-x64'
 
+$SourceCommit = 'source-archive'
+try {
+  $CandidateCommit = (& git -C $PSScriptRoot rev-parse HEAD 2>$null | Select-Object -First 1).Trim()
+  if ($LASTEXITCODE -eq 0 -and $CandidateCommit) { $SourceCommit = $CandidateCommit }
+} catch {}
+
 New-Item -ItemType Directory -Force -Path $CacheDir, $DistRoot | Out-Null
 if (-not (Test-Path $Archive)) {
   Write-Host "Downloading the official Electron $ElectronVersion Windows runtime..."
@@ -53,7 +59,6 @@ foreach ($File in $Files) {
   main = 'desktop/main.cjs'
 } | ConvertTo-Json | Set-Content (Join-Path $AppDir 'package.json') -Encoding UTF8
 
-
 $IconSource = Join-Path $AppDir 'resources\omniforge-icon.ico'
 $Executable = Join-Path $Output 'OmniForge.exe'
 & $Rcedit $Executable `
@@ -69,7 +74,10 @@ $Executable = Join-Path $Output 'OmniForge.exe'
 if ($LASTEXITCODE -ne 0) { throw "Failed to stamp OmniForge executable resources." }
 
 $VersionFile = Join-Path $Output 'version'
-"OmniForge 0.11.0`nElectron $ElectronVersion`nBuilt $(Get-Date -Format o)" | Set-Content $VersionFile -Encoding UTF8
+$SourceCommitFile = Join-Path $Output 'source-commit'
+"OmniForge 0.11.0`nElectron $ElectronVersion`nSource commit $SourceCommit`nBuilt $(Get-Date -Format o)" | Set-Content $VersionFile -Encoding UTF8
+$SourceCommit | Set-Content $SourceCommitFile -Encoding ascii
 Write-Host ""
 Write-Host "Desktop build created:" -ForegroundColor Green
 Write-Host (Join-Path $Output 'OmniForge.exe') -ForegroundColor Cyan
+Write-Host "Source commit: $SourceCommit" -ForegroundColor DarkCyan
