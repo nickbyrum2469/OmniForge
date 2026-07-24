@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cloneCamera, shouldPreserveViewportCamera } from '../app/viewport-state.js';
 import { buildPathGuideSegments } from '../app/path-visuals.js';
 
-test('live viewport camera remains authoritative during navigation and pending persistence', () => {
+test('same-scene live viewport camera remains authoritative during navigation and pending persistence', () => {
   assert.equal(shouldPreserveViewportCamera({ sameAuthority: true, navigationActive: true }), true);
   assert.equal(shouldPreserveViewportCamera({ sameAuthority: true, cameraDirty: true }), true);
   assert.equal(shouldPreserveViewportCamera({ sameAuthority: true, requested: true }), true);
