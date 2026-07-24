@@ -1,0 +1,102 @@
+OmniForge Windows verification exit code: 1
+Generated: 2026-07-24T05:20:25.0675937+00:00
+
+--- STDOUT ---
+
+> omniforge-3d-engine@0.10.0 verify
+> node scripts/verify.mjs
+
+Syntax: server: passed
+Syntax: provider framework: passed
+Syntax: job manager: passed
+Syntax: marketplace: passed
+Syntax: local worker: passed
+Syntax: MCP bridge: passed
+Syntax: editor: passed
+Syntax: renderer: passed
+Syntax: desktop shell: passed
+✔ default project is general-purpose and contains a real 3D starter scene (3.9086ms)
+✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (0.427ms)
+✔ all supported scene primitives receive valid transforms and properties (0.9032ms)
+✔ terrain height is deterministic and responds to world position (0.265ms)
+✔ path defaults preserve terrain-conforming system relationships (0.1776ms)
+✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.2622ms)
+✔ starter PBR materials include real texture-map files and are protected (0.5544ms)
+✔ horizontal mouse look uses the intuitive right-positive yaw convention (0.5941ms)
+✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (0.4917ms)
+✔ Windows desktop builder pins and stamps the native executable metadata (0.4238ms)
+✔ project hub and editor usability controls are wired into the authoritative editor (1.6256ms)
+✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (256.1181ms)
+✔ two runtime sessions cannot write the same active project simultaneously (301.7927ms)
+✔ starter objects are grounded against the authoritative terrain surface (0.6694ms)
+✔ browser automation bridge exposes read-only snapshots and controlled editor actions (0.8252ms)
+✔ managed workspace path cannot escape the projects root (0.5588ms)
+✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (121.637ms)
+✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (180.392ms)
+✔ material authoring settings clamp safely and preserve tiling transforms (0.2017ms)
+✔ material tuner exposes live tiling and PBR response controls (0.9766ms)
+✔ active source and documentation contain no legacy product assumptions (5.9884ms)
+✔ desktop clipboard and pointer-lock permissions use guarded native paths (0.5102ms)
+✔ surface recipes are stable linked assets with validation and deterministic masks (0.7651ms)
+✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.5191ms)
+✔ desktop launcher rejects stale packaged executables (0.1201ms)
+✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (223.5313ms)
+✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.1217ms)
+✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (6.8497ms)
+✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (328.2009ms)
+✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (4.9384ms)
+✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (7.1584ms)
+✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (0.7582ms)
+✔ provider framework normalizes independent providers, settings, and persistent job records (0.6897ms)
+✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (0.9635ms)
+✖ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (5398.7744ms)
+✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (1.8799ms)
+✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (463.3273ms)
+✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.6827ms)
+✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (0.9285ms)
+✔ v0.9 decal and atlas recipes validate stable production metadata (0.4902ms)
+✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.4517ms)
+✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (311.2778ms)
+✔ v0.10 seeded random and foliage placement are deterministic (10.3498ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (0.9233ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.3266ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.2385ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (31.6588ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (22.5904ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.4886ms)
+✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (437.5253ms)
+ℹ tests 50
+ℹ suites 0
+ℹ pass 49
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7877.1179
+
+✖ failing tests:
+
+test at tests\engine.test.mjs:517:1
+✖ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (5398.7744ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'failed'
+  - 'succeeded'
+  
+      at TestContext.<anonymous> (file:///D:/a/OmniForge/OmniForge/tests/engine.test.mjs:528:163)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'failed',
+    expected: 'succeeded',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+
+--- STDERR ---
+Automated tests failed.
+
