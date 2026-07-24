@@ -6,52 +6,52 @@ TAP version 13
 # Subtest: default project is general-purpose and contains a real 3D starter scene
 ok 1 - default project is general-purpose and contains a real 3D starter scene
   ---
-  duration_ms: 3.57308
+  duration_ms: 3.643358
   ...
 # Subtest: editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences
 ok 2 - editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences
   ---
-  duration_ms: 0.602448
+  duration_ms: 0.661448
   ...
 # Subtest: all supported scene primitives receive valid transforms and properties
 ok 3 - all supported scene primitives receive valid transforms and properties
   ---
-  duration_ms: 1.289472
+  duration_ms: 1.935733
   ...
 # Subtest: terrain height is deterministic and responds to world position
 ok 4 - terrain height is deterministic and responds to world position
   ---
-  duration_ms: 0.363815
+  duration_ms: 0.361535
   ...
 # Subtest: path defaults preserve terrain-conforming system relationships
 ok 5 - path defaults preserve terrain-conforming system relationships
   ---
-  duration_ms: 0.197406
+  duration_ms: 0.238062
   ...
 # Subtest: terrain path mask produces a soft shoulder instead of a hard ribbon
 ok 6 - terrain path mask produces a soft shoulder instead of a hard ribbon
   ---
-  duration_ms: 0.441609
+  duration_ms: 0.422575
   ...
 # Subtest: starter PBR materials include real texture-map files and are protected
 ok 7 - starter PBR materials include real texture-map files and are protected
   ---
-  duration_ms: 0.821835
+  duration_ms: 0.775147
   ...
 # Subtest: horizontal mouse look uses the intuitive right-positive yaw convention
 ok 8 - horizontal mouse look uses the intuitive right-positive yaw convention
   ---
-  duration_ms: 1.12616
+  duration_ms: 1.118985
   ...
 # Subtest: desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership
 ok 9 - desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership
   ---
-  duration_ms: 0.584093
+  duration_ms: 0.582702
   ...
 # Subtest: Windows desktop builder pins and stamps the native executable metadata
 not ok 10 - Windows desktop builder pins and stamps the native executable metadata
   ---
-  duration_ms: 2.135793
+  duration_ms: 2.136009
   location: '/home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:191:1'
   failureType: 'testCodeFailure'
   error: |-
@@ -226,127 +226,127 @@ not ok 10 - Windows desktop builder pins and stamps the native executable metada
 # Subtest: project hub and editor usability controls are wired into the authoritative editor
 ok 11 - project hub and editor usability controls are wired into the authoritative editor
   ---
-  duration_ms: 2.354218
+  duration_ms: 2.565805
   ...
 # Subtest: project store supports create, open, duplicate, archive, import, migration, and moved-project recovery
 ok 12 - project store supports create, open, duplicate, archive, import, migration, and moved-project recovery
   ---
-  duration_ms: 132.777351
+  duration_ms: 136.511578
   ...
 # Subtest: two runtime sessions cannot write the same active project simultaneously
 ok 13 - two runtime sessions cannot write the same active project simultaneously
   ---
-  duration_ms: 196.539078
+  duration_ms: 191.957046
   ...
 # Subtest: starter objects are grounded against the authoritative terrain surface
 ok 14 - starter objects are grounded against the authoritative terrain surface
   ---
-  duration_ms: 1.150375
+  duration_ms: 0.85201
   ...
 # Subtest: browser automation bridge exposes read-only snapshots and controlled editor actions
 ok 15 - browser automation bridge exposes read-only snapshots and controlled editor actions
   ---
-  duration_ms: 1.839854
+  duration_ms: 1.448062
   ...
 # Subtest: managed workspace path cannot escape the projects root
 ok 16 - managed workspace path cannot escape the projects root
   ---
-  duration_ms: 0.61461
+  duration_ms: 0.481042
   ...
 # Subtest: Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools
 ok 17 - Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools
   ---
-  duration_ms: 90.730274
+  duration_ms: 90.416881
   ...
 # Subtest: Codex can import and rebuild a hierarchy-aware model through guarded MCP tools
 ok 18 - Codex can import and rebuild a hierarchy-aware model through guarded MCP tools
   ---
-  duration_ms: 119.758737
+  duration_ms: 114.910449
   ...
 # Subtest: material authoring settings clamp safely and preserve tiling transforms
 ok 19 - material authoring settings clamp safely and preserve tiling transforms
   ---
-  duration_ms: 0.495289
+  duration_ms: 0.307124
   ...
 # Subtest: material tuner exposes live tiling and PBR response controls
 ok 20 - material tuner exposes live tiling and PBR response controls
   ---
-  duration_ms: 2.175266
+  duration_ms: 1.475422
   ...
 # Subtest: active source and documentation contain no legacy product assumptions
 ok 21 - active source and documentation contain no legacy product assumptions
   ---
-  duration_ms: 10.272431
+  duration_ms: 7.446554
   ...
 # Subtest: desktop clipboard and pointer-lock permissions use guarded native paths
 ok 22 - desktop clipboard and pointer-lock permissions use guarded native paths
   ---
-  duration_ms: 1.263304
+  duration_ms: 0.823458
   ...
 # Subtest: surface recipes are stable linked assets with validation and deterministic masks
 ok 23 - surface recipes are stable linked assets with validation and deterministic masks
   ---
-  duration_ms: 1.397584
+  duration_ms: 0.951747
   ...
 # Subtest: Surface Studio preview, commit, revert, and recipe rendering are wired
 ok 24 - Surface Studio preview, commit, revert, and recipe rendering are wired
   ---
-  duration_ms: 1.139274
+  duration_ms: 0.872921
   ...
 # Subtest: desktop launcher rejects stale packaged executables
 ok 25 - desktop launcher rejects stale packaged executables
   ---
-  duration_ms: 0.187969
+  duration_ms: 0.144234
   ...
 # Subtest: canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives
 ok 26 - canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives
   ---
-  duration_ms: 7.410591
+  duration_ms: 5.617729
   ...
 # Subtest: asset workspace exposes real import, health, reversible processing, preview, and commit flows
 ok 27 - asset workspace exposes real import, health, reversible processing, preview, and commit flows
   ---
-  duration_ms: 1.246463
+  duration_ms: 1.752762
   ...
 # Subtest: asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages
 ok 28 - asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages
   ---
-  duration_ms: 2.503054
+  duration_ms: 2.184942
   ...
 # Subtest: real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server
 ok 29 - real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server
   ---
-  duration_ms: 191.45861
+  duration_ms: 196.069333
   ...
 # Subtest: canonical importer applies nested glTF node transforms and preserves primitive material groups
 ok 30 - canonical importer applies nested glTF node transforms and preserves primitive material groups
   ---
-  duration_ms: 2.66217
+  duration_ms: 2.563531
   ...
 # Subtest: canonical rebuild repairs legacy imports from preserved source and retains rollback history
 ok 31 - canonical rebuild repairs legacy imports from preserved source and retains rollback history
   ---
-  duration_ms: 3.855224
+  duration_ms: 3.86762
   ...
 # Subtest: asset workspace reflows into focused subviews and protects the viewport from panel overlap
 ok 32 - asset workspace reflows into focused subviews and protects the viewport from panel overlap
   ---
-  duration_ms: 1.259086
+  duration_ms: 1.329636
   ...
 # Subtest: provider framework normalizes independent providers, settings, and persistent job records
 ok 33 - provider framework normalizes independent providers, settings, and persistent job records
   ---
-  duration_ms: 1.186632
+  duration_ms: 1.201717
   ...
 # Subtest: Integrations workspace and Job Center are connected to guarded provider and worker routes
 ok 34 - Integrations workspace and Job Center are connected to guarded provider and worker routes
   ---
-  duration_ms: 1.513448
+  duration_ms: 1.553378
   ...
 # Subtest: real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers
 not ok 35 - real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers
   ---
-  duration_ms: 98.641833
+  duration_ms: 99.782719
   location: '/home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:517:1'
   failureType: 'testCodeFailure'
   error: |-
@@ -370,12 +370,12 @@ not ok 35 - real provider health, project validation, cancellation, retry, and r
 # Subtest: v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor
 ok 36 - v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor
   ---
-  duration_ms: 1.985535
+  duration_ms: 3.472677
   ...
 # Subtest: mocked Poly Haven search completes a real staged download job and imports a canonical model
 not ok 37 - mocked Poly Haven search completes a real staged download job and imports a canonical model
   ---
-  duration_ms: 95.734229
+  duration_ms: 98.362359
   location: '/home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:546:1'
   failureType: 'testCodeFailure'
   error: |-
@@ -399,27 +399,27 @@ not ok 37 - mocked Poly Haven search completes a real staged download job and im
 # Subtest: ambientCG provider migrates existing v2 settings to the supported v3 asset API
 ok 38 - ambientCG provider migrates existing v2 settings to the supported v3 asset API
   ---
-  duration_ms: 0.801047
+  duration_ms: 0.93348
   ...
 # Subtest: v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation
 ok 39 - v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation
   ---
-  duration_ms: 1.055608
+  duration_ms: 1.13594
   ...
 # Subtest: v0.9 decal and atlas recipes validate stable production metadata
 ok 40 - v0.9 decal and atlas recipes validate stable production metadata
   ---
-  duration_ms: 0.607437
+  duration_ms: 0.678944
   ...
 # Subtest: v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools
 ok 41 - v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools
   ---
-  duration_ms: 1.727966
+  duration_ms: 2.637842
   ...
 # Subtest: v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts
 not ok 42 - v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts
   ---
-  duration_ms: 95.07721
+  duration_ms: 99.004203
   location: '/home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:597:1'
   failureType: 'testCodeFailure'
   error: |-
@@ -443,22 +443,22 @@ not ok 42 - v0.9 real API creates processed material derivatives, compiles recip
 # Subtest: v0.10 seeded random and foliage placement are deterministic
 ok 43 - v0.10 seeded random and foliage placement are deterministic
   ---
-  duration_ms: 4.626835
+  duration_ms: 4.702616
   ...
 # Subtest: v0.10 world system drives the authoritative scene sun and renderer settings
 ok 44 - v0.10 world system drives the authoritative scene sun and renderer settings
   ---
-  duration_ms: 1.556258
+  duration_ms: 1.641138
   ...
 # Subtest: v0.10 support-plane grounding conforms a box to terrain at four corners
 ok 45 - v0.10 support-plane grounding conforms a box to terrain at four corners
   ---
-  duration_ms: 0.592699
+  duration_ms: 0.56096
   ...
 # Subtest: v0.10 foliage uses root-socket grounding and vehicles remain upright
 ok 46 - v0.10 foliage uses root-socket grounding and vehicles remain upright
   ---
-  duration_ms: 0.354748
+  duration_ms: 0.382957
   ...
 1..46
 # tests 46
@@ -468,4 +468,4 @@ ok 46 - v0.10 foliage uses root-socket grounding and vehicles remain upright
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 1148.00436
+# duration_ms 1154.439591
