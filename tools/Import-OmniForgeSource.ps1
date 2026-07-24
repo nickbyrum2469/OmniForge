@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [string]$ArchivePath,
+    [Alias("ArchivePath")]
+    [string]$SourcePath,
 
     [string]$Repository = "nickbyrum2469/OmniForge",
 
@@ -56,34 +57,100 @@ function Ensure-Command {
     }
 }
 
-function Select-Archive {
+function Select-Source {
     Add-Type -AssemblyName System.Windows.Forms
     $dialog = New-Object System.Windows.Forms.OpenFileDialog
     $dialog.Title = "Select the OmniForge source ZIP"
     $dialog.Filter = "ZIP archives (*.zip)|*.zip"
     $dialog.Multiselect = $false
     if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
-        throw "No archive was selected."
+        throw "No source was selected. Pass -SourcePath with an extracted folder to bypass ZIP extraction."
     }
     return $dialog.FileName
 }
 
 function Find-SourceRoot {
-    param([Parameter(Mandatory)] [string]$ExpandedRoot)
+    param([Parameter(Mandatory)] [string]$SearchRoot)
 
-    $candidates = Get-ChildItem -LiteralPath $ExpandedRoot -Filter package.json -File -Recurse -ErrorAction SilentlyContinue |
+    $searchRootFull = [IO.Path]::GetFullPath($SearchRoot)
+    if ((Test-Path (Join-Path $searchRootFull "package.json") -PathType Leaf) -and
+        (Test-Path (Join-Path $searchRootFull "app") -PathType Container) -and
+        (Test-Path (Join-Path $searchRootFull "desktop") -PathType Container)) {
+        return $searchRootFull
+    }
+
+    $candidates = Get-ChildItem -LiteralPath $searchRootFull -Filter package.json -File -Recurse -ErrorAction SilentlyContinue |
         Where-Object {
             $parent = $_.Directory.FullName
-            (Test-Path (Join-Path $parent "app")) -and
-            (Test-Path (Join-Path $parent "desktop"))
+            (Test-Path (Join-Path $parent "app") -PathType Container) -and
+            (Test-Path (Join-Path $parent "desktop") -PathType Container)
         } |
         Sort-Object { $_.Directory.FullName.Length }
 
     if (-not $candidates) {
-        throw "Could not find an OmniForge source root containing package.json, app/, and desktop/."
+        throw "Could not find an OmniForge source root containing package.json, app/, and desktop/ under: $searchRootFull"
     }
 
     return $candidates[0].Directory.FullName
+}
+
+function Expand-ZipSafely {
+    param(
+        [Parameter(Mandatory)] [string]$ZipPath,
+        [Parameter(Mandatory)] [string]$DestinationPath
+    )
+
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    $destinationFull = [IO.Path]::GetFullPath($DestinationPath)
+    New-Item -ItemType Directory -Force -Path $destinationFull | Out-Null
+    $destinationPrefix = $destinationFull.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+
+    $archive = [IO.Compression.ZipFile]::OpenRead($ZipPath)
+    try {
+        foreach ($entry in $archive.Entries) {
+            $entryName = ($entry.FullName -replace '\\', '/').TrimStart('/')
+            if ([string]::IsNullOrWhiteSpace($entryName)) {
+                continue
+            }
+
+            $targetPath = [IO.Path]::GetFullPath((Join-Path $destinationFull $entryName))
+            if (-not $targetPath.StartsWith($destinationPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Unsafe ZIP entry attempted to escape the extraction directory: $($entry.FullName)"
+            }
+
+            $isDirectory = $entryName.EndsWith('/') -or [string]::IsNullOrEmpty($entry.Name)
+            if ($isDirectory) {
+                New-Item -ItemType Directory -Force -Path $targetPath | Out-Null
+                continue
+            }
+
+            $parent = Split-Path -Parent $targetPath
+            if ($parent) {
+                New-Item -ItemType Directory -Force -Path $parent | Out-Null
+            }
+
+            # FileMode.Create makes duplicate ZIP entries deterministic: the final
+            # occurrence replaces the earlier one instead of failing extraction.
+            $inputStream = $entry.Open()
+            try {
+                $outputStream = [IO.File]::Open($targetPath, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+                try {
+                    $inputStream.CopyTo($outputStream)
+                }
+                finally {
+                    $outputStream.Dispose()
+                }
+            }
+            finally {
+                $inputStream.Dispose()
+            }
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
 }
 
 function Invoke-Checked {
@@ -92,9 +159,6 @@ function Invoke-Checked {
         [Parameter(ValueFromRemainingArguments = $true)] [string[]]$Arguments
     )
 
-    # Windows PowerShell 5.1 can turn native stderr into PowerShell ErrorRecord
-    # objects. Run native tools with non-terminating stderr handling, then trust
-    # their real process exit code.
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
@@ -120,9 +184,6 @@ function Test-GitHubAuthentication {
     $stderrPath = [IO.Path]::GetTempFileName()
 
     try {
-        # `gh api user` proves that an authenticated API call actually works.
-        # Start-Process keeps PowerShell 5.1 from converting native stderr into a
-        # terminating RemoteException.
         $process = Start-Process `
             -FilePath $ghCommand.Source `
             -ArgumentList @("api", "user", "--jq", ".login") `
@@ -152,17 +213,19 @@ function Test-GitHubAuthentication {
     }
 }
 
-if (-not $ArchivePath) {
-    $ArchivePath = Select-Archive
+if (-not $SourcePath) {
+    $SourcePath = Select-Source
 }
 
-$ArchivePath = [IO.Path]::GetFullPath($ArchivePath)
-if (-not (Test-Path -LiteralPath $ArchivePath -PathType Leaf)) {
-    throw "Archive not found: $ArchivePath"
+$SourcePath = [IO.Path]::GetFullPath($SourcePath)
+if (-not (Test-Path -LiteralPath $SourcePath)) {
+    throw "Source path not found: $SourcePath"
 }
 
-if ([IO.Path]::GetExtension($ArchivePath) -ne ".zip") {
-    throw "The selected file must be a ZIP archive."
+$sourceIsDirectory = Test-Path -LiteralPath $SourcePath -PathType Container
+$sourceIsZip = (Test-Path -LiteralPath $SourcePath -PathType Leaf) -and ([IO.Path]::GetExtension($SourcePath).Equals(".zip", [StringComparison]::OrdinalIgnoreCase))
+if (-not $sourceIsDirectory -and -not $sourceIsZip) {
+    throw "SourcePath must point to an extracted OmniForge directory or a ZIP archive."
 }
 
 Ensure-Command -Name git -WingetId Git.Git
@@ -175,9 +238,7 @@ if (-not (Test-GitHubAuthentication)) {
     Start-Sleep -Seconds 2
 
     if (-not (Test-GitHubAuthentication)) {
-        # `gh auth login` already returned success. Continue to the clone/push
-        # operations, which provide the final authoritative authentication test.
-        Write-Warning "GitHub login completed, but the API verification was inconclusive. Continuing; clone or push will report any real authentication problem."
+        Write-Warning "GitHub login completed, but API verification was inconclusive. Continuing; clone or push will report any real authentication problem."
     }
 }
 
@@ -185,15 +246,32 @@ $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $workRoot = Join-Path $env:TEMP "omniforge-source-import-$stamp"
 $expandedRoot = Join-Path $workRoot "expanded"
 $repoRoot = Join-Path $workRoot "repo"
-New-Item -ItemType Directory -Force -Path $expandedRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
 
 try {
-    Write-Step "Extracting source archive"
-    Expand-Archive -LiteralPath $ArchivePath -DestinationPath $expandedRoot -Force
-    $sourceRoot = Find-SourceRoot -ExpandedRoot $expandedRoot
+    if ($sourceIsDirectory) {
+        Write-Step "Using extracted OmniForge source directory"
+        $sourceRoot = Find-SourceRoot -SearchRoot $SourcePath
+        $sourceKind = "directory"
+        $sourceDisplayName = Split-Path -Leaf $sourceRoot
+        $fingerprintFile = Join-Path $sourceRoot "package.json"
+        $sourceFingerprint = (Get-FileHash -LiteralPath $fingerprintFile -Algorithm SHA256).Hash.ToLowerInvariant()
+        $fingerprintBasis = "package.json"
+    }
+    else {
+        Write-Step "Extracting source archive with duplicate-entry-safe extractor"
+        Expand-ZipSafely -ZipPath $SourcePath -DestinationPath $expandedRoot
+        $sourceRoot = Find-SourceRoot -SearchRoot $expandedRoot
+        $sourceKind = "zip"
+        $sourceDisplayName = [IO.Path]::GetFileName($SourcePath)
+        $sourceFingerprint = (Get-FileHash -LiteralPath $SourcePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $fingerprintBasis = "archive"
+    }
+
     Write-Host "Source root: $sourceRoot" -ForegroundColor Green
 
-    $packageJson = Get-Content -LiteralPath (Join-Path $sourceRoot "package.json") -Raw | ConvertFrom-Json
+    $packageJsonPath = Join-Path $sourceRoot "package.json"
+    $packageJson = Get-Content -LiteralPath $packageJsonPath -Raw | ConvertFrom-Json
     if (-not $packageJson.name) {
         throw "package.json is invalid or missing a package name."
     }
@@ -207,7 +285,7 @@ try {
     )
     $excludedFiles = @("*.zip", "*.7z", "*.rar", "*.exe", "*.dll", "*.pdb", "*.log")
 
-    Write-Step "Copying source while excluding generated runtime and build files"
+    Write-Step "Copying authoritative source while excluding generated build/runtime files"
     $robocopyArgs = @(
         $sourceRoot,
         $repoRoot,
@@ -236,12 +314,13 @@ try {
         throw "Files at or above 95 MB cannot be pushed normally. Remove generated files or configure Git LFS:`n$details"
     }
 
-    $archiveHash = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
     $manifest = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         importedAt = (Get-Date).ToUniversalTime().ToString("o")
-        sourceArchive = [IO.Path]::GetFileName($ArchivePath)
-        sourceArchiveSha256 = $archiveHash
+        sourceKind = $sourceKind
+        sourceName = $sourceDisplayName
+        sourceFingerprintSha256 = $sourceFingerprint
+        fingerprintBasis = $fingerprintBasis
         packageName = [string]$packageJson.name
         packageVersion = [string]$packageJson.version
         repository = $Repository
@@ -255,8 +334,16 @@ try {
         Invoke-Checked git config user.email "omniforge-source-import@users.noreply.github.com"
         Invoke-Checked git add -A
 
-        $status = (& git status --porcelain) -join "`n"
-        if (-not $status.Trim()) {
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            $status = (& git status --porcelain 2>$null) -join "`n"
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+
+        if ([string]::IsNullOrWhiteSpace($status)) {
             Write-Host "The repository already contains this source. No commit was needed." -ForegroundColor Green
         }
         else {
@@ -271,7 +358,7 @@ try {
     }
 
     Write-Host "`nOmniForge source is now in https://github.com/$Repository" -ForegroundColor Green
-    Write-Host "Archive SHA-256: $archiveHash" -ForegroundColor DarkGray
+    Write-Host "Source fingerprint: $sourceFingerprint" -ForegroundColor DarkGray
     Start-Process "https://github.com/$Repository"
 }
 finally {
