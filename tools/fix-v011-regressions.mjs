@@ -45,10 +45,10 @@ for(const name of fs.readdirSync('tests')){
   write(file,source);
 }
 
-for(const launcher of ['RUN_OMNIFORGE.bat','RUN_OMNIFORGE_DESKTOP.bat']){
+for(const launcher of ['START_DESKTOP.bat','RUN_OMNIFORGE.bat','RUN_OMNIFORGE_DESKTOP.bat']){
   if(!fs.existsSync(path.resolve(launcher)))continue;
   let source=read(launcher).replaceAll('EXPECTED_VERSION=OmniForge 0.9.0','EXPECTED_VERSION=OmniForge 0.11.0').replaceAll('EXPECTED_VERSION=OmniForge 0.10.0','EXPECTED_VERSION=OmniForge 0.11.0');
   write(launcher,source);
 }
 
-console.log('Repaired path-aware starter grounding, profile diagnostics, v0.11 migration expectations, and desktop launcher identity.');
+console.log('Repaired path-aware starter grounding, profile diagnostics, v0.11 migration expectations, and all desktop launcher identities.');
