@@ -1,0 +1,83 @@
+--- a/desktop/main.cjs
++++ b/desktop/main.cjs
+@@ -186,8 +186,14 @@
+   session.defaultSession.setPermissionRequestHandler((webContents,permission,callback,details)=>{
+     const origin=details?.requestingUrl || webContents?.getURL?.() || '';
+     callback(permission==='pointerLock' && isTrustedEditorOrigin(origin));
+   });
++  mainWindow.webContents.on('console-message',(_event,level,message,line,sourceId)=>{
++    if(Number(level)>=2)appendLog(`Renderer console level=${level} ${sourceId||'unknown'}:${line||0} ${message}`);
++  });
++  mainWindow.webContents.on('render-process-gone',(_event,details)=>appendLog(`Renderer process gone reason=${details.reason} exitCode=${details.exitCode}`));
++  mainWindow.on('unresponsive',()=>appendLog('Main window renderer became unresponsive.'));
++  mainWindow.on('responsive',()=>appendLog('Main window renderer recovered responsiveness.'));
+   mainWindow.once('ready-to-show',()=>mainWindow.show());
+   mainWindow.on('close',()=>{if(!mainWindow.isDestroyed()){const bounds=mainWindow.getBounds();writeJson(windowStateFile,{...bounds,maximized:mainWindow.isMaximized()});}});
+   mainWindow.on('closed',()=>{mainWindow=null;});
+   await mainWindow.loadURL(`${allowedOrigin}/?desktop=1&safeMode=${safeMode?'1':'0'}&recovered=${recoveryReason?'1':'0'}`);
+--- a/tests/v010.test.mjs
++++ b/tests/v010.test.mjs
+@@ -318,12 +318,35 @@
+   try {
+     const health = await waitForHealth(port);
+     assert.equal(health.version, '0.11.0');
+ 
++    const stateBeforeReadOnlyQueries = await requestJson(port, '/api/state');
+     const initial = await requestJson(port, '/api/v010/world');
+     assert.equal(initial.status, 200);
+     assert.equal(initial.body.world.schemaVersion, 1);
+     assert.ok(initial.body.scene.settings.environmentV010);
++    const worldgen = await requestJson(port, '/api/v011/worldgen');
++    assert.equal(worldgen.status, 200);
++    assert.ok(worldgen.body.foundation);
++    assert.equal(Object.prototype.hasOwnProperty.call(worldgen.body, 'state'), false);
++    const stateAfterReadOnlyQueries = await requestJson(port, '/api/state');
++    assert.equal(stateAfterReadOnlyQueries.body.engine.revision, stateBeforeReadOnlyQueries.body.engine.revision);
++
++    const compactStep = await requestJson(port, '/api/v010/world/step', {
++      method: 'POST',
++      body: JSON.stringify({ seconds: 2 })
++    });
++    assert.equal(compactStep.status, 200);
++    assert.ok(compactStep.body.runtime.sceneId);
++    assert.ok(compactStep.body.runtime.settings);
++    assert.equal(Object.prototype.hasOwnProperty.call(compactStep.body, 'state'), false);
++
++    const compatibleFullStep = await requestJson(port, '/api/v010/world/step?full=1', {
++      method: 'POST',
++      body: JSON.stringify({ seconds: 2 })
++    });
++    assert.equal(compatibleFullStep.status, 200);
++    assert.ok(compatibleFullStep.body.state?.engine);
+ 
+     const updated = await requestJson(port, '/api/v010/world', {
+       method: 'PATCH',
+       body: JSON.stringify({
+--- a/BUILD_DESKTOP_WINDOWS.ps1
++++ b/BUILD_DESKTOP_WINDOWS.ps1
+@@ -13,12 +13,21 @@
+ $DistRoot = Join-Path $PSScriptRoot 'dist'
+ $Output = Join-Path $DistRoot 'OmniForge-win32-x64'
+ 
+ $SourceCommit = 'source-archive'
+-try {
+-  $CandidateCommit = (& git -C $PSScriptRoot rev-parse HEAD 2>$null | Select-Object -First 1).Trim()
+-  if ($LASTEXITCODE -eq 0 -and $CandidateCommit) { $SourceCommit = $CandidateCommit }
+-} catch {}
++$GitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
++if (-not $GitCommand) { $GitCommand = Get-Command git -ErrorAction SilentlyContinue }
++if ($GitCommand) {
++  try {
++    $CandidateCommit = & $GitCommand.Source -C $PSScriptRoot rev-parse HEAD 2>$null
++    if ($LASTEXITCODE -eq 0 -and $CandidateCommit) {
++      $SourceCommit = ([string]($CandidateCommit | Select-Object -First 1)).Trim()
++    }
++  } catch {}
++}
++if ((Test-Path (Join-Path $PSScriptRoot '.git')) -and $SourceCommit -eq 'source-archive') {
++  throw 'The source is a Git checkout, but its current commit could not be determined. Refusing to create an untraceable desktop build.'
++}
+ 
+ New-Item -ItemType Directory -Force -Path $CacheDir, $DistRoot | Out-Null
+ if (-not (Test-Path $Archive)) {
+   Write-Host "Downloading the official Electron $ElectronVersion Windows runtime..."

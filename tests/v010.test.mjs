@@ -319,10 +319,33 @@ test('v0.10 bootstrap serves world systems and upgrades the existing Ground comm
     const health = await waitForHealth(port);
     assert.equal(health.version, '0.11.0');
 
+    const stateBeforeReadOnlyQueries = await requestJson(port, '/api/state');
     const initial = await requestJson(port, '/api/v010/world');
     assert.equal(initial.status, 200);
     assert.equal(initial.body.world.schemaVersion, 1);
     assert.ok(initial.body.scene.settings.environmentV010);
+    const worldgen = await requestJson(port, '/api/v011/worldgen');
+    assert.equal(worldgen.status, 200);
+    assert.ok(worldgen.body.foundation);
+    assert.equal(Object.prototype.hasOwnProperty.call(worldgen.body, 'state'), false);
+    const stateAfterReadOnlyQueries = await requestJson(port, '/api/state');
+    assert.equal(stateAfterReadOnlyQueries.body.engine.revision, stateBeforeReadOnlyQueries.body.engine.revision);
+
+    const compactStep = await requestJson(port, '/api/v010/world/step', {
+      method: 'POST',
+      body: JSON.stringify({ seconds: 2 })
+    });
+    assert.equal(compactStep.status, 200);
+    assert.ok(compactStep.body.runtime.sceneId);
+    assert.ok(compactStep.body.runtime.settings);
+    assert.equal(Object.prototype.hasOwnProperty.call(compactStep.body, 'state'), false);
+
+    const compatibleFullStep = await requestJson(port, '/api/v010/world/step?full=1', {
+      method: 'POST',
+      body: JSON.stringify({ seconds: 2 })
+    });
+    assert.equal(compatibleFullStep.status, 200);
+    assert.ok(compatibleFullStep.body.state?.engine);
 
     const updated = await requestJson(port, '/api/v010/world', {
       method: 'PATCH',

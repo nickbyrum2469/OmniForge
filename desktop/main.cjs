@@ -187,6 +187,12 @@ async function createMainWindow() {
     const origin=details?.requestingUrl || webContents?.getURL?.() || '';
     callback(permission==='pointerLock' && isTrustedEditorOrigin(origin));
   });
+  mainWindow.webContents.on('console-message',(_event,level,message,line,sourceId)=>{
+    if(Number(level)>=2)appendLog(`Renderer console level=${level} ${sourceId||'unknown'}:${line||0} ${message}`);
+  });
+  mainWindow.webContents.on('render-process-gone',(_event,details)=>appendLog(`Renderer process gone reason=${details.reason} exitCode=${details.exitCode}`));
+  mainWindow.on('unresponsive',()=>appendLog('Main window renderer became unresponsive.'));
+  mainWindow.on('responsive',()=>appendLog('Main window renderer recovered responsiveness.'));
   mainWindow.once('ready-to-show',()=>mainWindow.show());
   mainWindow.on('close',()=>{if(!mainWindow.isDestroyed()){const bounds=mainWindow.getBounds();writeJson(windowStateFile,{...bounds,maximized:mainWindow.isMaximized()});}});
   mainWindow.on('closed',()=>{mainWindow=null;});
