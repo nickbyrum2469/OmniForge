@@ -14,7 +14,8 @@ const ICON = path.join(APP_ROOT, 'resources', process.platform === 'win32' ? 'om
 
 app.setName(PRODUCT_NAME);
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
-const uniqueUserData = path.join(app.getPath('appData'), 'OmniForge');
+const configuredDataRoot = String(process.env.OMNIFORGE_DATA_ROOT || '').trim();
+const uniqueUserData = configuredDataRoot ? path.resolve(configuredDataRoot) : path.join(app.getPath('appData'), 'OmniForge');
 app.setPath('userData', uniqueUserData);
 app.setPath('crashDumps', path.join(uniqueUserData, 'crashes'));
 app.setAboutPanelOptions({ applicationName: PRODUCT_NAME, applicationVersion: PRODUCT_VERSION, copyright: 'Copyright © 2026 OmniForge', credits: 'AI-native 3D game creation workspace', iconPath: path.join(APP_ROOT, 'resources', 'omniforge-icon.png') });
@@ -43,6 +44,11 @@ function findFreePort() {
     const server = net.createServer(); server.unref(); server.on('error', reject);
     server.listen(0, '127.0.0.1', () => { const address=server.address(); const port=typeof address==='object'&&address?address.port:0; server.close(()=>resolve(port)); });
   });
+}
+
+function configuredRuntimePort() {
+  const requested = Number.parseInt(String(process.env.OMNIFORGE_PORT || ''), 10);
+  return Number.isInteger(requested) && requested > 0 && requested <= 65535 ? requested : 0;
 }
 
 function probeHealth(port, token, timeoutMs=1000) {
@@ -114,7 +120,12 @@ async function chooseRecoveryMode() {
 
 async function startRuntime() {
   await cleanupStaleRuntime();
-  const port=await findFreePort();
+  const requestedPort=configuredRuntimePort();
+  const port=requestedPort || await findFreePort();
+  if(requestedPort){
+    const existing=await probeHealth(requestedPort,null,500);
+    if(existing)throw new Error(`The requested OmniForge runtime port ${requestedPort} is already in use.`);
+  }
   const token=crypto.randomBytes(24).toString('hex');
   const serverScript=path.join(APP_ROOT,'server','v011-bootstrap.mjs');
   const logFile=fs.openSync(path.join(LOG_DIR,'runtime.log'),'a');
