@@ -998,9 +998,17 @@ function focusSelected() {
   const radius=Math.max(2,bounds?(bounds.radius||Math.hypot(...(bounds.size||[1,1,1]))*.5)*Math.max(...object.transform.scale.map(Math.abs)):length(object.transform.scale)*.7);const forward=cameraForward(camera);camera.position=sub(center,scale(forward,radius*3.2));state.editor.lastFocusObjectId=object.id;persistCameraSoon();showToast(`Focused ${object.name}`);
 }
 async function groundSelected(){
-  const object=selectedObject(),terrain=scene.objects.find(o=>o.type==='terrain'&&o.visible);if(!object)return showToast('Select an object first.','error');if(!terrain||['terrain','path','directionalLight','pointLight','empty'].includes(object.type))return showToast('This entity cannot be grounded to terrain.','error');
-  const transform=deepClone(object.transform),asset=object.type==='model'?(state.assets||[]).find(item=>item.type==='model'&&item.id===object.properties?.assetId):null;
-  const bottomOffset=asset?.bounds?.min?asset.bounds.min[1]*transform.scale[1]:-objectHalfExtents(object)[1];transform.position[1]=terrainHeight(terrain,transform.position[0],transform.position[2])-bottomOffset;await patchObject(object.id,{transform});showToast(`${object.name} grounded to terrain`,'success');
+  const object=selectedObject(),terrain=scene.objects.find(o=>o.type==='terrain'&&o.visible);
+  if(!object)return showToast('Select an object first.','error');
+  if(!terrain||['terrain','path','directionalLight','pointLight','empty'].includes(object.type))return showToast('This entity cannot be grounded to terrain.','error');
+  try{
+    markLocalMutation();
+    const payload=await api('/api/object/ground',{method:'POST',body:{objectId:object.id,maxTilt:35}});
+    applyState(payload.state,{forceSelection:true});
+    const diagnostics=payload.diagnostics||{};
+    scheduleAutoCapture(`Grounded ${object.name} using ${diagnostics.mode||'terrain contact'}`);
+    showToast(`${object.name} grounded · ${diagnostics.mode||'terrain contact'} · ${Number(diagnostics.terrainSlopeDegrees||0).toFixed(1)}° slope`,'success');
+  }catch(error){handleError(error,'Grounding failed');}
 }
 function frameAll() {
   const visible=scene.objects.filter(o=>o.visible&&o.type!=='directionalLight');if(!visible.length)return;
@@ -1280,6 +1288,7 @@ async function bootstrap() {
       setCamera:patch=>{if(patch&&typeof patch==='object'){if(Array.isArray(patch.position))camera.position=patch.position.map(Number);for(const key of ['yaw','pitch','fov','moveSpeed'])if(Number.isFinite(Number(patch[key])))camera[key]=Number(patch[key]);scene.editorCamera={...camera,position:[...camera.position]};}},
       select:id=>selectObject(id,false),togglePlay:()=>enterPlayMode(),capture:title=>captureViewport(title||'Automated viewport inspection'),openProjectHub:()=>loadProjects({openHub:true}),applyLayout:patch=>applyLayout(patch,false)
     });
+    window.addEventListener('omniforge:apply-state',event=>{const nextState=event.detail?.state;if(nextState?.engine&&Array.isArray(nextState.scenes))applyState(nextState,{forceSelection:false});});
     window.addEventListener('error',event=>handleError(event.error||event.message,'Unexpected editor error'));window.addEventListener('unhandledrejection',event=>handleError(event.reason,'Unexpected editor error'));
     requestAnimationFrame(animationLoop);setInterval(pollRemoteState,1000);showToast(state.engine.safeMode?'Recovered project opened in Safe Mode':'OmniForge ready','success');
     const params=new URLSearchParams(location.search);if(params.get('panel')==='assets')document.querySelector('[data-left-tab="assets"]')?.click();if(params.get('panel')==='integrations')document.querySelector('[data-left-tab="integrations"]')?.click();if(params.get('asset'))selectModelAsset(params.get('asset'),false);if(!state.editor.firstUseComplete&&!params.has('skipTutorial'))setTimeout(showTutorial,500);else if(state.settings?.integrations?.setupState==='pending'&&!params.has('skipSetup'))setTimeout(()=>{renderIntegrationSetup();ui.integrationSetupDialog.showModal();},850);

@@ -24,6 +24,10 @@ let snapshot = null;
 let lastFoliageTransaction = null;
 let timeTimer = null;
 
+function synchronizeAuthoritativeEditor() {
+  if (snapshot?.state) window.dispatchEvent(new CustomEvent('omniforge:apply-state', { detail: { state: snapshot.state } }));
+}
+
 function setStatus(message, error = false) {
   const node = field('v010Status');
   if (!node) return;
@@ -166,6 +170,7 @@ function populate() {
 async function refresh() {
   try {
     snapshot = await api('/api/v010/world');
+    synchronizeAuthoritativeEditor();
     populate();
     const worker = snapshot.runtimeDiagnostics?.workers?.local;
     setStatus(worker?.ready === false
@@ -192,6 +197,7 @@ async function applyWorld(extra = {}) {
     weather: { preset: field('v010Weather').value, fog: numeric('v010Fog', 0.04) }
   };
   snapshot = await api('/api/v010/world', { method: 'PATCH', body: JSON.stringify(payload) });
+  synchronizeAuthoritativeEditor();
   populate();
 }
 
@@ -333,6 +339,7 @@ function bindControls() {
     if (!snapshot?.world?.time?.enabled) return;
     try {
       snapshot = await api('/api/v010/world/step', { method: 'POST', body: JSON.stringify({ seconds: 2 }) });
+      synchronizeAuthoritativeEditor();
       populate();
     } catch {
       // The regular refresh/error UI handles runtime disconnects.
