@@ -89,6 +89,28 @@ function Invoke-Checked {
     }
 }
 
+function Invoke-ExitCodeOnly {
+    param(
+        [Parameter(Mandatory)] [string]$FilePath,
+        [Parameter(ValueFromRemainingArguments = $true)] [string[]]$Arguments
+    )
+
+    # Windows PowerShell 5.1 converts native stderr into PowerShell ErrorRecord
+    # objects. With ErrorActionPreference=Stop, a successful diagnostic command
+    # such as `gh auth status` can terminate the script before LASTEXITCODE is
+    # inspected. Temporarily relax native stderr handling and return only the
+    # process exit code.
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $FilePath @Arguments 1>$null 2>$null
+        return $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+}
+
 if (-not $ArchivePath) {
     $ArchivePath = Select-Archive
 }
@@ -106,10 +128,15 @@ Ensure-Command -Name git -WingetId Git.Git
 Ensure-Command -Name gh -WingetId GitHub.cli
 
 Write-Step "Checking GitHub authentication"
-& gh auth status *> $null
-if ($LASTEXITCODE -ne 0) {
+$authExitCode = Invoke-ExitCodeOnly gh auth status
+if ($authExitCode -ne 0) {
     Write-Host "A GitHub browser login will open. Sign in to the account that owns $Repository." -ForegroundColor Yellow
     Invoke-Checked gh auth login --web --git-protocol https
+
+    $authExitCode = Invoke-ExitCodeOnly gh auth status
+    if ($authExitCode -ne 0) {
+        throw "GitHub CLI authentication did not complete successfully. Run 'gh auth login --web' and retry."
+    }
 }
 
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
