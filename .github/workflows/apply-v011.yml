@@ -1,0 +1,152 @@
+name: Apply OmniForge v0.11
+
+on:
+  push:
+    branches:
+      - milestone-11/terrain-path-world-foundation
+    paths:
+      - app/worldgen.js
+      - app/v011.js
+      - app/v011.css
+      - server/v011-*.mjs
+      - bridge/v011-tools.mjs
+      - tools/apply-v011*.mjs
+      - tools/fix-v011*.mjs
+      - tools/update-v011-test-expectations.mjs
+      - tests/v011.test.mjs
+      - docs/TERRAIN_PATH_WORLDGEN_V011.md
+      - docs/OMNIHYDRO_FOUNDATION_PLAN.md
+      - .github/workflows/apply-v011.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: omniforge-v011-source
+  cancel-in-progress: true
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out authoritative v0.11 branch
+        uses: actions/checkout@v4
+        with:
+          ref: milestone-11/terrain-path-world-foundation
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Apply connected v0.11 pass
+        shell: bash
+        run: |
+          set +e
+          {
+            node tools/apply-v011.mjs
+            node tools/fix-v011-presets.mjs
+            node tools/apply-v011-mcp.mjs
+            node tools/update-v011-test-expectations.mjs
+          } > APPLY_V011_ERROR.txt 2>&1
+          result=$?
+          cat APPLY_V011_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge v0.11 Build Bot"
+            git config user.email "omniforge-v011-build-bot@users.noreply.github.com"
+            git add APPLY_V011_ERROR.txt
+            git commit -m "Record v0.11 application diagnostics"
+            git pull --rebase origin milestone-11/terrain-path-world-foundation
+            git push origin milestone-11/terrain-path-world-foundation
+            exit "$result"
+          fi
+          rm -f APPLY_V011_ERROR.txt
+
+      - name: Syntax-check connected runtime
+        shell: bash
+        run: |
+          set +e
+          {
+            node --check app/worldgen.js
+            node --check app/renderer.js
+            node --check app/app.js
+            node --check app/v010.js
+            node --check app/v011.js
+            node --check server/state-store.mjs
+            node --check server/v010-systems.mjs
+            node --check server/v011-systems.mjs
+            node --check server/v011-api.mjs
+            node --check server/v011-bootstrap.mjs
+            node --check server/job-manager.mjs
+            node --check workers/local-worker.mjs
+            node --check bridge/v010-tools.mjs
+            node --check bridge/v011-tools.mjs
+            node --check bridge/mcp-server.mjs
+          } > SYNTAX_V011_ERROR.txt 2>&1
+          result=$?
+          cat SYNTAX_V011_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge v0.11 Build Bot"
+            git config user.email "omniforge-v011-build-bot@users.noreply.github.com"
+            git add SYNTAX_V011_ERROR.txt
+            git commit -m "Record v0.11 syntax diagnostics"
+            git pull --rebase origin milestone-11/terrain-path-world-foundation
+            git push origin milestone-11/terrain-path-world-foundation
+            exit "$result"
+          fi
+          rm -f SYNTAX_V011_ERROR.txt
+
+      - name: Run full automated suite
+        shell: bash
+        run: |
+          set +e
+          npm test > TEST_V011_ERROR.txt 2>&1
+          result=$?
+          cat TEST_V011_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge v0.11 Build Bot"
+            git config user.email "omniforge-v011-build-bot@users.noreply.github.com"
+            git add TEST_V011_ERROR.txt
+            git commit -m "Record v0.11 test diagnostics"
+            git pull --rebase origin milestone-11/terrain-path-world-foundation
+            git push origin milestone-11/terrain-path-world-foundation
+            exit "$result"
+          fi
+          rm -f TEST_V011_ERROR.txt
+
+      - name: Run package verification
+        shell: bash
+        run: |
+          set +e
+          npm run verify > VERIFY_V011_ERROR.txt 2>&1
+          result=$?
+          cat VERIFY_V011_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge v0.11 Build Bot"
+            git config user.email "omniforge-v011-build-bot@users.noreply.github.com"
+            git add VERIFY_V011_ERROR.txt
+            git commit -m "Record v0.11 package diagnostics"
+            git pull --rebase origin milestone-11/terrain-path-world-foundation
+            git push origin milestone-11/terrain-path-world-foundation
+            exit "$result"
+          fi
+          rm -f VERIFY_V011_ERROR.txt
+
+      - name: Commit verified generated source
+        shell: bash
+        run: |
+          git config user.name "OmniForge v0.11 Build Bot"
+          git config user.email "omniforge-v011-build-bot@users.noreply.github.com"
+          rm -f APPLY_V011_ERROR.txt SYNTAX_V011_ERROR.txt TEST_V011_ERROR.txt VERIFY_V011_ERROR.txt WINDOWS_VERIFY_ERROR.txt
+          git add --all
+          if git diff --cached --quiet; then
+            echo "v0.11 source is already deterministic and current."
+            exit 0
+          fi
+          git commit -m "Connect OmniForge v0.11 terrain splines expansion grades editor runtime and MCP"
+          git pull --rebase origin milestone-11/terrain-path-world-foundation
+          git push origin milestone-11/terrain-path-world-foundation
