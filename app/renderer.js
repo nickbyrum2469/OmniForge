@@ -198,7 +198,7 @@ vec3 applySurfaceRecipe(vec3 color, vec4 layers, vec4 extra, vec4 masks, vec4 ma
 }
 void main(){
   vec3 viewDir=normalize(uCameraPos-vWorld);
-  vec2 baseUV=vWorld.xz/max(uBaseTextureScale,0.05);
+  vec2 baseUV=uIsTerrain>.5?vWorld.xz/max(uBaseTextureScale,0.05):vUV;
   vec2 pathUV=vWorld.xz/max(uPathTextureScale,0.05);
   float baseC=cos(uBaseTextureRotation),baseS=sin(uBaseTextureRotation);
   float pathC=cos(uPathTextureRotation),pathS=sin(uPathTextureRotation);
@@ -483,6 +483,13 @@ export class Renderer3D{
     image.onload=()=>{const gl=this.gl,t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);entry.texture=t;entry.ready=true;};
     image.onerror=()=>{entry.error=true;};image.src=url;return {texture:entry.texture,ready:false,scale};
   }
+  textureFromUrl(url,flipY=false){
+    const fallback=this.whiteTexture;if(!url)return {texture:fallback,ready:false,scale:1};
+    const cacheKey=`imported:${flipY?'flip':'native'}:${url}`,cached=this.textureCache.get(cacheKey);if(cached)return {texture:cached.texture,ready:cached.ready,scale:1};
+    const entry={texture:fallback,ready:false,error:false};this.textureCache.set(cacheKey,entry);const image=new Image();
+    image.onload=()=>{const gl=this.gl,t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,flipY);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);entry.texture=t;entry.ready=true;};
+    image.onerror=()=>{entry.error=true;};image.src=url;return {texture:entry.texture,ready:false,scale:1};
+  }
   materialAsset(id){return this.assets.find(asset=>asset.id===id&&asset.type==='material')||null;}
   surfaceRecipeForMaterial(material){if(!material)return null;return this.assets.find(asset=>asset.id===material.surfaceRecipeId&&asset.type==='surfaceRecipe')||this.assets.find(asset=>asset.type==='surfaceRecipe'&&asset.baseMaterialId===material.id)||null;}
   resize(){const dpr=Math.min(devicePixelRatio||1,2),w=Math.max(2,Math.floor(this.canvas.clientWidth*dpr)),h=Math.max(2,Math.floor(this.canvas.clientHeight*dpr));if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;this.gl.viewport(0,0,w,h);}}
@@ -562,9 +569,10 @@ export class Renderer3D{
     if(useImportedGroups){
       for(const group of mesh.groups){
         const material=group.material||mesh.sourceMaterials?.[group.materialIndex]||mesh.sourceMaterial||{};
-        const color=Array.isArray(material.baseColor)?material.baseColor:[.62,.66,.72,1];
+        const color=Array.isArray(material.baseColor)?material.baseColor:[.62,.66,.72,1],importedBase=this.textureFromUrl(material.textureUrls?.baseColor,false);
         set3('uBaseColor',new Float32Array([Number(color[0]??.62),Number(color[1]??.66),Number(color[2]??.72)]));
-        set1('uRoughness',Number(material.roughness??.8));set1('uMetallic',Number(material.metallic??0));
+        bindMap(0,'uBaseTexture',importedBase);set1('uUseBaseTexture',importedBase.ready?1:0);set1('uBaseTextureScale',1);
+        set1('uOpacity',Number(color[3]??1));set1('uRoughness',Number(material.roughness??.8));set1('uMetallic',Number(material.metallic??0));
         if(material.doubleSided)gl.disable(gl.CULL_FACE);else gl.enable(gl.CULL_FACE);
         gl.drawElements(gl.TRIANGLES,Number(group.indexCount||0),mesh.indexType,Number(group.indexOffset||0)*mesh.indexStride);
       }

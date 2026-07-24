@@ -309,7 +309,7 @@ test('Codex can import and rebuild a hierarchy-aware model through guarded MCP t
   const probe=spawnSync(process.execPath,['bridge/mcp-server.mjs'],{cwd:ROOT,input,encoding:'utf8',timeout:10000,env:{...process.env,OMNIFORGE_DATA_ROOT:runtime}});
   assert.equal(probe.status,0,probe.stderr);const messages=probe.stdout.trim().split(/\r?\n/).map(line=>JSON.parse(line));
   const imported=JSON.parse(messages.find(message=>message.id===2).result.content[0].text),rebuilt=JSON.parse(messages.find(message=>message.id===3).result.content[0].text);
-  assert.equal(imported.id,assetId);assert.equal(rebuilt.id,assetId);assert.equal(rebuilt.canonicalImporterVersion,2);assert.equal(rebuilt.health.nodeTransformsApplied,true);assert.equal(rebuilt.materialSlots.length,4);
+  assert.equal(imported.id,assetId);assert.equal(rebuilt.id,assetId);assert.equal(rebuilt.canonicalImporterVersion,3);assert.equal(rebuilt.health.nodeTransformsApplied,true);assert.equal(rebuilt.materialSlots.length,4);
   fs.rmSync(runtime,{recursive:true,force:true});
 });
 
@@ -438,7 +438,7 @@ test('real asset API imports, recipes, processes, previews, commits, and persist
     assert.equal(imported.status,201,JSON.stringify(imported.body));
     const asset=imported.body.asset;assert.ok(asset.assetRecipeId);assert.ok(imported.body.state.assets.some(item=>item.type==='assetRecipe'&&item.id===asset.assetRecipeId));
     assert.ok(fs.existsSync(path.join(runtime,asset.sourceFile)));assert.ok(fs.existsSync(path.join(runtime,asset.canonicalFile)));
-    const rebuilt=await postJson(port,'/api/asset/rebuild',{assetId:asset.id});assert.equal(rebuilt.status,200);assert.equal(rebuilt.body.asset.canonicalImporterVersion,2);assert.equal(rebuilt.body.asset.health.nodeTransformsApplied,true);assert.equal(rebuilt.body.asset.approvalState,'draft');
+    const rebuilt=await postJson(port,'/api/asset/rebuild',{assetId:asset.id});assert.equal(rebuilt.status,200);assert.equal(rebuilt.body.asset.canonicalImporterVersion,3);assert.equal(rebuilt.body.asset.health.nodeTransformsApplied,true);assert.equal(rebuilt.body.asset.approvalState,'draft');
     const historyDirectory=path.join(path.dirname(path.join(runtime,asset.canonicalFile)),'history');assert.ok(fs.existsSync(historyDirectory));assert.ok(fs.readdirSync(historyDirectory).length>=1);
     const collision=await postJson(port,'/api/asset/collision',{assetId:asset.id});assert.equal(collision.status,200);assert.equal(collision.body.asset.collisionStatus,'generated');
     const lods=await postJson(port,'/api/asset/lods',{assetId:asset.id,ratios:[.5,.2]});assert.equal(lods.status,200);assert.equal(lods.body.asset.lods.length,2);
@@ -479,7 +479,7 @@ test('canonical rebuild repairs legacy imports from preserved source and retains
   const sourcePath=path.join(runtime,asset.sourceFile),sourceChecksum=fs.readFileSync(sourcePath).toString('base64');
   const canonicalPath=path.join(runtime,asset.canonicalFile),legacy=JSON.parse(fs.readFileSync(canonicalPath,'utf8'));legacy.schemaVersion=1;legacy.groups=[];legacy.nodeTransformsApplied=false;fs.writeFileSync(canonicalPath,JSON.stringify(legacy));asset.canonicalImporterVersion=1;asset.health.nodeTransformsApplied=false;asset.approvalState='approved';
   const rebuilt=rebuildCanonicalAsset({assetRoot,asset});
-  assert.equal(rebuilt.id,asset.id);assert.equal(rebuilt.canonicalImporterVersion,2);assert.equal(rebuilt.health.nodeTransformsApplied,true);assert.equal(rebuilt.health.meshInstanceCount,2);assert.equal(rebuilt.approvalState,'draft');assert.ok(rebuilt.canonicalRevision);
+  assert.equal(rebuilt.id,asset.id);assert.equal(rebuilt.canonicalImporterVersion,3);assert.equal(rebuilt.health.nodeTransformsApplied,true);assert.equal(rebuilt.health.meshInstanceCount,2);assert.equal(rebuilt.approvalState,'draft');assert.ok(rebuilt.canonicalRevision);
   const canonical=JSON.parse(fs.readFileSync(canonicalPath,'utf8'));assert.equal(canonical.schemaVersion,2);assert.equal(canonical.groups.length,4);
   const historyDir=path.join(path.dirname(canonicalPath),'history');assert.ok(fs.readdirSync(historyDir).some(name=>name.startsWith('mesh-before-rebuild-')));
   assert.equal(fs.readFileSync(sourcePath).toString('base64'),sourceChecksum);
