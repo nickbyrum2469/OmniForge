@@ -16,6 +16,7 @@ function program(gl,vs,fs){
   return p;
 }
 function smoothstep(a,b,x){const t=clamp((x-a)/(b-a||1),0,1);return t*t*(3-2*t);}
+function lerp(a,b,t){return a+(b-a)*t;}
 
 const meshVS=`#version 300 es
 precision highp float;
@@ -391,7 +392,7 @@ function cylinderMesh(seg=32){
 
 export function terrainHeight(terrain,x,z,paths=[]){return sharedTerrainHeightAt(terrain,x,z,paths);}
 export function pathBlendAt(paths,x,z){return sharedPathBlendAt(paths,x,z);}
-function terrainMesh(object,paths){
+export function terrainMesh(object,paths){
   const props=normalizeTerrainProperties(object.properties||{},object.transform||{}),resX=clamp(Math.round(Number(props.resolutionX||props.resolution||128)),8,256),resZ=clamp(Math.round(Number(props.resolutionZ||props.resolution||128)),8,256),bounds=props.bounds,p=[],n=[],idx=[],uv=[],blends=[];
   const ox=Number(object.transform.position?.[0]||0),oy=Number(object.transform.position?.[1]||0),oz=Number(object.transform.position?.[2]||0);
   for(let z=0;z<=resZ;z++)for(let x=0;x<=resX;x++){
