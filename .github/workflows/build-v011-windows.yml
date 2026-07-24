@@ -1,4 +1,5 @@
 name: Build OmniForge v0.11 Windows
+# Final verification trigger for generated source commit 09e52f2371ecc0c4ef6024576e18de567438922a.
 
 on:
   push:
