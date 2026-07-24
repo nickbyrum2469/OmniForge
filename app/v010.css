@@ -1,0 +1,91 @@
+.v010-world-tab {
+  overflow: auto;
+  padding: 12px;
+}
+
+.v010-card {
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid var(--border, #2b3442);
+  border-radius: 10px;
+  background: rgba(12, 18, 28, 0.82);
+}
+
+.v010-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.v010-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.v010-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: #9eabbc;
+  font-size: 11px;
+}
+
+.v010-grid input,
+.v010-grid select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.v010-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.v010-world-tab .button {
+  min-height: 30px;
+}
+
+.v010-section-note,
+.v010-status {
+  color: #9ba8b9;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.v010-section-note {
+  margin: 0 0 8px;
+}
+
+.v010-status {
+  min-height: 42px;
+  padding: 8px;
+  white-space: pre-wrap;
+  border: 1px solid rgba(108, 132, 164, 0.25);
+  border-radius: 8px;
+  background: rgba(7, 11, 18, 0.65);
+}
+
+.v010-chip {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #1b2a3f;
+  color: #9ecfff;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.v010-danger-card {
+  border-color: #5d3038;
+}
+
+@media (max-width: 1250px) {
+  .v010-grid {
+    grid-template-columns: 1fr;
+  }
+}
