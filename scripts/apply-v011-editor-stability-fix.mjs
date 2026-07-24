@@ -27,4 +27,4 @@ if (result.status !== 0) {
   throw new Error(`The deterministic editor-stability patch failed with exit code ${result.status}.`);
 }
 
-console.log(`Applied ${patchFiles.length} verified v0.11 editor-stability patch parts to the authoritative repair branch.`);
+console.log(`Applied ${patchFiles.length} verified v0.11 editor-stability patch parts to the authoritative repair branch; Windows packaging verification is required before integration.`);
