@@ -1,0 +1,46 @@
+
+> omniforge-3d-engine@0.10.0 test
+> node --test tests/*.test.mjs
+
+file:///home/runner/work/OmniForge/OmniForge/app/renderer.js:585
+    const instanceCount=instanced?this.prepareInstances(mesh,instances):0,asset=object.type==='model'?this.assets.find(item=>item.type==='model'&&item.id===object.properties?.assetId):null,bounds=asset?.bounds||{min:[0,0,0],size:[1,1,1]},foliageWind=object.properties?.wind||{};
+          ^
+
+SyntaxError: Identifier 'instanceCount' has already been declared
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.18.0
+✖ tests/engine.test.mjs (93.354754ms)
+✔ v0.10 seeded random and foliage placement are deterministic (5.994176ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (1.037775ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.618112ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.442425ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (3.57836ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (3.578372ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.803277ms)
+✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (0.651214ms)
+✔ v0.10 existing Ground button and World tab synchronize through authoritative state (1.604141ms)
+✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (257.671287ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 10
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3347.010831
+
+✖ failing tests:
+
+test at tests/engine.test.mjs:1:1
+✖ tests/engine.test.mjs (93.354754ms)
+  'test failed'
