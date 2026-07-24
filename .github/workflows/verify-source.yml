@@ -49,7 +49,13 @@ jobs:
       - name: Verify source and tests
         if: steps.source.outputs.present == 'true'
         shell: pwsh
-        run: npm run verify --if-present
+        run: |
+          $stdout = Join-Path $PWD "windows-verify.stdout.log"
+          $stderr = Join-Path $PWD "windows-verify.stderr.log"
+          $process = Start-Process npm.cmd -ArgumentList @("run", "verify", "--if-present") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if (Test-Path $stdout) { Get-Content $stdout }
+          if (Test-Path $stderr) { Get-Content $stderr }
+          if ($process.ExitCode -ne 0) { throw "OmniForge verification failed with exit code $($process.ExitCode)." }
 
       - name: Audit packaged workers
         if: steps.source.outputs.present == 'true'
@@ -68,3 +74,14 @@ jobs:
             throw "The Windows desktop builder does not package the workers directory."
           }
           Write-Host "Windows packaging includes the worker registry."
+
+      - name: Upload Windows verification diagnostics
+        if: always() && steps.source.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-verification-${{ github.run_id }}
+          path: |
+            windows-verify.stdout.log
+            windows-verify.stderr.log
+          if-no-files-found: warn
+          retention-days: 7
