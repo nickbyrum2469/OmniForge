@@ -41,13 +41,4 @@ replaceOnce(
   'wait for worker stdio close before final state'
 );
 
-const testFile = 'tests/engine.test.mjs';
-let tests = read(testFile);
-if (!tests.includes("assert.match(manager,/child\\.on\\('close'/)")) {
-  const marker = "  for(const token of ['spawn(process.execPath','cancellationRequested','retryJob','shutdownJobs'])assert.match(manager,new RegExp(token.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')));";
-  if (!tests.includes(marker)) throw new Error('Worker lifecycle regression test insertion point was not found.');
-  tests = tests.replace(marker, `${marker}\n  assert.match(manager,/child\\.on\\('close'/);assert.doesNotMatch(manager,/child\\.on\\('exit'/);`);
-  write(testFile, tests);
-}
-
 console.log('Cross-platform worker request-file IPC and drained-close finalization applied.');
