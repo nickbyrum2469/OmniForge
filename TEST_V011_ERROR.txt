@@ -1,0 +1,76 @@
+
+> omniforge-3d-engine@0.11.0 test
+> node --test tests/*.test.mjs
+
+file:///home/runner/work/OmniForge/OmniForge/server/state-store.mjs:8
+import { migrateSceneWorldFoundation, normalizeTerrainProperties, normalizePathProperties, terrainHeightAt } from '../app/worldgen.js';
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+SyntaxError: Identifier 'migrateSceneWorldFoundation' has already been declared
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.18.0
+✖ tests/engine.test.mjs (69.140669ms)
+✔ v0.10 worker IPC drains stdout before finalizing jobs (1.084856ms)
+✔ v0.10 seeded random and foliage placement are deterministic (18.87209ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (1.10745ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.693554ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.454307ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (2.867904ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (3.157535ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.545593ms)
+✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (0.536168ms)
+✔ v0.10 existing Ground button and World tab synchronize through authoritative state (1.072578ms)
+✖ v0.10 bootstrap serves world systems and upgrades the existing Ground command (15022.754521ms)
+✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (15.113308ms)
+✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (0.762977ms)
+✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (0.769627ms)
+✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (1.907282ms)
+✔ path grade compilation respects configured maximum grade and bounded terrain cut/fill (9.746623ms)
+✔ path material blending follows the sampled spline instead of straight control-point chords (0.55011ms)
+✔ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (1.415509ms)
+✖ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (14524.120407ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 17
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 15117.700451
+
+✖ failing tests:
+
+test at tests/engine.test.mjs:1:1
+✖ tests/engine.test.mjs (69.140669ms)
+  'test failed'
+
+test at tests/v010.test.mjs:303:1
+✖ v0.10 bootstrap serves world systems and upgrades the existing Ground command (15022.754521ms)
+  [TypeError: fetch failed] {
+    [cause]: Error: connect ECONNREFUSED 127.0.0.1:45521
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 45521
+    }
+  }
+
+test at tests/v011.test.mjs:146:1
+✖ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (14524.120407ms)
+  Error: Timed out waiting for v0.11 health.
+      at waitHealth (file:///home/runner/work/OmniForge/OmniForge/tests/v011.test.mjs:35:271)
+      at async TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/v011.test.mjs:151:18)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)

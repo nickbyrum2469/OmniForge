@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { syncAssetRecipe } from './asset-pipeline.mjs';
 import { starterProviders, normalizeProviders, normalizeJobs, normalizeIntegrationSettings } from './provider-framework.mjs';
+import { migrateSceneWorldFoundation, normalizeTerrainProperties, normalizePathProperties, terrainHeightAt } from '../app/worldgen.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(here, '..');
@@ -217,16 +218,16 @@ function starterScene(template='starter-3d') {
   const sun = baseObject('directionalLight', 'Sun', [0,18,0], { id:'sun-main', rotation:[-48,32,0], properties:{ color:'#fff1d1', intensity:1.45, castsShadows:true } });
   const objects = [sun];
   if (template === 'starter-3d') {
-    const terrain = baseObject('terrain', 'Terrain', [0,0,0], { id:'terrain-main', properties:{ size:100,resolution:96,amplitude:4,frequency:.055,seed:17,color:'#526d49',roughness:.86,materialId:'material-highland-grass',collider:true,receivesShadows:true } });
-    const pathObject = baseObject('path', 'Terrain Path', [0,0,0], { id:'path-main', properties:{ width:3.2,surfaceOffset:.03,color:'#73573d',materialId:'material-packed-earth',blendDistance:3.2,edgeNoise:.65,points:[[-32,-22],[-20,-13],[-8,-8],[5,-2],[17,9],[30,16]],conformToTerrain:true,collider:true,navigation:true,vegetationExclusion:1.2 } });
-    const block = baseObject('box', 'Scene Block', [7,6.05,4], { id:'block-main', scale:[6,4,6], properties:{ color:'#3f66a3',metallic:.08,roughness:.78,collider:true } });
+    const terrain = baseObject('terrain', 'Terrain', [0,0,0], { id:'terrain-main', properties:normalizeTerrainProperties({ preset:'mountainValley',sizeX:180,sizeZ:180,resolution:144,height:34,macroScale:190,detailScale:34,octaves:6,warpStrength:38,ridgeStrength:.72,valleyStrength:.58,valleyRadius:58,canyonDepth:0,islandStrength:0,seaLevel:0,seed:17,color:'#526d49',roughness:.86,materialId:'material-highland-grass',collider:true,receivesShadows:true,hydrologyReady:true },{position:[0,0,0],scale:[1,1,1]}) });
+    const pathObject = baseObject('path', 'Terrain Path', [0,0,0], { id:'path-main', properties:normalizePathProperties({ width:3.2,surfaceOffset:.03,color:'#73573d',materialId:'material-packed-earth',blendDistance:3.2,edgeNoise:.36,points:[[-48,-34],[-31,-20],[-12,-11],[7,-3],[24,13],[47,28]],worldSpacePoints:true,spline:true,splineTension:.42,samplesPerSegment:16,showSpline:true,carveTerrain:true,maxGradePercent:11,maxCutDepth:7,maxFillDepth:2.5,cutShoulder:4.2,conformToTerrain:true,collider:true,navigation:true,vegetationExclusion:1.2 },{position:[0,0,0],scale:[1,1,1]}) });
+    const block = baseObject('box', 'Scale Reference Block', [7,6.05,4], { id:'block-main', scale:[6,4,6], properties:{ color:'#3f66a3',metallic:.08,roughness:.78,collider:true,editorReference:true,purpose:'Starter scale, collision, lighting, and shadow reference. No scene-management behavior.' } });
     const marker = baseObject('sphere', 'World Marker', [-12,4,-4], { id:'marker-main', scale:[2.2,2.2,2.2], properties:{ color:'#a96cff',metallic:.2,roughness:.42,collider:true } });
     objects.unshift(terrain, pathObject);
     objects.push(block, marker);
   }
   return {
     id:'scene-main', name:'Main', createdAt:now(), updatedAt:now(),
-    settings:{ skyTop:'#17243d',skyBottom:'#8ca6b8',ambientColor:'#b8c6d8',ambientIntensity:.48,gravity:-9.81,gridVisible:true,gridSize:100,gridStep:5,fogNear:90,fogFar:280,exposure:1.22,waterLevel:-100,windDirection:[1,0,.25],windStrength:.35,season:'summer',weatherWetness:0,weatherSnow:0 },
+    settings:{ skyTop:'#17243d',skyBottom:'#8ca6b8',ambientColor:'#b8c6d8',ambientIntensity:.48,gravity:-9.81,gridVisible:true,splinesVisible:true,worldChunkSize:64,gridSize:200,gridStep:5,fogNear:90,fogFar:280,exposure:1.22,waterLevel:-100,windDirection:[1,0,.25],windStrength:.35,season:'summer',weatherWetness:0,weatherSnow:0 },
     editorCamera:{ position:[25,15,32],yaw:-.68,pitch:-.29,moveSpeed:12,fastMultiplier:3.5,fov:62,lookSensitivity:.0023,invertHorizontal:false,invertVertical:false },
     objects
   };
@@ -244,11 +245,13 @@ export function createDefaultState(options={}) {
   const projectId = options.id || slugify(name, 'untitled-game');
   const template = options.template || 'starter-3d';
   const root = options.root || path.join(WORKSPACE_ROOT, projectId);
-  const scene = starterScene(template);
+  const scene = migrateSceneWorldFoundation(starterScene(template));
+  const starterTerrain=scene.objects.find(object=>object.type==='terrain'),starterPaths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);
+  if(starterTerrain)for(const object of scene.objects.filter(item=>['block-main','marker-main'].includes(item.id))){const half=Math.max(.05,Math.abs(Number(object.transform.scale?.[1]||1))*.5);object.transform.position[1]=terrainHeightAt(starterTerrain,object.transform.position[0],object.transform.position[2],starterPaths)+half;}
   return {
-    schemaVersion:8,
-    engine:{ name:'OmniForge', version:'0.9.0', status:'ready', revision:1, updatedAt:now(), safeMode:Boolean(process.env.OMNIFORGE_SAFE_MODE === '1') },
-    project:{ id:projectId,name,root,template,schemaVersion:8,createdAt:options.createdAt || now(),updatedAt:now(),lastOpenedAt:now(),thumbnail:null,importSource:options.importSource || null },
+    schemaVersion:9,
+    engine:{ name:'OmniForge', version:'0.11.0', status:'ready', revision:1, updatedAt:now(), safeMode:Boolean(process.env.OMNIFORGE_SAFE_MODE === '1') },
+    project:{ id:projectId,name,root,template,schemaVersion:9,createdAt:options.createdAt || now(),updatedAt:now(),lastOpenedAt:now(),thumbnail:null,importSource:options.importSource || null },
     activeSceneId:scene.id,
     scenes:[scene],
     selection:{ objectId:scene.objects.find(o=>o.type==='box')?.id || scene.objects[0]?.id || null },
@@ -264,9 +267,9 @@ function migrateState(input) {
   if (!input || typeof input !== 'object') return createDefaultState();
   const state = structuredClone(input);
   if (!state.project) return createDefaultState();
-  state.schemaVersion = 8;
-  state.engine = { name:'OmniForge', version:'0.9.0',status:'ready',revision:1,updatedAt:now(), ...state.engine, version:'0.9.0', safeMode:Boolean(process.env.OMNIFORGE_SAFE_MODE === '1') };
-  state.project = { schemaVersion:8,createdAt:now(),updatedAt:now(),lastOpenedAt:now(),thumbnail:null, ...state.project, schemaVersion:8 };
+  state.schemaVersion = 9;
+  state.engine = { name:'OmniForge', version:'0.11.0',status:'ready',revision:1,updatedAt:now(), ...state.engine, version:'0.11.0', safeMode:Boolean(process.env.OMNIFORGE_SAFE_MODE === '1') };
+  state.project = { schemaVersion:9,createdAt:now(),updatedAt:now(),lastOpenedAt:now(),thumbnail:null, ...state.project, schemaVersion:9 };
   const managedProjectRoot = path.join(WORKSPACE_ROOT, state.project.id || slugify(state.project.name));
   if (!path.isAbsolute(state.project.root || '') || !path.resolve(state.project.root).startsWith(path.resolve(WORKSPACE_ROOT) + path.sep)) state.project.root = managedProjectRoot;
   state.assets = Array.isArray(state.assets) ? state.assets : starterMaterials();
@@ -312,7 +315,9 @@ function migrateState(input) {
   for(let index=0;index<state.assets.length;index++)if(state.assets[index].type==='surfaceRecipe')state.assets[index]=normalizeSurfaceRecipe(state.assets[index],state.assets[index]);
   for(let index=0;index<state.assets.length;index++){const asset=state.assets[index];if(asset.type==='decalRecipe')state.assets[index]=normalizeDecalRecipe(asset,asset);else if(asset.type==='atlasRecipe')state.assets[index]=normalizeAtlasRecipe(asset,asset);}
   for (const scene of state.scenes || []) {
-    scene.settings = { fogNear:90,fogFar:280,exposure:1,gridVisible:true,waterLevel:-100,windDirection:[1,0,.25],windStrength:.35,season:'summer',weatherWetness:0,weatherSnow:0,...scene.settings };
+    scene.settings = { fogNear:90,fogFar:280,exposure:1,gridVisible:true,splinesVisible:true,worldChunkSize:64,waterLevel:-100,windDirection:[1,0,.25],windStrength:.35,season:'summer',weatherWetness:0,weatherSnow:0,...scene.settings };
+    migrateSceneWorldFoundation(scene);
+    const referenceBlock=scene.objects.find(object=>object.id==='block-main'&&object.name==='Scene Block');if(referenceBlock){referenceBlock.name='Scale Reference Block';referenceBlock.properties={...(referenceBlock.properties||{}),editorReference:true,purpose:'Starter scale, collision, lighting, and shadow reference. No scene-management behavior.'};}
     scene.editorCamera = { lookSensitivity:.0023,invertHorizontal:false,invertVertical:false,moveSpeed:12,fov:62,...scene.editorCamera };
   }
   return state;
@@ -329,7 +334,7 @@ export function readCatalog() {
   for(const project of raw.projects){
     const managedRoot=path.join(WORKSPACE_ROOT,project.id||slugify(project.name,'untitled-game'));
     if(!path.isAbsolute(project.root||'')||!path.resolve(project.root).startsWith(path.resolve(WORKSPACE_ROOT)+path.sep))project.root=managedRoot;
-    project.schemaVersion=Math.max(8,Number(project.schemaVersion)||0);
+    project.schemaVersion=Math.max(9,Number(project.schemaVersion)||0);
   }
   return raw;
 }
@@ -543,8 +548,8 @@ export function createSceneObject(type, options={}) {
     cylinder:{name:'Cylinder',properties:{color:'#d19366',metallic:.04,roughness:.72,collider:true}},
     plane:{name:'Plane',properties:{color:'#7f9474',metallic:0,roughness:.9,collider:true}},
     decal:{name:'Decal',properties:{color:'#ffffff',opacity:.85,metallic:0,roughness:.8,materialId:null,decalRecipeId:null,projectionDepth:.25,sortOrder:0,castsShadows:false,receivesShadows:true,collider:false}},
-    terrain:{name:'Terrain',properties:{size:80,resolution:80,amplitude:3,frequency:.06,seed:11,color:'#607b52',roughness:.9,materialId:null,collider:true,receivesShadows:true}},
-    path:{name:'Path',properties:{width:3,surfaceOffset:.03,color:'#8c7354',materialId:null,blendDistance:2.5,edgeNoise:.5,points:[[-10,0],[0,0],[10,0]],conformToTerrain:true,collider:true,navigation:true,vegetationExclusion:1}},
+    terrain:{name:'Terrain',properties:normalizeTerrainProperties({preset:'rollingHills',sizeX:120,sizeZ:120,resolution:112,height:18,macroScale:150,detailScale:34,octaves:6,warpStrength:20,ridgeStrength:.18,seed:11,color:'#607b52',roughness:.9,materialId:null,collider:true,receivesShadows:true,hydrologyReady:true},{position:[0,0,0],scale:[1,1,1]})},
+    path:{name:'Path',properties:normalizePathProperties({width:3,surfaceOffset:.03,color:'#8c7354',materialId:null,blendDistance:2.5,edgeNoise:.35,points:[[-10,0],[0,0],[10,0]],worldSpacePoints:true,spline:true,splineTension:.5,samplesPerSegment:14,showSpline:true,carveTerrain:false,maxGradePercent:12,maxCutDepth:6,maxFillDepth:2.5,cutShoulder:3,conformToTerrain:true,collider:true,navigation:true,vegetationExclusion:1},{position:[0,0,0],scale:[1,1,1]})},
     directionalLight:{name:'Directional Light',properties:{color:'#fff1d3',intensity:1,castsShadows:true}},
     pointLight:{name:'Point Light',properties:{color:'#ffd3a3',intensity:2,range:12}},
     model:{name:'Imported Model',properties:{assetId:null,color:'#aab4c6',metallic:0,roughness:.8,collider:false,castsShadows:true,receivesShadows:true}},

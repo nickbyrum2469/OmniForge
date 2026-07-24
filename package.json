@@ -1,11 +1,11 @@
 {
   "name": "omniforge-3d-engine",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
-  "description": "General-purpose AI-native 3D game engine with connected asset, foliage, lighting, atmosphere, and world systems.",
+  "description": "General-purpose AI-native 3D game engine with connected assets, foliage, atmosphere, stable worldgen, terrain expansion, and editable spline paths.",
   "type": "module",
   "scripts": {
-    "start": "node server/v010-bootstrap.mjs",
+    "start": "node server/v011-bootstrap.mjs",
     "test": "node --test tests/*.test.mjs",
     "verify": "node scripts/verify.mjs",
     "mcp": "node bridge/mcp-server.mjs",

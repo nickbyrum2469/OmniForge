@@ -14,6 +14,7 @@ import {
 import { normalizeProvider, normalizeIntegrationSettings } from './provider-framework.mjs';
 import { initializeJobManager, createJob, cancelJob, retryJob, clearCompletedJobs, shutdownJobs } from './job-manager.mjs';
 import { searchMarketplace, marketplaceDetails, prepareMarketplaceDownload, resolveMarketplaceImportFiles, createMaterialFromMarketplaceDownload, inspectDownloadedJob } from './marketplace.mjs';
+import { terrainHeightAt as sharedTerrainHeightAt } from '../app/worldgen.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.join(ROOT, 'app');
@@ -153,12 +154,10 @@ function decalObjectFromRecipe(recipe,material,body={}) {
 function rgbToHex(color=[.65,.68,.74]) {
   return `#${color.slice(0,3).map(value=>Math.max(0,Math.min(255,Math.round(Number(value||0)*255))).toString(16).padStart(2,'0')).join('')}`;
 }
-function terrainHeightAt(terrain,x,z){
-  if(!terrain)return 0;const p=terrain.transform.position,s=terrain.transform.scale,props=terrain.properties||{};const lx=(x-p[0])/(s[0]||1),lz=(z-p[2])/(s[2]||1),seed=Number(props.seed||0),f=Number(props.frequency||.05),a=Number(props.amplitude||0);const n1=Math.sin((lx+seed*2.13)*f)*Math.cos((lz-seed*.73)*f*1.17),n2=Math.sin((lx+lz)*f*.47+seed*1.91)*.48,n3=Math.cos((lx*.37-lz*.61)*f*1.9-seed)*.22,n4=Math.sin((lx*.73+lz*.19)*f*3.4+seed*.31)*.09;return p[1]+(n1+n2+n3+n4)*a*(s[1]||1);
-}
+function terrainHeightAt(terrain,x,z,paths=[]){return sharedTerrainHeightAt(terrain,x,z,paths);}
 function modelObjectFromAsset(asset,body={}){
   const size=asset.bounds?.size||[1,1,1],position=Array.isArray(body.position)?body.position.map(Number):[0,0,0],scene=body.scene||null;
-  const terrain=scene?.objects?.find(object=>object.type==='terrain');if(!Array.isArray(body.position))position[1]=terrainHeightAt(terrain,position[0],position[2])+Math.max(0,size[1]/2-(asset.bounds?.center?.[1]||0));
+  const terrain=scene?.objects?.find(object=>object.type==='terrain'),paths=scene?.objects?.filter(object=>object.type==='path'&&object.visible!==false)||[];if(!Array.isArray(body.position))position[1]=terrainHeightAt(terrain,position[0],position[2],paths)+Math.max(0,size[1]/2-(asset.bounds?.center?.[1]||0));
   return createSceneObject('model',{name:body.name||asset.name,position,scale:Array.isArray(body.scale)?body.scale.map(Number):[1,1,1],rotation:Array.isArray(body.rotation)?body.rotation.map(Number):[0,0,0],properties:{assetId:asset.id,color:rgbToHex(asset.material?.baseColor),metallic:Number(asset.material?.metallic||0),roughness:Number(asset.material?.roughness??.8),collider:asset.collisionStatus==='generated',collision:asset.collision||null,castsShadows:true,receivesShadows:true,previewOnly:Boolean(body.previewOnly),previewTransactionId:body.previewTransactionId||null}});
 }
 
@@ -262,7 +261,7 @@ function acquireActiveProjectLock(state=readState()){
 
 
 async function handleApi(req, res, url) {
-  if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, port, name: 'OmniForge', version:'0.10.0', sessionToken, pid:process.pid, safeMode:process.env.OMNIFORGE_SAFE_MODE==='1' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, port, name: 'OmniForge', version:'0.11.0', sessionToken, pid:process.pid, safeMode:process.env.OMNIFORGE_SAFE_MODE==='1' });
   if (req.method === 'GET' && url.pathname === '/api/state') return json(res, 200, readState());
 
   if (req.method === 'GET' && url.pathname === '/api/providers') {
