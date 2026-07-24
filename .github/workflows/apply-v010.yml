@@ -7,6 +7,10 @@ on:
     paths:
       - tools/apply-v010.mjs
       - .github/workflows/apply-v010.yml
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 permissions:
