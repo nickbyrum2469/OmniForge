@@ -34,7 +34,6 @@ jobs:
           node-version: '20'
 
       - name: Apply connected v0.10 pass
-        id: apply
         shell: bash
         run: |
           set +e
@@ -61,10 +60,38 @@ jobs:
           node --check server/asset-pipeline.mjs
 
       - name: Run full automated tests
-        run: npm test
+        shell: bash
+        run: |
+          set +e
+          npm test > TEST_V010_ERROR.txt 2>&1
+          result=$?
+          cat TEST_V010_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge Build Bot"
+            git config user.email "omniforge-build-bot@users.noreply.github.com"
+            git add TEST_V010_ERROR.txt
+            git commit -m "Record v0.10 test failure diagnostics"
+            git push origin milestone-10/foliage-lighting-foundation
+            exit "$result"
+          fi
+          rm -f TEST_V010_ERROR.txt
 
       - name: Run package verification
-        run: npm run verify
+        shell: bash
+        run: |
+          set +e
+          npm run verify > VERIFY_V010_ERROR.txt 2>&1
+          result=$?
+          cat VERIFY_V010_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge Build Bot"
+            git config user.email "omniforge-build-bot@users.noreply.github.com"
+            git add VERIFY_V010_ERROR.txt
+            git commit -m "Record v0.10 verification failure diagnostics"
+            git push origin milestone-10/foliage-lighting-foundation
+            exit "$result"
+          fi
+          rm -f VERIFY_V010_ERROR.txt
 
       - name: Commit verified v0.10 implementation
         run: |
