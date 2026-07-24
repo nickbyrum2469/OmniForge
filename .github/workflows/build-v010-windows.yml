@@ -1,0 +1,154 @@
+name: Build OmniForge v0.10 Windows
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - milestone-10/foliage-lighting-foundation
+    paths:
+      - BUILD_DESKTOP_WINDOWS.ps1
+      - desktop/**
+      - app/**
+      - server/**
+      - workers/**
+      - bridge/**
+      - package.json
+      - .github/workflows/build-v010-windows.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omniforge-v010-final-windows
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout authoritative milestone source
+        uses: actions/checkout@v4
+        with:
+          ref: milestone-10/foliage-lighting-foundation
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          if (Test-Path package-lock.json) {
+            npm ci
+          } else {
+            npm install
+          }
+
+      - name: Verify source before packaging
+        shell: pwsh
+        run: |
+          $stdout = Join-Path $PWD "package-verify.stdout.log"
+          $stderr = Join-Path $PWD "package-verify.stderr.log"
+          $process = Start-Process npm.cmd -ArgumentList @("run", "verify") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if (Test-Path $stdout) { Get-Content $stdout }
+          if (Test-Path $stderr) { Get-Content $stderr }
+          if ($process.ExitCode -ne 0) { throw "OmniForge package verification failed with exit code $($process.ExitCode)." }
+
+      - name: Build Windows desktop package
+        shell: pwsh
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\BUILD_DESKTOP_WINDOWS.ps1
+
+      - name: Audit packaged application
+        shell: pwsh
+        run: |
+          $output = Join-Path $PWD "dist\OmniForge-win32-x64"
+          $required = @(
+            "OmniForge.exe",
+            "version",
+            "resources\app\server\v010-bootstrap.mjs",
+            "resources\app\server\v010-api.mjs",
+            "resources\app\server\v010-systems.mjs",
+            "resources\app\workers\local-worker.mjs",
+            "resources\app\app\v010.js",
+            "resources\app\app\v010.css",
+            "resources\app\bridge\v010-tools.mjs"
+          )
+          foreach ($relative in $required) {
+            $candidate = Join-Path $output $relative
+            if (-not (Test-Path $candidate -PathType Leaf)) {
+              throw "Packaged v0.10 file is missing: $relative"
+            }
+          }
+          $version = Get-Content (Join-Path $output "version") -Raw
+          if ($version -notmatch "OmniForge 0\.10\.0") {
+            throw "Packaged version marker does not identify OmniForge 0.10.0."
+          }
+          $package = Get-Content (Join-Path $output "resources\app\package.json") -Raw | ConvertFrom-Json
+          if ($package.version -ne "0.10.0" -or $package.main -ne "desktop/main.cjs") {
+            throw "Packaged app package metadata is invalid."
+          }
+          Write-Host "Packaged v0.10 source, worker, UI, MCP, and bootstrap files are present."
+
+      - name: Smoke-test packaged executable and worker
+        shell: pwsh
+        run: |
+          $output = Join-Path $PWD "dist\OmniForge-win32-x64"
+          $runtime = Join-Path $env:TEMP "omniforge-v010-package-smoke-$env:GITHUB_RUN_ID"
+          New-Item -ItemType Directory -Force -Path $runtime | Out-Null
+          $port = 43119
+          $previousDataRoot = $env:OMNIFORGE_DATA_ROOT
+          $previousPort = $env:OMNIFORGE_PORT
+          $env:OMNIFORGE_DATA_ROOT = $runtime
+          $env:OMNIFORGE_PORT = "$port"
+          $process = Start-Process -FilePath (Join-Path $output "OmniForge.exe") -PassThru
+          try {
+            $health = $null
+            $deadline = (Get-Date).AddSeconds(25)
+            while ((Get-Date) -lt $deadline -and -not $health) {
+              Start-Sleep -Milliseconds 500
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2
+              } catch {}
+            }
+            if (-not $health) { throw "Packaged OmniForge did not expose its health endpoint." }
+            if ($health.version -ne "0.10.0") { throw "Packaged health endpoint reported version $($health.version)." }
+            $world = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/v010/world" -TimeoutSec 5
+            if ($world.world.schemaVersion -ne 1) { throw "Packaged v0.10 world API did not initialize." }
+            if (-not $world.runtimeDiagnostics.workers.local.ready) {
+              throw "Packaged local worker diagnostics report the worker as unavailable."
+            }
+            Write-Host "Packaged executable, v0.10 API, persistence runtime, and worker diagnostics passed."
+          } finally {
+            if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+            Get-Process OmniForge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            if ($null -eq $previousDataRoot) { Remove-Item Env:OMNIFORGE_DATA_ROOT -ErrorAction SilentlyContinue } else { $env:OMNIFORGE_DATA_ROOT = $previousDataRoot }
+            if ($null -eq $previousPort) { Remove-Item Env:OMNIFORGE_PORT -ErrorAction SilentlyContinue } else { $env:OMNIFORGE_PORT = $previousPort }
+            Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Create portable v0.10 archive
+        shell: pwsh
+        run: |
+          $archive = Join-Path $PWD "OmniForge-3D-Engine-v0.10.0-Windows-x64.zip"
+          if (Test-Path $archive) { Remove-Item $archive -Force }
+          Compress-Archive -Path ".\dist\OmniForge-win32-x64\*" -DestinationPath $archive -CompressionLevel Optimal
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  OmniForge-3D-Engine-v0.10.0-Windows-x64.zip" | Set-Content ".\OmniForge-3D-Engine-v0.10.0-Windows-x64.sha256" -Encoding ascii
+          Write-Host "Archive SHA-256: $hash"
+
+      - name: Upload packaged OmniForge v0.10
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniForge-3D-Engine-v0.10.0-Windows-x64
+          path: |
+            OmniForge-3D-Engine-v0.10.0-Windows-x64.zip
+            OmniForge-3D-Engine-v0.10.0-Windows-x64.sha256
+          if-no-files-found: error
+          retention-days: 30

@@ -9,8 +9,9 @@ import { importModelAsset, rebuildCanonicalAsset, createSafeRepairDerivative, ge
 import { terrainHeight } from '../app/renderer.js';
 import { createJob, cancelJob, retryJob, clearCompletedJobs } from '../server/job-manager.mjs';
 import { searchMarketplace, marketplaceDetails, prepareMarketplaceDownload, resolveMarketplaceImportFiles, createMaterialFromMarketplaceDownload, inspectDownloadedJob } from '../server/marketplace.mjs';
+import { v010Tools, callV010Tool } from './v010-tools.mjs';
 
-const SERVER_INFO={name:'omniforge',version:'0.9.0'};
+const SERVER_INFO={name:'omniforge',version:'0.10.0'};
 const now=()=>new Date().toISOString();
 
 function upsertAssetRecipe(state,asset){
@@ -21,7 +22,7 @@ function upsertAssetRecipe(state,asset){
   return recipe;
 }
 
-const tools=[
+const tools=[...v010Tools,
   {
     name:'omniforge_get_state',
     description:'Read the authoritative OmniForge project, active 3D scene, selected object, editor state, Codex command queue, and recent evidence.',
@@ -94,8 +95,8 @@ const tools=[
   },
   {
     name:'omniforge_ground_object',
-    description:'Place a mesh entity directly on the authoritative terrain using its current world footprint instead of guessing a Y coordinate.',
-    inputSchema:{type:'object',required:['objectId'],properties:{objectId:{type:'string'}}}
+    description:'Fit an unlocked mesh entity to authoritative terrain with category-aware support points, controlled tilt, root sockets, foundation mode, or vehicle contact mode.',
+    inputSchema:{type:'object',required:['objectId'],properties:{objectId:{type:'string'},maxTilt:{type:'number',minimum:0,maximum:89}}}
   },
   {
     name:'omniforge_list_materials',
@@ -320,6 +321,8 @@ function sceneSummary(state){const scene=activeScene(state);return {engine:state
 function searchState(query){const state=readState(),scene=activeScene(state),q=String(query||'').toLowerCase(),includes=v=>JSON.stringify(v).toLowerCase().includes(q);return {objects:scene.objects.filter(includes),assets:state.assets.filter(includes),commands:state.commands.filter(includes).slice(0,30),evidence:state.evidence.filter(includes).slice(0,30),activity:state.activity.filter(includes).slice(0,30)};}
 
 async function callTool(name,args={}){
+  const v010Result=await callV010Tool(name,args);
+  if(v010Result.handled)return response(v010Result.value);
   switch(name){
     case 'omniforge_get_state':{
       const state=readState();

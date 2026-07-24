@@ -1,0 +1,160 @@
+name: Apply OmniForge v0.10
+
+on:
+  push:
+    branches:
+      - milestone-10/foliage-lighting-foundation
+    paths:
+      - tools/apply-v010.mjs
+      - tools/apply-v010-mcp.mjs
+      - tools/apply-v010-textures.mjs
+      - tools/apply-v010-worker-ipc.mjs
+      - tools/apply-v010-editor-integration.mjs
+      - tools/apply-v010-atmosphere-instancing.mjs
+      - tools/fix-v010-instancing-name.mjs
+      - tools/add-v010-texture-test.mjs
+      - tools/add-v010-editor-integration-test.mjs
+      - tools/add-v010-atmosphere-instancing-test.mjs
+      - tools/update-v010-test-expectations.mjs
+      - .github/workflows/apply-v010.yml
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out authoritative milestone branch
+        uses: actions/checkout@v4
+        with:
+          ref: milestone-10/foliage-lighting-foundation
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Apply connected v0.10 pass
+        shell: bash
+        run: |
+          set +e
+          {
+            node tools/apply-v010.mjs
+            node tools/apply-v010-mcp.mjs
+            node tools/apply-v010-textures.mjs
+            node tools/apply-v010-worker-ipc.mjs
+            node tools/apply-v010-editor-integration.mjs
+            node tools/apply-v010-atmosphere-instancing.mjs
+            node tools/fix-v010-instancing-name.mjs
+            node tools/add-v010-texture-test.mjs
+            node tools/add-v010-editor-integration-test.mjs
+            node tools/add-v010-atmosphere-instancing-test.mjs
+          } > APPLY_V010_ERROR.txt 2>&1
+          result=$?
+          cat APPLY_V010_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge Build Bot"
+            git config user.email "omniforge-build-bot@users.noreply.github.com"
+            git add APPLY_V010_ERROR.txt
+            git commit -m "Record v0.10 application failure diagnostics"
+            git reset --hard HEAD
+            git pull --rebase origin milestone-10/foliage-lighting-foundation
+            git push origin milestone-10/foliage-lighting-foundation
+            exit "$result"
+          fi
+          rm -f APPLY_V010_ERROR.txt
+
+      - name: Update v0.10 release identity assertions
+        run: node tools/update-v010-test-expectations.mjs
+
+      - name: Syntax-check v0.10 runtime files
+        shell: bash
+        run: |
+          set +e
+          {
+            node --check server/v010-bootstrap.mjs
+            node --check server/v010-api.mjs
+            node --check server/v010-systems.mjs
+            node --check app/app.js
+            node --check app/v010.js
+            node --check app/renderer.js
+            node --check server/job-manager.mjs
+            node --check server/asset-pipeline.mjs
+            node --check workers/local-worker.mjs
+            node --check bridge/v010-tools.mjs
+            node --check bridge/mcp-server.mjs
+          } > SYNTAX_V010_ERROR.txt 2>&1
+          result=$?
+          cat SYNTAX_V010_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge Build Bot"
+            git config user.email "omniforge-build-bot@users.noreply.github.com"
+            git add SYNTAX_V010_ERROR.txt
+            git commit -m "Record v0.10 syntax failure diagnostics"
+            git reset --hard HEAD
+            git pull --rebase origin milestone-10/foliage-lighting-foundation
+            git push origin milestone-10/foliage-lighting-foundation
+            exit "$result"
+          fi
+          rm -f SYNTAX_V010_ERROR.txt
+
+      - name: Run full automated tests
+        shell: bash
+        run: |
+          set +e
+          npm test > TEST_V010_ERROR.txt 2>&1
+          result=$?
+          cat TEST_V010_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge Build Bot"
+            git config user.email "omniforge-build-bot@users.noreply.github.com"
+            git add TEST_V010_ERROR.txt
+            git commit -m "Record v0.10 test failure diagnostics"
+            git reset --hard HEAD
+            git pull --rebase origin milestone-10/foliage-lighting-foundation
+            git push origin milestone-10/foliage-lighting-foundation
+            exit "$result"
+          fi
+          rm -f TEST_V010_ERROR.txt
+
+      - name: Run package verification
+        shell: bash
+        run: |
+          set +e
+          npm run verify > VERIFY_V010_ERROR.txt 2>&1
+          result=$?
+          cat VERIFY_V010_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge Build Bot"
+            git config user.email "omniforge-build-bot@users.noreply.github.com"
+            git add VERIFY_V010_ERROR.txt
+            git commit -m "Record v0.10 verification failure diagnostics"
+            git reset --hard HEAD
+            git pull --rebase origin milestone-10/foliage-lighting-foundation
+            git push origin milestone-10/foliage-lighting-foundation
+            exit "$result"
+          fi
+          rm -f VERIFY_V010_ERROR.txt
+
+      - name: Commit verified v0.10 implementation
+        run: |
+          git config user.name "OmniForge Build Bot"
+          git config user.email "omniforge-build-bot@users.noreply.github.com"
+          rm -f WINDOWS_VERIFY_ERROR.txt APPLY_V010_ERROR.txt SYNTAX_V010_ERROR.txt TEST_V010_ERROR.txt VERIFY_V010_ERROR.txt
+          git add --all
+          if git diff --cached --quiet; then
+            echo "No implementation changes were produced."
+            exit 0
+          fi
+          git commit -m "Connect OmniForge v0.10 importer textures worker IPC live editor atmosphere instanced foliage UI API renderer jobs and MCP"
+          git pull --rebase origin milestone-10/foliage-lighting-foundation
+          git push origin milestone-10/foliage-lighting-foundation

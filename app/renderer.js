@@ -22,7 +22,19 @@ layout(location=0) in vec3 aPosition;
 layout(location=1) in vec3 aNormal;
 layout(location=2) in vec2 aUV;
 layout(location=3) in float aBlend;
+layout(location=4) in vec4 aInstance0;
+layout(location=5) in vec4 aInstance1;
+layout(location=6) in vec4 aInstance2;
+layout(location=7) in vec4 aInstance3;
 uniform mat4 uModel;
+uniform float uInstanced;
+uniform float uTime;
+uniform float uFoliageWind;
+uniform float uFoliageWindStrength;
+uniform float uFoliageWindFrequency;
+uniform float uFoliageBaseY;
+uniform float uFoliageHeight;
+uniform vec3 uFoliageWindDirection;
 uniform mat4 uViewProj;
 uniform mat4 uLightViewProj;
 uniform mat3 uNormalMat;
@@ -32,9 +44,19 @@ out vec2 vUV;
 out float vBlend;
 out vec4 vShadowCoord;
 void main(){
-  vec4 world=uModel*vec4(aPosition,1.0);
+  mat4 instanceModel=mat4(aInstance0,aInstance1,aInstance2,aInstance3);
+  mat4 model=uInstanced>.5?instanceModel:uModel;
+  vec3 localPosition=aPosition;
+  if(uFoliageWind>.5){
+    float height=max(uFoliageHeight,.001);
+    float bend=clamp((aPosition.y-uFoliageBaseY)/height,0.0,1.0);
+    float phase=dot(model[3].xz,vec2(.173,.119));
+    float sway=sin(uTime*uFoliageWindFrequency+phase)*uFoliageWindStrength*bend*bend;
+    localPosition.xz+=normalize(uFoliageWindDirection.xz+vec2(.0001))*sway;
+  }
+  vec4 world=model*vec4(localPosition,1.0);
   vWorld=world.xyz;
-  vNormal=normalize(uNormalMat*aNormal);
+  vNormal=normalize(uInstanced>.5?mat3(model)*aNormal:uNormalMat*aNormal);
   vUV=aUV;
   vBlend=aBlend;
   vShadowCoord=uLightViewProj*world;
@@ -198,7 +220,7 @@ vec3 applySurfaceRecipe(vec3 color, vec4 layers, vec4 extra, vec4 masks, vec4 ma
 }
 void main(){
   vec3 viewDir=normalize(uCameraPos-vWorld);
-  vec2 baseUV=vWorld.xz/max(uBaseTextureScale,0.05);
+  vec2 baseUV=uIsTerrain>.5?vWorld.xz/max(uBaseTextureScale,0.05):vUV;
   vec2 pathUV=vWorld.xz/max(uPathTextureScale,0.05);
   float baseC=cos(uBaseTextureRotation),baseS=sin(uBaseTextureRotation);
   float pathC=cos(uPathTextureRotation),pathS=sin(uPathTextureRotation);
@@ -294,9 +316,14 @@ void main(){
 const depthVS=`#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPosition;
+layout(location=4) in vec4 aInstance0;
+layout(location=5) in vec4 aInstance1;
+layout(location=6) in vec4 aInstance2;
+layout(location=7) in vec4 aInstance3;
 uniform mat4 uModel;
 uniform mat4 uLightViewProj;
-void main(){gl_Position=uLightViewProj*uModel*vec4(aPosition,1.0);}`;
+uniform float uInstanced;
+void main(){mat4 instanceModel=mat4(aInstance0,aInstance1,aInstance2,aInstance3);mat4 model=uInstanced>.5?instanceModel:uModel;gl_Position=uLightViewProj*model*vec4(aPosition,1.0);}`;
 const depthFS=`#version 300 es
 precision highp float;
 void main(){}`;
@@ -442,7 +469,7 @@ export class Renderer3D{
     if(!this.gl)throw new Error('WebGL 2 is required.');
     const gl=this.gl;this.meshProgram=program(gl,meshVS,meshFS);this.depthProgram=program(gl,depthVS,depthFS);this.lineProgram=program(gl,lineVS,lineFS);
     this.staticMeshes={cube:createBufferMesh(gl,cubeMesh()),plane:createBufferMesh(gl,planeMesh()),sphere:createBufferMesh(gl,sphereMesh()),cylinder:createBufferMesh(gl,cylinderMesh())};
-    this.dynamic=new Map();this.pathLines=new Map();this.textureCache=new Map();this.assets=[];this.modelMeshes=new Map();this.modelLoads=new Map();this.modelRevisions=new Map();this.modelLoadRevisions=new Map();this.grid=null;this.gridKey='';this.selectionBox=createLineBuffer(gl,this.boxLines());this.whiteTexture=this.createSolidTexture([255,255,255,255]);this.flatNormalTexture=this.createSolidTexture([128,128,255,255]);
+    this.dynamic=new Map();this.pathLines=new Map();this.textureCache=new Map();this.instanceBuffers=new Set();this.renderStart=performance.now();this.assets=[];this.modelMeshes=new Map();this.modelLoads=new Map();this.modelRevisions=new Map();this.modelLoadRevisions=new Map();this.grid=null;this.gridKey='';this.selectionBox=createLineBuffer(gl,this.boxLines());this.whiteTexture=this.createSolidTexture([255,255,255,255]);this.flatNormalTexture=this.createSolidTexture([128,128,255,255]);
     this.createShadowResources(2048);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(canvas);this.resize();
   }
@@ -483,6 +510,13 @@ export class Renderer3D{
     image.onload=()=>{const gl=this.gl,t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);entry.texture=t;entry.ready=true;};
     image.onerror=()=>{entry.error=true;};image.src=url;return {texture:entry.texture,ready:false,scale};
   }
+  textureFromUrl(url,flipY=false){
+    const fallback=this.whiteTexture;if(!url)return {texture:fallback,ready:false,scale:1};
+    const cacheKey=`imported:${flipY?'flip':'native'}:${url}`,cached=this.textureCache.get(cacheKey);if(cached)return {texture:cached.texture,ready:cached.ready,scale:1};
+    const entry={texture:fallback,ready:false,error:false};this.textureCache.set(cacheKey,entry);const image=new Image();
+    image.onload=()=>{const gl=this.gl,t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,flipY);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);entry.texture=t;entry.ready=true;};
+    image.onerror=()=>{entry.error=true;};image.src=url;return {texture:entry.texture,ready:false,scale:1};
+  }
   materialAsset(id){return this.assets.find(asset=>asset.id===id&&asset.type==='material')||null;}
   surfaceRecipeForMaterial(material){if(!material)return null;return this.assets.find(asset=>asset.id===material.surfaceRecipeId&&asset.type==='surfaceRecipe')||this.assets.find(asset=>asset.type==='surfaceRecipe'&&asset.baseMaterialId===material.id)||null;}
   resize(){const dpr=Math.min(devicePixelRatio||1,2),w=Math.max(2,Math.floor(this.canvas.clientWidth*dpr)),h=Math.max(2,Math.floor(this.canvas.clientHeight*dpr));if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;this.gl.viewport(0,0,w,h);}}
@@ -495,6 +529,25 @@ export class Renderer3D{
     const paths=scene.objects.filter(o=>o.type==='path'),signature=JSON.stringify([object.type,object.properties,object.transform.scale,paths.map(p=>[p.visible,p.transform,p.properties])]),cached=this.dynamic.get(object.id);
     if(cached?.signature===signature)return cached.mesh;if(cached){for(const b of cached.mesh.buffers)this.gl.deleteBuffer(b);this.gl.deleteVertexArray(cached.mesh.vao);}
     const data=object.type==='terrain'?terrainMesh(object,paths):null;if(!data)return null;const mesh=createBufferMesh(this.gl,data);this.dynamic.set(object.id,{signature,mesh});return mesh;
+  }
+  prepareInstances(mesh,objects){
+    const gl=this.gl,matrices=new Float32Array(objects.length*16);
+    objects.forEach((object,index)=>matrices.set(modelMatrix(object.transform),index*16));
+    if(!mesh.instanceBuffer){mesh.instanceBuffer=gl.createBuffer();mesh.buffers.push(mesh.instanceBuffer);this.instanceBuffers.add(mesh.instanceBuffer);}
+    gl.bindVertexArray(mesh.vao);gl.bindBuffer(gl.ARRAY_BUFFER,mesh.instanceBuffer);gl.bufferData(gl.ARRAY_BUFFER,matrices,gl.DYNAMIC_DRAW);
+    for(let column=0;column<4;column++){const location=4+column;gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,4,gl.FLOAT,false,64,column*16);gl.vertexAttribDivisor(location,1);}
+    return objects.length;
+  }
+  foliageGroups(scene,camera){
+    const groups=new Map();
+    for(const object of scene.objects){
+      if(!object.visible||object.type!=='model'||!object.properties?.foliageInstance)continue;
+      const limit=Number(object.properties?.lod?.impostor||180),distance=Math.hypot(object.transform.position[0]-camera.position[0],object.transform.position[1]-camera.position[1],object.transform.position[2]-camera.position[2]);
+      if(distance>limit)continue;
+      const key=`${object.properties.assetId||'missing'}:${object.properties.foliageSpeciesId||'species'}`;
+      if(!groups.has(key))groups.set(key,[]);groups.get(key).push(object);
+    }
+    return groups;
   }
   pathBuffers(pathObject,scene){
     const terrain=scene.objects.find(o=>o.type==='terrain'),signature=JSON.stringify([pathObject.properties,pathObject.transform,terrain?.properties,terrain?.transform]),cached=this.pathLines.get(pathObject.id);if(cached?.signature===signature)return cached;
@@ -516,14 +569,18 @@ export class Renderer3D{
     for(const object of scene.objects){if(!object.visible||['empty','path','directionalLight','pointLight'].includes(object.type)||object.properties?.castsShadows===false)continue;const mesh=this.meshFor(object,scene);if(!mesh)continue;gl.bindVertexArray(mesh.vao);gl.uniformMatrix4fv(gl.getUniformLocation(this.depthProgram,'uModel'),false,modelMatrix(object.transform));gl.drawElements(gl.TRIANGLES,mesh.count,mesh.indexType,0);}
     gl.bindVertexArray(null);gl.cullFace(gl.BACK);gl.colorMask(true,true,true,true);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);
   }
-  drawMesh(object,mesh,viewProj,lightViewProj,scene,selected,camera,lights){
-    const gl=this.gl,p=this.meshProgram;gl.useProgram(p);gl.bindVertexArray(mesh.vao);let transform=object.transform;if(object.type==='directionalLight'||object.type==='pointLight')transform={...object.transform,scale:[.7,.7,.7]};const model=modelMatrix(transform);
+  drawMesh(object,mesh,viewProj,lightViewProj,scene,selected,camera,lights,instances=null){
+    const gl=this.gl,p=this.meshProgram;gl.useProgram(p);gl.bindVertexArray(mesh.vao);const instanced=Array.isArray(instances)&&instances.length>0;let transform=object.transform;if(object.type==='directionalLight'||object.type==='pointLight')transform={...object.transform,scale:[.7,.7,.7]};const model=instanced?mat4Identity():modelMatrix(transform);
     const firstPath=scene.objects.find(o=>o.type==='path'&&o.visible),baseAsset=this.materialAsset(object.properties?.materialId),pathAsset=this.materialAsset(firstPath?.properties?.materialId),baseRecipe=this.surfaceRecipeForMaterial(baseAsset),pathRecipe=this.surfaceRecipeForMaterial(pathAsset);
     const baseMaps={baseColor:this.textureFor(baseAsset,'baseColor'),normal:this.textureFor(baseAsset,'normal'),roughness:this.textureFor(baseAsset,'roughness'),ao:this.textureFor(baseAsset,'ambientOcclusion'),height:this.textureFor(baseAsset,'height')};
     const pathMaps={baseColor:this.textureFor(pathAsset,'baseColor'),normal:this.textureFor(pathAsset,'normal'),roughness:this.textureFor(pathAsset,'roughness'),ao:this.textureFor(pathAsset,'ambientOcclusion'),height:this.textureFor(pathAsset,'height')};
     const setM4=(name,value)=>gl.uniformMatrix4fv(gl.getUniformLocation(p,name),false,value),set3=(name,value)=>gl.uniform3fv(gl.getUniformLocation(p,name),value),set1=(name,value)=>gl.uniform1f(gl.getUniformLocation(p,name),value);
     const bindMap=(unit,uniform,entry)=>{gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,entry.texture);gl.uniform1i(gl.getUniformLocation(p,uniform),unit);};
     setM4('uModel',model);setM4('uViewProj',viewProj);setM4('uLightViewProj',lightViewProj);gl.uniformMatrix3fv(gl.getUniformLocation(p,'uNormalMat'),false,normalMatrix3(model));
+    set1('uInstanced',instanced?1:0);
+    const instanceCount=instanced?this.prepareInstances(mesh,instances):0,asset=object.type==='model'?this.assets.find(item=>item.type==='model'&&item.id===object.properties?.assetId):null,bounds=asset?.bounds||{min:[0,0,0],size:[1,1,1]},foliageWind=object.properties?.wind||{};
+    set1('uTime',(performance.now()-this.renderStart)/1000);set1('uFoliageWind',instanced?1:0);set1('uFoliageWindStrength',Number(foliageWind.strength??.35)*Number(scene.settings.windStrength??.35));set1('uFoliageWindFrequency',Number(foliageWind.frequency??1));set1('uFoliageBaseY',Number(bounds.min?.[1]??0));set1('uFoliageHeight',Math.max(.001,Number(bounds.size?.[1]??1)));set3('uFoliageWindDirection',new Float32Array(Array.isArray(scene.settings.windDirection)?scene.settings.windDirection:[1,0,.25]));
+    const drawRange=(count,offset=0)=>{if(instanced)gl.drawElementsInstanced(gl.TRIANGLES,count,mesh.indexType,offset,instanceCount);else gl.drawElements(gl.TRIANGLES,count,mesh.indexType,offset);};
     set3('uBaseColor',hexToRgb(object.properties.color||'#9da7b8'));set3('uPathColor',hexToRgb(firstPath?.properties?.color||'#73573d'));set3('uAmbientColor',hexToRgb(scene.settings.ambientColor||'#ffffff'));set1('uAmbientIntensity',Number(scene.settings.ambientIntensity||.3));
     set3('uLightDir',lights.dir);set3('uLightColor',lights.color);set1('uLightIntensity',lights.intensity);gl.uniform1i(gl.getUniformLocation(p,'uPointCount'),lights.points.length);
     const pp=new Float32Array(12),pc=new Float32Array(12),pd=new Float32Array(8);lights.points.forEach((l,i)=>{pp.set(l.transform.position,i*3);pc.set(hexToRgb(l.properties.color),i*3);pd.set([Number(l.properties.intensity||1),Number(l.properties.range||10)],i*2);});gl.uniform3fv(gl.getUniformLocation(p,'uPointPos[0]'),pp);gl.uniform3fv(gl.getUniformLocation(p,'uPointColor[0]'),pc);gl.uniform2fv(gl.getUniformLocation(p,'uPointData[0]'),pd);
@@ -562,20 +619,23 @@ export class Renderer3D{
     if(useImportedGroups){
       for(const group of mesh.groups){
         const material=group.material||mesh.sourceMaterials?.[group.materialIndex]||mesh.sourceMaterial||{};
-        const color=Array.isArray(material.baseColor)?material.baseColor:[.62,.66,.72,1];
+        const color=Array.isArray(material.baseColor)?material.baseColor:[.62,.66,.72,1],importedBase=this.textureFromUrl(material.textureUrls?.baseColor,false);
         set3('uBaseColor',new Float32Array([Number(color[0]??.62),Number(color[1]??.66),Number(color[2]??.72)]));
-        set1('uRoughness',Number(material.roughness??.8));set1('uMetallic',Number(material.metallic??0));
+        bindMap(0,'uBaseTexture',importedBase);set1('uUseBaseTexture',importedBase.ready?1:0);set1('uBaseTextureScale',1);
+        set1('uOpacity',Number(color[3]??1));set1('uRoughness',Number(material.roughness??.8));set1('uMetallic',Number(material.metallic??0));
         if(material.doubleSided)gl.disable(gl.CULL_FACE);else gl.enable(gl.CULL_FACE);
-        gl.drawElements(gl.TRIANGLES,Number(group.indexCount||0),mesh.indexType,Number(group.indexOffset||0)*mesh.indexStride);
+        drawRange(Number(group.indexCount||0),Number(group.indexOffset||0)*mesh.indexStride);
       }
       gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
-    }else gl.drawElements(gl.TRIANGLES,mesh.count,mesh.indexType,0);
+    }else drawRange(mesh.count,0);
     gl.bindVertexArray(null);
   }
   drawLines(buffer,model,viewProj,color,width=1){if(!buffer?.count)return;const gl=this.gl,p=this.lineProgram;gl.useProgram(p);gl.bindVertexArray(buffer.vao);gl.uniformMatrix4fv(gl.getUniformLocation(p,'uModel'),false,model);gl.uniformMatrix4fv(gl.getUniformLocation(p,'uViewProj'),false,viewProj);gl.uniform4fv(gl.getUniformLocation(p,'uColor'),color);gl.lineWidth(width);gl.drawArrays(gl.LINES,0,buffer.count);gl.bindVertexArray(null);}
   render(scene,camera,selectedId){
     this.resize();const gl=this.gl,{viewProj}=this.cameraMatrices(camera),lights=this.lightState(scene),lightViewProj=this.lightMatrix(scene,lights);if(lights.shadows)this.renderShadow(scene,lightViewProj);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.cullFace(gl.BACK);
-    const objects=scene.objects.filter(o=>o.visible&&!['empty','path'].includes(o.type));objects.sort((a,b)=>{const rank=o=>o.type==='terrain'?-20:o.type==='decal'?20+Number(o.properties?.sortOrder||0):0;return rank(a)-rank(b);});for(const object of objects){const mesh=this.meshFor(object,scene);if(!mesh)continue;if(object.type==='decal'){gl.enable(gl.BLEND);gl.depthMask(false);gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);}this.drawMesh(object,mesh,viewProj,lightViewProj,scene,object.id===selectedId,camera,lights);if(object.type==='decal'){gl.disable(gl.POLYGON_OFFSET_FILL);gl.depthMask(true);gl.enable(gl.CULL_FACE);}}
+    const foliageGroups=this.foliageGroups(scene,camera),foliageIds=new Set([...foliageGroups.values()].flat().map(item=>item.id));
+    const objects=scene.objects.filter(o=>o.visible&&!['empty','path'].includes(o.type)&&!foliageIds.has(o.id));objects.sort((a,b)=>{const rank=o=>o.type==='terrain'?-20:o.type==='decal'?20+Number(o.properties?.sortOrder||0):0;return rank(a)-rank(b);});for(const object of objects){const mesh=this.meshFor(object,scene);if(!mesh)continue;if(object.type==='decal'){gl.enable(gl.BLEND);gl.depthMask(false);gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);}this.drawMesh(object,mesh,viewProj,lightViewProj,scene,object.id===selectedId,camera,lights);if(object.type==='decal'){gl.disable(gl.POLYGON_OFFSET_FILL);gl.depthMask(true);gl.enable(gl.CULL_FACE);}}
+    for(const instances of foliageGroups.values()){const object=instances[0],mesh=this.meshFor(object,scene);if(mesh)this.drawMesh(object,mesh,viewProj,lightViewProj,scene,false,camera,lights,instances);}
     this.ensureGrid(scene);if(scene.settings.gridVisible)this.drawLines(this.grid,mat4Identity(),viewProj,[.45,.56,.68,.18]);
     for(const pathObject of scene.objects.filter(o=>o.type==='path'&&o.visible)){const buffers=this.pathBuffers(pathObject,scene),selected=pathObject.id===selectedId;this.drawLines(buffers.edges,mat4Identity(),viewProj,selected?[.83,.62,1,.9]:[.30,.22,.15,.28],selected?2:1);if(selected)this.drawLines(buffers.center,mat4Identity(),viewProj,[.92,.8,1,1],2);}
     const selected=scene.objects.find(o=>o.id===selectedId);if(selected&&selected.visible&&!['terrain','path','empty'].includes(selected.type)){gl.disable(gl.DEPTH_TEST);let selectionTransform=selected.transform;if(selected.type==='model'){const asset=this.assets.find(item=>item.type==='model'&&item.id===selected.properties?.assetId),bounds=asset?.bounds;if(bounds)selectionTransform={position:[selected.transform.position[0]+(bounds.center?.[0]||0)*selected.transform.scale[0],selected.transform.position[1]+(bounds.center?.[1]||0)*selected.transform.scale[1],selected.transform.position[2]+(bounds.center?.[2]||0)*selected.transform.scale[2]],rotation:selected.transform.rotation,scale:[Math.max(.02,Math.abs((bounds.size?.[0]||1)*selected.transform.scale[0])),Math.max(.02,Math.abs((bounds.size?.[1]||1)*selected.transform.scale[1])),Math.max(.02,Math.abs((bounds.size?.[2]||1)*selected.transform.scale[2]))]};}this.drawLines(this.selectionBox,modelMatrix(selectionTransform),viewProj,[.72,.45,1,1],2);gl.enable(gl.DEPTH_TEST);}

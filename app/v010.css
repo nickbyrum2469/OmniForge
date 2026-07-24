@@ -1,0 +1,161 @@
+.v010-world-tab {
+  overflow: auto;
+  padding: 12px;
+}
+
+.v010-card {
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid var(--border, #2b3442);
+  border-radius: 10px;
+  background: rgba(12, 18, 28, 0.82);
+}
+
+.v010-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.v010-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.v010-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: #9eabbc;
+  font-size: 11px;
+}
+
+.v010-grid input,
+.v010-grid select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.v010-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.v010-world-tab .button {
+  min-height: 30px;
+}
+
+.v010-section-note,
+.v010-status {
+  color: #9ba8b9;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.v010-section-note {
+  margin: 0 0 8px;
+}
+
+.v010-status {
+  min-height: 42px;
+  padding: 8px;
+  white-space: pre-wrap;
+  border: 1px solid rgba(108, 132, 164, 0.25);
+  border-radius: 8px;
+  background: rgba(7, 11, 18, 0.65);
+}
+
+.v010-chip {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #1b2a3f;
+  color: #9ecfff;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.v010-danger-card {
+  border-color: #5d3038;
+}
+
+@media (max-width: 1250px) {
+  .v010-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+#viewportWrap {
+  isolation: isolate;
+  overflow: hidden;
+}
+
+#viewportWrap::before,
+#viewportWrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#viewportWrap::before {
+  z-index: 0;
+  opacity: max(var(--v010-stars, 0), var(--v010-aurora, 0));
+  background-image:
+    radial-gradient(circle at 7% 14%, rgba(255,255,255,0.95) 0 0.7px, transparent 1.4px),
+    radial-gradient(circle at 21% 32%, rgba(190,218,255,0.9) 0 0.6px, transparent 1.2px),
+    radial-gradient(circle at 37% 11%, rgba(255,236,202,0.92) 0 0.8px, transparent 1.5px),
+    radial-gradient(circle at 53% 27%, rgba(255,255,255,0.9) 0 0.55px, transparent 1.2px),
+    radial-gradient(circle at 73% 8%, rgba(190,218,255,0.9) 0 0.75px, transparent 1.4px),
+    radial-gradient(circle at 88% 36%, rgba(255,245,224,0.9) 0 0.7px, transparent 1.35px),
+    linear-gradient(116deg, transparent 25%, rgba(83,255,190,calc(var(--v010-aurora, 0) * 0.32)) 43%, rgba(83,133,255,calc(var(--v010-aurora, 0) * 0.24)) 54%, transparent 72%),
+    radial-gradient(ellipse at 58% 32%, rgba(188,205,255,calc(var(--v010-milky-way, 0) * 0.18)), transparent 54%);
+  background-size:
+    calc(180px / var(--v010-star-density, .72)) calc(140px / var(--v010-star-density, .72)),
+    calc(230px / var(--v010-star-density, .72)) calc(190px / var(--v010-star-density, .72)),
+    calc(310px / var(--v010-star-density, .72)) calc(210px / var(--v010-star-density, .72)),
+    calc(270px / var(--v010-star-density, .72)) calc(250px / var(--v010-star-density, .72)),
+    calc(350px / var(--v010-star-density, .72)) calc(180px / var(--v010-star-density, .72)),
+    calc(290px / var(--v010-star-density, .72)) calc(230px / var(--v010-star-density, .72)),
+    100% 100%, 100% 100%;
+  mix-blend-mode: screen;
+  transition: opacity 1.2s ease;
+}
+
+#viewportWrap::after {
+  z-index: 0;
+  opacity: var(--v010-clouds, 0);
+  background:
+    radial-gradient(ellipse at 12% 24%, rgba(235,242,249,.72) 0 9%, transparent 25%),
+    radial-gradient(ellipse at 34% 18%, rgba(219,231,241,.65) 0 12%, transparent 28%),
+    radial-gradient(ellipse at 59% 28%, rgba(238,244,249,.68) 0 11%, transparent 27%),
+    radial-gradient(ellipse at 82% 16%, rgba(205,220,233,.64) 0 13%, transparent 29%),
+    linear-gradient(to bottom, rgba(160,180,198,.18), transparent 58%);
+  background-size: 720px 330px, 880px 390px, 760px 350px, 940px 410px, 100% 100%;
+  filter: blur(12px) saturate(.82);
+  mix-blend-mode: screen;
+  animation: v010-cloud-drift var(--v010-cloud-speed, 82s) linear infinite;
+  transition: opacity 1.4s ease;
+}
+
+#viewportWrap[data-weather='storm']::after,
+#viewportWrap[data-weather='overcast']::after {
+  filter: blur(10px) saturate(.55) brightness(.62);
+  mix-blend-mode: normal;
+}
+
+#viewport {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes v010-cloud-drift {
+  from { background-position: 0 0, 140px 12px, 330px -4px, 520px 18px, 0 0; }
+  to { background-position: 720px 0, 1020px 12px, 1090px -4px, 1460px 18px, 0 0; }
+}

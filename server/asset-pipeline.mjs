@@ -25,18 +25,40 @@ function componentCount(type){const map={SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT2:4,MA
 function normalizedValue(value,componentType){
   if(componentType===5120)return Math.max(value/127,-1);if(componentType===5121)return value/255;if(componentType===5122)return Math.max(value/32767,-1);if(componentType===5123)return value/65535;return value;
 }
-function accessorArray(gltf,buffers,index){
-  const accessor=gltf.accessors?.[index];if(!accessor)throw new Error(`Missing accessor ${index}.`);
-  if(accessor.sparse)throw new Error('Sparse glTF accessors are not supported by the current canonical importer.');
-  const view=gltf.bufferViews?.[accessor.bufferView];if(!view)throw new Error(`Accessor ${index} has no buffer view.`);
-  const source=buffers[view.buffer];if(!source)throw new Error(`Missing glTF buffer ${view.buffer}.`);
-  const info=componentInfo(accessor.componentType),size=componentCount(accessor.type),stride=view.byteStride||info.bytes*size;
-  const start=(view.byteOffset||0)+(accessor.byteOffset||0),out=new Array(accessor.count*size);
-  for(let item=0;item<accessor.count;item++)for(let c=0;c<size;c++){
-    const offset=start+item*stride+c*info.bytes;if(offset+info.bytes>source.length)throw new Error(`Accessor ${index} exceeds its buffer.`);
-    let value=source[info.read](offset);if(accessor.normalized)value=normalizedValue(value,accessor.componentType);out[item*size+c]=value;
+function accessorArray(gltf, buffers, index) {
+  if (!Number.isInteger(index) || index < 0) throw new Error(`Invalid accessor index ${index}.`);
+  const accessor = gltf.accessors?.[index];
+  if (!accessor) throw new Error(`Missing accessor ${index}.`);
+  if (!Number.isInteger(accessor.count) || accessor.count < 0 || accessor.count > 50_000_000) throw new Error(`Accessor ${index} has an invalid element count.`);
+  if (accessor.sparse) throw new Error(`Accessor ${index} uses sparse data, which is preserved in the source but is not yet supported by the canonical preview.`);
+  if (!Number.isInteger(accessor.bufferView)) throw new Error(`Accessor ${index} has no buffer view.`);
+  const view = gltf.bufferViews?.[accessor.bufferView];
+  if (!view) throw new Error(`Accessor ${index} references missing buffer view ${accessor.bufferView}.`);
+  if (!Number.isInteger(view.buffer) || view.buffer < 0) throw new Error(`Buffer view ${accessor.bufferView} references an invalid buffer.`);
+  const source = buffers[view.buffer];
+  if (!source) throw new Error(`Missing glTF buffer ${view.buffer}.`);
+  const info = componentInfo(accessor.componentType);
+  const size = componentCount(accessor.type);
+  const packed = info.bytes * size;
+  const stride = view.byteStride || packed;
+  if (stride < packed || stride % info.bytes !== 0) throw new Error(`Accessor ${index} has invalid byte stride ${stride}.`);
+  const viewStart = Number(view.byteOffset || 0);
+  const viewLength = Number(view.byteLength || 0);
+  const accessorOffset = Number(accessor.byteOffset || 0);
+  const start = viewStart + accessorOffset;
+  if (viewStart < 0 || viewLength < 0 || start < 0 || viewStart + viewLength > source.length) throw new Error(`Buffer view ${accessor.bufferView} exceeds buffer ${view.buffer}.`);
+  const required = accessor.count ? ((accessor.count - 1) * stride + packed) : 0;
+  if (accessorOffset + required > viewLength || start + required > source.length) throw new Error(`Accessor ${index} exceeds its declared buffer view.`);
+  const out = new Array(accessor.count * size);
+  for (let item = 0; item < accessor.count; item += 1) {
+    for (let component = 0; component < size; component += 1) {
+      const offset = start + item * stride + component * info.bytes;
+      let value = source[info.read](offset);
+      if (accessor.normalized) value = normalizedValue(value, accessor.componentType);
+      out[item * size + component] = value;
+    }
   }
-  return {values:out,count:accessor.count,size,componentType:accessor.componentType,min:accessor.min||null,max:accessor.max||null};
+  return { values: out, count: accessor.count, size, componentType: accessor.componentType, min: accessor.min || null, max: accessor.max || null };
 }
 function decodeDataUri(uri){
   const match=/^data:([^;,]+)?;base64,([A-Za-z0-9+/=]+)$/.exec(String(uri||''));if(!match)return null;return Buffer.from(match[2],'base64');
@@ -90,27 +112,167 @@ function normalMatrixFromMat4(m){
 }
 function transformNormal(matrix3,x,y,z){const nx=matrix3[0]*x+matrix3[3]*y+matrix3[6]*z,ny=matrix3[1]*x+matrix3[4]*y+matrix3[7]*z,nz=matrix3[2]*x+matrix3[5]*y+matrix3[8]*z,length=Math.hypot(nx,ny,nz)||1;return [nx/length,ny/length,nz/length];}
 function transformDeterminant(matrix){return matrix[0]*(matrix[5]*matrix[10]-matrix[9]*matrix[6])-matrix[4]*(matrix[1]*matrix[10]-matrix[9]*matrix[2])+matrix[8]*(matrix[1]*matrix[6]-matrix[5]*matrix[2]);}
-function sceneMeshInstances(gltf){
-  const nodes=gltf.nodes||[],scenes=gltf.scenes||[];
-  if(!nodes.length)return (gltf.meshes||[]).map((_,meshIndex)=>({meshIndex,nodeIndex:null,nodeName:`Mesh ${meshIndex}`,worldMatrix:mat4Identity()}));
-  const childSet=new Set(nodes.flatMap(node=>Array.isArray(node.children)?node.children:[]));
-  const configured=scenes[gltf.scene??0]?.nodes;
-  const roots=Array.isArray(configured)&&configured.length?configured:nodes.map((_,index)=>index).filter(index=>!childSet.has(index));
-  const instances=[],visiting=new Set();
-  const walk=(nodeIndex,parentMatrix)=>{
-    if(visiting.has(nodeIndex))throw new Error(`glTF node hierarchy contains a cycle at node ${nodeIndex}.`);
-    const node=nodes[nodeIndex];if(!node)return;
-    visiting.add(nodeIndex);const worldMatrix=mat4Multiply(parentMatrix,nodeLocalMatrix(node));
-    if(Number.isInteger(node.mesh)&&gltf.meshes?.[node.mesh])instances.push({meshIndex:node.mesh,nodeIndex,nodeName:node.name||`Node ${nodeIndex}`,worldMatrix});
-    for(const child of node.children||[])walk(child,worldMatrix);
-    visiting.delete(nodeIndex);
-  };
-  for(const root of roots)walk(root,mat4Identity());
-  if(!instances.length)return (gltf.meshes||[]).map((_,meshIndex)=>({meshIndex,nodeIndex:null,nodeName:`Mesh ${meshIndex}`,worldMatrix:mat4Identity()}));
+function sceneMeshInstances(gltf) {
+  const nodes = Array.isArray(gltf.nodes) ? gltf.nodes : [];
+  const scenes = Array.isArray(gltf.scenes) ? gltf.scenes : [];
+  if (!nodes.length) return (gltf.meshes || []).map((_, meshIndex) => ({ meshIndex, nodeIndex: null, nodeName: `Mesh ${meshIndex}`, worldMatrix: mat4Identity() }));
+
+  const childSet = new Set();
+  for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex += 1) {
+    const node = nodes[nodeIndex] || {};
+    if (!Array.isArray(node.children)) continue;
+    for (const child of node.children) {
+      if (!Number.isInteger(child) || child < 0 || child >= nodes.length) throw new Error(`Node ${nodeIndex} references invalid child ${child}.`);
+      childSet.add(child);
+    }
+  }
+
+  const configured = scenes[gltf.scene ?? 0]?.nodes;
+  let roots = Array.isArray(configured) && configured.length
+    ? configured.slice()
+    : nodes.map((_, index) => index).filter(index => !childSet.has(index));
+  roots = roots.filter(index => Number.isInteger(index) && index >= 0 && index < nodes.length);
+  if (!roots.length) roots = nodes.map((_, index) => index);
+
+  const instances = [];
+  const stack = roots.slice().reverse().map(nodeIndex => ({ nodeIndex, parentMatrix: mat4Identity(), ancestors: new Set(), depth: 0 }));
+  let visitedSteps = 0;
+  const maxSteps = Math.max(1000, nodes.length * 64);
+  const maxDepth = Math.min(4096, Math.max(256, nodes.length * 4));
+  while (stack.length) {
+    const entry = stack.pop();
+    if (++visitedSteps > maxSteps) throw new Error('glTF node traversal exceeded its safety budget. The source may contain a cycle or pathological repeated hierarchy.');
+    if (entry.depth > maxDepth) throw new Error(`glTF node hierarchy exceeds the maximum safe depth at node ${entry.nodeIndex}.`);
+    if (entry.ancestors.has(entry.nodeIndex)) throw new Error(`glTF node hierarchy contains a cycle at node ${entry.nodeIndex}.`);
+    const node = nodes[entry.nodeIndex];
+    if (!node) continue;
+    const worldMatrix = mat4Multiply(entry.parentMatrix, nodeLocalMatrix(node));
+    if (Number.isInteger(node.mesh)) {
+      if (!gltf.meshes?.[node.mesh]) throw new Error(`Node ${entry.nodeIndex} references missing mesh ${node.mesh}.`);
+      instances.push({ meshIndex: node.mesh, nodeIndex: entry.nodeIndex, nodeName: node.name || `Node ${entry.nodeIndex}`, worldMatrix });
+    }
+    const ancestors = new Set(entry.ancestors);
+    ancestors.add(entry.nodeIndex);
+    const children = Array.isArray(node.children) ? node.children : [];
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      stack.push({ nodeIndex: children[index], parentMatrix: worldMatrix, ancestors, depth: entry.depth + 1 });
+    }
+  }
+  if (!instances.length) return (gltf.meshes || []).map((_, meshIndex) => ({ meshIndex, nodeIndex: null, nodeName: `Mesh ${meshIndex}`, worldMatrix: mat4Identity() }));
   return instances;
 }
-function materialInfo(gltf,index){
-  const material=gltf.materials?.[index]||{},pbr=material.pbrMetallicRoughness||{},factor=pbr.baseColorFactor||[.65,.68,.74,1];return {name:material.name||`Material ${index??0}`,baseColor:[finite(factor[0],.65),finite(factor[1],.68),finite(factor[2],.74),finite(factor[3],1)],metallic:finite(pbr.metallicFactor,0),roughness:finite(pbr.roughnessFactor,.8),doubleSided:Boolean(material.doubleSided),alphaMode:material.alphaMode||'OPAQUE'};
+function materialInfo(gltf, index) {
+  const material = gltf.materials?.[index] || {};
+  const pbr = material.pbrMetallicRoughness || {};
+  const factor = pbr.baseColorFactor || [0.65, 0.68, 0.74, 1];
+  return {
+    name: material.name || `Material ${index ?? 0}`,
+    baseColor: [finite(factor[0], 0.65), finite(factor[1], 0.68), finite(factor[2], 0.74), finite(factor[3], 1)],
+    metallic: finite(pbr.metallicFactor, 0),
+    roughness: finite(pbr.roughnessFactor, 0.8),
+    doubleSided: Boolean(material.doubleSided),
+    alphaMode: material.alphaMode || 'OPAQUE',
+    alphaCutoff: finite(material.alphaCutoff, 0.5),
+    emissiveFactor: Array.isArray(material.emissiveFactor) ? material.emissiveFactor.map(value => finite(value, 0)).slice(0, 3) : [0, 0, 0],
+    textureSlots: {
+      baseColor: Number.isInteger(pbr.baseColorTexture?.index) ? pbr.baseColorTexture.index : null,
+      metallicRoughness: Number.isInteger(pbr.metallicRoughnessTexture?.index) ? pbr.metallicRoughnessTexture.index : null,
+      normal: Number.isInteger(material.normalTexture?.index) ? material.normalTexture.index : null,
+      occlusion: Number.isInteger(material.occlusionTexture?.index) ? material.occlusionTexture.index : null,
+      emissive: Number.isInteger(material.emissiveTexture?.index) ? material.emissiveTexture.index : null
+    }
+  };
+}
+function imageExtension(mimeType) {
+  const normalized = String(mimeType || '').toLowerCase();
+  if (normalized === 'image/png') return 'png';
+  if (normalized === 'image/jpeg' || normalized === 'image/jpg') return 'jpg';
+  if (normalized === 'image/webp') return 'webp';
+  return null;
+}
+function imageBuffer(gltf, buffers, image, imageIndex) {
+  if (typeof image?.uri === 'string') {
+    const decoded = decodeDataUri(image.uri);
+    if (!decoded) return { buffer: null, warning: `Image ${imageIndex} uses an external URI. The single-file importer preserved the source reference but did not copy an external file.` };
+    const mimeMatch = /^data:([^;,]+)/.exec(image.uri);
+    return { buffer: decoded, mimeType: image.mimeType || mimeMatch?.[1] || 'application/octet-stream' };
+  }
+  if (Number.isInteger(image?.bufferView)) {
+    const view = gltf.bufferViews?.[image.bufferView];
+    if (!view) throw new Error(`Image ${imageIndex} references missing buffer view ${image.bufferView}.`);
+    if (!Number.isInteger(view.buffer) || view.buffer < 0) throw new Error(`Image ${imageIndex} references an invalid buffer.`);
+    const source = buffers[view.buffer];
+    if (!source) throw new Error(`Image ${imageIndex} references missing buffer ${view.buffer}.`);
+    const start = Number(view.byteOffset || 0);
+    const length = Number(view.byteLength || 0);
+    if (start < 0 || length <= 0 || start + length > source.length) throw new Error(`Image ${imageIndex} exceeds its declared buffer view.`);
+    return { buffer: source.subarray(start, start + length), mimeType: image.mimeType || 'application/octet-stream' };
+  }
+  return { buffer: null, warning: `Image ${imageIndex} has neither a data URI nor a buffer view.` };
+}
+function extractEmbeddedTextures(gltf, buffers, canonicalFolder, assetId) {
+  const texturesFolder = path.join(canonicalFolder, 'textures');
+  const records = [];
+  const warnings = [];
+  for (let imageIndex = 0; imageIndex < (gltf.images || []).length; imageIndex += 1) {
+    const image = gltf.images[imageIndex] || {};
+    try {
+      const extracted = imageBuffer(gltf, buffers, image, imageIndex);
+      if (!extracted.buffer) {
+        if (extracted.warning) warnings.push(extracted.warning);
+        continue;
+      }
+      const extension = imageExtension(extracted.mimeType);
+      if (!extension) {
+        warnings.push(`Image ${imageIndex} uses unsupported MIME type ${extracted.mimeType}; its source bytes remain preserved in the original import.`);
+        continue;
+      }
+      fs.mkdirSync(texturesFolder, { recursive: true });
+      const fileName = `image-${String(imageIndex).padStart(3, '0')}.${extension}`;
+      const output = path.join(texturesFolder, fileName);
+      fs.writeFileSync(output, extracted.buffer);
+      records.push({
+        id: `texture-${assetId}-${imageIndex}`,
+        imageIndex,
+        name: image.name || `Image ${imageIndex}`,
+        mimeType: extracted.mimeType,
+        file: `assets/models/${assetId}/canonical/textures/${fileName}`,
+        url: `/assets/models/${encodeURIComponent(assetId)}/canonical/textures/${encodeURIComponent(fileName)}`,
+        fileBytes: extracted.buffer.length,
+        checksum: checksum(extracted.buffer),
+        source: Number.isInteger(image.bufferView) ? 'bufferView' : 'data-uri',
+        createdAt: now()
+      });
+    } catch (error) {
+      warnings.push(`Image ${imageIndex}: ${error.message}`);
+    }
+  }
+  return { records, warnings };
+}
+function attachTextureUrls(gltf, mesh, textures) {
+  const images = new Map((textures || []).map(item => [item.imageIndex, item]));
+  const textureUrl = textureIndex => {
+    if (!Number.isInteger(textureIndex)) return null;
+    const texture = gltf.textures?.[textureIndex];
+    if (!texture || !Number.isInteger(texture.source)) return null;
+    return images.get(texture.source)?.url || null;
+  };
+  const enrich = material => {
+    material.textureUrls = {
+      baseColor: textureUrl(material.textureSlots?.baseColor),
+      metallicRoughness: textureUrl(material.textureSlots?.metallicRoughness),
+      normal: textureUrl(material.textureSlots?.normal),
+      occlusion: textureUrl(material.textureSlots?.occlusion),
+      emissive: textureUrl(material.textureSlots?.emissive)
+    };
+    material.authoredUvSet = 0;
+    return material;
+  };
+  for (const material of mesh.materials || []) enrich(material);
+  for (const group of mesh.groups || []) {
+    if (group.material) enrich(group.material);
+  }
+  return mesh;
 }
 function mergePrimitives(gltf,buffers){
   const positions=[],normals=[],uvs=[],indices=[],materials=[],groups=[];let vertexOffset=0;const unsupported=[],instances=sceneMeshInstances(gltf);
@@ -147,7 +309,7 @@ function createHealth(gltf,mesh,fileBytes,container){
   const bounds=computeBounds(mesh.positions),warnings=[],blocking=[];
   const nodes=gltf.nodes||[],hasNodeTransforms=nodes.some(node=>Array.isArray(node.matrix)||Array.isArray(node.translation)||Array.isArray(node.rotation)||Array.isArray(node.scale));
   if(mesh.materials.length>1)warnings.push('Multiple material slots are preserved and rendered as separate primitive groups; inspect texture fidelity before approval.');
-  if((gltf.textures||[]).length||(gltf.images||[]).length)warnings.push('Texture and image references are preserved in the original glTF; the current canonical preview reproduces material factors but not every authored texture slot.');
+  if((gltf.textures||[]).length||(gltf.images||[]).length)warnings.push('Texture and image references are preserved. Embedded PNG, JPEG, and WebP images are extracted when possible; base-color UV0 is rendered and remaining PBR channels require inspection.');
   if(hasNodeTransforms&&!mesh.nodeTransformsApplied)warnings.push('Authored node transforms could not be applied to the canonical preview. Inspect the import before approval.');
   if((gltf.skins||[]).length)warnings.push('Skeleton and skin data are preserved in the original glTF but are not yet rendered by the current runtime.');
   if((gltf.animations||[]).length)warnings.push('Animation clips are catalogued and preserved, but animation playback is preserved for the animation-runtime milestone.');
@@ -169,22 +331,152 @@ function canonicalMesh(mesh){
 function createLod(mesh,ratio){
   const triCount=Math.floor(mesh.indices.length/3),keep=Math.max(1,Math.floor(triCount*ratio)),indices=[];for(let i=0;i<keep;i++){const source=Math.min(triCount-1,Math.floor(i*triCount/keep))*3;indices.push(mesh.indices[source],mesh.indices[source+1],mesh.indices[source+2]);}return {...mesh,indices,createdAt:now(),lodRatio:ratio};
 }
-export function importModelAsset({assetRoot,name,fileName,dataUrl,category='static-prop',license='User supplied — review before release',creator='User',source='Local import',tags=[]}){
-  const {buffer}=decodeAssetDataUrl(dataUrl),extension=String(fileName||'model.glb').toLowerCase().endsWith('.gltf')?'gltf':'glb',digest=checksum(buffer),assetId=`asset-${slugify(name||path.basename(fileName||'model',path.extname(fileName||'')),'model')}-${digest.slice(0,10)}`;
-  const folder=path.join(assetRoot,'models',assetId),staging=path.join(folder,'source'),canonical=path.join(folder,'canonical');fs.mkdirSync(staging,{recursive:true});fs.mkdirSync(canonical,{recursive:true});const sourceFile=path.join(staging,`original.${extension}`);if(!fs.existsSync(sourceFile))fs.writeFileSync(sourceFile,buffer);
-  let parsed,mesh,health,parseError=null;try{parsed=extension==='glb'?parseGlb(buffer):parseGltf(buffer);mesh=mergePrimitives(parsed.gltf,parsed.buffers);health=createHealth(parsed.gltf,mesh,buffer.length,parsed.container);}catch(error){parseError=error;health={state:'failed',checkedAt:now(),container:extension,fileBytes:buffer.length,dimensions:[0,0,0],bounds:null,triangleCount:0,vertexCount:0,meshCount:0,primitiveCount:0,materialCount:0,textureCount:0,imageCount:0,nodeCount:0,skeletonCount:0,animationCount:0,morphTargetCount:0,warnings:[],blocking:[error.message],recommendedRepairs:[]};}
-  let meshFile=null,meshUrl=null,material=null;if(mesh&&!parseError){const canonicalData=canonicalMesh(mesh);meshFile=path.join(canonical,'mesh.json');writeJson(meshFile,canonicalData);meshUrl=`/assets/models/${encodeURIComponent(assetId)}/canonical/mesh.json`;material=canonicalData.material;}
-  const record={id:assetId,type:'model',name:String(name||path.basename(fileName||'Imported Model',path.extname(fileName||''))).slice(0,120),category:String(category||'static-prop').slice(0,50),status:health.state==='failed'?'unvalidated':'validated',approvalState:health.state==='failed'?'unvalidated':'draft',source:String(source).slice(0,500),sourceUri:String(source).startsWith('http')?String(source).slice(0,500):null,creator:String(creator).slice(0,120),license:String(license).slice(0,240),sourceFile:`assets/models/${assetId}/source/original.${extension}`,canonicalFile:meshFile?`assets/models/${assetId}/canonical/mesh.json`:null,meshUrl,checksum:digest,fileBytes:buffer.length,unitScale:1,upAxis:'y',forwardAxis:'-z',pivotMode:'source',bounds:health.bounds,triangleCount:health.triangleCount,vertexCount:health.vertexCount,materialSlots:mesh?.materials||[],textures:[],skeleton:health.skeletonCount?{skinCount:health.skeletonCount}:null,animations:health.animationCount?Array.from({length:health.animationCount},(_,index)=>({id:`animation-${index}`,name:parsed?.gltf?.animations?.[index]?.name||`Animation ${index+1}`})):[],collisionStatus:'missing',lods:[],tags:Array.isArray(tags)?tags.map(v=>String(v).slice(0,40)).slice(0,30):[],semanticDescription:'',affordances:[],health,validation:{state:health.state,checkedAt:now(),warnings:health.warnings,errors:health.blocking},provenance:{source:String(source).slice(0,200),creator:String(creator).slice(0,120),license:String(license).slice(0,240),attributionRequired:false,importedAt:now(),originalFileName:path.basename(fileName||`original.${extension}`)},sourceAssetId:null,derivativeAssetIds:[],sceneUsages:[],thumbnail:null,preview:null,material,canonicalImporterVersion:2,canonicalRevision:Date.now(),createdAt:now(),updatedAt:now()};writeJson(path.join(folder,'asset-record.json'),record);return record;
+export function importModelAsset({ assetRoot, name, fileName, dataUrl, category = 'static-prop', license = 'User supplied — review before release', creator = 'User', source = 'Local import', tags = [] }) {
+  const { buffer } = decodeAssetDataUrl(dataUrl);
+  const extension = String(fileName || 'model.glb').toLowerCase().endsWith('.gltf') ? 'gltf' : 'glb';
+  const digest = checksum(buffer);
+  const assetId = `asset-${slugify(name || path.basename(fileName || 'model', path.extname(fileName || '')), 'model')}-${digest.slice(0, 10)}`;
+  const folder = path.join(assetRoot, 'models', assetId);
+  const staging = path.join(folder, 'source');
+  const canonical = path.join(folder, 'canonical');
+  fs.mkdirSync(staging, { recursive: true });
+  fs.mkdirSync(canonical, { recursive: true });
+  const sourceFile = path.join(staging, `original.${extension}`);
+  if (!fs.existsSync(sourceFile)) fs.writeFileSync(sourceFile, buffer);
+
+  let parsed;
+  let mesh;
+  let health;
+  let parseError = null;
+  let textures = [];
+  try {
+    parsed = extension === 'glb' ? parseGlb(buffer) : parseGltf(buffer);
+    mesh = mergePrimitives(parsed.gltf, parsed.buffers);
+    const extracted = extractEmbeddedTextures(parsed.gltf, parsed.buffers, canonical, assetId);
+    textures = extracted.records;
+    attachTextureUrls(parsed.gltf, mesh, textures);
+    health = createHealth(parsed.gltf, mesh, buffer.length, parsed.container);
+    health.warnings.push(...extracted.warnings);
+    if (textures.length) health.warnings.push('Embedded texture images were extracted into the managed canonical asset. Base-color maps render with authored UV0; inspect normal, occlusion, emissive, and metallic-roughness fidelity before approval.');
+  } catch (error) {
+    parseError = error;
+    health = {
+      state: 'failed', checkedAt: now(), container: extension, fileBytes: buffer.length,
+      dimensions: [0, 0, 0], bounds: null, triangleCount: 0, vertexCount: 0,
+      meshCount: 0, primitiveCount: 0, materialCount: 0, textureCount: 0, imageCount: 0,
+      nodeCount: 0, skeletonCount: 0, animationCount: 0, morphTargetCount: 0,
+      warnings: [], blocking: [error.message], recommendedRepairs: []
+    };
+  }
+
+  let meshFile = null;
+  let meshUrl = null;
+  let material = null;
+  if (mesh && !parseError) {
+    const canonicalData = canonicalMesh(mesh);
+    meshFile = path.join(canonical, 'mesh.json');
+    writeJson(meshFile, canonicalData);
+    meshUrl = `/assets/models/${encodeURIComponent(assetId)}/canonical/mesh.json`;
+    material = canonicalData.material;
+  }
+
+  const record = {
+    id: assetId,
+    type: 'model',
+    name: String(name || path.basename(fileName || 'Imported Model', path.extname(fileName || ''))).slice(0, 120),
+    category: String(category || 'static-prop').slice(0, 50),
+    status: health.state === 'failed' ? 'unvalidated' : 'validated',
+    approvalState: health.state === 'failed' ? 'unvalidated' : 'draft',
+    source: String(source).slice(0, 500),
+    sourceUri: String(source).startsWith('http') ? String(source).slice(0, 500) : null,
+    creator: String(creator).slice(0, 120),
+    license: String(license).slice(0, 240),
+    sourceFile: `assets/models/${assetId}/source/original.${extension}`,
+    canonicalFile: meshFile ? `assets/models/${assetId}/canonical/mesh.json` : null,
+    meshUrl,
+    checksum: digest,
+    fileBytes: buffer.length,
+    unitScale: 1,
+    upAxis: 'y',
+    forwardAxis: '-z',
+    pivotMode: 'source',
+    bounds: health.bounds,
+    triangleCount: health.triangleCount,
+    vertexCount: health.vertexCount,
+    materialSlots: mesh?.materials || [],
+    textures,
+    skeleton: health.skeletonCount ? { skinCount: health.skeletonCount } : null,
+    animations: health.animationCount ? Array.from({ length: health.animationCount }, (_, index) => ({ id: `animation-${index}`, name: parsed?.gltf?.animations?.[index]?.name || `Animation ${index + 1}` })) : [],
+    collisionStatus: 'missing', lods: [],
+    tags: Array.isArray(tags) ? tags.map(value => String(value).slice(0, 40)).slice(0, 30) : [],
+    semanticDescription: '', affordances: [],
+    health,
+    validation: { state: health.state, checkedAt: now(), warnings: health.warnings, errors: health.blocking },
+    provenance: {
+      source: String(source).slice(0, 200), creator: String(creator).slice(0, 120), license: String(license).slice(0, 240),
+      attributionRequired: false, importedAt: now(), originalFileName: path.basename(fileName || `original.${extension}`)
+    },
+    sourceAssetId: null, derivativeAssetIds: [], sceneUsages: [], thumbnail: null, preview: null, material,
+    canonicalImporterVersion: 3, canonicalRevision: Date.now(), createdAt: now(), updatedAt: now()
+  };
+  writeJson(path.join(folder, 'asset-record.json'), record);
+  return record;
 }
-export function rebuildCanonicalAsset({assetRoot,asset}){
-  if(!asset?.sourceFile)throw new Error('The original source file is unavailable for rebuilding.');
-  const sourcePath=path.join(assetRoot,path.relative('assets',asset.sourceFile));if(!fs.existsSync(sourcePath))throw new Error('The preserved original source file could not be found.');
-  const buffer=fs.readFileSync(sourcePath),extension=sourcePath.toLowerCase().endsWith('.gltf')?'gltf':'glb',parsed=extension==='glb'?parseGlb(buffer):parseGltf(buffer),mesh=mergePrimitives(parsed.gltf,parsed.buffers),health=createHealth(parsed.gltf,mesh,buffer.length,parsed.container),canonicalData=canonicalMesh(mesh);
-  const canonicalPath=asset.canonicalFile?path.join(assetRoot,path.relative('assets',asset.canonicalFile)):path.join(assetRoot,'models',asset.id,'canonical','mesh.json');fs.mkdirSync(path.dirname(canonicalPath),{recursive:true});
-  if(fs.existsSync(canonicalPath)){const history=path.join(path.dirname(canonicalPath),'history');fs.mkdirSync(history,{recursive:true});const stamp=new Date().toISOString().replaceAll(':','-').replaceAll('.','-');fs.copyFileSync(canonicalPath,path.join(history,`mesh-before-rebuild-${stamp}.json`));}
-  writeJson(canonicalPath,canonicalData);
-  Object.assign(asset,{canonicalFile:`assets/${relativeAssetPath(assetRoot,canonicalPath)}`,meshUrl:`/${`assets/${relativeAssetPath(assetRoot,canonicalPath)}`.split('/').map(encodeURIComponent).join('/')}`,bounds:health.bounds,triangleCount:health.triangleCount,vertexCount:health.vertexCount,materialSlots:mesh.materials||[],material:canonicalData.material,status:health.state==='failed'?'unvalidated':'validated',approvalState:'draft',health,validation:{state:health.state,checkedAt:now(),warnings:[...(health.warnings||[]),'Canonical import rebuilt with the current node-transform and material-group pipeline. Inspect the rendered result before approval.'],errors:health.blocking||[]},canonicalImporterVersion:2,canonicalRevision:Date.now(),processingHistory:[...(asset.processingHistory||[]),{operation:'rebuild-canonical',at:now(),importerVersion:2,nodeTransformsApplied:Boolean(health.nodeTransformsApplied),meshInstanceCount:Number(health.meshInstanceCount||0)}],updatedAt:now()});
-  const recordPath=path.join(assetRoot,'models',asset.id,'asset-record.json');writeJson(recordPath,asset);return asset;
+export function rebuildCanonicalAsset({ assetRoot, asset }) {
+  if (!asset?.sourceFile) throw new Error('The original source file is unavailable for rebuilding.');
+  const sourcePath = path.join(assetRoot, path.relative('assets', asset.sourceFile));
+  if (!fs.existsSync(sourcePath)) throw new Error('The preserved original source file could not be found.');
+  const buffer = fs.readFileSync(sourcePath);
+  const extension = sourcePath.toLowerCase().endsWith('.gltf') ? 'gltf' : 'glb';
+  const parsed = extension === 'glb' ? parseGlb(buffer) : parseGltf(buffer);
+  const mesh = mergePrimitives(parsed.gltf, parsed.buffers);
+  const canonicalPath = asset.canonicalFile
+    ? path.join(assetRoot, path.relative('assets', asset.canonicalFile))
+    : path.join(assetRoot, 'models', asset.id, 'canonical', 'mesh.json');
+  const canonicalFolder = path.dirname(canonicalPath);
+  fs.mkdirSync(canonicalFolder, { recursive: true });
+  const extracted = extractEmbeddedTextures(parsed.gltf, parsed.buffers, canonicalFolder, asset.id);
+  attachTextureUrls(parsed.gltf, mesh, extracted.records);
+  const health = createHealth(parsed.gltf, mesh, buffer.length, parsed.container);
+  health.warnings.push(...extracted.warnings);
+  if (extracted.records.length) health.warnings.push('Embedded texture images were rebuilt. Base-color maps render with authored UV0; inspect the remaining PBR channels before approval.');
+  const canonicalData = canonicalMesh(mesh);
+  if (fs.existsSync(canonicalPath)) {
+    const history = path.join(canonicalFolder, 'history');
+    fs.mkdirSync(history, { recursive: true });
+    const stamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-');
+    fs.copyFileSync(canonicalPath, path.join(history, `mesh-before-rebuild-${stamp}.json`));
+  }
+  writeJson(canonicalPath, canonicalData);
+  const canonicalRelative = `assets/${relativeAssetPath(assetRoot, canonicalPath)}`;
+  Object.assign(asset, {
+    canonicalFile: canonicalRelative,
+    meshUrl: `/${canonicalRelative.split('/').map(encodeURIComponent).join('/')}`,
+    bounds: health.bounds,
+    triangleCount: health.triangleCount,
+    vertexCount: health.vertexCount,
+    materialSlots: mesh.materials || [],
+    textures: extracted.records,
+    material: canonicalData.material,
+    status: health.state === 'failed' ? 'unvalidated' : 'validated',
+    approvalState: 'draft',
+    health,
+    validation: {
+      state: health.state,
+      checkedAt: now(),
+      warnings: [...(health.warnings || []), 'Canonical import rebuilt with the current transform, material-group, and embedded-texture pipeline. Inspect the rendered result before approval.'],
+      errors: health.blocking || []
+    },
+    canonicalImporterVersion: 3,
+    canonicalRevision: Date.now(),
+    processingHistory: [
+      ...(asset.processingHistory || []),
+      { operation: 'rebuild-canonical', at: now(), importerVersion: 3, nodeTransformsApplied: Boolean(health.nodeTransformsApplied), meshInstanceCount: Number(health.meshInstanceCount || 0), extractedTextureCount: extracted.records.length }
+    ],
+    updatedAt: now()
+  });
+  writeJson(path.join(assetRoot, 'models', asset.id, 'asset-record.json'), asset);
+  return asset;
 }
 
 export function createSafeRepairDerivative({assetRoot,source,settings={}}){

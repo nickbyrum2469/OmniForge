@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0a0d13">
   <title>OmniForge</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="v010.css">
 </head>
 <body>
   <div id="app" class="engine-shell">
@@ -173,7 +174,7 @@
           <div class="integration-storage" id="integrationStorageSummary"></div>
         </section>
 
-        <div class="left-footer"><button id="openProjectFolder" class="text-button" type="button">Open project folder</button><span id="engineVersion">v0.9.0</span></div>
+        <div class="left-footer"><button id="openProjectFolder" class="text-button" type="button">Open project folder</button><span id="engineVersion">v0.10.0</span></div>
       </aside>
       <div id="leftResizeHandle" class="resize-handle vertical left-resize" role="separator" aria-label="Resize left panel"></div>
 
@@ -279,5 +280,6 @@
   <dialog id="prefabDialog" class="modal"><div class="modal-header"><div><small>PREFAB</small><h2>Create reusable prefab</h2></div><button class="icon-button" data-close-dialog type="button">×</button></div><label>Prefab name<input id="prefabNameInput" type="text" maxlength="120"></label><p class="modal-note">The prefab stores the selected entity and its components as reusable scene data. Instances keep a prefab reference while remaining editable.</p><div class="modal-actions"><button class="button subtle" data-close-dialog type="button">Cancel</button><button id="createPrefabButton" class="button primary" type="button">Create prefab</button></div></dialog>
 
   <script type="module" src="app.js"></script>
+  <script type="module" src="v010.js"></script>
 </body>
 </html>

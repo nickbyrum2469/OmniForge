@@ -194,7 +194,7 @@ test('Windows desktop builder pins and stamps the native executable metadata',()
     /ElectronVersion = '43\.2\.0'/, /RceditVersion = '2\.0\.0'/,
     /Get-FileHash -Algorithm SHA256/, /Rename-Item .*electron\.exe.*OmniForge\.exe/,
     /--set-icon/, /ProductName 'OmniForge'/, /FileDescription 'OmniForge AI-Native 3D Game Engine'/,
-    /--set-file-version '0\.9\.0\.0'/, /--set-product-version '0\.9\.0\.0'/
+    /--set-file-version '0\.10\.0\.0'/, /--set-product-version '0\.10\.0\.0'/
   ]) assert.match(source,pattern);
   assert.ok(fs.existsSync(path.join(ROOT,'resources','omniforge-icon.ico')));
 });
@@ -309,7 +309,7 @@ test('Codex can import and rebuild a hierarchy-aware model through guarded MCP t
   const probe=spawnSync(process.execPath,['bridge/mcp-server.mjs'],{cwd:ROOT,input,encoding:'utf8',timeout:10000,env:{...process.env,OMNIFORGE_DATA_ROOT:runtime}});
   assert.equal(probe.status,0,probe.stderr);const messages=probe.stdout.trim().split(/\r?\n/).map(line=>JSON.parse(line));
   const imported=JSON.parse(messages.find(message=>message.id===2).result.content[0].text),rebuilt=JSON.parse(messages.find(message=>message.id===3).result.content[0].text);
-  assert.equal(imported.id,assetId);assert.equal(rebuilt.id,assetId);assert.equal(rebuilt.canonicalImporterVersion,2);assert.equal(rebuilt.health.nodeTransformsApplied,true);assert.equal(rebuilt.materialSlots.length,4);
+  assert.equal(imported.id,assetId);assert.equal(rebuilt.id,assetId);assert.equal(rebuilt.canonicalImporterVersion,3);assert.equal(rebuilt.health.nodeTransformsApplied,true);assert.equal(rebuilt.materialSlots.length,4);
   fs.rmSync(runtime,{recursive:true,force:true});
 });
 
@@ -438,7 +438,7 @@ test('real asset API imports, recipes, processes, previews, commits, and persist
     assert.equal(imported.status,201,JSON.stringify(imported.body));
     const asset=imported.body.asset;assert.ok(asset.assetRecipeId);assert.ok(imported.body.state.assets.some(item=>item.type==='assetRecipe'&&item.id===asset.assetRecipeId));
     assert.ok(fs.existsSync(path.join(runtime,asset.sourceFile)));assert.ok(fs.existsSync(path.join(runtime,asset.canonicalFile)));
-    const rebuilt=await postJson(port,'/api/asset/rebuild',{assetId:asset.id});assert.equal(rebuilt.status,200);assert.equal(rebuilt.body.asset.canonicalImporterVersion,2);assert.equal(rebuilt.body.asset.health.nodeTransformsApplied,true);assert.equal(rebuilt.body.asset.approvalState,'draft');
+    const rebuilt=await postJson(port,'/api/asset/rebuild',{assetId:asset.id});assert.equal(rebuilt.status,200);assert.equal(rebuilt.body.asset.canonicalImporterVersion,3);assert.equal(rebuilt.body.asset.health.nodeTransformsApplied,true);assert.equal(rebuilt.body.asset.approvalState,'draft');
     const historyDirectory=path.join(path.dirname(path.join(runtime,asset.canonicalFile)),'history');assert.ok(fs.existsSync(historyDirectory));assert.ok(fs.readdirSync(historyDirectory).length>=1);
     const collision=await postJson(port,'/api/asset/collision',{assetId:asset.id});assert.equal(collision.status,200);assert.equal(collision.body.asset.collisionStatus,'generated');
     const lods=await postJson(port,'/api/asset/lods',{assetId:asset.id,ratios:[.5,.2]});assert.equal(lods.status,200);assert.equal(lods.body.asset.lods.length,2);
@@ -479,7 +479,7 @@ test('canonical rebuild repairs legacy imports from preserved source and retains
   const sourcePath=path.join(runtime,asset.sourceFile),sourceChecksum=fs.readFileSync(sourcePath).toString('base64');
   const canonicalPath=path.join(runtime,asset.canonicalFile),legacy=JSON.parse(fs.readFileSync(canonicalPath,'utf8'));legacy.schemaVersion=1;legacy.groups=[];legacy.nodeTransformsApplied=false;fs.writeFileSync(canonicalPath,JSON.stringify(legacy));asset.canonicalImporterVersion=1;asset.health.nodeTransformsApplied=false;asset.approvalState='approved';
   const rebuilt=rebuildCanonicalAsset({assetRoot,asset});
-  assert.equal(rebuilt.id,asset.id);assert.equal(rebuilt.canonicalImporterVersion,2);assert.equal(rebuilt.health.nodeTransformsApplied,true);assert.equal(rebuilt.health.meshInstanceCount,2);assert.equal(rebuilt.approvalState,'draft');assert.ok(rebuilt.canonicalRevision);
+  assert.equal(rebuilt.id,asset.id);assert.equal(rebuilt.canonicalImporterVersion,3);assert.equal(rebuilt.health.nodeTransformsApplied,true);assert.equal(rebuilt.health.meshInstanceCount,2);assert.equal(rebuilt.approvalState,'draft');assert.ok(rebuilt.canonicalRevision);
   const canonical=JSON.parse(fs.readFileSync(canonicalPath,'utf8'));assert.equal(canonical.schemaVersion,2);assert.equal(canonical.groups.length,4);
   const historyDir=path.join(path.dirname(canonicalPath),'history');assert.ok(fs.readdirSync(historyDir).some(name=>name.startsWith('mesh-before-rebuild-')));
   assert.equal(fs.readFileSync(sourcePath).toString('base64'),sourceChecksum);
@@ -519,7 +519,7 @@ test('real provider health, project validation, cancellation, retry, and restart
   const server=spawn(process.execPath,['server/server.mjs'],{cwd:ROOT,env:{...process.env,OMNIFORGE_DATA_ROOT:runtime,OMNIFORGE_PORT:String(port),OMNIFORGE_SESSION_TOKEN:'provider-api-test'},stdio:['ignore','pipe','pipe']});
   let stderr='';server.stderr.on('data',chunk=>stderr+=chunk);
   try{
-    const health=await waitForHealth(port);assert.equal(health.version,'0.9.0');
+    const health=await waitForHealth(port);assert.equal(health.version,'0.10.0');
     const initial=await requestJson(port,'/api/state');assert.ok(initial.body.providers.some(provider=>provider.id==='local-worker-host'));
     const healthQueued=await postJson(port,'/api/providers/local-worker-host/health',{});assert.equal(healthQueued.status,202);const healthJob=await waitForJob(port,healthQueued.body.job.id);assert.equal(healthJob.state,'succeeded');assert.equal(healthJob.validation.state,'passed');assert.equal(healthJob.outputs[0].type,'hardware-report');
     const afterHealth=await requestJson(port,'/api/state');const provider=afterHealth.body.providers.find(item=>item.id==='local-worker-host');assert.ok(provider.status.lastHealthCheck);assert.equal(provider.status.state,'connected');
@@ -549,7 +549,7 @@ test('mocked Poly Haven search completes a real staged download job and imports 
   fs.writeFileSync(path.join(mockRoot,'poly-haven-files-marketplace-cube.json'),JSON.stringify({gltf:{'1k':{glb:{url:'https://mock.invalid/marketplace_cube.glb',localPath:fixture,size:fs.statSync(fixture).size,md5:crypto.createHash('md5').update(fs.readFileSync(fixture)).digest('hex')}}}}));
   const server=spawn(process.execPath,['server/server.mjs'],{cwd:ROOT,env:{...process.env,OMNIFORGE_DATA_ROOT:runtime,OMNIFORGE_PORT:String(port),OMNIFORGE_SESSION_TOKEN:'marketplace-api-test',OMNIFORGE_MARKETPLACE_MOCK_ROOT:mockRoot},stdio:['ignore','pipe','pipe']});let stderr='';server.stderr.on('data',chunk=>stderr+=chunk);
   try{
-    const health=await waitForHealth(port);assert.equal(health.version,'0.9.0');
+    const health=await waitForHealth(port);assert.equal(health.version,'0.10.0');
     const search=await requestJson(port,'/api/marketplace/search?providerId=poly-haven&q=cube&type=model&limit=10');assert.equal(search.status,200);assert.equal(search.body.results.length,1);assert.equal(search.body.results[0].license,'CC0');
     const details=await requestJson(port,'/api/marketplace/details?providerId=poly-haven&assetId=marketplace_cube');assert.equal(details.status,200);assert.ok(details.body.asset.downloadChoices.length>=1);
     const queued=await postJson(port,'/api/marketplace/download',{providerId:'poly-haven',assetId:'marketplace_cube',choiceId:details.body.asset.downloadChoices[0].id});assert.equal(queued.status,202);
@@ -597,7 +597,7 @@ test('v0.9 Production Surface Studio exposes map processing, advanced graph, dec
 test('v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts',async()=>{
   const runtime=tempRoot('omniforge-surface-v09-'),port=await freePort(),server=spawn(process.execPath,['server/server.mjs'],{cwd:ROOT,env:{...process.env,OMNIFORGE_DATA_ROOT:runtime,OMNIFORGE_PORT:String(port),OMNIFORGE_SESSION_TOKEN:'surface-v09-test'},stdio:['ignore','pipe','pipe']});let stderr='';server.stderr.on('data',chunk=>stderr+=chunk);
   try{
-    const health=await waitForHealth(port);assert.equal(health.version,'0.9.0');const state=(await requestJson(port,'/api/state')).body,source=state.assets.find(item=>item.type==='material');assert.ok(source);
+    const health=await waitForHealth(port);assert.equal(health.version,'0.10.0');const state=(await requestJson(port,'/api/state')).body,source=state.assets.find(item=>item.type==='material');assert.ok(source);
     const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XjT5WQAAAABJRU5ErkJggg==';
     const derivative=await postJson(port,'/api/material/derivative',{materialId:source.id,name:'Processed Test',operation:'seam-repair',maps:{baseColor:png,normal:png,roughness:png,ambientOcclusion:png,height:png},shareUnchangedMaps:true});assert.equal(derivative.status,201);assert.equal(derivative.body.material.sourceAssetId,source.id);assert.equal(derivative.body.recipe.compilation.state,'ready');
     const compiled=await postJson(port,`/api/surface-recipe/${encodeURIComponent(derivative.body.recipe.id)}/compile`,{});assert.equal(compiled.status,200);assert.equal(compiled.body.recipe.compilation.state,'ready');
