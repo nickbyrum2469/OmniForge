@@ -37,14 +37,14 @@ function Ensure-Command {
     }
 
     Write-Step "Installing $Name"
-    $previousErrorActionPreference = $ErrorActionPreference
+    $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
         & winget install --id $WingetId --exact --accept-package-agreements --accept-source-agreements
         $exitCode = $LASTEXITCODE
     }
     finally {
-        $ErrorActionPreference = $previousErrorActionPreference
+        $ErrorActionPreference = $previousPreference
     }
 
     if ($exitCode -ne 0) {
@@ -131,8 +131,6 @@ function Expand-ZipSafely {
                 New-Item -ItemType Directory -Force -Path $parent | Out-Null
             }
 
-            # FileMode.Create makes duplicate ZIP entries deterministic: the final
-            # occurrence replaces the earlier one instead of failing extraction.
             $inputStream = $entry.Open()
             try {
                 $outputStream = [IO.File]::Open($targetPath, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
@@ -153,24 +151,25 @@ function Expand-ZipSafely {
     }
 }
 
-function Invoke-Checked {
+function Invoke-NativeChecked {
     param(
         [Parameter(Mandatory)] [string]$FilePath,
-        [Parameter(ValueFromRemainingArguments = $true)] [string[]]$Arguments
+        [string[]]$CommandArgs = @()
     )
 
-    $previousErrorActionPreference = $ErrorActionPreference
+    $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        & $FilePath @Arguments
+        & $FilePath @CommandArgs
         $exitCode = $LASTEXITCODE
     }
     finally {
-        $ErrorActionPreference = $previousErrorActionPreference
+        $ErrorActionPreference = $previousPreference
     }
 
     if ($exitCode -ne 0) {
-        throw "$FilePath failed with exit code $exitCode."
+        $renderedArgs = $CommandArgs -join " "
+        throw "$FilePath $renderedArgs failed with exit code $exitCode."
     }
 }
 
@@ -234,7 +233,7 @@ Ensure-Command -Name gh -WingetId GitHub.cli
 Write-Step "Checking GitHub authentication"
 if (-not (Test-GitHubAuthentication)) {
     Write-Host "A GitHub browser login will open. Sign in to the account that owns $Repository." -ForegroundColor Yellow
-    Invoke-Checked gh auth login --web --git-protocol https
+    Invoke-NativeChecked -FilePath "gh" -CommandArgs @("auth", "login", "--web", "--git-protocol", "https")
     Start-Sleep -Seconds 2
 
     if (-not (Test-GitHubAuthentication)) {
@@ -277,7 +276,7 @@ try {
     }
 
     Write-Step "Cloning authoritative repository"
-    Invoke-Checked gh repo clone $Repository $repoRoot
+    Invoke-NativeChecked -FilePath "gh" -CommandArgs @("repo", "clone", $Repository, $repoRoot)
 
     $excludedDirectories = @(
         ".git", "node_modules", "dist", "out", "coverage", ".cache", ".vite",
@@ -293,14 +292,14 @@ try {
         "/XD"
     ) + $excludedDirectories + @("/XF") + $excludedFiles
 
-    $previousErrorActionPreference = $ErrorActionPreference
+    $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
         & robocopy @robocopyArgs | Out-Host
         $robocopyExitCode = $LASTEXITCODE
     }
     finally {
-        $ErrorActionPreference = $previousErrorActionPreference
+        $ErrorActionPreference = $previousPreference
     }
 
     if ($robocopyExitCode -gt 7) {
@@ -315,7 +314,7 @@ try {
     }
 
     $manifest = [ordered]@{
-        schemaVersion = 2
+        schemaVersion = 3
         importedAt = (Get-Date).ToUniversalTime().ToString("o")
         sourceKind = $sourceKind
         sourceName = $sourceDisplayName
@@ -330,17 +329,17 @@ try {
 
     Push-Location $repoRoot
     try {
-        Invoke-Checked git config user.name "OmniForge Source Import"
-        Invoke-Checked git config user.email "omniforge-source-import@users.noreply.github.com"
-        Invoke-Checked git add -A
+        Invoke-NativeChecked -FilePath "git" -CommandArgs @("config", "user.name", "OmniForge Source Import")
+        Invoke-NativeChecked -FilePath "git" -CommandArgs @("config", "user.email", "omniforge-source-import@users.noreply.github.com")
+        Invoke-NativeChecked -FilePath "git" -CommandArgs @("add", "--all")
 
-        $previousErrorActionPreference = $ErrorActionPreference
+        $previousPreference = $ErrorActionPreference
         try {
             $ErrorActionPreference = "Continue"
             $status = (& git status --porcelain 2>$null) -join "`n"
         }
         finally {
-            $ErrorActionPreference = $previousErrorActionPreference
+            $ErrorActionPreference = $previousPreference
         }
 
         if ([string]::IsNullOrWhiteSpace($status)) {
@@ -348,9 +347,9 @@ try {
         }
         else {
             Write-Step "Committing authoritative OmniForge source"
-            Invoke-Checked git commit -m "Import OmniForge $($packageJson.version) authoritative source"
+            Invoke-NativeChecked -FilePath "git" -CommandArgs @("commit", "-m", "Import OmniForge $($packageJson.version) authoritative source")
             Write-Step "Pushing source to GitHub"
-            Invoke-Checked git push origin main
+            Invoke-NativeChecked -FilePath "git" -CommandArgs @("push", "origin", "main")
         }
     }
     finally {
