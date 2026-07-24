@@ -8,4 +8,5 @@ const replacement=`export function updateTerrainProperties(terrain, patch = {}) 
 if(!source.includes('const selectedPreset = patch.preset')){if(!pattern.test(source))throw new Error('Terrain preset update function was not found.');source=source.replace(pattern,replacement);}
 fs.writeFileSync(file,source,'utf8');
 await import('./fix-v011-regressions.mjs');
-console.log('Terrain preset defaults and v0.11 regression repairs applied.');
+await import('./fix-v011-editor-integration.mjs');
+console.log('Terrain preset defaults, regressions, editor integration, and server placement repairs applied.');
