@@ -2,67 +2,67 @@
 > omniforge-3d-engine@0.11.0 test
 > node --test tests/*.test.mjs
 
-✖ default project is general-purpose and contains a real 3D starter scene (5.355934ms)
-✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (0.874145ms)
-✔ all supported scene primitives receive valid transforms and properties (2.211185ms)
-✔ terrain height is deterministic and responds to world position (2.193489ms)
-✔ path defaults preserve terrain-conforming system relationships (0.275578ms)
-✔ terrain path mask produces a soft shoulder instead of a hard ribbon (2.304013ms)
-✔ starter PBR materials include real texture-map files and are protected (1.172957ms)
-✔ horizontal mouse look uses the intuitive right-positive yaw convention (2.769903ms)
-✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (1.04604ms)
-✔ Windows desktop builder pins and stamps the native executable metadata (1.307767ms)
-✔ project hub and editor usability controls are wired into the authoritative editor (6.233734ms)
-✖ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (105.21354ms)
-✔ two runtime sessions cannot write the same active project simultaneously (403.598759ms)
-✖ starter objects are grounded against the authoritative terrain surface (1.259215ms)
-✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.718395ms)
-✔ managed workspace path cannot escape the projects root (0.401365ms)
-✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (91.784632ms)
-✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (117.272572ms)
-✔ material authoring settings clamp safely and preserve tiling transforms (0.245344ms)
-✔ material tuner exposes live tiling and PBR response controls (1.413624ms)
-✔ active source and documentation contain no legacy product assumptions (8.533651ms)
-✔ desktop clipboard and pointer-lock permissions use guarded native paths (0.884801ms)
-✔ surface recipes are stable linked assets with validation and deterministic masks (0.926062ms)
-✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.908676ms)
-✔ desktop launcher rejects stale packaged executables (0.119597ms)
-✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (5.271208ms)
-✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.426353ms)
-✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (1.800667ms)
-✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (275.765102ms)
-✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (2.115784ms)
-✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (3.121334ms)
-✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.057987ms)
-✔ provider framework normalizes independent providers, settings, and persistent job records (1.037516ms)
-✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.407475ms)
-✔ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (1734.228241ms)
-✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (2.186236ms)
-✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (337.703011ms)
-✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.609265ms)
-✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.055497ms)
-✔ v0.9 decal and atlas recipes validate stable production metadata (0.562906ms)
-✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.775917ms)
-✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (243.178059ms)
-✔ v0.10 worker IPC drains stdout before finalizing jobs (1.416258ms)
-✔ v0.10 seeded random and foliage placement are deterministic (34.880878ms)
-✔ v0.10 world system drives the authoritative scene sun and renderer settings (1.487693ms)
-✔ v0.10 support-plane grounding conforms a box to terrain at four corners (6.319812ms)
-✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.703472ms)
-✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (4.080064ms)
-✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (4.387288ms)
-✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.758954ms)
-✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (0.700958ms)
-✔ v0.10 existing Ground button and World tab synchronize through authoritative state (1.360075ms)
-✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (430.610154ms)
-✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (19.464212ms)
-✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (0.991248ms)
-✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (0.99908ms)
-✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (2.287398ms)
-✖ path grade compilation respects configured maximum grade and bounded terrain cut/fill (18.934187ms)
-✔ path material blending follows the sampled spline instead of straight control-point chords (1.144526ms)
-✔ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (4.819378ms)
-✖ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (427.624487ms)
+✖ default project is general-purpose and contains a real 3D starter scene (7.964405ms)
+✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (1.407355ms)
+✔ all supported scene primitives receive valid transforms and properties (3.101506ms)
+✔ terrain height is deterministic and responds to world position (2.93633ms)
+✔ path defaults preserve terrain-conforming system relationships (0.304202ms)
+✔ terrain path mask produces a soft shoulder instead of a hard ribbon (1.214749ms)
+✔ starter PBR materials include real texture-map files and are protected (1.43782ms)
+✔ horizontal mouse look uses the intuitive right-positive yaw convention (1.395447ms)
+✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (1.004986ms)
+✔ Windows desktop builder pins and stamps the native executable metadata (0.719911ms)
+✔ project hub and editor usability controls are wired into the authoritative editor (7.136713ms)
+✖ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (106.234405ms)
+✔ two runtime sessions cannot write the same active project simultaneously (424.499388ms)
+✖ starter objects are grounded against the authoritative terrain surface (0.999098ms)
+✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.636446ms)
+✔ managed workspace path cannot escape the projects root (0.308979ms)
+✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (116.622878ms)
+✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (121.924298ms)
+✔ material authoring settings clamp safely and preserve tiling transforms (0.259086ms)
+✔ material tuner exposes live tiling and PBR response controls (1.460644ms)
+✔ active source and documentation contain no legacy product assumptions (7.381336ms)
+✔ desktop clipboard and pointer-lock permissions use guarded native paths (0.892879ms)
+✔ surface recipes are stable linked assets with validation and deterministic masks (0.898607ms)
+✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.923504ms)
+✔ desktop launcher rejects stale packaged executables (0.122623ms)
+✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (5.243885ms)
+✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.450609ms)
+✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (1.774291ms)
+✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (277.929305ms)
+✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (2.14995ms)
+✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (3.097541ms)
+✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.077714ms)
+✔ provider framework normalizes independent providers, settings, and persistent job records (1.102882ms)
+✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.457089ms)
+✔ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (2507.758473ms)
+✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (2.309598ms)
+✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (340.968369ms)
+✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.797014ms)
+✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.05303ms)
+✔ v0.9 decal and atlas recipes validate stable production metadata (0.52138ms)
+✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.787967ms)
+✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (248.21773ms)
+✔ v0.10 worker IPC drains stdout before finalizing jobs (1.11554ms)
+✔ v0.10 seeded random and foliage placement are deterministic (26.984675ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (1.566021ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (1.039998ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (1.129241ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (4.22559ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (4.637283ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.925428ms)
+✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (0.847682ms)
+✔ v0.10 existing Ground button and World tab synchronize through authoritative state (3.66163ms)
+✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (491.899369ms)
+✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (12.866782ms)
+✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (0.811628ms)
+✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (0.860631ms)
+✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (1.487083ms)
+✖ path grade compilation respects configured maximum grade and bounded terrain cut/fill (21.642704ms)
+✔ path material blending follows the sampled spline instead of straight control-point chords (1.054279ms)
+✔ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (2.670866ms)
+✖ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (428.065535ms)
 ℹ tests 61
 ℹ suites 0
 ℹ pass 56
@@ -70,12 +70,12 @@
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 3579.552358
+ℹ duration_ms 4395.065796
 
 ✖ failing tests:
 
 test at tests/engine.test.mjs:99:1
-✖ default project is general-purpose and contains a real 3D starter scene (5.355934ms)
+✖ default project is general-purpose and contains a real 3D starter scene (7.964405ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   
   '0.11.0' !== '0.9.0'
@@ -94,7 +94,7 @@ test at tests/engine.test.mjs:99:1
   }
 
 test at tests/engine.test.mjs:212:1
-✖ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (105.21354ms)
+✖ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (106.234405ms)
   AssertionError [ERR_ASSERTION]: file:///home/runner/work/OmniForge/OmniForge/[eval1]:5
       if(first.schemaVersion!==8)throw new Error('Migration schema failed');
                                        ^
@@ -123,7 +123,7 @@ test at tests/engine.test.mjs:212:1
   }
 
 test at tests/engine.test.mjs:263:1
-✖ starter objects are grounded against the authoritative terrain surface (1.259215ms)
+✖ starter objects are grounded against the authoritative terrain surface (0.999098ms)
   AssertionError [ERR_ASSERTION]: Scale Reference Block is not grounded: 4.05 versus -14.987237094714338
       at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:270:12)
       at Test.runInAsyncScope (node:async_hooks:227:14)
@@ -142,7 +142,7 @@ test at tests/engine.test.mjs:263:1
   }
 
 test at tests/v011.test.mjs:94:1
-✖ path grade compilation respects configured maximum grade and bounded terrain cut/fill (18.934187ms)
+✖ path grade compilation respects configured maximum grade and bounded terrain cut/fill (21.642704ms)
   TypeError: Cannot read properties of undefined (reading 'y')
       at pathDiagnostics (file:///home/runner/work/OmniForge/OmniForge/server/v011-systems.mjs:148:75)
       at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/v011.test.mjs:106:21)
@@ -154,7 +154,7 @@ test at tests/v011.test.mjs:94:1
       at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
 
 test at tests/v011.test.mjs:143:1
-✖ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (427.624487ms)
+✖ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (428.065535ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   
   400 !== 200
