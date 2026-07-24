@@ -1,0 +1,248 @@
+OmniForge Windows verification exit code: 1
+Generated: 2026-07-24T13:14:29.0790403+00:00
+
+--- STDOUT ---
+
+> omniforge-3d-engine@0.10.0 verify
+> node scripts/verify.mjs
+
+Syntax: server: passed
+Syntax: provider framework: passed
+Syntax: job manager: passed
+Syntax: marketplace: passed
+Syntax: local worker: passed
+Syntax: MCP bridge: passed
+Syntax: editor: passed
+Syntax: renderer: passed
+Syntax: desktop shell: passed
+✔ default project is general-purpose and contains a real 3D starter scene (43.4871ms)
+✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (1.2299ms)
+✔ all supported scene primitives receive valid transforms and properties (2.5426ms)
+✔ terrain height is deterministic and responds to world position (0.5854ms)
+✔ path defaults preserve terrain-conforming system relationships (0.427ms)
+✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.5866ms)
+✔ starter PBR materials include real texture-map files and are protected (1.5659ms)
+✔ horizontal mouse look uses the intuitive right-positive yaw convention (1.1684ms)
+✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (19.403ms)
+✔ Windows desktop builder pins and stamps the native executable metadata (3.0448ms)
+✔ project hub and editor usability controls are wired into the authoritative editor (6.0835ms)
+✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (703.2808ms)
+✔ two runtime sessions cannot write the same active project simultaneously (496.8718ms)
+✔ starter objects are grounded against the authoritative terrain surface (0.8397ms)
+✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.1771ms)
+✔ managed workspace path cannot escape the projects root (0.6905ms)
+✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (203.6225ms)
+✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (289.3868ms)
+✔ material authoring settings clamp safely and preserve tiling transforms (0.2317ms)
+✔ material tuner exposes live tiling and PBR response controls (1.2787ms)
+✔ active source and documentation contain no legacy product assumptions (10.8987ms)
+✔ desktop clipboard and pointer-lock permissions use guarded native paths (0.8243ms)
+✔ surface recipes are stable linked assets with validation and deterministic masks (0.8587ms)
+✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.7043ms)
+✔ desktop launcher rejects stale packaged executables (0.1987ms)
+✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (17.9077ms)
+✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.5121ms)
+✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (13.0651ms)
+✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (580.9935ms)
+✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (9.2838ms)
+✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (12.0279ms)
+✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.3059ms)
+✔ provider framework normalizes independent providers, settings, and persistent job records (1.2025ms)
+✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.5384ms)
+✔ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (5553.742ms)
+✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (2.2836ms)
+✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (1013.7061ms)
+✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.9265ms)
+✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.1195ms)
+✔ v0.9 decal and atlas recipes validate stable production metadata (0.7046ms)
+✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.9391ms)
+✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (613.9679ms)
+✔ v0.10 worker IPC drains stdout before finalizing jobs (1.7139ms)
+✔ v0.10 seeded random and foliage placement are deterministic (16.0555ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (3.0187ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (11.4005ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (1.7092ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (37.4102ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (18.9833ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (2.7245ms)
+✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (1.6927ms)
+✔ v0.10 existing Ground button and World tab synchronize through authoritative state (2.9693ms)
+✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (899.6684ms)
+✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (19.6468ms)
+✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (1.515ms)
+✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (1.2943ms)
+✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (2.0631ms)
+✖ path grade compilation respects configured maximum grade and bounded terrain cut/fill (15.0402ms)
+✔ path material blending follows the sampled spline instead of straight control-point chords (2.0607ms)
+✖ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (5.1779ms)
+✖ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (634.91ms)
+ℹ tests 61
+ℹ suites 0
+ℹ pass 58
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9998.2627
+
+✖ failing tests:
+
+test at tests\v011.test.mjs:94:1
+✖ path grade compilation respects configured maximum grade and bounded terrain cut/fill (15.0402ms)
+  TypeError: Cannot read properties of undefined (reading 'y')
+      at pathDiagnostics (file:///D:/a/OmniForge/OmniForge/server/v011-systems.mjs:147:75)
+      at TestContext.<anonymous> (file:///D:/a/OmniForge/OmniForge/tests/v011.test.mjs:106:21)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+
+test at tests\v011.test.mjs:118:1
+✖ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (5.1779ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /id="splineToggle"/. Input:
+  
+  '<!doctype html>\r\n' +
+    '<html lang="en">\r\n' +
+    '<head>\r\n' +
+    '  <meta charset="utf-8">\r\n' +
+    '  <meta name="viewport" content="width=device-width,initial-scale=1">\r\n' +
+    '  <meta name="theme-color" content="#0a0d13">\r\n' +
+    '  <title>OmniForge</title>\r\n' +
+    '  <link rel="stylesheet" href="styles.css">\r\n' +
+    '  <link rel="stylesheet" href="v010.css">\r\n' +
+    '</head>\r\n' +
+    '<body>\r\n' +
+    '  <div id="app" class="engine-shell">\r\n' +
+    '    <header class="topbar">\r\n' +
+    '      <div class="brand" title="OmniForge 3D Engine">\r\n' +
+    '        <div class="brand-mark" aria-hidden="true"><span>OF</span></div>\r\n' +
+    '        <div><strong>OmniForge</strong><small>AI-native game creation</small></div>\r\n' +
+    '      </div>\r\n' +
+    '      <div class="project-strip">\r\n' +
+    '        <button id="projectButton" class="project-button" type="button" title="Open Project Hub (Ctrl+Shift+P)"><span class="status-dot"></span><span id="projectName">Untitled Game</span><span class="chevron">⌄</span></button>\r\n' +
+    '        <label class="scene-select-label">Scene <select id="sceneSelect" aria-label="Active scene"></select></label>\r\n' +
+    '      </div>\r\n' +
+    '      <div class="top-actions">\r\n' +
+    '        <button id="newSceneButton" class="button subtle" type="button">New scene</button>\r\n' +
+    '        <button id="layoutButton" class="button subtle" type="button">Layout</button><button id="commandPaletteButton" class="button subtle" type="button" title="Command palette (Ctrl+K)">Commands</button><button id="saveButton" class="button subtle save-button" type="button"><span class="shortcut">Ctrl S</span> Save <span id="saveStateBadge" class="save-state saved">Saved</span></button>\r\n' +
+    '        <button id="playButton" class="button play" type="button"><span class="play-icon">▶</span><span>Play</span></button>\r\n' +
+    '        <button id="captureButton" class="button primary" type="button">Capture view</button>\r\n' +
+    '        <span id="connectionBadge" class="connection-badge"><span class="status-dot"></span><span>MCP available</span></span>\r\n' +
+    '      </div>\r\n' +
+    '    </header>\r\n' +
+    '\r\n' +
+    '    <main class="workspace">\r\n' +
+    '      <aside id="leftPanel" class="left-panel panel"><button id="collapseLeftButton" class="panel-collapse left" type="button" title="Collapse hierarchy panel">‹</button>\r\n' +
+    '        <div class="panel-tabs" role="tablist">\r\n' +
+    '          <button class="panel-tab active" data-left-tab="hierarchy" type="button">Hierarchy</button>\r\n' +
+    '          <button class="panel-tab" data-left-tab="create" type="button">Create</button>\r\n' +
+    '          <button class="panel-tab" data-left-tab="assets" type="button">Assets</button>\r\n' +
+    '          <button class="panel-tab" data-left-tab="integrations" type="button">Integrations</button>\r\n' +
+    '        </div>\r\n' +
+    '        <section id="hierarchyTab" class="left-tab active">\r\n' +
+    '          <div class="panel-tools">\r\n' +
+    '            <div class="search-field"><span>⌕</span><input id="hierarchySearch" type="search" placeholder="Search scene"></div>\r\n' +
+    '            <button id="addQuickButton" class="icon-button" type="button" title="Create object">＋</button>\r\n' +
+    '          </div>\r\n' +
+    '          <div class="scene-heading"><span id="sceneNameLabel">Main</span><span id="objectCount">0 objects</span></div>\r\n' +
+    '          <div id="hierarchyList" class="hierarchy-list" aria-label="Scene hierarchy"></div>\r\n' +
+    '        </section>\r\n' +
+    '\r\n' +
+    '        <section id="createTab" class="left-tab">\r\n' +
+    '          <p class="panel-hint">Add live 3D objects to the active scene.</p>\r\n' +
+    '          <div id="createGrid" class="create-grid">\r\n' +
+    '            <button data-create="box" type="button"><span class="primitive cube"></span><b>Box</b></button>\r\n' +
+    '            <button data-create="sphere" type="button"><span class="primitive sphere"></span><b>Sphere</b></button>\r\n' +
+    '            <button data-create="cylinder" type="button"><span class="primitive cylinder"></span><b>Cylinder</b></button>\r\n' +
+    '            <button data-create="plane" type="button"><span class="primitive plane"></span><b>Plane</b></button>\r\n' +
+    '            <button data-create="terrain" type="button"><span class="primitive terrain"></span><b>Terrain</b></button>\r\n' +
+    '            <button data-create="path" type="button"><span class="primitive path"></span><b>Path</b></button>\r\n' +
+    '            <button data-create="directionalLight" type="button"><span class="primitive sun"></span><b>Sun light</b></button>\r\n' +
+    '            <button data-create="pointLight" type="button"><span class="primitive bulb"></span><b>Point light</b></button>\r\n' +
+    '            <button data-create="empty" type="button"><span class="primitive empty"></span><b>Empty</b></button>\r\n' +
+    '          </div>\r\n' +
+    '          <div class="create-note"><strong>Shared scene authority</strong><p>The editor and Codex operate on the same structured entities, components, materials, prefabs, and world settings.</p></div>\r\n' +
+    '        </section>\r\n' +
+    '\r\n' +
+    '        <section id="assetsTab" class="left-tab material-studio asset-workspace">\r\n' +
+    '          <nav class="asset-workspace-nav" aria-label="Asset workspace sections">\r\n' +
+    '            <button class="active" data-asset-workspace-view="models" type="button">Models</button>\r\n' +
+    '            <button data-asset-workspace-view="surfaces" type="button">Surfaces</button>\r\n' +
+    '            <button data-asset-workspace-view="prefabs" type="button">Prefabs</button>\r\n' +
+    '            <button data-asset-workspace-view="marketplace" type="button">Marketplace</button>\r\n' +
+    '          </nav>\r\n' +
+    '\r\n' +
+    '          <div id="modelsAssetSubview" class="asset-subview active" data-asset-subview="models">\r\n' +
+    '            <div class="studio-heading"><div><small>CANONICAL ASSET WORKSPACE</small><strong>Import and validate real 3D assets</strong></div><span class="studio-badge">GLB / GLTF</span></div>\r\n' +
+    '            <label class="import-drop asset-import-drop">Import a 3D model<input id="modelImportInput" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"><span>Original files are preserved. OmniForge applies the authored node hierarchy, builds a canonical derivative, and creates an Asset Health Report.</span></label>\r\n' +
+    '            <div class="studio-row asset-import-fields">\r\n' +
+    '              <label>Intended use<select id="modelCategory"><option value="static-prop">Static prop</option><option value="architecture">Architecture</option><option value="modular-piece">Modular piece</option><option value="foliage">Foliage</option><option value="terrain-feature">Terrain feature</option><option value="character">Character</option><option value="creature">Creature</option><option value="weapon">Weapon</option><option value="vehicle">Vehicle</option><option value="animated-mechanism">Animated mechanism</option><option value="vfx-mesh">VFX mesh</option></select></label>\r\n' +
+    '              <label>License<input id="modelLicense" type="text" value="User supplied — review before release" maxlength="240"></label>\r\n' +
+    '            </div>\r\n' +
+    '            <div class="studio-actions asset-import-actions"><button id="importModelButton" class="button primary" type="button" disabled>Import selected model</button><span id="modelImportStatus" class="asset-import-status">No file selected</span></div>\r\n' +
+    '            <div class="material-divider"><span>3D ASSET LIBRARY</span><span id="modelAssetCount">0</span></div>\r\n' +
+    '            <div class="asset-filter-row"><input id="assetSearchInput" type="search" placeholder="Search assets, tags, licenses…"><select id="assetStatusFilter"><option value="">All states</option><option value="approved">Approved</option><option value="draft">Draft</option><option value="unvalidated">Unvalidated</option></select></div>\r\n' +
+    '            <div id="modelAssetList" class="model-asset-list"></div>\r\n' +
+    '            <div class="material-divider"><span>ASSET HEALTH + PROCESSING</span><span>REVERSIBLE</span></div>\r\n' +
+    '            <div id="modelAssetInspector" class="model-asset-inspector"><div class="material-empty">Import or select a 3D asset to inspect geometry, transforms, provenance, collision, LODs, validation, and scene usages.</div></div>\r\n' +
+    '          </div>\r\n' +
+    '\r\n' +
+    '          <div id="surfacesAssetSubview" class="asset-subview" data-asset-subview="surfaces">\r\n' +
+    '            <div class="studio-heading"><div><small>PRODUCTION SURFACE STUDIO</small><strong>Author, process, layer, compile, and reuse surfaces</strong></div><span class="studio-badge">RECIPE CORE v2</span></div>\r\n' +
+    '            <nav class="surface-mode-nav" aria-label="Surface Studio modes">\r\n' +
+    '              <button class="active" data-surface-mode="simple" type="button">Simple</button>\r\n' +
+    '              <button data-surface-mode="advanced" type="button">Advanced</button>\r\n' +
+    '              <button data-surface-mode="processing" type="button">Map tools</button>\r\n' +
+    '              <button data-surface-mode="decals" type="button">Decals</button>\r\n' +
+    '              <button data-surface-mode="atlas" type="button">Atlas + Trim</button>\r\n' +
+    '            </nav>\r\n' +
+    '\r\n' +
+    '            <section id="surfaceSimplePanel" class="surface-mode-panel active" data-surface-panel="simple">\r\n' +
+    '              <textarea id="texturePrompt" rows="4" placeholder="Realistic dry mountain grass with sparse yellow blades, tiny exposed soil patches, subtle roughness variation, seamless tiling…"></textarea>\r\n' +
+    '              <div class="studio-row">\r\n' +
+    '                <label>Surface<select id="textureCategory"><option value="grass">Grass</option><option value="dirt">Dirt</option><option value="sand">Sand</option><option value="gravel">Gravel</option><option value="rock">Rock</option><option value="snow">Snow</option><option value="custom">Custom</option></select></label>\r\n' +
+    '                <label>Resolution<select id="textureResolution"><option value="256">256</option><option value="512" selected>512</option></select></label>\r\n' +
+    '              </div>\r\n' +
+    '              <div class="studio-actions"><button id="generateTextureButton" class="button primary" type="button">Generate material</button><button id="sendTextureBriefButton" class="button subtle" type="button">Send brief to Codex</button></div>\r\n' +
+    '              <label class="import-drop">Import a ChatGPT or external texture<input id="textureImportInput" type="file" accept="image/png,image/jpeg,image/webp"><span>Choose a source image. Map Tools can make a non-destructive seamless PBR derivative.</span></label>\r\n' +
+    '          '... 24493 more characters
+  
+      at TestContext.<anonymous> (file:///D:/a/OmniForge/OmniForge/tests/v011.test.mjs:126:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<!doctype html>\r\n<html lang="en">\r\n<head>\r\n  <meta charset="utf-8">\r\n  <meta name="viewport" content="width=device-width,initial-scale=1">\r\n  <meta name="theme-color" content="#0a0d13">\r\n  <title>OmniForge</title>\r\n  <link rel="stylesheet" href="styles.css">\r\n  <link rel="stylesheet" href="v010.css">\r\n</head>\r\n<body>\r\n  <div id="app" class="engine-shell">\r\n    <header class="topbar">\r\n      <div class="brand" title="OmniForge 3D Engine">\r\n        <div class="brand-mark" aria-hidden="true"><span>OF</span></div>\r\n        <div><strong>OmniForge</strong><small>AI-native game creation</small></div>\r\n      </div>\r\n      <div class="project-strip">\r\n        <button id="projectButton" class="project-button" type="button" title="Open Project Hub (Ctrl+Shift+P)"><span class="status-dot"></span><span id="projectName">Untitled Game</span><span class="chevron">⌄</span></button>\r\n        <label class="scene-select-label">Scene <select id="sceneSelect" aria-label="Active scene"></select></label>\r\n      </div>\r\n      <div class="top-actions">\r\n        <button id="newSceneButton" class="button subtle" type="button">New scene</button>\r\n        <button id="layoutButton" class="button subtle" type="button">Layout</button><button id="commandPaletteButton" class="button subtle" type="button" title="Command palette (Ctrl+K)">Commands</button><button id="saveButton" class="button subtle save-button" type="button"><span class="shortcut">Ctrl S</span> Save <span id="saveStateBadge" class="save-state saved">Saved</span></button>\r\n        <button id="playButton" class="button play" type="button"><span class="play-icon">▶</span><span>Play</span></button>\r\n        <button id="captureButton" class="button primary" type="button">Capture view</button>\r\n        <span id="connectionBadge" class="connection-badge"><span class="status-dot"></span><span>MCP available</span></span>\r\n      </div>\r\n    </header>\r\n\r\n    <main class="workspace">\r\n      <aside id="leftPanel" class="left-panel panel"><button id="collapseLeftButton" class="panel-collapse left" type="button" title="Collapse hierarchy panel">‹</button>\r\n        <div class="panel-tabs" role="tablist">\r\n          <button class="panel-tab active" data-left-tab="hierarchy" type="button">Hierarchy</button>\r\n          <button class="panel-tab" data-left-tab="create" type="button">Create</button>\r\n          <button class="panel-tab" data-left-tab="assets" type="button">Assets</button>\r\n          <button class="panel-tab" data-left-tab="integrations" type="button">Integrations</button>\r\n        </div>\r\n        <section id="hierarchyTab" class="left-tab active">\r\n          <div class="panel-tools">\r\n            <div class="search-field"><span>⌕</span><input id="hierarchySearch" type="search" placeholder="Search scene"></div>\r\n            <button id="addQuickButton" class="icon-button" type="button" title="Create object">＋</button>\r\n          </div>\r\n          <div class="scene-heading"><span id="sceneNameLabel">Main</span><span id="objectCount">0 objects</span></div>\r\n          <div id="hierarchyList" class="hierarchy-list" aria-label="Scene hierarchy"></div>\r\n        </section>\r\n\r\n        <section id="createTab" class="left-tab">\r\n          <p class="panel-hint">Add live 3D objects to the active scene.</p>\r\n          <div id="createGrid" class="create-grid">\r\n            <button data-create="box" type="button"><span class="primitive cube"></span><b>Box</b></button>\r\n            <button data-create="sphere" type="button"><span class="primitive sphere"></span><b>Sphere</b></button>\r\n            <button data-create="cylinder" type="button"><span class="primitive cylinder"></span><b>Cylinder</b></button>\r\n            <button data-create="plane" type="button"><span class="primitive plane"></span><b>Plane</b></button>\r\n            <button data-create="terrain" type="button"><span class="primitive terrain"></span><b>Terrain</b></button>\r\n            <button data-create="path" type="button"><span class="primitive path"></span><b>Path</b></button>\r\n            <button data-create="directionalLight" type="button"><span class="primitive sun"></span><b>Sun light</b></button>\r\n            <button data-create="pointLight" type="button"><span class="primitive bulb"></span><b>Point light</b></button>\r\n            <button data-create="empty" type="button"><span class="primitive empty"></span><b>Empty</b></button>\r\n          </div>\r\n          <div class="create-note"><strong>Shared scene authority</strong><p>The editor and Codex operate on the same structured entities, components, materials, prefabs, and world settings.</p></div>\r\n        </section>\r\n\r\n        <section id="assetsTab" class="left-tab material-studio asset-workspace">\r\n          <nav class="asset-workspace-nav" aria-label="Asset workspace sections">\r\n            <button class="active" data-asset-workspace-view="models" type="button">Models</button>\r\n            <button data-asset-workspace-view="surfaces" type="button">Surfaces</button>\r\n            <button data-asset-workspace-view="prefabs" type="button">Prefabs</button>\r\n            <button data-asset-workspace-view="marketplace" type="button">Marketplace</button>\r\n          </nav>\r\n\r\n          <div id="modelsAssetSubview" class="asset-subview active" data-asset-subview="models">\r\n            <div class="studio-heading"><div><small>CANONICAL ASSET WORKSPACE</small><strong>Import and validate real 3D assets</strong></div><span class="studio-badge">GLB / GLTF</span></div>\r\n            <label class="import-drop asset-import-drop">Import a 3D model<input id="modelImportInput" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"><span>Original files are preserved. OmniForge applies the authored node hierarchy, builds a canonical derivative, and creates an Asset Health Report.</span></label>\r\n            <div class="studio-row asset-import-fields">\r\n              <label>Intended use<select id="modelCategory"><option value="static-prop">Static prop</option><option value="architecture">Architecture</option><option value="modular-piece">Modular piece</option><option value="foliage">Foliage</option><option value="terrain-feature">Terrain feature</option><option value="character">Character</option><option value="creature">Creature</option><option value="weapon">Weapon</option><option value="vehicle">Vehicle</option><option value="animated-mechanism">Animated mechanism</option><option value="vfx-mesh">VFX mesh</option></select></label>\r\n              <label>License<input id="modelLicense" type="text" value="User supplied — review before release" maxlength="240"></label>\r\n            </div>\r\n            <div class="studio-actions asset-import-actions"><button id="importModelButton" class="button primary" type="button" disabled>Import selected model</button><span id="modelImportStatus" class="asset-import-status">No file selected</span></div>\r\n            <div class="material-divider"><span>3D ASSET LIBRARY</span><span id="modelAssetCount">0</span></div>\r\n            <div class="asset-filter-row"><input id="assetSearchInput" type="search" placeholder="Search assets, tags, licenses…"><select id="assetStatusFilter"><option value="">All states</option><option value="approved">Approved</option><option value="draft">Draft</option><option value="unvalidated">Unvalidated</option></select></div>\r\n            <div id="modelAssetList" class="model-asset-list"></div>\r\n            <div class="material-divider"><span>ASSET HEALTH + PROCESSING</span><span>REVERSIBLE</span></div>\r\n            <div id="modelAssetInspector" class="model-asset-inspector"><div class="material-empty">Import or select a 3D asset to inspect geometry, transforms, provenance, collision, LODs, validation, and scene usages.</div></div>\r\n          </div>\r\n\r\n          <div id="surfacesAssetSubview" class="asset-subview" data-asset-subview="surfaces">\r\n            <div class="studio-heading"><div><small>PRODUCTION SURFACE STUDIO</small><strong>Author, process, layer, compile, and reuse surfaces</strong></div><span class="studio-badge">RECIPE CORE v2</span></div>\r\n            <nav class="surface-mode-nav" aria-label="Surface Studio modes">\r\n              <button class="active" data-surface-mode="simple" type="button">Simple</button>\r\n              <button data-surface-mode="advanced" type="button">Advanced</button>\r\n              <button data-surface-mode="processing" type="button">Map tools</button>\r\n              <button data-surface-mode="decals" type="button">Decals</button>\r\n              <button data-surface-mode="atlas" type="button">Atlas + Trim</button>\r\n            </nav>\r\n\r\n            <section id="surfaceSimplePanel" class="surface-mode-panel active" data-surface-panel="simple">\r\n              <textarea id="texturePrompt" rows="4" placeholder="Realistic dry mountain grass with sparse yellow blades, tiny exposed soil patches, subtle roughness variation, seamless tiling…"></textarea>\r\n              <div class="studio-row">\r\n                <label>Surface<select id="textureCategory"><option value="grass">Grass</option><option value="dirt">Dirt</option><option value="sand">Sand</option><option value="gravel">Gravel</option><option value="rock">Rock</option><option value="snow">Snow</option><option value="custom">Custom</option></select></label>\r\n                <label>Resolution<select id="textureResolution"><option value="256">256</option><option value="512" selected>512</option></select></label>\r\n              </div>\r\n              <div class="studio-actions"><button id="generateTextureButton" class="button primary" type="button">Generate material</button><button id="sendTextureBriefButton" class="button subtle" type="button">Send brief to Codex</button></div>\r\n              <label class="import-drop">Import a ChatGPT or external texture<input id="textureImportInput" type="file" accept="image/png,image/jpeg,image/webp"><span>Choose a source image. Map Tools can make a non-destructive seamless PBR derivative.</span></label>\r\n          '... 24493 more characters,
+    expected: /id="splineToggle"/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\v011.test.mjs:143:1
+✖ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (634.91ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  '0.10.0' !== '0.11.0'
+  
+      at TestContext.<anonymous> (file:///D:/a/OmniForge/OmniForge/tests/v011.test.mjs:148:48)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '0.10.0',
+    expected: '0.11.0',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+
+--- STDERR ---
+Automated tests failed.
+
