@@ -1,0 +1,61 @@
+name: Apply v0.11 Terrain Renderer Hotfix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - tools/apply-v011-terrain-lerp-hotfix.mjs
+      - .github/workflows/apply-v011-terrain-lerp-hotfix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-and-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout authoritative main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Apply renderer runtime hotfix
+        run: node tools/apply-v011-terrain-lerp-hotfix.mjs
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          if (Test-Path package-lock.json) { npm ci } else { npm install }
+
+      - name: Syntax-check corrected renderer
+        run: node --check app/renderer.js
+
+      - name: Execute complete regression suite
+        run: npm test
+
+      - name: Verify package structure
+        run: npm run verify
+
+      - name: Commit verified hotfix
+        shell: pwsh
+        run: |
+          git config user.name "OmniForge Hotfix Bot"
+          git config user.email "omniforge-hotfix-bot@users.noreply.github.com"
+          git add app/renderer.js tests/v011-renderer-runtime.test.mjs tools/apply-v011-terrain-lerp-hotfix.mjs
+          if (git diff --cached --quiet) {
+            Write-Host "No generated source changes were required."
+            exit 0
+          }
+          git commit -m "Fix v0.11 terrain renderer interpolation runtime"
+          git pull --rebase origin main
+          git push origin main
