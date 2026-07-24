@@ -11,6 +11,7 @@ on:
       - tools/apply-v010-worker-ipc.mjs
       - tools/apply-v010-editor-integration.mjs
       - tools/add-v010-texture-test.mjs
+      - tools/add-v010-editor-integration-test.mjs
       - tools/update-v010-test-expectations.mjs
       - .github/workflows/apply-v010.yml
   pull_request:
@@ -50,6 +51,7 @@ jobs:
             node tools/apply-v010-worker-ipc.mjs
             node tools/apply-v010-editor-integration.mjs
             node tools/add-v010-texture-test.mjs
+            node tools/add-v010-editor-integration-test.mjs
           } > APPLY_V010_ERROR.txt 2>&1
           result=$?
           cat APPLY_V010_ERROR.txt
