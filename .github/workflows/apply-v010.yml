@@ -7,6 +7,8 @@ on:
     paths:
       - tools/apply-v010.mjs
       - tools/apply-v010-mcp.mjs
+      - tools/apply-v010-textures.mjs
+      - tools/add-v010-texture-test.mjs
       - tools/update-v010-test-expectations.mjs
       - .github/workflows/apply-v010.yml
   pull_request:
@@ -42,6 +44,8 @@ jobs:
           {
             node tools/apply-v010.mjs
             node tools/apply-v010-mcp.mjs
+            node tools/apply-v010-textures.mjs
+            node tools/add-v010-texture-test.mjs
           } > APPLY_V010_ERROR.txt 2>&1
           result=$?
           cat APPLY_V010_ERROR.txt
@@ -64,6 +68,7 @@ jobs:
           node --check server/v010-api.mjs
           node --check server/v010-systems.mjs
           node --check app/v010.js
+          node --check app/renderer.js
           node --check server/job-manager.mjs
           node --check server/asset-pipeline.mjs
           node --check bridge/v010-tools.mjs
@@ -112,5 +117,5 @@ jobs:
             echo "No implementation changes were produced."
             exit 0
           fi
-          git commit -m "Connect OmniForge v0.10 UI API renderer assets jobs and MCP"
+          git commit -m "Connect OmniForge v0.10 importer textures UI API renderer jobs and MCP"
           git push origin milestone-10/foliage-lighting-foundation
