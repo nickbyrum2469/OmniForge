@@ -9,6 +9,7 @@ test('live viewport camera remains authoritative during navigation and pending p
   assert.equal(shouldPreserveViewportCamera({ sameAuthority: true, requested: true }), true);
   assert.equal(shouldPreserveViewportCamera({ sameAuthority: false, navigationActive: true, cameraDirty: true }), false);
   assert.equal(shouldPreserveViewportCamera({ sameAuthority: true }), false);
+  assert.equal(cloneCamera(null), null);
 
   const source = { position: [10, 20, 30], yaw: 1.25, pitch: -0.4, fov: 62 };
   const copy = cloneCamera(source);
@@ -43,4 +44,6 @@ test('path guide edges share exact joined endpoints and follow edge terrain heig
     const [x, y, z] = geometry.edges.slice(index, index + 3);
     assert.ok(Math.abs(y - (heightAt(x, z) + 0.1)) < 1e-10);
   }
+
+  assert.deepEqual(buildPathGuideSegments([], 4, heightAt, 0.1), { center: [], edges: [] });
 });
