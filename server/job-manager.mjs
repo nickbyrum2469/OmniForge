@@ -261,7 +261,10 @@ function runJob(jobId) {
   });
   child.stderr.on('data', chunk => { stderr += chunk.toString(); });
   child.on('error', error => { stderr += `${error.stack||error.message}\n`; });
-  child.on('exit', (code, signal) => {
+  child.on('close', (code, signal) => {
+    // `close` fires after stdout/stderr are drained. Using `exit` here races the
+    // worker's final JSON result on Windows and can incorrectly mark a completed
+    // Marketplace or provider job as failed.
     if (stdout.trim()) consume(stdout);
     active.delete(jobId);
     fs.rmSync(requestFile,{force:true});
