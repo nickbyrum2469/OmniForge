@@ -10,8 +10,10 @@ on:
       - tools/apply-v010-textures.mjs
       - tools/apply-v010-worker-ipc.mjs
       - tools/apply-v010-editor-integration.mjs
+      - tools/apply-v010-atmosphere-instancing.mjs
       - tools/add-v010-texture-test.mjs
       - tools/add-v010-editor-integration-test.mjs
+      - tools/add-v010-atmosphere-instancing-test.mjs
       - tools/update-v010-test-expectations.mjs
       - .github/workflows/apply-v010.yml
   pull_request:
@@ -50,8 +52,10 @@ jobs:
             node tools/apply-v010-textures.mjs
             node tools/apply-v010-worker-ipc.mjs
             node tools/apply-v010-editor-integration.mjs
+            node tools/apply-v010-atmosphere-instancing.mjs
             node tools/add-v010-texture-test.mjs
             node tools/add-v010-editor-integration-test.mjs
+            node tools/add-v010-atmosphere-instancing-test.mjs
           } > APPLY_V010_ERROR.txt 2>&1
           result=$?
           cat APPLY_V010_ERROR.txt
@@ -132,6 +136,6 @@ jobs:
             echo "No implementation changes were produced."
             exit 0
           fi
-          git commit -m "Connect OmniForge v0.10 importer textures worker IPC live editor UI API renderer jobs and MCP"
+          git commit -m "Connect OmniForge v0.10 importer textures worker IPC live editor atmosphere instanced foliage UI API renderer jobs and MCP"
           git pull --rebase origin milestone-10/foliage-lighting-foundation
           git push origin milestone-10/foliage-lighting-foundation
