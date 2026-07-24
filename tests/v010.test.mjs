@@ -1,5 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import net from 'node:net';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
   seededRandom,
   defaultWorldSettings,
@@ -8,6 +14,8 @@ import {
   generateFoliagePlacements,
   distanceToPaths
 } from '../server/v010-systems.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const terrain = {
   id: 'terrain-test',
@@ -38,6 +46,41 @@ function foliageScene() {
       }
     ]
   };
+}
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const port = server.address().port;
+      server.close(error => error ? reject(error) : resolve(port));
+    });
+  });
+}
+
+async function requestJson(port, pathname, options = {}) {
+  const response = await fetch(`http://127.0.0.1:${port}${pathname}`, {
+    ...options,
+    headers: { 'content-type': 'application/json', ...(options.headers || {}) }
+  });
+  const body = await response.json().catch(() => ({}));
+  return { status: response.status, body };
+}
+
+async function waitForHealth(port, timeoutMs = 12_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const result = await requestJson(port, '/api/health');
+      if (result.status === 200) return result.body;
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 80));
+  }
+  throw lastError || new Error('Timed out waiting for the v0.10 server health endpoint.');
 }
 
 test('v0.10 seeded random and foliage placement are deterministic', () => {
@@ -113,4 +156,92 @@ test('v0.10 foliage uses root-socket grounding and vehicles remain upright', () 
   assert.equal(fitGroundContact({ object: vehicle, asset: vehicleAsset, terrain }).mode, 'wheel-contact');
   assert.equal(vehicle.transform.rotation[0], 0);
   assert.equal(vehicle.transform.rotation[2], 0);
+});
+
+test('v0.10 desktop package, UI, and MCP share the connected authorities', () => {
+  const builder = fs.readFileSync(path.join(ROOT, 'BUILD_DESKTOP_WINDOWS.ps1'), 'utf8');
+  const html = fs.readFileSync(path.join(ROOT, 'app', 'index.html'), 'utf8');
+  const mcp = fs.readFileSync(path.join(ROOT, 'bridge', 'mcp-server.mjs'), 'utf8');
+  const mcpTools = fs.readFileSync(path.join(ROOT, 'bridge', 'v010-tools.mjs'), 'utf8');
+  assert.match(builder, /'desktop','workers','assets'/);
+  assert.match(html, /v010\.css/);
+  assert.match(html, /v010\.js/);
+  assert.match(mcp, /v010Tools, callV010Tool/);
+  assert.match(mcp, /callV010Tool\(name,args\)/);
+  for (const name of [
+    'omniforge_get_world_systems',
+    'omniforge_update_world_systems',
+    'omniforge_create_foliage_species',
+    'omniforge_preview_foliage_region',
+    'omniforge_commit_foliage_preview',
+    'omniforge_cancel_foliage_preview',
+    'omniforge_get_model_asset_usages',
+    'omniforge_archive_model_import',
+    'omniforge_restore_model_import',
+    'omniforge_delete_model_import'
+  ]) assert.match(mcpTools, new RegExp(name));
+});
+
+test('v0.10 bootstrap serves world systems and upgrades the existing Ground command', async () => {
+  const port = await freePort();
+  const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'omniforge-v010-runtime-'));
+  const child = spawn(process.execPath, ['server/v010-bootstrap.mjs'], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      OMNIFORGE_DATA_ROOT: runtime,
+      OMNIFORGE_PORT: String(port),
+      OMNIFORGE_SESSION_TOKEN: 'v010-integration-test'
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  let stderr = '';
+  child.stderr.on('data', chunk => { stderr += chunk.toString(); });
+  try {
+    const health = await waitForHealth(port);
+    assert.equal(health.version, '0.10.0');
+
+    const initial = await requestJson(port, '/api/v010/world');
+    assert.equal(initial.status, 200);
+    assert.equal(initial.body.world.schemaVersion, 1);
+    assert.ok(initial.body.scene.settings.environmentV010);
+
+    const updated = await requestJson(port, '/api/v010/world', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        time: { hours: 19.25, timeScale: 120 },
+        atmosphere: { visibilityKm: 70, rayleigh: 1.3, mie: 0.2 },
+        weather: { preset: 'fog', fog: 0.4 }
+      })
+    });
+    assert.equal(updated.status, 200);
+    assert.equal(updated.body.world.time.hours, 19.25);
+    assert.equal(updated.body.world.weather.preset, 'fog');
+    assert.ok(updated.body.derived.night > 0);
+
+    const state = await requestJson(port, '/api/state');
+    const groundable = state.body.scenes
+      .find(scene => scene.id === state.body.activeSceneId)
+      .objects.find(object => ['box', 'sphere', 'cylinder'].includes(object.type));
+    assert.ok(groundable);
+    const grounded = await requestJson(port, '/api/object/ground', {
+      method: 'POST',
+      body: JSON.stringify({ objectId: groundable.id, maxTilt: 30 })
+    });
+    assert.equal(grounded.status, 200);
+    assert.equal(grounded.body.diagnostics.supportPoints.length, 4);
+    assert.ok(['support-plane', 'foundation', 'wheel-contact', 'root-socket'].includes(grounded.body.diagnostics.mode));
+
+    const persisted = JSON.parse(fs.readFileSync(path.join(runtime, 'data', 'engine-state.json'), 'utf8'));
+    assert.equal(persisted.worldV010.time.hours, 19.25);
+    assert.equal(persisted.worldV010.atmosphere.visibilityKm, 70);
+  } finally {
+    child.kill('SIGTERM');
+    await Promise.race([
+      new Promise(resolve => child.once('exit', resolve)),
+      new Promise(resolve => setTimeout(resolve, 3000))
+    ]);
+    fs.rmSync(runtime, { recursive: true, force: true });
+  }
+  assert.equal(stderr, '', stderr);
 });
