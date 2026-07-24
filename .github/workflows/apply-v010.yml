@@ -11,6 +11,7 @@ on:
       - tools/apply-v010-worker-ipc.mjs
       - tools/apply-v010-editor-integration.mjs
       - tools/apply-v010-atmosphere-instancing.mjs
+      - tools/fix-v010-instancing-name.mjs
       - tools/add-v010-texture-test.mjs
       - tools/add-v010-editor-integration-test.mjs
       - tools/add-v010-atmosphere-instancing-test.mjs
@@ -53,6 +54,7 @@ jobs:
             node tools/apply-v010-worker-ipc.mjs
             node tools/apply-v010-editor-integration.mjs
             node tools/apply-v010-atmosphere-instancing.mjs
+            node tools/fix-v010-instancing-name.mjs
             node tools/add-v010-texture-test.mjs
             node tools/add-v010-editor-integration-test.mjs
             node tools/add-v010-atmosphere-instancing-test.mjs
