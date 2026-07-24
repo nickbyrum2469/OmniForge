@@ -1,5 +1,5 @@
 OmniForge Windows verification exit code: 1
-Generated: 2026-07-24T05:04:54.2712183+00:00
+Generated: 2026-07-24T05:06:15.5165740+00:00
 
 --- STDOUT ---
 
@@ -15,95 +15,75 @@ Syntax: MCP bridge: passed
 Syntax: editor: passed
 Syntax: renderer: passed
 Syntax: desktop shell: passed
-✔ default project is general-purpose and contains a real 3D starter scene (7.467ms)
-✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (1.4833ms)
-✔ all supported scene primitives receive valid transforms and properties (2.7767ms)
-✔ terrain height is deterministic and responds to world position (1.6816ms)
-✔ path defaults preserve terrain-conforming system relationships (0.3695ms)
-✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.7263ms)
-✔ starter PBR materials include real texture-map files and are protected (1.3378ms)
-✔ horizontal mouse look uses the intuitive right-positive yaw convention (0.9761ms)
-✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (1.0839ms)
-✔ Windows desktop builder pins and stamps the native executable metadata (0.943ms)
-✔ project hub and editor usability controls are wired into the authoritative editor (2.8196ms)
-✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (915.362ms)
-✔ two runtime sessions cannot write the same active project simultaneously (596.4025ms)
-✔ starter objects are grounded against the authoritative terrain surface (0.9027ms)
-✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.2218ms)
-✔ managed workspace path cannot escape the projects root (0.7194ms)
-✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (199.8305ms)
-✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (280.9184ms)
-✔ material authoring settings clamp safely and preserve tiling transforms (0.2345ms)
-✔ material tuner exposes live tiling and PBR response controls (1.2612ms)
-✔ active source and documentation contain no legacy product assumptions (9.4083ms)
-✔ desktop clipboard and pointer-lock permissions use guarded native paths (0.8841ms)
-✔ surface recipes are stable linked assets with validation and deterministic masks (0.8891ms)
-✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.7169ms)
-✔ desktop launcher rejects stale packaged executables (0.1892ms)
-✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (15.5444ms)
-✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.5591ms)
-✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (10.0451ms)
-✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (662.8065ms)
-✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (6.9342ms)
-✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (10.8568ms)
-✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.2087ms)
-✔ provider framework normalizes independent providers, settings, and persistent job records (1.2541ms)
-✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.4837ms)
-✖ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (5614.6726ms)
-✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (2.932ms)
-✖ mocked Poly Haven search completes a real staged download job and imports a canonical model (595.1252ms)
-✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (1.0318ms)
-✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.1415ms)
-✔ v0.9 decal and atlas recipes validate stable production metadata (0.6128ms)
-✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.8311ms)
-✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (506.2933ms)
-✔ v0.10 seeded random and foliage placement are deterministic (12.0501ms)
-✔ v0.10 world system drives the authoritative scene sun and renderer settings (2.135ms)
-✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.798ms)
-✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.5124ms)
-✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (26.9143ms)
-✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.9812ms)
-✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (1192.3588ms)
+✔ default project is general-purpose and contains a real 3D starter scene (6.9516ms)
+✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (1.065ms)
+✔ all supported scene primitives receive valid transforms and properties (2.3864ms)
+✔ terrain height is deterministic and responds to world position (0.5086ms)
+✔ path defaults preserve terrain-conforming system relationships (0.3734ms)
+✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.542ms)
+✔ starter PBR materials include real texture-map files and are protected (1.5803ms)
+✔ horizontal mouse look uses the intuitive right-positive yaw convention (1.1728ms)
+✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (1.0959ms)
+✔ Windows desktop builder pins and stamps the native executable metadata (0.7697ms)
+✔ project hub and editor usability controls are wired into the authoritative editor (2.5529ms)
+✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (457.9757ms)
+✔ two runtime sessions cannot write the same active project simultaneously (518.6008ms)
+✔ starter objects are grounded against the authoritative terrain surface (0.8355ms)
+✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.1164ms)
+✔ managed workspace path cannot escape the projects root (0.7867ms)
+✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (220.0025ms)
+✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (285.9385ms)
+✔ material authoring settings clamp safely and preserve tiling transforms (0.237ms)
+✔ material tuner exposes live tiling and PBR response controls (1.188ms)
+✔ active source and documentation contain no legacy product assumptions (10.0712ms)
+✔ desktop clipboard and pointer-lock permissions use guarded native paths (0.8205ms)
+✔ surface recipes are stable linked assets with validation and deterministic masks (0.8872ms)
+✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.7521ms)
+✔ desktop launcher rejects stale packaged executables (0.193ms)
+✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (16.9241ms)
+✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.6059ms)
+✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (10.7099ms)
+✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (566.1466ms)
+✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (7.6909ms)
+✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (11.4477ms)
+✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.2209ms)
+✔ provider framework normalizes independent providers, settings, and persistent job records (1.1908ms)
+✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.5059ms)
+✖ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (1513.0657ms)
+✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (2.926ms)
+✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (783.5724ms)
+✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.8384ms)
+✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.1302ms)
+✔ v0.9 decal and atlas recipes validate stable production metadata (0.5716ms)
+✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.9032ms)
+✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (550.6874ms)
+✔ v0.10 seeded random and foliage placement are deterministic (49.9764ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (1.526ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.6868ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.4611ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (99.5439ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.9934ms)
+✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (994.7754ms)
 ℹ tests 49
 ℹ suites 0
-ℹ pass 47
-ℹ fail 2
+ℹ pass 48
+ℹ fail 1
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 9730.2159
+ℹ duration_ms 5614.2834
 
 ✖ failing tests:
 
 test at tests\engine.test.mjs:517:1
-✖ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (5614.6726ms)
+✖ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (1513.0657ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   + actual - expected
   
   + 'failed'
   - 'succeeded'
   
-      at TestContext.<anonymous> (file:///D:/a/OmniForge/OmniForge/tests/engine.test.mjs:528:163)
-      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
-      at async Test.run (node:internal/test_runner/test:1332:7)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 'failed',
-    expected: 'succeeded',
-    operator: 'strictEqual',
-    diff: 'simple'
-  }
-
-test at tests\engine.test.mjs:546:1
-✖ mocked Poly Haven search completes a real staged download job and imports a canonical model (595.1252ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  + actual - expected
-  
-  + 'failed'
-  - 'succeeded'
-  
-      at TestContext.<anonymous> (file:///D:/a/OmniForge/OmniForge/tests/engine.test.mjs:556:64)
+      at TestContext.<anonymous> (file:///D:/a/OmniForge/OmniForge/tests/engine.test.mjs:526:196)
       at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
       at async Test.run (node:internal/test_runner/test:1332:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
