@@ -35,8 +35,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         if: steps.source.outputs.present == 'true'
@@ -62,6 +60,11 @@ jobs:
             $registered = Get-ChildItem workers -File -Recurse
           }
           Write-Host "Worker files found: $($registered.Count)"
-          if (Test-Path app/workers) {
-            Write-Host "app/workers files: $((Get-ChildItem app/workers -File -Recurse).Count)"
+          if ($registered.Count -lt 1) {
+            throw "No packaged worker files were found."
           }
+          $builder = Get-Content BUILD_DESKTOP_WINDOWS.ps1 -Raw
+          if ($builder -notmatch "'workers'") {
+            throw "The Windows desktop builder does not package the workers directory."
+          }
+          Write-Host "Windows packaging includes the worker registry."
