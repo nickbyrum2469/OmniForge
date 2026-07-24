@@ -1,4 +1,5 @@
 import {
+  readState,
   mutateState,
   addActivity,
   activeScene,
@@ -103,8 +104,8 @@ export async function handleV011Request(req, res) {
     if (!url.pathname.startsWith('/api/v011/')) return false;
 
     if (req.method === 'GET' && url.pathname === '/api/v011/worldgen') {
-      const result = mutateState(state => worldSnapshot(state));
-      json(res, 200, { ...result.result, state: result.state });
+      const state = readState();
+      json(res, 200, worldSnapshot(state));
       return true;
     }
 

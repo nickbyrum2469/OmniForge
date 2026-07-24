@@ -1,3 +1,5 @@
+import { applyCompactWorldRuntime, shouldAdvanceWorldTime } from './world-runtime.js';
+
 const $ = selector => document.querySelector(selector);
 
 async function api(url, options = {}) {
@@ -23,9 +25,22 @@ const numeric = (id, fallback = 0) => {
 let snapshot = null;
 let lastFoliageTransaction = null;
 let timeTimer = null;
+let timeStepInFlight = false;
+let previewTimeInEditor = sessionStorage.getItem('omniforge.previewTimeInEditor') === '1';
 
 function synchronizeAuthoritativeEditor() {
   if (snapshot?.state) window.dispatchEvent(new CustomEvent('omniforge:apply-state', { detail: { state: snapshot.state } }));
+}
+
+function synchronizeRuntimeOnly() {
+  const target = window.__omniforgeV011Bridge?.snapshot?.();
+  if (!target || !applyCompactWorldRuntime(target, snapshot?.runtime)) return false;
+  const wrap = document.getElementById('viewportWrap');
+  if (wrap && snapshot.runtime?.settings) {
+    const settings = snapshot.runtime.settings;
+    wrap.style.background = `linear-gradient(${settings.skyTop} 0%, ${settings.skyBottom} 72%, #26343c 100%)`;
+  }
+  return true;
 }
 
 function setStatus(message, error = false) {
@@ -79,8 +94,10 @@ function installWorldPanel() {
         <label>Time scale<input id="v010TimeScale" type="number" min="-86400" max="86400" step="10"></label>
         <label>Sun intensity<input id="v010SunIntensity" type="number" min="0" max="20" step="0.1"></label>
         <label>Lighting profile<select id="v010LightingProfile"><option value="compatibility">GTX 1650 compatibility</option><option value="balanced">Balanced</option><option value="quality">Quality</option><option value="reference">Reference capture</option></select></label>
+        <label>Preview time while editing<input id="v010PreviewTime" type="checkbox"></label>
       </div>
       <div class="v010-actions"><button id="v010ApplyWorld" class="button primary" type="button">Apply world</button><button id="v010ToggleTime" class="button subtle" type="button">Pause time</button></div>
+      <p class="v010-section-note">Automatic time advances in Play mode. Editor preview is opt-in so lighting updates cannot interrupt viewport input or rebuild the entire workspace while authoring.</p>
     </div>
 
     <div class="v010-card">
@@ -153,9 +170,13 @@ function applyViewportEnvironment() {
   wrap.dataset.weather = String(snapshot?.world?.weather?.preset || 'clear');
 }
 
-function populate() {
+function populate(options = {}) {
   if (!snapshot?.world) return;
   const world = snapshot.world;
+  field('v010TimeReadout').textContent = formatTime(world.time.hours);
+  field('v010ToggleTime').textContent = world.time.enabled === false ? 'Resume time' : 'Pause time';
+  if (field('v010PreviewTime')) field('v010PreviewTime').checked = previewTimeInEditor;
+  if (options.runtimeOnly) { applyViewportEnvironment(); return; }
   field('v010Hours').value = world.time.hours;
   field('v010TimeScale').value = world.time.timeScale;
   field('v010SunIntensity').value = world.lighting.sunIntensity;
@@ -169,8 +190,6 @@ function populate() {
   field('v010Clouds').value = world.clouds.coverage;
   field('v010Fog').value = world.weather.fog;
   field('v010Weather').value = world.weather.preset;
-  field('v010TimeReadout').textContent = formatTime(world.time.hours);
-  field('v010ToggleTime').textContent = world.time.enabled === false ? 'Resume time' : 'Pause time';
 
   const models = snapshot.assets.filter(item => item.type === 'model' && !item.archived);
   const species = snapshot.assets.filter(item => item.type === 'foliageSpecies');
@@ -349,14 +368,41 @@ function bindControls() {
     }
   });
 
+  field('v010PreviewTime')?.addEventListener('change', event => {
+    previewTimeInEditor = Boolean(event.target.checked);
+    sessionStorage.setItem('omniforge.previewTimeInEditor', previewTimeInEditor ? '1' : '0');
+    setStatus(previewTimeInEditor
+      ? 'Editor time preview enabled. Compact lighting patches will update without replacing the workspace.'
+      : 'Editor time preview paused. Time still advances normally in Play mode.');
+  });
+
   timeTimer = window.setInterval(async () => {
-    if (!snapshot?.world?.time?.enabled) return;
+    const bridgeSnapshot = window.__omniforgeV011Bridge?.snapshot?.();
+    if (!shouldAdvanceWorldTime({
+      enabled: snapshot?.world?.time?.enabled,
+      editorMode: bridgeSnapshot?.state?.editor?.mode || 'edit',
+      previewInEditor: previewTimeInEditor,
+      documentHidden: document.hidden,
+      inFlight: timeStepInFlight
+    })) return;
+    timeStepInFlight = true;
     try {
-      snapshot = await api('/api/v010/world/step', { method: 'POST', body: JSON.stringify({ seconds: 2 }) });
-      synchronizeAuthoritativeEditor();
-      populate();
+      const stepped = await api('/api/v010/world/step', { method: 'POST', body: JSON.stringify({ seconds: 2 }) });
+      snapshot = {
+        ...snapshot,
+        ...stepped,
+        state: snapshot?.state,
+        assets: snapshot?.assets || [],
+        transactions: snapshot?.transactions || [],
+        runtimeDiagnostics: snapshot?.runtimeDiagnostics || {},
+        scene: stepped.runtime?.settings ? { ...(snapshot?.scene || {}), id: stepped.runtime.sceneId, settings: stepped.runtime.settings } : snapshot?.scene
+      };
+      synchronizeRuntimeOnly();
+      populate({ runtimeOnly: true });
     } catch {
       // The regular refresh/error UI handles runtime disconnects.
+    } finally {
+      timeStepInFlight = false;
     }
   }, 2000);
 }

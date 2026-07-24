@@ -83,6 +83,8 @@ let lastKnownSaveState = 'saved';
 let viewportDragLook = false;
 let viewportDragLast = null;
 let pointerLockSupported = 'pointerLockElement' in document;
+let interactionActiveUntil = 0;
+let remotePollInFlight = false;
 
 async function api(path, options={}) {
   const method=String(options.method||'GET').toUpperCase(),mutating=!['GET','HEAD'].includes(method);
@@ -110,6 +112,7 @@ function selectedSurfaceRecipe(){const material=selectedMaterial();if(!material)
 function setSaveState(status='saved'){lastKnownSaveState=status;if(!ui.saveStateBadge)return;ui.saveStateBadge.textContent=({saved:'Saved',dirty:'Unsaved',saving:'Saving…',error:'Save error'})[status]||status;ui.saveStateBadge.className=`save-state ${status}`;}
 function markLocalMutation() { localMutationAt = Date.now();setSaveState('dirty'); }
 function noteCameraMutation() { cameraDirty = true;cameraMutationVersion += 1;localMutationAt = Date.now(); }
+function noteUserInteraction(duration=900) { interactionActiveUntil = Math.max(interactionActiveUntil, Date.now() + duration); }
 
 function showToast(message, type='') {
   clearTimeout(toastTimer);
@@ -1042,7 +1045,7 @@ function persistCameraSoon(){
 
 async function captureViewport(title='3D viewport capture') {
   try{
-    renderer.render(scene,camera,selectedId);
+    renderer.render(scene,camera,selectedId,{editorMode:state?.editor?.mode||'edit'});
     const dataUrl=ui.viewport.toDataURL('image/png');
     const payload=await api('/api/capture',{method:'POST',body:{dataUrl,kind:'viewport',title,metadata:{sceneId:scene.id,selectedObjectId:selectedId,camera:deepClone(camera),objectCount:scene.objects.length}}});
     state=payload.state;showToast(`Saved ${payload.capture.name}`,'success');return payload;
@@ -1119,7 +1122,7 @@ function updateCamera(dt) {
 }
 
 function animationLoop(now) {
-  const dt=Math.min(.05,(now-lastFrame)/1000);lastFrame=now;updateCamera(dt);if(state?.editor.mode==='play'){behaviorStep(dt);physicsAccumulator=Math.min(.2,physicsAccumulator+dt);while(physicsAccumulator>=1/60){physicsStep(1/60);physicsAccumulator-=1/60;}}if(renderer&&scene)renderer.render(scene,camera,selectedId);
+  const dt=Math.min(.05,(now-lastFrame)/1000);lastFrame=now;updateCamera(dt);if(state?.editor.mode==='play'){behaviorStep(dt);physicsAccumulator=Math.min(.2,physicsAccumulator+dt);while(physicsAccumulator>=1/60){physicsStep(1/60);physicsAccumulator-=1/60;}}if(renderer&&scene)renderer.render(scene,camera,selectedId,{editorMode:state?.editor?.mode||'edit'});
   frameCounter++;fpsTimer+=dt;if(fpsTimer>=.5){ui.fpsStatus.textContent=`${Math.round(frameCounter/fpsTimer)} FPS`;frameCounter=0;fpsTimer=0;ui.cameraPositionBadge.textContent=`X ${camera.position[0].toFixed(1)} · Y ${camera.position[1].toFixed(1)} · Z ${camera.position[2].toFixed(1)}`;}
   requestAnimationFrame(animationLoop);
 }
@@ -1168,6 +1171,10 @@ function bindTabs() {
 }
 
 function bindEvents() {
+  document.addEventListener('pointerdown',()=>noteUserInteraction(1200),true);
+  document.addEventListener('input',()=>noteUserInteraction(1400),true);
+  document.addEventListener('change',()=>noteUserInteraction(1400),true);
+  document.addEventListener('wheel',()=>noteUserInteraction(700),{capture:true,passive:true});
   bindTabs();
   $$('[data-asset-workspace-view]').forEach(button=>button.addEventListener('click',()=>setAssetWorkspaceView(button.dataset.assetWorkspaceView,true)));
   ui.marketplaceSearchButton?.addEventListener('click',searchMarketplaceCatalog);ui.marketplaceSearchInput?.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();searchMarketplaceCatalog();}});ui.marketplaceProviderSelect?.addEventListener('change',()=>{marketplaceSearchResults=[];selectedMarketplaceAsset=null;renderMarketplaceProviders();renderMarketplaceResults();renderMarketplaceInspector();});
@@ -1283,7 +1290,8 @@ function bindEvents() {
 }
 
 async function pollRemoteState() {
-  if(!state||viewportNavigationActive()||cameraDirty||Date.now()-localMutationAt<900||state.editor.mode==='play')return;
+  if(!state||remotePollInFlight||Date.now()<interactionActiveUntil||viewportNavigationActive()||cameraDirty||Date.now()-localMutationAt<900||state.editor.mode==='play'||document.hidden)return;
+  remotePollInFlight=true;
   try{
     const remote=await api('/api/state');
     if(remote.engine.revision>state.engine.revision){
@@ -1300,7 +1308,7 @@ async function pollRemoteState() {
         state.engine.revision=next.engine.revision;
       }
     }
-  }catch{}
+  }catch{}finally{remotePollInFlight=false;}
 }
 
 async function bootstrap() {

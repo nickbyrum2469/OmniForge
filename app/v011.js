@@ -6,6 +6,9 @@ let splineEditPathId = null;
 let draggingNode = null;
 let inspectorObserver = null;
 let overlayFrame = 0;
+let foundationRefreshPromise = null;
+let foundationSignature = '';
+
 
 function bridge() {
   return window.__omniforgeV011Bridge || null;
@@ -38,12 +41,33 @@ async function applyMutation(payload, forceSelection = true) {
   await refreshFoundation();
 }
 
+function currentFoundationSignature() {
+  const snapshot = currentSnapshot();
+  const terrain = snapshot?.scene?.objects?.find(object => object.type === 'terrain');
+  const paths = snapshot?.scene?.objects?.filter(object => object.type === 'path') || [];
+  return JSON.stringify([
+    snapshot?.scene?.id || '',
+    terrain?.id || '',
+    terrain?.properties?.generatedRevision || 0,
+    terrain?.properties?.seed || 0,
+    terrain?.properties?.bounds || null,
+    paths.map(path => [path.id, path.visible !== false, path.properties?.profileRevision || 0, path.properties?.points || []])
+  ]);
+}
+
 async function refreshFoundation() {
-  try {
-    applyPayload(await api('/api/v011/worldgen'));
-  } catch (error) {
-    bridge()?.showToast?.(error.message, 'error');
-  }
+  if (foundationRefreshPromise) return foundationRefreshPromise;
+  foundationRefreshPromise = (async () => {
+    try {
+      applyPayload(await api('/api/v011/worldgen'));
+      foundationSignature = currentFoundationSignature();
+    } catch (error) {
+      bridge()?.showToast?.(error.message, 'error');
+    } finally {
+      foundationRefreshPromise = null;
+    }
+  })();
+  return foundationRefreshPromise;
 }
 
 function selectedObject() {
@@ -354,7 +378,11 @@ async function bootstrap() {
   watchInspector();
   await refreshFoundation();
   renderNodeOverlay();
-  window.addEventListener('omniforge:apply-state', () => queueMicrotask(() => { refreshFoundation(); enhanceInspector(); }));
+  window.addEventListener('omniforge:apply-state', () => queueMicrotask(() => {
+    const nextSignature = currentFoundationSignature();
+    if (nextSignature !== foundationSignature) refreshFoundation();
+    enhanceInspector();
+  }));
 }
 
 bootstrap();

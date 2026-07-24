@@ -28,6 +28,25 @@ function json(res, status, payload) {
   res.end(responseBody);
 }
 
+
+function compactWorldRuntime(state) {
+  const scene = activeScene(state);
+  return {
+    engineRevision: Number(state.engine?.revision || 0),
+    sceneId: scene.id,
+    settings: structuredClone(scene.settings || {}),
+    celestialObjects: scene.objects
+      .filter(object => object.type === 'directionalLight' || object.properties?.celestialRole)
+      .map(object => ({
+        id: object.id,
+        type: object.type,
+        visible: object.visible !== false,
+        transform: structuredClone(object.transform),
+        properties: structuredClone(object.properties || {})
+      }))
+  };
+}
+
 async function readJsonBody(req) {
   const chunks = [];
   let size = 0;
@@ -116,17 +135,16 @@ export async function handleV010Request(req, res) {
     if (!url.pathname.startsWith('/api/v010/')) return false;
 
     if (req.method === 'GET' && url.pathname === '/api/v010/world') {
-      const result = mutateState(state => {
-        const world = ensureWorld(state);
-        return {
-          world,
-          scene: activeScene(state),
-          assets: state.assets.filter(item => ['model', 'foliageSpecies', 'foliageFamily', 'biomeRecipe', 'windProfile'].includes(item.type)),
-          transactions: state.foliageTransactions || [],
-          runtimeDiagnostics: state.runtimeDiagnostics || {}
-        };
+      const state = readState();
+      const world = ensureWorld(state);
+      json(res, 200, {
+        world,
+        scene: activeScene(state),
+        assets: state.assets.filter(item => ['model', 'foliageSpecies', 'foliageFamily', 'biomeRecipe', 'windProfile'].includes(item.type)),
+        transactions: state.foliageTransactions || [],
+        runtimeDiagnostics: state.runtimeDiagnostics || {},
+        state
       });
-      json(res, 200, { ...result.result, state: result.state });
       return true;
     }
 
@@ -165,7 +183,12 @@ export async function handleV010Request(req, res) {
         const derived = applyWorldToScene(activeScene(state), world);
         return { world, derived };
       });
-      json(res, 200, { ...result.result, state: result.state });
+      const includeFullState = url.searchParams.get('full') === '1';
+      json(res, 200, {
+        ...result.result,
+        runtime: compactWorldRuntime(result.state),
+        ...(includeFullState ? { state: result.state } : {})
+      });
       return true;
     }
 

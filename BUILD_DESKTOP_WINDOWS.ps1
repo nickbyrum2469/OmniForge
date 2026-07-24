@@ -14,10 +14,19 @@ $DistRoot = Join-Path $PSScriptRoot 'dist'
 $Output = Join-Path $DistRoot 'OmniForge-win32-x64'
 
 $SourceCommit = 'source-archive'
-try {
-  $CandidateCommit = (& git -C $PSScriptRoot rev-parse HEAD 2>$null | Select-Object -First 1).Trim()
-  if ($LASTEXITCODE -eq 0 -and $CandidateCommit) { $SourceCommit = $CandidateCommit }
-} catch {}
+$GitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+if (-not $GitCommand) { $GitCommand = Get-Command git -ErrorAction SilentlyContinue }
+if ($GitCommand) {
+  try {
+    $CandidateCommit = & $GitCommand.Source -C $PSScriptRoot rev-parse HEAD 2>$null
+    if ($LASTEXITCODE -eq 0 -and $CandidateCommit) {
+      $SourceCommit = ([string]($CandidateCommit | Select-Object -First 1)).Trim()
+    }
+  } catch {}
+}
+if ((Test-Path (Join-Path $PSScriptRoot '.git')) -and $SourceCommit -eq 'source-archive') {
+  throw 'The source is a Git checkout, but its current commit could not be determined. Refusing to create an untraceable desktop build.'
+}
 
 New-Item -ItemType Directory -Force -Path $CacheDir, $DistRoot | Out-Null
 if (-not (Test-Path $Archive)) {
