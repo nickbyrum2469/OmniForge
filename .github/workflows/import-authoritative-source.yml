@@ -1,0 +1,100 @@
+name: Import OmniForge Source Archive
+
+on:
+  workflow_dispatch:
+    inputs:
+      archive_name:
+        description: "ZIP archive in the repository root"
+        required: false
+        default: ""
+  push:
+    paths:
+      - "OmniForge-3D-Engine-v*.zip"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: import-authoritative-source
+  cancel-in-progress: false
+
+jobs:
+  import-source:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Locate source archive
+        id: archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          requested="${{ github.event.inputs.archive_name }}"
+          if [[ -n "$requested" && -f "$requested" ]]; then
+            archive="$requested"
+          else
+            archive="$(find . -maxdepth 1 -type f -name 'OmniForge-3D-Engine-v*.zip' -printf '%f\n' | sort -V | tail -n 1)"
+          fi
+          if [[ -z "${archive:-}" || ! -f "$archive" ]]; then
+            echo "No OmniForge source ZIP was found in the repository root." >&2
+            exit 1
+          fi
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+          echo "Using $archive"
+
+      - name: Extract and validate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="${{ steps.archive.outputs.archive }}"
+          rm -rf .source-import
+          mkdir -p .source-import
+          unzip -q "$archive" -d .source-import
+
+          shopt -s dotglob nullglob
+          entries=(.source-import/*)
+          if [[ ${#entries[@]} -eq 1 && -d "${entries[0]}" ]]; then
+            source_root="${entries[0]}"
+          else
+            source_root=".source-import"
+          fi
+
+          if [[ ! -f "$source_root/package.json" ]]; then
+            echo "The archive does not contain package.json at its source root." >&2
+            find .source-import -maxdepth 3 -type f | sort | head -100
+            exit 1
+          fi
+
+          if [[ ! -d "$source_root/app" || ! -d "$source_root/desktop" ]]; then
+            echo "The archive is missing the expected app/ or desktop/ source directory." >&2
+            exit 1
+          fi
+
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='dist/' \
+            --exclude='node_modules/' \
+            "$source_root/" ./
+
+          rm -rf .source-import
+          rm -f "$archive"
+
+      - name: Record imported baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "OmniForge Source Importer"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No source changes were detected."
+            exit 0
+          fi
+          version="$(node -p "require('./package.json').version || 'unknown'" 2>/dev/null || echo unknown)"
+          git commit -m "Import OmniForge v${version} authoritative source"
+          git push origin HEAD:${GITHUB_REF_NAME}
