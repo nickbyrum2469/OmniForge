@@ -1,0 +1,117 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  applyCompactWorldRuntime,
+  resolveViewportLighting,
+  shouldAdvanceWorldTime
+} from '../app/world-runtime.js';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+test('automatic world time cannot replace the editor workspace while authoring', () => {
+  assert.equal(shouldAdvanceWorldTime({ enabled: true, editorMode: 'edit' }), false);
+  assert.equal(shouldAdvanceWorldTime({ enabled: true, editorMode: 'play' }), true);
+  assert.equal(shouldAdvanceWorldTime({ enabled: true, editorMode: 'edit', previewInEditor: true }), true);
+  assert.equal(shouldAdvanceWorldTime({ enabled: false, editorMode: 'play' }), false);
+  assert.equal(shouldAdvanceWorldTime({ enabled: true, editorMode: 'play', documentHidden: true }), false);
+  assert.equal(shouldAdvanceWorldTime({ enabled: true, editorMode: 'play', inFlight: true }), false);
+});
+
+test('compact world runtime patches lighting and celestial objects without replacing editor state', () => {
+  const state = {
+    engine: { revision: 7 },
+    project: { id: 'project-a' },
+    editor: { mode: 'edit', selectedMaterialId: 'material-a' }
+  };
+  const scene = {
+    id: 'scene-a',
+    settings: { ambientIntensity: 0.2, gridVisible: true },
+    objects: [
+      {
+        id: 'sun-a',
+        type: 'directionalLight',
+        visible: true,
+        transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+        properties: { celestialRole: 'sun', intensity: 1 }
+      },
+      { id: 'box-a', type: 'box', properties: { color: '#ffffff' } }
+    ]
+  };
+  const untouchedProject = state.project;
+  const untouchedEditor = state.editor;
+  const untouchedBox = scene.objects[1];
+  const applied = applyCompactWorldRuntime({ state, scene }, {
+    engineRevision: 9,
+    sceneId: 'scene-a',
+    settings: { ambientIntensity: 0.12, exposure: 0.82, environmentV010: { nightFactor: 1 } },
+    celestialObjects: [{
+      id: 'sun-a',
+      visible: false,
+      transform: { position: [0, 100, 0], rotation: [-80, 20, 0], scale: [1, 1, 1] },
+      properties: { celestialRole: 'sun', intensity: 0.05 }
+    }]
+  });
+
+  assert.equal(applied, true);
+  assert.equal(state.engine.revision, 9);
+  assert.equal(state.project, untouchedProject);
+  assert.equal(state.editor, untouchedEditor);
+  assert.equal(scene.objects[1], untouchedBox);
+  assert.equal(scene.settings.gridVisible, true);
+  assert.equal(scene.settings.ambientIntensity, 0.12);
+  assert.equal(scene.objects[0].visible, false);
+  assert.equal(scene.objects[0].properties.intensity, 0.05);
+  assert.deepEqual(scene.objects[0].transform.rotation, [-80, 20, 0]);
+  assert.equal(applyCompactWorldRuntime({ state, scene }, { sceneId: 'other-scene' }), false);
+});
+
+test('night remains readable in Edit mode without changing authored Play lighting', () => {
+  const settings = { ambientIntensity: 0.08, exposure: 0.72, environmentV010: { nightFactor: 1 } };
+  const edit = resolveViewportLighting(settings, 'edit', 0.03);
+  assert.ok(edit.ambientIntensity >= 0.42);
+  assert.ok(edit.exposure >= 1.08);
+  assert.ok(edit.sunIntensity >= 0.36);
+
+  const play = resolveViewportLighting(settings, 'play', 0.03);
+  assert.deepEqual(play, { ambientIntensity: 0.08, exposure: 0.72, sunIntensity: 0.03, editorFill: 0 });
+});
+
+test('runtime source contains polling, compact-step, read-only GET, and traceable-build safeguards', () => {
+  const editor = fs.readFileSync(path.join(ROOT, 'app', 'app.js'), 'utf8');
+  const worldUi = fs.readFileSync(path.join(ROOT, 'app', 'v010.js'), 'utf8');
+  const worldApi = fs.readFileSync(path.join(ROOT, 'server', 'v010-api.mjs'), 'utf8');
+  const worldgenApi = fs.readFileSync(path.join(ROOT, 'server', 'v011-api.mjs'), 'utf8');
+  const renderer = fs.readFileSync(path.join(ROOT, 'app', 'renderer.js'), 'utf8');
+  const worldgenUi = fs.readFileSync(path.join(ROOT, 'app', 'v011.js'), 'utf8');
+  const builder = fs.readFileSync(path.join(ROOT, 'BUILD_DESKTOP_WINDOWS.ps1'), 'utf8');
+
+  assert.match(editor, /remotePollInFlight/);
+  assert.match(editor, /interactionActiveUntil/);
+  assert.match(editor, /renderer\.render\(scene,camera,selectedId,\{editorMode:/);
+
+  const timer = worldUi.slice(worldUi.indexOf('timeTimer = window.setInterval'), worldUi.indexOf("window.addEventListener('beforeunload'"));
+  assert.match(timer, /shouldAdvanceWorldTime/);
+  assert.match(timer, /timeStepInFlight/);
+  assert.match(timer, /synchronizeRuntimeOnly/);
+  assert.doesNotMatch(timer, /synchronizeAuthoritativeEditor/);
+  assert.match(worldUi, /Preview time while editing/);
+
+  const stepRoute = worldApi.slice(worldApi.indexOf("url.pathname === '/api/v010/world/step'"), worldApi.indexOf("url.pathname === '/api/v010/foliage/species'"));
+  assert.match(stepRoute, /runtime: compactWorldRuntime/);
+  assert.match(stepRoute, /includeFullState/);
+  assert.doesNotMatch(stepRoute, /state: result\.state\s*,/);
+  assert.match(worldApi, /const state = readState\(\);\s*const world = ensureWorld\(state\);/);
+  assert.match(worldgenApi, /const state = readState\(\);\s*json\(res, 200, worldSnapshot\(state\)\);/);
+
+  assert.match(renderer, /resolveViewportLighting/);
+  assert.match(renderer, /lightState\(scene,editorMode='edit'\)/);
+  assert.match(worldgenUi, /foundationRefreshPromise/);
+  assert.match(worldgenUi, /currentFoundationSignature/);
+
+  assert.match(builder, /Get-Command git\.exe/);
+  assert.match(builder, /rev-parse HEAD/);
+  assert.match(builder, /Refusing to create an untraceable desktop build/);
+});
