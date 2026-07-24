@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Desktop/runtime builds
+dist/
+build/
+out/
+release/
+
+# Runtime state and local projects
+.omniforge/
+OmniForgeData/
+projects/
+cache/
+temp/
+tmp/
+logs/
+
+# Generated asset caches
+**/canonical/history/
+**/.staging/
+**/.cache/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Test artifacts
+coverage/
+test-results/
+playwright-report/
+
+# Archives and installers
+*.zip
+*.7z
+*.rar
+*.exe
+*.msi
