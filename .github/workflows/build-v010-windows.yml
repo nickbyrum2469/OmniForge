@@ -29,6 +29,9 @@ jobs:
     steps:
       - name: Checkout authoritative milestone source
         uses: actions/checkout@v4
+        with:
+          ref: milestone-10/foliage-lighting-foundation
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
