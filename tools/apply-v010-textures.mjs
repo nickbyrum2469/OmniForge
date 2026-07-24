@@ -287,14 +287,14 @@ if (!pipeline.includes('function imageExtension(')) {
 replaceRegex(
   pipelineFile,
   /export function importModelAsset\([\s\S]*?\n\}\nexport function rebuildCanonicalAsset/,
-  `${functionSource(importModelAssetV010, 'importModelAsset')}\nexport function rebuildCanonicalAsset`,
+  `export ${functionSource(importModelAssetV010, 'importModelAsset')}\nexport function rebuildCanonicalAsset`,
   'canonicalImporterVersion: 3',
   'texture-aware model import'
 );
 replaceRegex(
   pipelineFile,
   /export function rebuildCanonicalAsset\([\s\S]*?\n\}\n\nexport function createSafeRepairDerivative/,
-  `${functionSource(rebuildCanonicalAssetV010, 'rebuildCanonicalAsset')}\n\nexport function createSafeRepairDerivative`,
+  `export ${functionSource(rebuildCanonicalAssetV010, 'rebuildCanonicalAsset')}\n\nexport function createSafeRepairDerivative`,
   'extractedTextureCount:',
   'texture-aware canonical rebuild'
 );
