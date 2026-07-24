@@ -1,0 +1,471 @@
+
+> omniforge-3d-engine@0.10.0 test
+> node --test tests/*.test.mjs
+
+TAP version 13
+# Subtest: default project is general-purpose and contains a real 3D starter scene
+ok 1 - default project is general-purpose and contains a real 3D starter scene
+  ---
+  duration_ms: 3.57308
+  ...
+# Subtest: editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences
+ok 2 - editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences
+  ---
+  duration_ms: 0.602448
+  ...
+# Subtest: all supported scene primitives receive valid transforms and properties
+ok 3 - all supported scene primitives receive valid transforms and properties
+  ---
+  duration_ms: 1.289472
+  ...
+# Subtest: terrain height is deterministic and responds to world position
+ok 4 - terrain height is deterministic and responds to world position
+  ---
+  duration_ms: 0.363815
+  ...
+# Subtest: path defaults preserve terrain-conforming system relationships
+ok 5 - path defaults preserve terrain-conforming system relationships
+  ---
+  duration_ms: 0.197406
+  ...
+# Subtest: terrain path mask produces a soft shoulder instead of a hard ribbon
+ok 6 - terrain path mask produces a soft shoulder instead of a hard ribbon
+  ---
+  duration_ms: 0.441609
+  ...
+# Subtest: starter PBR materials include real texture-map files and are protected
+ok 7 - starter PBR materials include real texture-map files and are protected
+  ---
+  duration_ms: 0.821835
+  ...
+# Subtest: horizontal mouse look uses the intuitive right-positive yaw convention
+ok 8 - horizontal mouse look uses the intuitive right-positive yaw convention
+  ---
+  duration_ms: 1.12616
+  ...
+# Subtest: desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership
+ok 9 - desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership
+  ---
+  duration_ms: 0.584093
+  ...
+# Subtest: Windows desktop builder pins and stamps the native executable metadata
+not ok 10 - Windows desktop builder pins and stamps the native executable metadata
+  ---
+  duration_ms: 2.135793
+  location: '/home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:191:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /--set-file-version '0\.9\.0\.0'/. Input:
+    
+    "$ErrorActionPreference = 'Stop'\n" +
+      'Set-Location $PSScriptRoot\n' +
+      '\n' +
+      "$ElectronVersion = '43.2.0'\n" +
+      "$Architecture = 'x64'\n" +
+      '$DownloadUrl = "https://github.com/electron/electron/releases/download/v$ElectronVersion/electron-v$ElectronVersion-win32-$Architecture.zip"\n' +
+      "$CacheDir = Join-Path $PSScriptRoot '.desktop-cache'\n" +
+      '$Archive = Join-Path $CacheDir "electron-v$ElectronVersion-win32-$Architecture.zip"\n' +
+      "$RceditVersion = '2.0.0'\n" +
+      '$Rcedit = Join-Path $CacheDir "rcedit-v$RceditVersion-x64.exe"\n' +
+      '$RceditUrl = "https://github.com/electron/rcedit/releases/download/v$RceditVersion/rcedit-x64.exe"\n' +
+      "$RceditSha256 = '3E7801DB1A5EDBEC91B49A24A094AAD776CB4515488EA5A4CA2289C400EADE2A'\n" +
+      "$DistRoot = Join-Path $PSScriptRoot 'dist'\n" +
+      "$Output = Join-Path $DistRoot 'OmniForge-win32-x64'\n" +
+      '\n' +
+      'New-Item -ItemType Directory -Force -Path $CacheDir, $DistRoot | Out-Null\n' +
+      'if (-not (Test-Path $Archive)) {\n' +
+      '  Write-Host "Downloading the official Electron $ElectronVersion Windows runtime..."\n' +
+      '  Invoke-WebRequest -Uri $DownloadUrl -OutFile $Archive -UseBasicParsing\n' +
+      '}\n' +
+      'if (-not (Test-Path $Rcedit)) {\n' +
+      '  Write-Host "Downloading the pinned rcedit $RceditVersion resource editor..."\n' +
+      '  Invoke-WebRequest -Uri $RceditUrl -OutFile $Rcedit -UseBasicParsing\n' +
+      '}\n' +
+      '$ActualRceditHash = (Get-FileHash -Algorithm SHA256 $Rcedit).Hash.ToUpperInvariant()\n' +
+      'if ($ActualRceditHash -ne $RceditSha256) { throw "rcedit checksum mismatch. Expected $RceditSha256, received $ActualRceditHash." }\n' +
+      '\n' +
+      'if (Test-Path $Output) { Remove-Item $Output -Recurse -Force }\n' +
+      'Expand-Archive -Path $Archive -DestinationPath $Output -Force\n' +
+      "Rename-Item (Join-Path $Output 'electron.exe') 'OmniForge.exe'\n" +
+      '\n' +
+      "$Resources = Join-Path $Output 'resources'\n" +
+      "Remove-Item (Join-Path $Resources 'default_app.asar') -Force -ErrorAction SilentlyContinue\n" +
+      "$AppDir = Join-Path $Resources 'app'\n" +
+      'New-Item -ItemType Directory -Force -Path $AppDir | Out-Null\n' +
+      '\n' +
+      "$Folders = @('app','server','bridge','desktop','workers','assets','data','workspace','captures','logs','docs','scripts','tests','resources')\n" +
+      'foreach ($Folder in $Folders) {\n' +
+      '  $Source = Join-Path $PSScriptRoot $Folder\n' +
+      '  if (Test-Path $Source) { Copy-Item $Source (Join-Path $AppDir $Folder) -Recurse -Force }\n' +
+      '}\n' +
+      "$Files = @('package.json','omniforge.project.json','README.md','AGENTS.md','CONNECT_CODEX.bat','RUN_TESTS.bat')\n" +
+      'foreach ($File in $Files) {\n' +
+      '  $Source = Join-Path $PSScriptRoot $File\n' +
+      '  if (Test-Path $Source) { Copy-Item $Source (Join-Path $AppDir $File) -Force }\n' +
+      '}\n' +
+      '\n' +
+      '@{\n' +
+      "  name = 'omniforge'\n" +
+      "  productName = 'OmniForge'\n" +
+      "  version = '0.10.0'\n" +
+      '  private = $true\n' +
+      "  main = 'desktop/main.cjs'\n" +
+      "} | ConvertTo-Json | Set-Content (Join-Path $AppDir 'package.json') -Encoding UTF8\n" +
+      '\n' +
+      '\n' +
+      "$IconSource = Join-Path $AppDir 'resources\\omniforge-icon.ico'\n" +
+      "$Executable = Join-Path $Output 'OmniForge.exe'\n" +
+      '& $Rcedit $Executable `\n' +
+      '  --set-icon $IconSource `\n' +
+      "  --set-version-string ProductName 'OmniForge' `\n" +
+      "  --set-version-string FileDescription 'OmniForge AI-Native 3D Game Engine' `\n" +
+      "  --set-version-string CompanyName 'OmniForge' `\n" +
+      "  --set-version-string InternalName 'OmniForge' `\n" +
+      "  --set-version-string OriginalFilename 'OmniForge.exe' `\n" +
+      "  --set-version-string LegalCopyright 'Copyright (c) 2026 OmniForge' `\n" +
+      "  --set-file-version '0.10.0.0' `\n" +
+      "  --set-product-version '0.10.0.0'\n" +
+      'if ($LASTEXITCODE -ne 0) { throw "Failed to stamp OmniForge executable resources." }\n' +
+      '\n' +
+      "$VersionFile = Join-Path $Output 'version'\n" +
+      '"OmniForge 0.10.0`nElectron $ElectronVersion`nBuilt $(Get-Date -Format o)" | Set-Content $VersionFile -Encoding UTF8\n' +
+      'Write-Host ""\n' +
+      'Write-Host "Desktop build created:" -ForegroundColor Green\n' +
+      "Write-Host (Join-Path $Output 'OmniForge.exe') -ForegroundColor Cyan\n"
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    $ErrorActionPreference = 'Stop'
+    Set-Location $PSScriptRoot
+    
+    $ElectronVersion = '43.2.0'
+    $Architecture = 'x64'
+    $DownloadUrl = "https://github.com/electron/electron/releases/download/v$ElectronVersion/electron-v$ElectronVersion-win32-$Architecture.zip"
+    $CacheDir = Join-Path $PSScriptRoot '.desktop-cache'
+    $Archive = Join-Path $CacheDir "electron-v$ElectronVersion-win32-$Architecture.zip"
+    $RceditVersion = '2.0.0'
+    $Rcedit = Join-Path $CacheDir "rcedit-v$RceditVersion-x64.exe"
+    $RceditUrl = "https://github.com/electron/rcedit/releases/download/v$RceditVersion/rcedit-x64.exe"
+    $RceditSha256 = '3E7801DB1A5EDBEC91B49A24A094AAD776CB4515488EA5A4CA2289C400EADE2A'
+    $DistRoot = Join-Path $PSScriptRoot 'dist'
+    $Output = Join-Path $DistRoot 'OmniForge-win32-x64'
+    
+    New-Item -ItemType Directory -Force -Path $CacheDir, $DistRoot | Out-Null
+    if (-not (Test-Path $Archive)) {
+      Write-Host "Downloading the official Electron $ElectronVersion Windows runtime..."
+      Invoke-WebRequest -Uri $DownloadUrl -OutFile $Archive -UseBasicParsing
+    }
+    if (-not (Test-Path $Rcedit)) {
+      Write-Host "Downloading the pinned rcedit $RceditVersion resource editor..."
+      Invoke-WebRequest -Uri $RceditUrl -OutFile $Rcedit -UseBasicParsing
+    }
+    $ActualRceditHash = (Get-FileHash -Algorithm SHA256 $Rcedit).Hash.ToUpperInvariant()
+    if ($ActualRceditHash -ne $RceditSha256) { throw "rcedit checksum mismatch. Expected $RceditSha256, received $ActualRceditHash." }
+    
+    if (Test-Path $Output) { Remove-Item $Output -Recurse -Force }
+    Expand-Archive -Path $Archive -DestinationPath $Output -Force
+    Rename-Item (Join-Path $Output 'electron.exe') 'OmniForge.exe'
+    
+    $Resources = Join-Path $Output 'resources'
+    Remove-Item (Join-Path $Resources 'default_app.asar') -Force -ErrorAction SilentlyContinue
+    $AppDir = Join-Path $Resources 'app'
+    New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
+    
+    $Folders = @('app','server','bridge','desktop','workers','assets','data','workspace','captures','logs','docs','scripts','tests','resources')
+    foreach ($Folder in $Folders) {
+      $Source = Join-Path $PSScriptRoot $Folder
+      if (Test-Path $Source) { Copy-Item $Source (Join-Path $AppDir $Folder) -Recurse -Force }
+    }
+    $Files = @('package.json','omniforge.project.json','README.md','AGENTS.md','CONNECT_CODEX.bat','RUN_TESTS.bat')
+    foreach ($File in $Files) {
+      $Source = Join-Path $PSScriptRoot $File
+      if (Test-Path $Source) { Copy-Item $Source (Join-Path $AppDir $File) -Force }
+    }
+    
+    @{
+      name = 'omniforge'
+      productName = 'OmniForge'
+      version = '0.10.0'
+      private = $true
+      main = 'desktop/main.cjs'
+    } | ConvertTo-Json | Set-Content (Join-Path $AppDir 'package.json') -Encoding UTF8
+    
+    
+    $IconSource = Join-Path $AppDir 'resources\omniforge-icon.ico'
+    $Executable = Join-Path $Output 'OmniForge.exe'
+    & $Rcedit $Executable `
+      --set-icon $IconSource `
+      --set-version-string ProductName 'OmniForge' `
+      --set-version-string FileDescription 'OmniForge AI-Native 3D Game Engine' `
+      --set-version-string CompanyName 'OmniForge' `
+      --set-version-string InternalName 'OmniForge' `
+      --set-version-string OriginalFilename 'OmniForge.exe' `
+      --set-version-string LegalCopyright 'Copyright (c) 2026 OmniForge' `
+      --set-file-version '0.10.0.0' `
+      --set-product-version '0.10.0.0'
+    if ($LASTEXITCODE -ne 0) { throw "Failed to stamp OmniForge executable resources." }
+    
+    $VersionFile = Join-Path $Output 'version'
+    "OmniForge 0.10.0`nElectron $ElectronVersion`nBuilt $(Get-Date -Format o)" | Set-Content $VersionFile -Encoding UTF8
+    Write-Host ""
+    Write-Host "Desktop build created:" -ForegroundColor Green
+    Write-Host (Join-Path $Output 'OmniForge.exe') -ForegroundColor Cyan
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:198:13)
+    Test.runInAsyncScope (node:async_hooks:206:9)
+    Test.run (node:internal/test_runner/test:796:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:526:18)
+    Test.postRun (node:internal/test_runner/test:889:19)
+    Test.run (node:internal/test_runner/test:835:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:526:7)
+  ...
+# Subtest: project hub and editor usability controls are wired into the authoritative editor
+ok 11 - project hub and editor usability controls are wired into the authoritative editor
+  ---
+  duration_ms: 2.354218
+  ...
+# Subtest: project store supports create, open, duplicate, archive, import, migration, and moved-project recovery
+ok 12 - project store supports create, open, duplicate, archive, import, migration, and moved-project recovery
+  ---
+  duration_ms: 132.777351
+  ...
+# Subtest: two runtime sessions cannot write the same active project simultaneously
+ok 13 - two runtime sessions cannot write the same active project simultaneously
+  ---
+  duration_ms: 196.539078
+  ...
+# Subtest: starter objects are grounded against the authoritative terrain surface
+ok 14 - starter objects are grounded against the authoritative terrain surface
+  ---
+  duration_ms: 1.150375
+  ...
+# Subtest: browser automation bridge exposes read-only snapshots and controlled editor actions
+ok 15 - browser automation bridge exposes read-only snapshots and controlled editor actions
+  ---
+  duration_ms: 1.839854
+  ...
+# Subtest: managed workspace path cannot escape the projects root
+ok 16 - managed workspace path cannot escape the projects root
+  ---
+  duration_ms: 0.61461
+  ...
+# Subtest: Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools
+ok 17 - Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools
+  ---
+  duration_ms: 90.730274
+  ...
+# Subtest: Codex can import and rebuild a hierarchy-aware model through guarded MCP tools
+ok 18 - Codex can import and rebuild a hierarchy-aware model through guarded MCP tools
+  ---
+  duration_ms: 119.758737
+  ...
+# Subtest: material authoring settings clamp safely and preserve tiling transforms
+ok 19 - material authoring settings clamp safely and preserve tiling transforms
+  ---
+  duration_ms: 0.495289
+  ...
+# Subtest: material tuner exposes live tiling and PBR response controls
+ok 20 - material tuner exposes live tiling and PBR response controls
+  ---
+  duration_ms: 2.175266
+  ...
+# Subtest: active source and documentation contain no legacy product assumptions
+ok 21 - active source and documentation contain no legacy product assumptions
+  ---
+  duration_ms: 10.272431
+  ...
+# Subtest: desktop clipboard and pointer-lock permissions use guarded native paths
+ok 22 - desktop clipboard and pointer-lock permissions use guarded native paths
+  ---
+  duration_ms: 1.263304
+  ...
+# Subtest: surface recipes are stable linked assets with validation and deterministic masks
+ok 23 - surface recipes are stable linked assets with validation and deterministic masks
+  ---
+  duration_ms: 1.397584
+  ...
+# Subtest: Surface Studio preview, commit, revert, and recipe rendering are wired
+ok 24 - Surface Studio preview, commit, revert, and recipe rendering are wired
+  ---
+  duration_ms: 1.139274
+  ...
+# Subtest: desktop launcher rejects stale packaged executables
+ok 25 - desktop launcher rejects stale packaged executables
+  ---
+  duration_ms: 0.187969
+  ...
+# Subtest: canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives
+ok 26 - canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives
+  ---
+  duration_ms: 7.410591
+  ...
+# Subtest: asset workspace exposes real import, health, reversible processing, preview, and commit flows
+ok 27 - asset workspace exposes real import, health, reversible processing, preview, and commit flows
+  ---
+  duration_ms: 1.246463
+  ...
+# Subtest: asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages
+ok 28 - asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages
+  ---
+  duration_ms: 2.503054
+  ...
+# Subtest: real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server
+ok 29 - real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server
+  ---
+  duration_ms: 191.45861
+  ...
+# Subtest: canonical importer applies nested glTF node transforms and preserves primitive material groups
+ok 30 - canonical importer applies nested glTF node transforms and preserves primitive material groups
+  ---
+  duration_ms: 2.66217
+  ...
+# Subtest: canonical rebuild repairs legacy imports from preserved source and retains rollback history
+ok 31 - canonical rebuild repairs legacy imports from preserved source and retains rollback history
+  ---
+  duration_ms: 3.855224
+  ...
+# Subtest: asset workspace reflows into focused subviews and protects the viewport from panel overlap
+ok 32 - asset workspace reflows into focused subviews and protects the viewport from panel overlap
+  ---
+  duration_ms: 1.259086
+  ...
+# Subtest: provider framework normalizes independent providers, settings, and persistent job records
+ok 33 - provider framework normalizes independent providers, settings, and persistent job records
+  ---
+  duration_ms: 1.186632
+  ...
+# Subtest: Integrations workspace and Job Center are connected to guarded provider and worker routes
+ok 34 - Integrations workspace and Job Center are connected to guarded provider and worker routes
+  ---
+  duration_ms: 1.513448
+  ...
+# Subtest: real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers
+not ok 35 - real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers
+  ---
+  duration_ms: 98.641833
+  location: '/home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:517:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + '0.10.0'
+    - '0.9.0'
+         ^
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '0.9.0'
+  actual: '0.10.0'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:522:51)
+    process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    async Test.run (node:internal/test_runner/test:797:9)
+    async Test.processPendingSubtests (node:internal/test_runner/test:526:7)
+  ...
+# Subtest: v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor
+ok 36 - v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor
+  ---
+  duration_ms: 1.985535
+  ...
+# Subtest: mocked Poly Haven search completes a real staged download job and imports a canonical model
+not ok 37 - mocked Poly Haven search completes a real staged download job and imports a canonical model
+  ---
+  duration_ms: 95.734229
+  location: '/home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:546:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + '0.10.0'
+    - '0.9.0'
+         ^
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '0.9.0'
+  actual: '0.10.0'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:552:51)
+    process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    async Test.run (node:internal/test_runner/test:797:9)
+    async Test.processPendingSubtests (node:internal/test_runner/test:526:7)
+  ...
+# Subtest: ambientCG provider migrates existing v2 settings to the supported v3 asset API
+ok 38 - ambientCG provider migrates existing v2 settings to the supported v3 asset API
+  ---
+  duration_ms: 0.801047
+  ...
+# Subtest: v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation
+ok 39 - v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation
+  ---
+  duration_ms: 1.055608
+  ...
+# Subtest: v0.9 decal and atlas recipes validate stable production metadata
+ok 40 - v0.9 decal and atlas recipes validate stable production metadata
+  ---
+  duration_ms: 0.607437
+  ...
+# Subtest: v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools
+ok 41 - v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools
+  ---
+  duration_ms: 1.727966
+  ...
+# Subtest: v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts
+not ok 42 - v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts
+  ---
+  duration_ms: 95.07721
+  location: '/home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:597:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + '0.10.0'
+    - '0.9.0'
+         ^
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '0.9.0'
+  actual: '0.10.0'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:600:51)
+    process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    async Test.run (node:internal/test_runner/test:797:9)
+    async Test.processPendingSubtests (node:internal/test_runner/test:526:7)
+  ...
+# Subtest: v0.10 seeded random and foliage placement are deterministic
+ok 43 - v0.10 seeded random and foliage placement are deterministic
+  ---
+  duration_ms: 4.626835
+  ...
+# Subtest: v0.10 world system drives the authoritative scene sun and renderer settings
+ok 44 - v0.10 world system drives the authoritative scene sun and renderer settings
+  ---
+  duration_ms: 1.556258
+  ...
+# Subtest: v0.10 support-plane grounding conforms a box to terrain at four corners
+ok 45 - v0.10 support-plane grounding conforms a box to terrain at four corners
+  ---
+  duration_ms: 0.592699
+  ...
+# Subtest: v0.10 foliage uses root-socket grounding and vehicles remain upright
+ok 46 - v0.10 foliage uses root-socket grounding and vehicles remain upright
+  ---
+  duration_ms: 0.354748
+  ...
+1..46
+# tests 46
+# suites 0
+# pass 42
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1148.00436
