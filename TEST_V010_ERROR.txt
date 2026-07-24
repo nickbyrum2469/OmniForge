@@ -19,17 +19,17 @@ SyntaxError: Identifier 'wind' has already been declared
     at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
 
 Node.js v24.18.0
-✖ tests/engine.test.mjs (121.624598ms)
-✔ v0.10 seeded random and foliage placement are deterministic (3.594658ms)
-✔ v0.10 world system drives the authoritative scene sun and renderer settings (1.258554ms)
-✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.559757ms)
-✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.396379ms)
-✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (3.160906ms)
-✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (3.766341ms)
-✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.69534ms)
-✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (0.585958ms)
-✔ v0.10 existing Ground button and World tab synchronize through authoritative state (1.649782ms)
-✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (324.13662ms)
+✖ tests/engine.test.mjs (63.583814ms)
+✔ v0.10 seeded random and foliage placement are deterministic (2.826589ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (0.876384ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.580407ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.293715ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (2.212463ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (2.494034ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.569423ms)
+✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (0.486413ms)
+✔ v0.10 existing Ground button and World tab synchronize through authoritative state (1.199399ms)
+✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (642.321325ms)
 ℹ tests 11
 ℹ suites 0
 ℹ pass 10
@@ -37,10 +37,10 @@ Node.js v24.18.0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 3408.680236
+ℹ duration_ms 3704.347061
 
 ✖ failing tests:
 
 test at tests/engine.test.mjs:1:1
-✖ tests/engine.test.mjs (121.624598ms)
+✖ tests/engine.test.mjs (63.583814ms)
   'test failed'
