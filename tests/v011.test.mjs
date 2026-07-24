@@ -138,6 +138,9 @@ test('v0.11 editor, renderer, runtime, desktop, and MCP expose the connected wor
   assert.equal(packageJson.scripts.start,'node server/v011-bootstrap.mjs');
   assert.match(desktop,/PRODUCT_VERSION = '0\.11\.0'/);
   assert.match(desktop,/v011-bootstrap\.mjs/);
+  assert.match(desktop,/process\.env\.OMNIFORGE_DATA_ROOT/);
+  assert.match(desktop,/configuredRuntimePort\(\)/);
+  assert.match(desktop,/requestedPort \|\| await findFreePort\(\)/);
 });
 
 test('v0.11 bootstrap persists terrain expansion and spline node editing through real APIs',async()=>{
