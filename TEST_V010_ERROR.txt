@@ -15,7 +15,7 @@ TAP version 13
 # Subtest: /home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs
 not ok 1 - /home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs
   ---
-  duration_ms: 60.270358
+  duration_ms: 52.200294
   location: '/home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:1:1'
   failureType: 'testCodeFailure'
   exitCode: 1
@@ -35,7 +35,7 @@ not ok 1 - /home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs
 # Subtest: /home/runner/work/OmniForge/OmniForge/tests/v010.test.mjs
 not ok 2 - /home/runner/work/OmniForge/OmniForge/tests/v010.test.mjs
   ---
-  duration_ms: 57.402442
+  duration_ms: 44.697081
   location: '/home/runner/work/OmniForge/OmniForge/tests/v010.test.mjs:1:1'
   failureType: 'testCodeFailure'
   exitCode: 1
@@ -51,4 +51,4 @@ not ok 2 - /home/runner/work/OmniForge/OmniForge/tests/v010.test.mjs
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 67.532668
+# duration_ms 57.354561
