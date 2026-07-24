@@ -8,31 +8,33 @@ This GitHub repository is the authoritative source for OmniForge development. Do
 
 Current source baseline to import: **OmniForge v0.9.0**.
 
-## Import the source without GitHub's 25 MB browser limit
+## Import the source without GitHub's browser upload limit
 
-GitHub's web uploader rejects the complete ZIP because the archive contains packaged/generated files. Use the repository importer instead. It extracts the archive locally, finds the real source root, excludes `dist`, Electron binaries, `node_modules`, caches, logs, and archives, then pushes the individual source files through Git.
+GitHub's web uploader rejects the complete packaged ZIP. Use the repository importer instead. It accepts either an already-extracted OmniForge source directory or a ZIP, finds the real project root, excludes `dist`, Electron binaries, `node_modules`, caches, logs, archives, and generated runtime files, then pushes the individual source files through Git.
 
-### Direct-path method
+### Preferred: extracted-folder method
 
 Open Windows PowerShell and run:
 
 ```powershell
 $script = "$env:TEMP\Import-OmniForgeSource.ps1"
 Invoke-WebRequest "https://raw.githubusercontent.com/nickbyrum2469/OmniForge/main/tools/Import-OmniForgeSource.ps1" -OutFile $script
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -ArchivePath "C:\Users\nickb\Downloads\Compressed\OmniForge-3D-Engine-v0.9.0.zip"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -SourcePath "C:\Users\nickb\Downloads\Compressed\OmniForge-3D-Engine-v0.9.0"
 ```
 
-The helper installs Git and GitHub CLI through `winget` when needed, checks authentication without triggering the Windows PowerShell 5.1 native-stderr failure, opens one GitHub browser login when necessary, clones this repository, copies only authoritative source files, records the archive checksum, commits, and pushes to `main`.
+This method bypasses ZIP extraction entirely.
 
-### File-picker method
+### ZIP method
 
-Omit `-ArchivePath` to select the ZIP interactively:
+The helper also accepts a ZIP and uses a duplicate-entry-safe extractor:
 
 ```powershell
 $script = "$env:TEMP\Import-OmniForgeSource.ps1"
 Invoke-WebRequest "https://raw.githubusercontent.com/nickbyrum2469/OmniForge/main/tools/Import-OmniForgeSource.ps1" -OutFile $script
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -SourcePath "C:\Users\nickb\Downloads\Compressed\OmniForge-3D-Engine-v0.9.0.zip"
 ```
+
+The helper installs Git and GitHub CLI through `winget` when needed, verifies authentication through a real GitHub API request, clones this repository, copies only authoritative source files, records a source fingerprint, commits, and pushes to `main`.
 
 The source must end up directly in the repository root:
 
