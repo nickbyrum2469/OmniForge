@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "gtx-1650-class-balanced-60",
+  "name": "GTX 1650 Class — Balanced 60",
+  "targetClass": "nvidia-gtx-1650-class",
+  "targetResolution": { "width": 1920, "height": 1080 },
+  "targetFrameRate": 60,
+  "fallbackFrameRate": 30,
+  "maximumFrameTimeMs": 16.67,
+  "calibrationRequired": true,
+  "dynamicResolution": {
+    "enabled": true,
+    "minimumScale": 0.67,
+    "maximumScale": 1.0,
+    "recoverySpeed": 0.05
+  },
+  "memory": {
+    "safeBudgetFraction": 0.7,
+    "reserveForDriverAndTransientResources": true
+  },
+  "priorities": [
+    "frame-pacing",
+    "gameplay-readability",
+    "input-latency",
+    "memory-stability",
+    "protected-visuals"
+  ],
+  "qualityGuardrails": {
+    "preserveCollision": true,
+    "preserveNavigation": true,
+    "preserveGameplayLogic": true,
+    "preserveProtectedViews": true,
+    "preserveUiReadability": true,
+    "maximumVisibleLodPop": "low"
+  },
+  "notes": "Initial defaults only. Final budgets must be replaced by calibration and standalone-build telemetry from the actual target machine."
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "activeProjectId": "untitled-game",
+  "projects": [
+    {
+      "id": "untitled-game",
+      "name": "Untitled Game",
+      "root": "workspace/projects/untitled-game",
+      "template": "starter-3d",
+      "schemaVersion": 8,
+      "createdAt": "2026-07-23T14:09:37.445Z",
+      "updatedAt": "2026-07-23T14:09:37.445Z",
+      "lastOpenedAt": "2026-07-23T14:09:37.445Z",
+      "thumbnail": null,
+      "archived": false,
+      "missing": false,
+      "importSource": null
+    }
+  ]
+}

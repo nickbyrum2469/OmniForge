@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0a0d13">
+  <title>OmniForge</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="engine-shell">
+    <header class="topbar">
+      <div class="brand" title="OmniForge 3D Engine">
+        <div class="brand-mark" aria-hidden="true"><span>OF</span></div>
+        <div><strong>OmniForge</strong><small>AI-native game creation</small></div>
+      </div>
+      <div class="project-strip">
+        <button id="projectButton" class="project-button" type="button" title="Open Project Hub (Ctrl+Shift+P)"><span class="status-dot"></span><span id="projectName">Untitled Game</span><span class="chevron">⌄</span></button>
+        <label class="scene-select-label">Scene <select id="sceneSelect" aria-label="Active scene"></select></label>
+      </div>
+      <div class="top-actions">
+        <button id="newSceneButton" class="button subtle" type="button">New scene</button>
+        <button id="layoutButton" class="button subtle" type="button">Layout</button><button id="commandPaletteButton" class="button subtle" type="button" title="Command palette (Ctrl+K)">Commands</button><button id="saveButton" class="button subtle save-button" type="button"><span class="shortcut">Ctrl S</span> Save <span id="saveStateBadge" class="save-state saved">Saved</span></button>
+        <button id="playButton" class="button play" type="button"><span class="play-icon">▶</span><span>Play</span></button>
+        <button id="captureButton" class="button primary" type="button">Capture view</button>
+        <span id="connectionBadge" class="connection-badge"><span class="status-dot"></span><span>MCP available</span></span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside id="leftPanel" class="left-panel panel"><button id="collapseLeftButton" class="panel-collapse left" type="button" title="Collapse hierarchy panel">‹</button>
+        <div class="panel-tabs" role="tablist">
+          <button class="panel-tab active" data-left-tab="hierarchy" type="button">Hierarchy</button>
+          <button class="panel-tab" data-left-tab="create" type="button">Create</button>
+          <button class="panel-tab" data-left-tab="assets" type="button">Assets</button>
+          <button class="panel-tab" data-left-tab="integrations" type="button">Integrations</button>
+        </div>
+        <section id="hierarchyTab" class="left-tab active">
+          <div class="panel-tools">
+            <div class="search-field"><span>⌕</span><input id="hierarchySearch" type="search" placeholder="Search scene"></div>
+            <button id="addQuickButton" class="icon-button" type="button" title="Create object">＋</button>
+          </div>
+          <div class="scene-heading"><span id="sceneNameLabel">Main</span><span id="objectCount">0 objects</span></div>
+          <div id="hierarchyList" class="hierarchy-list" aria-label="Scene hierarchy"></div>
+        </section>
+
+        <section id="createTab" class="left-tab">
+          <p class="panel-hint">Add live 3D objects to the active scene.</p>
+          <div id="createGrid" class="create-grid">
+            <button data-create="box" type="button"><span class="primitive cube"></span><b>Box</b></button>
+            <button data-create="sphere" type="button"><span class="primitive sphere"></span><b>Sphere</b></button>
+            <button data-create="cylinder" type="button"><span class="primitive cylinder"></span><b>Cylinder</b></button>
+            <button data-create="plane" type="button"><span class="primitive plane"></span><b>Plane</b></button>
+            <button data-create="terrain" type="button"><span class="primitive terrain"></span><b>Terrain</b></button>
+            <button data-create="path" type="button"><span class="primitive path"></span><b>Path</b></button>
+            <button data-create="directionalLight" type="button"><span class="primitive sun"></span><b>Sun light</b></button>
+            <button data-create="pointLight" type="button"><span class="primitive bulb"></span><b>Point light</b></button>
+            <button data-create="empty" type="button"><span class="primitive empty"></span><b>Empty</b></button>
+          </div>
+          <div class="create-note"><strong>Shared scene authority</strong><p>The editor and Codex operate on the same structured entities, components, materials, prefabs, and world settings.</p></div>
+        </section>
+
+        <section id="assetsTab" class="left-tab material-studio asset-workspace">
+          <nav class="asset-workspace-nav" aria-label="Asset workspace sections">
+            <button class="active" data-asset-workspace-view="models" type="button">Models</button>
+            <button data-asset-workspace-view="surfaces" type="button">Surfaces</button>
+            <button data-asset-workspace-view="prefabs" type="button">Prefabs</button>
+            <button data-asset-workspace-view="marketplace" type="button">Marketplace</button>
+          </nav>
+
+          <div id="modelsAssetSubview" class="asset-subview active" data-asset-subview="models">
+            <div class="studio-heading"><div><small>CANONICAL ASSET WORKSPACE</small><strong>Import and validate real 3D assets</strong></div><span class="studio-badge">GLB / GLTF</span></div>
+            <label class="import-drop asset-import-drop">Import a 3D model<input id="modelImportInput" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"><span>Original files are preserved. OmniForge applies the authored node hierarchy, builds a canonical derivative, and creates an Asset Health Report.</span></label>
+            <div class="studio-row asset-import-fields">
+              <label>Intended use<select id="modelCategory"><option value="static-prop">Static prop</option><option value="architecture">Architecture</option><option value="modular-piece">Modular piece</option><option value="foliage">Foliage</option><option value="terrain-feature">Terrain feature</option><option value="character">Character</option><option value="creature">Creature</option><option value="weapon">Weapon</option><option value="vehicle">Vehicle</option><option value="animated-mechanism">Animated mechanism</option><option value="vfx-mesh">VFX mesh</option></select></label>
+              <label>License<input id="modelLicense" type="text" value="User supplied — review before release" maxlength="240"></label>
+            </div>
+            <div class="studio-actions asset-import-actions"><button id="importModelButton" class="button primary" type="button" disabled>Import selected model</button><span id="modelImportStatus" class="asset-import-status">No file selected</span></div>
+            <div class="material-divider"><span>3D ASSET LIBRARY</span><span id="modelAssetCount">0</span></div>
+            <div class="asset-filter-row"><input id="assetSearchInput" type="search" placeholder="Search assets, tags, licenses…"><select id="assetStatusFilter"><option value="">All states</option><option value="approved">Approved</option><option value="draft">Draft</option><option value="unvalidated">Unvalidated</option></select></div>
+            <div id="modelAssetList" class="model-asset-list"></div>
+            <div class="material-divider"><span>ASSET HEALTH + PROCESSING</span><span>REVERSIBLE</span></div>
+            <div id="modelAssetInspector" class="model-asset-inspector"><div class="material-empty">Import or select a 3D asset to inspect geometry, transforms, provenance, collision, LODs, validation, and scene usages.</div></div>
+          </div>
+
+          <div id="surfacesAssetSubview" class="asset-subview" data-asset-subview="surfaces">
+            <div class="studio-heading"><div><small>PRODUCTION SURFACE STUDIO</small><strong>Author, process, layer, compile, and reuse surfaces</strong></div><span class="studio-badge">RECIPE CORE v2</span></div>
+            <nav class="surface-mode-nav" aria-label="Surface Studio modes">
+              <button class="active" data-surface-mode="simple" type="button">Simple</button>
+              <button data-surface-mode="advanced" type="button">Advanced</button>
+              <button data-surface-mode="processing" type="button">Map tools</button>
+              <button data-surface-mode="decals" type="button">Decals</button>
+              <button data-surface-mode="atlas" type="button">Atlas + Trim</button>
+            </nav>
+
+            <section id="surfaceSimplePanel" class="surface-mode-panel active" data-surface-panel="simple">
+              <textarea id="texturePrompt" rows="4" placeholder="Realistic dry mountain grass with sparse yellow blades, tiny exposed soil patches, subtle roughness variation, seamless tiling…"></textarea>
+              <div class="studio-row">
+                <label>Surface<select id="textureCategory"><option value="grass">Grass</option><option value="dirt">Dirt</option><option value="sand">Sand</option><option value="gravel">Gravel</option><option value="rock">Rock</option><option value="snow">Snow</option><option value="custom">Custom</option></select></label>
+                <label>Resolution<select id="textureResolution"><option value="256">256</option><option value="512" selected>512</option></select></label>
+              </div>
+              <div class="studio-actions"><button id="generateTextureButton" class="button primary" type="button">Generate material</button><button id="sendTextureBriefButton" class="button subtle" type="button">Send brief to Codex</button></div>
+              <label class="import-drop">Import a ChatGPT or external texture<input id="textureImportInput" type="file" accept="image/png,image/jpeg,image/webp"><span>Choose a source image. Map Tools can make a non-destructive seamless PBR derivative.</span></label>
+            </section>
+
+            <section id="surfaceAdvancedPanel" class="surface-mode-panel" data-surface-panel="advanced">
+              <div class="surface-info-callout"><strong>One authoritative recipe</strong><p>Simple and Advanced modes edit the same Surface Recipe. Advanced mode exposes deterministic geometry, environment, proximity, graph, projection, and weather controls.</p></div>
+              <div id="surfaceGraphSummary" class="surface-graph-summary"></div>
+            </section>
+
+            <section id="surfaceProcessingPanel" class="surface-mode-panel" data-surface-panel="processing">
+              <div class="surface-info-callout"><strong>Non-destructive texture processing</strong><p>Processing creates a derivative material and preserves the original maps, settings, license, provenance, and source relationship.</p></div>
+              <div class="surface-processing-actions">
+                <button id="repairSurfaceSeamsButton" class="button primary" type="button">Repair seams + create derivative</button>
+                <button id="generateMissingMapsButton" class="button subtle" type="button">Generate missing PBR maps</button>
+              </div>
+              <label>Seam blend width <input id="seamBlendWidthInput" type="range" min="2" max="96" step="2" value="32"></label>
+              <div id="surfaceMapAudit" class="surface-map-audit"></div>
+              <div class="seam-preview-grid"><figure><figcaption>Source repeat</figcaption><canvas id="surfaceSourcePreview" width="256" height="160"></canvas></figure><figure><figcaption>Offset seam preview</figcaption><canvas id="surfaceSeamPreview" width="256" height="160"></canvas></figure></div>
+            </section>
+
+            <section id="surfaceDecalPanel" class="surface-mode-panel" data-surface-panel="decals">
+              <div class="surface-info-callout"><strong>First-class decals</strong><p>Create dirt, cracks, moss, leaks, road markings, damage, scorch marks, signs, snow, and puddle overlays from a registered material.</p></div>
+              <div class="studio-row"><label>Name<input id="decalNameInput" type="text" value="Surface Decal"></label><label>Category<select id="decalCategoryInput"><option>dirt</option><option>cracks</option><option>moss</option><option>leaks</option><option>road-marking</option><option>damage</option><option>scorch</option><option>sign</option><option>snow</option><option>puddle</option></select></label></div>
+              <div class="studio-row"><label>Opacity<input id="decalOpacityInput" type="number" min="0" max="1" step=".05" value=".85"></label><label>Projection depth<input id="decalDepthInput" type="number" min=".001" max="20" step=".05" value=".25"></label></div>
+              <div class="studio-actions"><button id="createDecalButton" class="button primary" type="button">Create from selected material</button><button id="placeDecalButton" class="button subtle" type="button">Place selected decal</button></div>
+              <div id="decalList" class="decal-list"></div>
+            </section>
+
+            <section id="surfaceAtlasPanel" class="surface-mode-panel" data-surface-panel="atlas">
+              <div class="surface-info-callout"><strong>Atlas and trim recipes</strong><p>Pack selected project materials into deterministic UV regions. This release stores production-ready layout metadata and preview evidence without overwriting source textures.</p></div>
+              <div class="studio-row"><label>Name<input id="atlasNameInput" type="text" value="Environment Surface Atlas"></label><label>Type<select id="atlasKindInput"><option value="atlas">Texture atlas</option><option value="trim-sheet">Trim sheet</option></select></label></div>
+              <div class="studio-row"><label>Resolution<select id="atlasResolutionInput"><option>1024</option><option selected>2048</option><option>4096</option></select></label><label>Sources<span id="atlasSourceCount" class="field-readout">0 selected</span></label></div>
+              <div class="studio-actions"><button id="createAtlasButton" class="button primary" type="button">Create from visible materials</button></div>
+              <div id="atlasList" class="atlas-list"></div>
+            </section>
+
+            <div class="material-divider"><span>PROJECT MATERIALS</span><span id="materialCount">0</span></div>
+            <div id="materialList" class="material-list"></div>
+            <div class="material-divider"><span>MATERIAL + RECIPE INSPECTOR</span><span>LIVE PREVIEW</span></div>
+            <div id="materialInspector" class="material-inspector"></div>
+          </div>
+
+          <div id="prefabsAssetSubview" class="asset-subview" data-asset-subview="prefabs">
+            <div class="studio-heading"><div><small>REUSABLE PREFABS</small><strong>Authored scene objects</strong></div><span id="prefabCount" class="studio-badge">0</span></div>
+            <p class="panel-hint compact">Select an entity and use the prefab action in the Inspector to create a reusable object. Prefab instances keep stable references and remain editable.</p>
+            <div id="prefabList" class="prefab-library"></div>
+          </div>
+
+          <div id="marketplaceAssetSubview" class="asset-subview marketplace-subview" data-asset-subview="marketplace">
+            <div class="studio-heading"><div><small>FREE ASSET MARKETPLACE</small><strong>Search, inspect, download, and import CC0 assets</strong></div><span id="marketplaceStatusBadge" class="studio-badge">READY</span></div>
+            <p class="panel-hint compact">Live API providers use cached metadata and the persistent Job Center. Curated providers open their official source pages when no stable automated download is available.</p>
+            <div class="marketplace-search-grid">
+              <label>Provider<select id="marketplaceProviderSelect"></select></label>
+              <label>Asset type<select id="marketplaceTypeSelect"><option value="all">All types</option><option value="model">3D models</option><option value="material">Materials</option><option value="hdri">HDRIs</option><option value="animation">Animations</option></select></label>
+              <label class="marketplace-query">Search<input id="marketplaceSearchInput" type="search" placeholder="stone arch, grass, castle, walk animation…"></label>
+              <button id="marketplaceSearchButton" class="button primary" type="button">Search provider</button>
+            </div>
+            <div class="marketplace-attribution" id="marketplaceAttribution">Choose a provider and search its catalog. License and source are shown before any download.</div>
+            <div id="marketplaceResults" class="marketplace-results"><div class="material-empty">No marketplace search has been run yet.</div></div>
+            <div class="material-divider"><span>SELECTED ASSET</span><span id="marketplaceResultCount">0</span></div>
+            <div id="marketplaceInspector" class="marketplace-inspector"><div class="material-empty">Select a marketplace result to inspect its source, license, download choices, and import support.</div></div>
+          </div>
+        </section>
+
+        <section id="integrationsTab" class="left-tab integrations-workspace">
+          <div class="studio-heading"><div><small>PROVIDER FRAMEWORK</small><strong>Assets, AI, and local workers</strong></div><span id="providerSummaryBadge" class="studio-badge">0 READY</span></div>
+          <p class="panel-hint">Every catalog, generator, and processing worker connects through one guarded provider interface. Disabled or failed providers cannot break the editor.</p>
+          <div class="studio-actions"><button id="runIntegrationSetupButton" class="button primary" type="button">Asset and AI setup</button><button id="testAllProvidersButton" class="button subtle" type="button">Test enabled providers</button></div>
+          <div id="providerList" class="provider-list"></div>
+          <div class="material-divider"><span>JOB ENGINE</span><span id="integrationJobCount">0</span></div>
+          <div class="provider-runtime-card"><div><strong>Isolated background execution</strong><small>Long-running work survives panel changes and reports real progress, logs, validation, cancellation, and retry state.</small></div><button id="openJobsButton" class="button subtle" type="button">Open Job Center</button></div>
+          <div class="integration-storage" id="integrationStorageSummary"></div>
+        </section>
+
+        <div class="left-footer"><button id="openProjectFolder" class="text-button" type="button">Open project folder</button><span id="engineVersion">v0.9.0</span></div>
+      </aside>
+      <div id="leftResizeHandle" class="resize-handle vertical left-resize" role="separator" aria-label="Resize left panel"></div>
+
+      <section id="centerStage" class="center-stage">
+        <div class="viewport-toolbar">
+          <div class="tool-group" aria-label="Transform mode">
+            <button class="tool-button active" data-transform-mode="move" type="button" title="Move mode (1)">↔</button>
+            <button class="tool-button" data-transform-mode="rotate" type="button" title="Rotate mode (2)">⟳</button>
+            <button class="tool-button" data-transform-mode="scale" type="button" title="Scale mode (3)">⤢</button>
+          </div>
+          <nav id="selectionBreadcrumb" class="selection-breadcrumb" aria-label="Selection hierarchy"></nav><div class="tool-group"><button id="focusButton" class="tool-text" type="button" title="Focus selected object (F)">Focus selected</button><button id="groundButton" class="tool-text" type="button" title="Place selected object on the authoritative terrain">Ground</button><button id="frameAllButton" class="tool-text" type="button">Frame world</button></div>
+          <div class="viewport-spacer"></div>
+          <label class="toolbar-check"><input id="gridToggle" type="checkbox" checked><span>Grid</span></label>
+          <label class="toolbar-check"><input id="autoCaptureToggle" type="checkbox"><span>Auto capture</span></label>
+          <button id="viewportSettingsButton" class="tool-button" type="button" title="Viewport settings">⚙</button>
+        </div>
+        <div id="viewportWrap" class="viewport-wrap">
+          <canvas id="viewport" tabindex="0" aria-label="Navigable 3D world viewport"></canvas>
+          <div class="viewport-vignette" aria-hidden="true"></div>
+          <div class="axis-widget" aria-hidden="true"><span class="axis y">Y</span><span class="axis x">X</span><span class="axis z">Z</span></div>
+          <div id="navPrompt" class="nav-prompt"><strong>Click to enter the 3D world</strong><span>WASD move · Mouse look · Space up · Ctrl down · Shift boost · Esc release · Right-drag fallback</span></div>
+          <div id="crosshair" class="crosshair" aria-hidden="true"><span></span><span></span></div>
+          <div class="viewport-badges"><span id="viewportModeBadge" class="viewport-badge">EDIT</span><span id="renderBadge" class="viewport-badge">PBR + SHADOWS</span><span id="cameraPositionBadge" class="viewport-badge mono">X 0.0 · Y 0.0 · Z 0.0</span></div>
+          <div id="viewportToast" class="viewport-toast" role="status" aria-live="polite"></div>
+        </div>
+        <div class="statusbar"><span><i class="status-dot"></i><b id="runtimeLabel">Live editor runtime</b></span><span id="selectionStatus">No object selected</span><span id="fpsStatus">60 FPS</span><span class="status-help">Click viewport to navigate</span></div>
+
+        <div id="bottomResizeHandle" class="resize-handle horizontal bottom-resize" role="separator" aria-label="Resize bottom dock"></div><section id="bottomDock" class="bottom-dock panel"><button id="collapseBottomButton" class="panel-collapse bottom" type="button" title="Collapse bottom dock">⌄</button>
+          <div class="dock-tabs">
+            <button class="dock-tab active" data-dock-tab="codex" type="button">AI development <span id="commandCount" class="count-badge">0</span></button>
+            <button class="dock-tab" data-dock-tab="console" type="button">Console</button>
+            <button class="dock-tab" data-dock-tab="jobs" type="button">Jobs <span id="jobCountBadge" class="count-badge">0</span></button>
+            <button class="dock-tab" data-dock-tab="scene" type="button">World settings</button>
+          </div>
+          <div id="codexDock" class="dock-content active">
+            <div class="codex-compose"><div class="codex-avatar">AI</div><textarea id="commandInput" rows="2" placeholder="Ask, plan, build, inspect, or repair anything in this game project…"></textarea><button id="queueCommandButton" class="button primary" type="button">Queue for Codex</button></div>
+            <div class="prompt-examples"><button type="button">Create a terrain system with editable hills</button><button type="button">Add a smoothly blended terrain path</button><button type="button">Create a physical day and night lighting system</button></div>
+            <div id="commandQueue" class="command-queue"></div>
+          </div>
+          <div id="consoleDock" class="dock-content"><div id="consoleList" class="console-list"></div></div>
+          <div id="jobsDock" class="dock-content job-center"><div class="job-toolbar"><div><strong>Background jobs</strong><small>Real isolated operations with persistence and recovery.</small></div><button id="runProjectIntegrityButton" class="button subtle" type="button">Project integrity</button><button id="runAssetIndexButton" class="button subtle" type="button">Index assets</button><button id="runDiagnosticJobButton" class="button subtle" type="button">Test cancellation</button><button id="clearCompletedJobsButton" class="button subtle" type="button">Clear completed</button></div><div id="jobList" class="job-list"></div></div>
+          <div id="sceneDock" class="dock-content"><div id="worldSettings" class="world-settings"></div></div>
+        </section>
+      </section>
+
+      <div id="rightResizeHandle" class="resize-handle vertical right-resize" role="separator" aria-label="Resize inspector panel"></div><aside id="rightPanel" class="right-panel panel"><button id="collapseRightButton" class="panel-collapse right" type="button" title="Collapse inspector panel">›</button>
+        <div class="inspector-header"><div><small>INSPECTOR</small><strong id="inspectorTitle">Nothing selected</strong></div><div class="inspector-actions"><button id="prefabButton" class="icon-button" type="button" title="Create prefab">◆</button><button id="duplicateButton" class="icon-button" type="button" title="Duplicate (Ctrl+D)">⧉</button><button id="deleteButton" class="icon-button danger" type="button" title="Delete">⌫</button></div></div>
+        <div id="inspectorContent" class="inspector-content"></div>
+      </aside>
+    </main>
+  </div>
+
+  <dialog id="projectHubDialog" class="modal project-hub-modal">
+    <div class="modal-header"><div><small>PROJECT HUB</small><h2>Your OmniForge projects</h2></div><button class="icon-button" data-close-dialog type="button">×</button></div>
+    <div class="project-hub-toolbar"><div class="search-field"><span>⌕</span><input id="projectSearchInput" type="search" placeholder="Search recent projects"></div><button id="newProjectHubButton" class="button primary" type="button">New project</button><button id="importProjectButton" class="button subtle" type="button">Import folder</button><button id="refreshProjectsButton" class="button subtle" type="button">Refresh</button></div>
+    <div id="projectHubStatus" class="project-hub-status"></div><div id="projectGrid" class="project-grid"></div>
+    <div class="modal-actions"><span class="modal-spacer"></span><button class="button subtle" data-close-dialog type="button">Close</button></div>
+  </dialog>
+
+  <dialog id="duplicateProjectDialog" class="modal"><div class="modal-header"><div><small>PROJECT</small><h2>Duplicate project</h2></div><button class="icon-button" data-close-dialog type="button">×</button></div><label>New project name<input id="duplicateProjectNameInput" type="text" maxlength="120"></label><input id="duplicateProjectIdInput" type="hidden"><p class="modal-note">OmniForge copies the managed project into a new independent project. Generated build and cache folders are excluded.</p><div class="modal-actions"><button class="button subtle" data-close-dialog type="button">Cancel</button><button id="confirmDuplicateProjectButton" class="button primary" type="button">Duplicate</button></div></dialog>
+
+  <dialog id="layoutDialog" class="modal layout-modal"><div class="modal-header"><div><small>WORKSPACE</small><h2>Layouts and panels</h2></div><button class="icon-button" data-close-dialog type="button">×</button></div><div class="layout-presets" id="layoutPresetList"></div><label>Save current layout as<input id="layoutNameInput" type="text" maxlength="60" placeholder="My layout"></label><div class="modal-actions"><button id="resetLayoutButton" class="button subtle" type="button">Reset default</button><span class="modal-spacer"></span><button id="saveLayoutButton" class="button primary" type="button">Save layout</button></div></dialog>
+
+  <dialog id="shortcutDialog" class="modal shortcut-modal"><div class="modal-header"><div><small>EDITOR</small><h2>Keyboard shortcuts</h2></div><button class="icon-button" data-close-dialog type="button">×</button></div><div id="shortcutList" class="shortcut-list"></div><div class="modal-actions"><button id="resetShortcutsButton" class="button subtle" type="button">Reset defaults</button><span class="modal-spacer"></span><button id="saveShortcutsButton" class="button primary" type="button">Save shortcuts</button></div></dialog>
+
+  <dialog id="commandPaletteDialog" class="modal command-palette-modal"><div class="command-palette-search"><span>⌕</span><input id="commandPaletteInput" type="search" autocomplete="off" placeholder="Type a command…"><kbd>Esc</kbd></div><div id="commandPaletteList" class="command-palette-list"></div></dialog>
+
+  <dialog id="tutorialDialog" class="modal tutorial-modal"><div class="tutorial-visual" id="tutorialVisual"></div><div class="tutorial-body"><small id="tutorialStepLabel">GETTING STARTED</small><h2 id="tutorialTitle">Navigate the 3D world</h2><p id="tutorialText"></p><div class="tutorial-progress" id="tutorialProgress"></div><div class="modal-actions"><button id="skipTutorialButton" class="button subtle" type="button">Skip</button><span class="modal-spacer"></span><button id="tutorialBackButton" class="button subtle" type="button">Back</button><button id="tutorialNextButton" class="button primary" type="button">Next</button></div></div></dialog>
+
+  <dialog id="errorDialog" class="modal error-modal"><div class="modal-header"><div><small>OMNIFORGE ERROR</small><h2 id="errorDialogTitle">Something went wrong</h2></div><button class="icon-button" data-close-dialog type="button">×</button></div><p id="errorDialogMessage" class="error-message"></p><pre id="errorDialogDetails" class="error-details"></pre><div class="modal-actions"><button id="copyErrorButton" class="button subtle" type="button">Copy details</button><span class="modal-spacer"></span><button class="button primary" data-close-dialog type="button">Close</button></div></dialog>
+
+
+  <dialog id="integrationSetupDialog" class="modal integration-setup-modal">
+    <div class="modal-header"><div><small>ASSET AND AI SETUP</small><h2>Configure OmniForge providers</h2></div><button class="icon-button" data-close-dialog type="button">×</button></div>
+    <p class="modal-note">Core editing stays available even when every optional provider is disabled or offline. No paid operation is submitted from this setup.</p>
+    <div id="setupProviderList" class="setup-provider-list"></div>
+    <div class="settings-grid integration-settings-grid">
+      <label>Maximum concurrent jobs<input id="maxConcurrentJobsInput" type="number" min="1" max="8" step="1"></label>
+      <label>Cache limit (GB)<input id="cacheLimitInput" type="number" min="1" max="500" step="1"></label>
+      <label>Download directory<input id="downloadDirectoryInput" type="text" maxlength="500"><button id="chooseDownloadDirectoryButton" class="button subtle inline-button" type="button">Choose folder</button></label>
+      <label class="switch-row">Offline mode<input id="offlineModeInput" type="checkbox"></label>
+    </div>
+    <div class="modal-actions"><button id="dismissIntegrationSetupButton" class="button subtle" type="button">Skip for now</button><span class="modal-spacer"></span><button id="saveIntegrationSetupButton" class="button primary" type="button">Save setup</button></div>
+  </dialog>
+
+  <dialog id="projectDialog" class="modal"><div class="modal-header"><div><small>NEW PROJECT</small><h2>Create game project</h2></div><button class="icon-button" data-close-dialog type="button">×</button></div><label>Project name<input id="projectNameInput" type="text" maxlength="120"></label><label>Starting structure<select id="projectTemplateInput"><option value="empty-3d">Empty 3D project</option><option value="starter-3d">Starter 3D world</option></select></label><p class="modal-note">OmniForge is project-agnostic. No genre, game, art style, or existing repository is assumed.</p><div class="modal-actions"><button class="button subtle" data-close-dialog type="button">Cancel</button><button id="applyProjectButton" class="button primary" type="button">Create project</button></div></dialog>
+
+  <dialog id="newSceneDialog" class="modal"><div class="modal-header"><div><small>SCENE</small><h2>Create scene</h2></div><button class="icon-button" data-close-dialog type="button">×</button></div><label>Scene name<input id="newSceneNameInput" type="text" value="New Scene" maxlength="100"></label><label>Template<select id="newSceneTemplateInput"><option value="empty-3d">Empty scene</option><option value="starter-3d">Starter 3D world</option></select></label><div class="modal-actions"><button class="button subtle" data-close-dialog type="button">Cancel</button><button id="createSceneButton" class="button primary" type="button">Create scene</button></div></dialog>
+
+  <dialog id="helpDialog" class="modal help-modal">
+    <div class="modal-header"><div><small>VIEWPORT</small><h2>Navigation and rendering</h2></div><button class="icon-button" data-close-dialog type="button">×</button></div>
+    <div class="settings-grid">
+      <label>Mouse sensitivity<input id="lookSensitivityInput" type="range" min="0.0005" max="0.008" step="0.0001"></label>
+      <label class="switch-row">Invert horizontal look<input id="invertHorizontalInput" type="checkbox"></label>
+      <label class="switch-row">Invert vertical look<input id="invertVerticalInput" type="checkbox"></label>
+      <label>Move speed<input id="moveSpeedInput" type="number" min="1" max="100" step="1"></label>
+      <label>Field of view<input id="fovInput" type="number" min="30" max="110" step="1"></label>
+    </div>
+    <div class="control-grid"><b>Click viewport</b><span>Capture mouse and enter fly navigation</span><b>Mouse</b><span>Look around using the configured axis direction</span><b>W A S D</b><span>Move forward, left, back, and right</span><b>Space / Ctrl</b><span>Move up and down</span><b>Shift</b><span>Move faster</span><b>Escape</b><span>Release mouse</span><b>F</b><span>Focus selected object</span><b>Arrow keys</b><span>Nudge selected object using Move, Rotate, or Scale</span></div>
+    <div class="modal-actions"><button id="saveViewportSettingsButton" class="button primary" type="button">Save settings</button></div>
+  </dialog>
+
+  <dialog id="prefabDialog" class="modal"><div class="modal-header"><div><small>PREFAB</small><h2>Create reusable prefab</h2></div><button class="icon-button" data-close-dialog type="button">×</button></div><label>Prefab name<input id="prefabNameInput" type="text" maxlength="120"></label><p class="modal-note">The prefab stores the selected entity and its components as reusable scene data. Instances keep a prefab reference while remaining editable.</p><div class="modal-actions"><button class="button subtle" data-close-dialog type="button">Cancel</button><button id="createPrefabButton" class="button primary" type="button">Create prefab</button></div></dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

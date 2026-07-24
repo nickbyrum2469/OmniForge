@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "omniforge-3d-engine",
+  "name": "OmniForge 3D Engine",
+  "version": "0.9.0",
+  "projectScope": "general-purpose",
+  "stateFile": "./data/engine-state.json",
+  "managedProjectsRoot": "./workspace/projects",
+  "mcpServer": "./bridge/mcp-server.mjs",
+  "requiredNodeVersion": ">=20",
+  "desktopEntry": "./desktop/main.cjs",
+  "developmentEditorEntry": "http://127.0.0.1:4177"
+}

@@ -1,0 +1,25 @@
+﻿{
+    "schemaVersion":  3,
+    "importedAt":  "2026-07-24T04:09:01.1076150Z",
+    "sourceKind":  "directory",
+    "sourceName":  "OmniForge-3D-Engine-v0.9.0",
+    "sourceFingerprintSha256":  "c2bcc53b3121de93ca1e071861f5fbff05c65f94121a71c583818cce759b9c60",
+    "fingerprintBasis":  "package.json",
+    "packageName":  "omniforge-3d-engine",
+    "packageVersion":  "0.9.0",
+    "repository":  "nickbyrum2469/OmniForge",
+    "excludedGeneratedDirectories":  [
+                                         ".git",
+                                         "node_modules",
+                                         "dist",
+                                         "out",
+                                         "coverage",
+                                         ".cache",
+                                         ".vite",
+                                         ".parcel-cache",
+                                         "runtime",
+                                         "logs",
+                                         "tmp",
+                                         "temp"
+                                     ]
+}

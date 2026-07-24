@@ -1,0 +1,8 @@
+{
+  "assets": [
+    {"id":"kenney-nature-kit","name":"Nature Kit","description":"A curated CC0 collection of stylized trees, rocks, plants, and terrain props.","kind":"model","category":"Environment pack","tags":["nature","trees","rocks","foliage","stylized"],"license":"CC0","creator":"Kenney","sourcePage":"https://kenney.nl/assets/nature-kit","thumbnail":"https://kenney.nl/media/pages/assets/nature-kit/1f25e4cc49-1677667486/preview.png"},
+    {"id":"kenney-castle-kit","name":"Castle Kit","description":"Modular CC0 castle walls, towers, roofs, stairs, and props.","kind":"model","category":"Modular architecture","tags":["castle","medieval","modular","architecture"],"license":"CC0","creator":"Kenney","sourcePage":"https://kenney.nl/assets/castle-kit"},
+    {"id":"kenney-graveyard-kit","name":"Graveyard Kit","description":"CC0 graveyard structures and environment props.","kind":"model","category":"Environment pack","tags":["graveyard","stone","props","environment"],"license":"CC0","creator":"Kenney","sourcePage":"https://kenney.nl/assets/graveyard-kit"},
+    {"id":"kenney-road-textures","name":"Road Textures","description":"A CC0 road and path texture collection for environment authoring.","kind":"material","category":"Texture pack","tags":["road","path","asphalt","markings"],"license":"CC0","creator":"Kenney","sourcePage":"https://kenney.nl/assets/road-textures"}
+  ]
+}

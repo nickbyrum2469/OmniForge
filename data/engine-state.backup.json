@@ -1,0 +1,1029 @@
+{
+  "schemaVersion": 8,
+  "engine": {
+    "name": "OmniForge",
+    "version": "0.9.0",
+    "status": "ready",
+    "revision": 1,
+    "updatedAt": "2026-07-23T14:09:37.445Z",
+    "safeMode": false
+  },
+  "project": {
+    "schemaVersion": 8,
+    "createdAt": "2026-07-23T14:09:37.445Z",
+    "updatedAt": "2026-07-23T14:09:37.445Z",
+    "lastOpenedAt": "2026-07-23T14:09:37.445Z",
+    "thumbnail": null,
+    "id": "untitled-game",
+    "name": "Untitled Game",
+    "root": "workspace/projects/untitled-game",
+    "template": "starter-3d",
+    "importSource": null
+  },
+  "activeSceneId": "scene-main",
+  "scenes": [
+    {
+      "id": "scene-main",
+      "name": "Main",
+      "createdAt": "2026-07-23T14:09:37.445Z",
+      "updatedAt": "2026-07-23T14:09:37.445Z",
+      "settings": {
+        "fogNear": 90,
+        "fogFar": 280,
+        "exposure": 1.22,
+        "gridVisible": true,
+        "skyTop": "#17243d",
+        "skyBottom": "#8ca6b8",
+        "ambientColor": "#b8c6d8",
+        "ambientIntensity": 0.48,
+        "gravity": -9.81,
+        "gridSize": 100,
+        "gridStep": 5
+      },
+      "editorCamera": {
+        "lookSensitivity": 0.0023,
+        "invertHorizontal": false,
+        "invertVertical": false,
+        "moveSpeed": 12,
+        "fov": 62,
+        "position": [
+          25,
+          15,
+          32
+        ],
+        "yaw": -0.68,
+        "pitch": -0.29,
+        "fastMultiplier": 3.5
+      },
+      "objects": [
+        {
+          "id": "terrain-main",
+          "name": "Terrain",
+          "type": "terrain",
+          "parentId": null,
+          "visible": true,
+          "locked": false,
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "components": [],
+          "properties": {
+            "size": 100,
+            "resolution": 96,
+            "amplitude": 4,
+            "frequency": 0.055,
+            "seed": 17,
+            "color": "#526d49",
+            "roughness": 0.86,
+            "materialId": "material-highland-grass",
+            "collider": true,
+            "receivesShadows": true
+          }
+        },
+        {
+          "id": "path-main",
+          "name": "Terrain Path",
+          "type": "path",
+          "parentId": null,
+          "visible": true,
+          "locked": false,
+          "transform": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "components": [],
+          "properties": {
+            "width": 3.2,
+            "surfaceOffset": 0.03,
+            "color": "#73573d",
+            "materialId": "material-packed-earth",
+            "blendDistance": 3.2,
+            "edgeNoise": 0.65,
+            "points": [
+              [
+                -32,
+                -22
+              ],
+              [
+                -20,
+                -13
+              ],
+              [
+                -8,
+                -8
+              ],
+              [
+                5,
+                -2
+              ],
+              [
+                17,
+                9
+              ],
+              [
+                30,
+                16
+              ]
+            ],
+            "conformToTerrain": true,
+            "collider": true,
+            "navigation": true,
+            "vegetationExclusion": 1.2
+          }
+        },
+        {
+          "id": "sun-main",
+          "name": "Sun",
+          "type": "directionalLight",
+          "parentId": null,
+          "visible": true,
+          "locked": false,
+          "transform": {
+            "position": [
+              0,
+              18,
+              0
+            ],
+            "rotation": [
+              -48,
+              32,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "components": [],
+          "properties": {
+            "color": "#fff1d1",
+            "intensity": 1.45,
+            "castsShadows": true
+          }
+        },
+        {
+          "id": "block-main",
+          "name": "Scene Block",
+          "type": "box",
+          "parentId": null,
+          "visible": true,
+          "locked": false,
+          "transform": {
+            "position": [
+              7,
+              6.05,
+              4
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              6,
+              4,
+              6
+            ]
+          },
+          "components": [],
+          "properties": {
+            "color": "#3f66a3",
+            "metallic": 0.08,
+            "roughness": 0.78,
+            "collider": true
+          }
+        },
+        {
+          "id": "marker-main",
+          "name": "World Marker",
+          "type": "sphere",
+          "parentId": null,
+          "visible": true,
+          "locked": false,
+          "transform": {
+            "position": [
+              -12,
+              4,
+              -4
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              2.2,
+              2.2,
+              2.2
+            ]
+          },
+          "components": [],
+          "properties": {
+            "color": "#a96cff",
+            "metallic": 0.2,
+            "roughness": 0.42,
+            "collider": true
+          }
+        }
+      ]
+    }
+  ],
+  "selection": {
+    "objectId": "block-main"
+  },
+  "editor": {
+    "mode": "edit",
+    "transformMode": "move",
+    "snap": 0.5,
+    "autoCapture": false,
+    "runtimeConnected": true,
+    "codexStatus": "available",
+    "captureRequest": null,
+    "selectedMaterialId": "material-highland-grass",
+    "selectedAssetId": null,
+    "selectedProviderId": "local-worker-host",
+    "assetView": "library",
+    "saveState": "saved",
+    "firstUseComplete": false,
+    "safeMode": false,
+    "layout": {
+      "leftWidth": 260,
+      "rightWidth": 330,
+      "bottomHeight": 250,
+      "leftCollapsed": false,
+      "rightCollapsed": false,
+      "bottomCollapsed": false,
+      "name": "Default"
+    },
+    "savedLayouts": [
+      {
+        "leftWidth": 260,
+        "rightWidth": 330,
+        "bottomHeight": 250,
+        "leftCollapsed": false,
+        "rightCollapsed": false,
+        "bottomCollapsed": false,
+        "name": "Default"
+      }
+    ],
+    "shortcuts": {
+      "save": "Ctrl+S",
+      "commandPalette": "Ctrl+K",
+      "duplicate": "Ctrl+D",
+      "focus": "F",
+      "resetCamera": "Home",
+      "play": "P",
+      "delete": "Delete",
+      "moveMode": "1",
+      "rotateMode": "2",
+      "scaleMode": "3",
+      "toggleLeftPanel": "Ctrl+Alt+1",
+      "toggleRightPanel": "Ctrl+Alt+2",
+      "toggleBottomDock": "Ctrl+Alt+3",
+      "projectHub": "Ctrl+Shift+P"
+    },
+    "recentErrors": [],
+    "lastFocusObjectId": null,
+    "lastCodexConnectionAt": null,
+    "viewportMessage": null
+  },
+  "assets": [
+    {
+      "id": "material-highland-grass",
+      "type": "material",
+      "name": "Highland Grass",
+      "category": "terrain",
+      "source": "OmniForge procedural material pipeline",
+      "license": "Generated locally for unrestricted project use",
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "maps": {
+        "baseColor": {
+          "file": "assets/materials/material-highland-grass/basecolor.png",
+          "url": "/assets/materials/material-highland-grass/basecolor.png"
+        },
+        "normal": {
+          "file": "assets/materials/material-highland-grass/normal.png",
+          "url": "/assets/materials/material-highland-grass/normal.png"
+        },
+        "roughness": {
+          "file": "assets/materials/material-highland-grass/roughness.png",
+          "url": "/assets/materials/material-highland-grass/roughness.png"
+        },
+        "ambientOcclusion": {
+          "file": "assets/materials/material-highland-grass/ao.png",
+          "url": "/assets/materials/material-highland-grass/ao.png"
+        },
+        "height": {
+          "file": "assets/materials/material-highland-grass/height.png",
+          "url": "/assets/materials/material-highland-grass/height.png"
+        }
+      },
+      "settings": {
+        "worldScale": 3.5,
+        "uvRotation": 0,
+        "uvOffset": [
+          0,
+          0
+        ],
+        "roughness": 0.9,
+        "roughnessMultiplier": 1,
+        "metallic": 0,
+        "normalStrength": 1.15,
+        "aoStrength": 1,
+        "heightStrength": 0.035
+      },
+      "tags": [
+        "grass",
+        "terrain",
+        "starter",
+        "seamless",
+        "pbr"
+      ],
+      "surfaceRecipeId": "surface-recipe-highland-grass",
+      "protected": true
+    },
+    {
+      "id": "material-packed-earth",
+      "type": "material",
+      "name": "Packed Earth Path",
+      "category": "terrain",
+      "source": "OmniForge procedural material pipeline",
+      "license": "Generated locally for unrestricted project use",
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "maps": {
+        "baseColor": {
+          "file": "assets/materials/material-packed-earth/basecolor.png",
+          "url": "/assets/materials/material-packed-earth/basecolor.png"
+        },
+        "normal": {
+          "file": "assets/materials/material-packed-earth/normal.png",
+          "url": "/assets/materials/material-packed-earth/normal.png"
+        },
+        "roughness": {
+          "file": "assets/materials/material-packed-earth/roughness.png",
+          "url": "/assets/materials/material-packed-earth/roughness.png"
+        },
+        "ambientOcclusion": {
+          "file": "assets/materials/material-packed-earth/ao.png",
+          "url": "/assets/materials/material-packed-earth/ao.png"
+        },
+        "height": {
+          "file": "assets/materials/material-packed-earth/height.png",
+          "url": "/assets/materials/material-packed-earth/height.png"
+        }
+      },
+      "settings": {
+        "worldScale": 2.3,
+        "uvRotation": 0,
+        "uvOffset": [
+          0,
+          0
+        ],
+        "roughness": 0.82,
+        "roughnessMultiplier": 1,
+        "metallic": 0,
+        "normalStrength": 1.25,
+        "aoStrength": 1,
+        "heightStrength": 0.04
+      },
+      "tags": [
+        "dirt",
+        "path",
+        "starter",
+        "seamless",
+        "pbr"
+      ],
+      "surfaceRecipeId": "surface-recipe-packed-earth",
+      "protected": true
+    },
+    {
+      "id": "surface-recipe-highland-grass",
+      "type": "surfaceRecipe",
+      "schemaVersion": 2,
+      "name": "Highland Grass Surface",
+      "baseMaterialId": "material-highland-grass",
+      "sourceRecipeId": null,
+      "layers": {
+        "dirt": 0.12,
+        "moss": 0.16,
+        "wetness": 0.05,
+        "snow": 0,
+        "damage": 0.03,
+        "colorVariation": 0.24,
+        "roughnessVariation": 0.12,
+        "detailAmount": 1.05,
+        "detailScale": 4
+      },
+      "layerColors": {
+        "dirt": "#4b2c18",
+        "moss": "#245b29",
+        "snow": "#dbe7f0",
+        "damage": "#17100d"
+      },
+      "masks": {
+        "upwardFacing": 1,
+        "downwardFacing": 0,
+        "slope": 0.28,
+        "cavities": 0.72,
+        "convexEdges": 0.15,
+        "groundContact": 0.45,
+        "waterContact": 0,
+        "sunExposure": 0.18,
+        "shade": 0.62,
+        "windFacing": 0,
+        "distanceFromPaths": 0,
+        "distanceFromStructures": 0,
+        "terrainLayer": 0,
+        "vertexPaint": 0,
+        "authoredMask": 0
+      },
+      "advanced": {
+        "projection": "world",
+        "macroScale": 24,
+        "detailScale": 4,
+        "blendSharpness": 1,
+        "parallaxSteps": 8,
+        "layerOrder": [
+          "dirt",
+          "moss",
+          "wetness",
+          "snow",
+          "damage"
+        ]
+      },
+      "graph": {
+        "version": 1,
+        "nodes": [
+          {
+            "id": "node-base",
+            "type": "base-material",
+            "label": "Base Material",
+            "enabled": true,
+            "value": 1,
+            "params": {}
+          },
+          {
+            "id": "node-slope",
+            "type": "slope-mask",
+            "label": "Slope Mask",
+            "enabled": true,
+            "value": 0.28,
+            "params": {}
+          },
+          {
+            "id": "node-cavity",
+            "type": "cavity-mask",
+            "label": "Cavity Mask",
+            "enabled": true,
+            "value": 0.72,
+            "params": {}
+          },
+          {
+            "id": "node-weather",
+            "type": "weather-state",
+            "label": "Weather State",
+            "enabled": true,
+            "value": 1,
+            "params": {}
+          },
+          {
+            "id": "node-output",
+            "type": "surface-output",
+            "label": "Surface Output",
+            "enabled": true,
+            "value": 1,
+            "params": {}
+          }
+        ],
+        "edges": [],
+        "outputNodeId": "node-output"
+      },
+      "weatherResponse": {
+        "wetness": 1,
+        "snow": 1,
+        "frost": 0,
+        "drought": 0
+      },
+      "tags": [
+        "terrain",
+        "grass",
+        "starter"
+      ],
+      "protected": true,
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "updatedAt": "2026-07-23T16:38:21.445Z",
+      "compilation": {
+        "state": "ready",
+        "hash": "1ba911dfe677d47b5b83c682d333804828ca99282d31e4c764a835f29fe4c3b2",
+        "key": "surface-1ba911dfe677d47b",
+        "rendererVersion": "surface-runtime-2",
+        "compiledAt": "2026-07-23T16:38:21.445Z",
+        "warnings": [],
+        "errors": [],
+        "cost": {
+          "estimatedTextureSamples": 14,
+          "estimatedAlu": 135,
+          "activeLayers": [
+            "dirt",
+            "moss",
+            "wetness",
+            "damage",
+            "colorVariation",
+            "roughnessVariation",
+            "detailAmount"
+          ],
+          "activeMasks": [
+            "upwardFacing",
+            "slope",
+            "cavities",
+            "convexEdges",
+            "groundContact",
+            "sunExposure",
+            "shade"
+          ],
+          "graphNodes": 5,
+          "projection": "world",
+          "lowEndWarnings": [],
+          "profileHints": {
+            "gtx1650": {
+              "recommendedTextureSamples": 24,
+              "recommendedAlu": 180,
+              "parallaxSteps": 8,
+              "allowTriplanar": true
+            }
+          }
+        }
+      },
+      "validation": {
+        "state": "valid",
+        "errors": [],
+        "warnings": [],
+        "checkedAt": "2026-07-23T16:38:21.445Z"
+      }
+    },
+    {
+      "id": "surface-recipe-packed-earth",
+      "type": "surfaceRecipe",
+      "schemaVersion": 2,
+      "name": "Packed Earth Path Surface",
+      "baseMaterialId": "material-packed-earth",
+      "sourceRecipeId": null,
+      "layers": {
+        "dirt": 0.28,
+        "moss": 0.04,
+        "wetness": 0.08,
+        "snow": 0,
+        "damage": 0.12,
+        "colorVariation": 0.18,
+        "roughnessVariation": 0.12,
+        "detailAmount": 1.12,
+        "detailScale": 4
+      },
+      "layerColors": {
+        "dirt": "#4b2c18",
+        "moss": "#245b29",
+        "snow": "#dbe7f0",
+        "damage": "#17100d"
+      },
+      "masks": {
+        "upwardFacing": 0.9,
+        "downwardFacing": 0,
+        "slope": 0.38,
+        "cavities": 0.62,
+        "convexEdges": 0.15,
+        "groundContact": 0.5,
+        "waterContact": 0,
+        "sunExposure": 0.2,
+        "shade": 0.35,
+        "windFacing": 0,
+        "distanceFromPaths": 0,
+        "distanceFromStructures": 0,
+        "terrainLayer": 0,
+        "vertexPaint": 0,
+        "authoredMask": 0
+      },
+      "advanced": {
+        "projection": "world",
+        "macroScale": 24,
+        "detailScale": 4,
+        "blendSharpness": 1,
+        "parallaxSteps": 8,
+        "layerOrder": [
+          "dirt",
+          "moss",
+          "wetness",
+          "snow",
+          "damage"
+        ]
+      },
+      "graph": {
+        "version": 1,
+        "nodes": [
+          {
+            "id": "node-base",
+            "type": "base-material",
+            "label": "Base Material",
+            "enabled": true,
+            "value": 1,
+            "params": {}
+          },
+          {
+            "id": "node-slope",
+            "type": "slope-mask",
+            "label": "Slope Mask",
+            "enabled": true,
+            "value": 0.38,
+            "params": {}
+          },
+          {
+            "id": "node-cavity",
+            "type": "cavity-mask",
+            "label": "Cavity Mask",
+            "enabled": true,
+            "value": 0.62,
+            "params": {}
+          },
+          {
+            "id": "node-weather",
+            "type": "weather-state",
+            "label": "Weather State",
+            "enabled": true,
+            "value": 1,
+            "params": {}
+          },
+          {
+            "id": "node-output",
+            "type": "surface-output",
+            "label": "Surface Output",
+            "enabled": true,
+            "value": 1,
+            "params": {}
+          }
+        ],
+        "edges": [],
+        "outputNodeId": "node-output"
+      },
+      "weatherResponse": {
+        "wetness": 1,
+        "snow": 1,
+        "frost": 0,
+        "drought": 0
+      },
+      "tags": [
+        "terrain",
+        "path",
+        "starter"
+      ],
+      "protected": true,
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "updatedAt": "2026-07-23T16:38:21.445Z",
+      "compilation": {
+        "state": "ready",
+        "hash": "d30bef5c06885c64a46b7c0768aa172ce02067bbe5fe27bb2d780af004dc8eea",
+        "key": "surface-d30bef5c06885c64",
+        "rendererVersion": "surface-runtime-2",
+        "compiledAt": "2026-07-23T16:38:21.445Z",
+        "warnings": [],
+        "errors": [],
+        "cost": {
+          "estimatedTextureSamples": 14,
+          "estimatedAlu": 135,
+          "activeLayers": [
+            "dirt",
+            "moss",
+            "wetness",
+            "damage",
+            "colorVariation",
+            "roughnessVariation",
+            "detailAmount"
+          ],
+          "activeMasks": [
+            "upwardFacing",
+            "slope",
+            "cavities",
+            "convexEdges",
+            "groundContact",
+            "sunExposure",
+            "shade"
+          ],
+          "graphNodes": 5,
+          "projection": "world",
+          "lowEndWarnings": [],
+          "profileHints": {
+            "gtx1650": {
+              "recommendedTextureSamples": 24,
+              "recommendedAlu": 180,
+              "parallaxSteps": 8,
+              "allowTriplanar": true
+            }
+          }
+        }
+      },
+      "validation": {
+        "state": "valid",
+        "errors": [],
+        "warnings": [],
+        "checkedAt": "2026-07-23T16:38:21.445Z"
+      }
+    }
+  ],
+  "prefabs": [],
+  "commands": [],
+  "evidence": [],
+  "providers": [
+    {
+      "id": "local-project-assets",
+      "displayName": "Project Asset Library",
+      "description": "Searches and validates assets already managed by the active OmniForge project.",
+      "kind": "asset-source",
+      "capabilities": [
+        "asset-search"
+      ],
+      "operations": [
+        "provider-health-check",
+        "asset-index",
+        "project-integrity"
+      ],
+      "enabled": true,
+      "required": true,
+      "settings": {
+        "includeUnvalidated": true
+      },
+      "status": {
+        "state": "connected",
+        "message": "Managed asset registry available.",
+        "version": "1.0.0",
+        "executionBackend": "local",
+        "lastHealthCheck": null,
+        "hardware": null
+      },
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "updatedAt": "2026-07-23T14:09:37.448Z"
+    },
+    {
+      "id": "local-procedural-surfaces",
+      "displayName": "Local Surface Generator",
+      "description": "Creates deterministic seamless starter surfaces without a network connection or paid credits.",
+      "kind": "generation",
+      "capabilities": [
+        "text-to-image",
+        "retexture"
+      ],
+      "operations": [
+        "provider-health-check"
+      ],
+      "enabled": true,
+      "required": false,
+      "settings": {
+        "defaultResolution": 512
+      },
+      "status": {
+        "state": "connected",
+        "message": "Local procedural surface tools available.",
+        "version": "1.0.0",
+        "executionBackend": "cpu",
+        "lastHealthCheck": null,
+        "hardware": null
+      },
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "updatedAt": "2026-07-23T14:09:37.448Z"
+    },
+    {
+      "id": "poly-haven",
+      "displayName": "Poly Haven",
+      "description": "Searches Poly Haven’s live CC0 models, materials, and HDRIs through its public API.",
+      "kind": "asset-source-remote",
+      "capabilities": [
+        "asset-search",
+        "asset-download",
+        "models",
+        "materials",
+        "hdris"
+      ],
+      "operations": [
+        "provider-health-check",
+        "marketplace-download"
+      ],
+      "enabled": true,
+      "required": false,
+      "settings": {
+        "apiBase": "https://api.polyhaven.com",
+        "attributionLabel": "Assets from Poly Haven",
+        "preferredResolution": "2K"
+      },
+      "status": {
+        "state": "disconnected",
+        "message": "Run a health check to test the live API.",
+        "version": null,
+        "executionBackend": "remote",
+        "lastHealthCheck": null,
+        "hardware": null
+      },
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "updatedAt": "2026-07-23T14:09:37.448Z"
+    },
+    {
+      "id": "ambientcg",
+      "displayName": "ambientCG",
+      "description": "Searches ambientCG’s live CC0 PBR materials, HDRIs, terrain assets, and models.",
+      "kind": "asset-source-remote",
+      "capabilities": [
+        "asset-search",
+        "asset-download",
+        "models",
+        "materials",
+        "hdris"
+      ],
+      "operations": [
+        "provider-health-check",
+        "marketplace-download"
+      ],
+      "enabled": true,
+      "required": false,
+      "settings": {
+        "apiBase": "https://ambientcg.com/api/v3",
+        "preferredResolution": "2K",
+        "preferredEncoding": "JPG"
+      },
+      "status": {
+        "state": "disconnected",
+        "message": "Run a health check to test the live API.",
+        "version": "v3",
+        "executionBackend": "remote",
+        "lastHealthCheck": null,
+        "hardware": null
+      },
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "updatedAt": "2026-07-23T14:09:37.448Z"
+    },
+    {
+      "id": "kenney",
+      "displayName": "Kenney",
+      "description": "Curated CC0 game-asset packs with source links and manual selective installation.",
+      "kind": "asset-source-curated",
+      "capabilities": [
+        "asset-search",
+        "curated-packs",
+        "models",
+        "materials"
+      ],
+      "operations": [
+        "provider-health-check"
+      ],
+      "enabled": true,
+      "required": false,
+      "settings": {
+        "catalog": "data/catalogs/kenney.json"
+      },
+      "status": {
+        "state": "connected",
+        "message": "Bundled curated catalog available.",
+        "version": "curated-1",
+        "executionBackend": "local",
+        "lastHealthCheck": null,
+        "hardware": null
+      },
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "updatedAt": "2026-07-23T14:09:37.448Z"
+    },
+    {
+      "id": "quaternius",
+      "displayName": "Quaternius",
+      "description": "Curated CC0 3D game-asset packs with source links and manual selective installation.",
+      "kind": "asset-source-curated",
+      "capabilities": [
+        "asset-search",
+        "curated-packs",
+        "models"
+      ],
+      "operations": [
+        "provider-health-check"
+      ],
+      "enabled": true,
+      "required": false,
+      "settings": {
+        "catalog": "data/catalogs/quaternius.json"
+      },
+      "status": {
+        "state": "connected",
+        "message": "Bundled curated catalog available.",
+        "version": "curated-1",
+        "executionBackend": "local",
+        "lastHealthCheck": null,
+        "hardware": null
+      },
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "updatedAt": "2026-07-23T14:09:37.448Z"
+    },
+    {
+      "id": "quaternius-animations",
+      "displayName": "Quaternius Animation Library",
+      "description": "Curated CC0 Universal Animation Library metadata for later retargeting and animation workflows.",
+      "kind": "animation-library",
+      "capabilities": [
+        "asset-search",
+        "animation-library"
+      ],
+      "operations": [
+        "provider-health-check"
+      ],
+      "enabled": true,
+      "required": false,
+      "settings": {
+        "catalog": "data/catalogs/quaternius-animations.json"
+      },
+      "status": {
+        "state": "connected",
+        "message": "Bundled animation catalog available.",
+        "version": "curated-1",
+        "executionBackend": "local",
+        "lastHealthCheck": null,
+        "hardware": null
+      },
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "updatedAt": "2026-07-23T14:09:37.448Z"
+    },
+    {
+      "id": "local-worker-host",
+      "displayName": "Isolated Worker Host",
+      "description": "Runs long operations outside the editor process with progress, logs, cancellation, and failure isolation.",
+      "kind": "worker-host",
+      "capabilities": [
+        "worker-execution"
+      ],
+      "operations": [
+        "provider-health-check",
+        "diagnostic-delay",
+        "asset-index",
+        "project-integrity"
+      ],
+      "enabled": true,
+      "required": true,
+      "settings": {
+        "maxMemoryMb": 4096
+      },
+      "status": {
+        "state": "connected",
+        "message": "Node worker runtime available.",
+        "version": "22.16.0",
+        "executionBackend": "local",
+        "lastHealthCheck": null,
+        "hardware": null
+      },
+      "createdAt": "2026-07-23T14:09:37.446Z",
+      "updatedAt": "2026-07-23T14:09:37.448Z"
+    }
+  ],
+  "jobs": [],
+  "activity": [
+    {
+      "id": "activity-mrxl8bs6-8b2f92",
+      "type": "engine",
+      "message": "General-purpose 3D workspace initialized.",
+      "createdAt": "2026-07-23T14:09:37.446Z"
+    }
+  ],
+  "settings": {
+    "port": 4177,
+    "desktopMode": false,
+    "integrations": {
+      "setupState": "pending",
+      "completedAt": null,
+      "dismissedAt": null,
+      "downloadDirectory": "downloads",
+      "cacheDirectory": "cache/providers",
+      "cacheLimitGb": 20,
+      "maxConcurrentJobs": 2,
+      "retainCompletedJobs": 100,
+      "offlineMode": false
+    }
+  }
+}

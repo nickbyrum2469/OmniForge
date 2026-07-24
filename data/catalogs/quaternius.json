@@ -1,0 +1,8 @@
+{
+  "assets": [
+    {"id":"quaternius-stylized-nature-megakit","name":"Stylized Nature MegaKit","description":"A large CC0 nature pack with trees, vegetation, rocks, and environment pieces.","kind":"model","category":"Environment pack","tags":["nature","foliage","trees","rocks","stylized"],"license":"CC0","creator":"Quaternius","sourcePage":"https://quaternius.com/packs/stylizednaturemegakit.html"},
+    {"id":"quaternius-downtown-city-megakit","name":"Downtown City MegaKit","description":"A CC0 modular city collection with buildings, streets, and props.","kind":"model","category":"Modular architecture","tags":["city","buildings","streets","modular"],"license":"CC0","creator":"Quaternius","sourcePage":"https://quaternius.com/packs/downtowncitymegakit.html"},
+    {"id":"quaternius-medieval-dungeon","name":"Modular Dungeon Pack","description":"A CC0 modular dungeon kit for walls, floors, stairs, and interior props.","kind":"model","category":"Modular architecture","tags":["dungeon","medieval","modular","stairs"],"license":"CC0","creator":"Quaternius","sourcePage":"https://quaternius.com/packs/medievaldungeon.html"},
+    {"id":"quaternius-ultimate-rpg","name":"Ultimate RPG Pack","description":"A broad CC0 RPG asset collection with characters, buildings, props, and nature.","kind":"model","category":"Game kit","tags":["rpg","characters","buildings","props"],"license":"CC0","creator":"Quaternius","sourcePage":"https://quaternius.com/packs/ultimaterpg.html"}
+  ]
+}

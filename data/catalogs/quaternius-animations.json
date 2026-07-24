@@ -1,0 +1,5 @@
+{
+  "assets": [
+    {"id":"quaternius-universal-animation-library","name":"Universal Animation Library","description":"A CC0 humanoid animation library intended for retargeting and gameplay prototypes.","kind":"animation","category":"Animation library","tags":["humanoid","locomotion","combat","interaction","animation"],"license":"CC0","creator":"Quaternius","sourcePage":"https://quaternius.com/packs/universalanimationlibrary.html"}
+  ]
+}
