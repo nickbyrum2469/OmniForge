@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/v011-editor-freeze-night-visibility
+    paths-ignore:
+      - tests/.v011-editor-stability-windows-status
+      - tests/.v011-editor-stability-windows-verified
 
 permissions:
   contents: write
@@ -27,18 +30,25 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
+          'phase=install' | Set-Content 'tests\.v011-editor-stability-windows-status' -Encoding ascii
           if (Test-Path package-lock.json) { npm ci } else { npm install }
 
       - name: Run source verification
-        run: npm run verify
+        shell: pwsh
+        run: |
+          'phase=source-verification' | Set-Content 'tests\.v011-editor-stability-windows-status' -Encoding ascii
+          npm run verify
 
       - name: Build Windows desktop package
         shell: pwsh
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\BUILD_DESKTOP_WINDOWS.ps1
+        run: |
+          'phase=desktop-build' | Set-Content 'tests\.v011-editor-stability-windows-status' -Encoding ascii
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\BUILD_DESKTOP_WINDOWS.ps1
 
       - name: Audit package and source identity
         shell: pwsh
         run: |
+          'phase=package-audit' | Set-Content 'tests\.v011-editor-stability-windows-status' -Encoding ascii
           $output=Join-Path $PWD 'dist\OmniForge-win32-x64'
           $required=@(
             'OmniForge.exe',
@@ -61,6 +71,7 @@ jobs:
       - name: Smoke-test packaged executable and compact world runtime
         shell: pwsh
         run: |
+          'phase=packaged-smoke-test' | Set-Content 'tests\.v011-editor-stability-windows-status' -Encoding ascii
           $output=Join-Path $PWD 'dist\OmniForge-win32-x64'
           $runtime=Join-Path $env:TEMP "omniforge-editor-stability-$env:GITHUB_RUN_ID"
           New-Item -ItemType Directory -Force -Path $runtime | Out-Null
@@ -82,6 +93,7 @@ jobs:
             $body=@{seconds=2}|ConvertTo-Json
             $step=Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/v010/world/step" -ContentType 'application/json' -Body $body -TimeoutSec 8
             if($null -eq $step.runtime -or $null -ne $step.state){throw 'World step did not return compact runtime-only state.'}
+            'phase=passed' | Set-Content 'tests\.v011-editor-stability-windows-status' -Encoding ascii
             Write-Host 'Packaged editor-stability executable, read-only diagnostics, and compact world runtime passed.'
           }finally{
             if($process -and -not $process.HasExited){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue}
@@ -91,15 +103,20 @@ jobs:
             Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Record successful Windows verification
+      - name: Record Windows verification result
+        if: always()
         shell: pwsh
         run: |
           $verified=(git rev-parse HEAD).Trim()
-          "$verified`nWindows package, audit, and smoke tests passed." | Set-Content 'tests\.v011-editor-stability-windows-verified' -Encoding ascii
-          if(-not(git diff --quiet -- 'tests/.v011-editor-stability-windows-verified')){
-            git config user.name 'OmniForge Windows CI'
-            git config user.email 'actions@users.noreply.github.com'
-            git add 'tests/.v011-editor-stability-windows-verified'
-            git commit -m 'Record successful v0.11 editor stability Windows verification'
-            git push origin HEAD:fix/v011-editor-freeze-night-visibility
+          $jobStatus='${{ job.status }}'
+          $phase=if(Test-Path 'tests\.v011-editor-stability-windows-status'){(Get-Content 'tests\.v011-editor-stability-windows-status' -Raw).Trim()}else{'phase=unknown'}
+          "status=$jobStatus`n$phase`nsource=$verified" | Set-Content 'tests\.v011-editor-stability-windows-status' -Encoding ascii
+          if($jobStatus -eq 'success'){
+            "$verified`nWindows package, audit, and smoke tests passed." | Set-Content 'tests\.v011-editor-stability-windows-verified' -Encoding ascii
           }
+          git config user.name 'OmniForge Windows CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -f 'tests/.v011-editor-stability-windows-status'
+          if(Test-Path 'tests\.v011-editor-stability-windows-verified'){git add -f 'tests/.v011-editor-stability-windows-verified'}
+          git commit -m "Record v0.11 editor stability Windows verification $jobStatus"
+          git push origin HEAD:fix/v011-editor-freeze-night-visibility
