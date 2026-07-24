@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/v011-viewport-camera-path-continuity
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
