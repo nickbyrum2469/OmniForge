@@ -6,6 +6,7 @@ on:
       - milestone-10/foliage-lighting-foundation
     paths:
       - tools/apply-v010.mjs
+      - tools/update-v010-test-expectations.mjs
       - .github/workflows/apply-v010.yml
   pull_request:
     branches:
@@ -49,6 +50,9 @@ jobs:
             exit "$result"
           fi
           rm -f APPLY_V010_ERROR.txt
+
+      - name: Update v0.10 release identity assertions
+        run: node tools/update-v010-test-expectations.mjs
 
       - name: Syntax-check v0.10 runtime files
         run: |
