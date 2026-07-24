@@ -36,9 +36,18 @@ function Ensure-Command {
     }
 
     Write-Step "Installing $Name"
-    & winget install --id $WingetId --exact --accept-package-agreements --accept-source-agreements
-    if ($LASTEXITCODE -ne 0) {
-        throw "winget could not install $Name (exit code $LASTEXITCODE)."
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & winget install --id $WingetId --exact --accept-package-agreements --accept-source-agreements
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    if ($exitCode -ne 0) {
+        throw "winget could not install $Name (exit code $exitCode)."
     }
 
     Refresh-Path
@@ -83,31 +92,63 @@ function Invoke-Checked {
         [Parameter(ValueFromRemainingArguments = $true)] [string[]]$Arguments
     )
 
-    & $FilePath @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$FilePath failed with exit code $LASTEXITCODE."
-    }
-}
-
-function Invoke-ExitCodeOnly {
-    param(
-        [Parameter(Mandatory)] [string]$FilePath,
-        [Parameter(ValueFromRemainingArguments = $true)] [string[]]$Arguments
-    )
-
-    # Windows PowerShell 5.1 converts native stderr into PowerShell ErrorRecord
-    # objects. With ErrorActionPreference=Stop, a successful diagnostic command
-    # such as `gh auth status` can terminate the script before LASTEXITCODE is
-    # inspected. Temporarily relax native stderr handling and return only the
-    # process exit code.
+    # Windows PowerShell 5.1 can turn native stderr into PowerShell ErrorRecord
+    # objects. Run native tools with non-terminating stderr handling, then trust
+    # their real process exit code.
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        & $FilePath @Arguments 1>$null 2>$null
-        return $LASTEXITCODE
+        & $FilePath @Arguments
+        $exitCode = $LASTEXITCODE
     }
     finally {
         $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    if ($exitCode -ne 0) {
+        throw "$FilePath failed with exit code $exitCode."
+    }
+}
+
+function Test-GitHubAuthentication {
+    $ghCommand = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $ghCommand) {
+        return $false
+    }
+
+    $stdoutPath = [IO.Path]::GetTempFileName()
+    $stderrPath = [IO.Path]::GetTempFileName()
+
+    try {
+        # `gh api user` proves that an authenticated API call actually works.
+        # Start-Process keeps PowerShell 5.1 from converting native stderr into a
+        # terminating RemoteException.
+        $process = Start-Process `
+            -FilePath $ghCommand.Source `
+            -ArgumentList @("api", "user", "--jq", ".login") `
+            -NoNewWindow `
+            -Wait `
+            -PassThru `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        if ($process.ExitCode -ne 0) {
+            return $false
+        }
+
+        $login = (Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue).Trim()
+        if ([string]::IsNullOrWhiteSpace($login)) {
+            return $false
+        }
+
+        Write-Host "Authenticated to GitHub as $login" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        return $false
+    }
+    finally {
+        Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -128,14 +169,15 @@ Ensure-Command -Name git -WingetId Git.Git
 Ensure-Command -Name gh -WingetId GitHub.cli
 
 Write-Step "Checking GitHub authentication"
-$authExitCode = Invoke-ExitCodeOnly gh auth status
-if ($authExitCode -ne 0) {
+if (-not (Test-GitHubAuthentication)) {
     Write-Host "A GitHub browser login will open. Sign in to the account that owns $Repository." -ForegroundColor Yellow
     Invoke-Checked gh auth login --web --git-protocol https
+    Start-Sleep -Seconds 2
 
-    $authExitCode = Invoke-ExitCodeOnly gh auth status
-    if ($authExitCode -ne 0) {
-        throw "GitHub CLI authentication did not complete successfully. Run 'gh auth login --web' and retry."
+    if (-not (Test-GitHubAuthentication)) {
+        # `gh auth login` already returned success. Continue to the clone/push
+        # operations, which provide the final authoritative authentication test.
+        Write-Warning "GitHub login completed, but the API verification was inconclusive. Continuing; clone or push will report any real authentication problem."
     }
 }
 
@@ -173,9 +215,18 @@ try {
         "/XD"
     ) + $excludedDirectories + @("/XF") + $excludedFiles
 
-    & robocopy @robocopyArgs | Out-Host
-    if ($LASTEXITCODE -gt 7) {
-        throw "robocopy failed with exit code $LASTEXITCODE."
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & robocopy @robocopyArgs | Out-Host
+        $robocopyExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    if ($robocopyExitCode -gt 7) {
+        throw "robocopy failed with exit code $robocopyExitCode."
     }
 
     $largeFiles = Get-ChildItem -LiteralPath $repoRoot -File -Recurse |
