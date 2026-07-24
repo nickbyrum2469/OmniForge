@@ -12,17 +12,27 @@ Current source baseline to import: **OmniForge v0.9.0**.
 
 GitHub's web uploader rejects the complete ZIP because the archive contains packaged/generated files. Use the repository importer instead. It extracts the archive locally, finds the real source root, excludes `dist`, Electron binaries, `node_modules`, caches, logs, and archives, then pushes the individual source files through Git.
 
-### Fastest method
+### Direct-path method
 
 Open Windows PowerShell and run:
 
 ```powershell
 $script = "$env:TEMP\Import-OmniForgeSource.ps1"
 Invoke-WebRequest "https://raw.githubusercontent.com/nickbyrum2469/OmniForge/main/tools/Import-OmniForgeSource.ps1" -OutFile $script
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -ArchivePath "C:\Users\nickb\Downloads\Compressed\OmniForge-3D-Engine-v0.9.0.zip"
 ```
 
-Select the recompressed v0.9 ZIP when prompted. The helper installs Git and GitHub CLI through `winget` when needed, opens one GitHub browser login, clones this repository, copies only authoritative source files, records the archive checksum, commits, and pushes to `main`.
+The helper installs Git and GitHub CLI through `winget` when needed, checks authentication without triggering the Windows PowerShell 5.1 native-stderr failure, opens one GitHub browser login when necessary, clones this repository, copies only authoritative source files, records the archive checksum, commits, and pushes to `main`.
+
+### File-picker method
+
+Omit `-ArchivePath` to select the ZIP interactively:
+
+```powershell
+$script = "$env:TEMP\Import-OmniForgeSource.ps1"
+Invoke-WebRequest "https://raw.githubusercontent.com/nickbyrum2469/OmniForge/main/tools/Import-OmniForgeSource.ps1" -OutFile $script
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script
+```
 
 The source must end up directly in the repository root:
 
@@ -52,7 +62,7 @@ After the source is present, development uses milestone branches and pull reques
 - Implement category-aware terrain-contact placement for props, trees, vehicles, rocks, and buildings.
 - Clean the Assets, Marketplace, Jobs, and inspector workflows.
 - Add authoritative foliage species, families, biomes, deterministic placement, exclusions, wind, seasons, streaming, and low-end budgets.
-- Add optimized hybrid lighting, time, atmosphere, celestial bodies, stars, clouds, and weather.
+- Add optimized hybrid lighting, a dedicated atmosphere system, time, celestial bodies, stars, clouds, and weather.
 - Preserve every approved v0.5-v0.9 system.
 
 See issue #2 for the full acceptance plan. Water remains the dedicated milestone immediately after this pass.
