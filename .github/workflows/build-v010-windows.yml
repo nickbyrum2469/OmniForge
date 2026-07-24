@@ -53,7 +53,13 @@ jobs:
 
       - name: Verify source before packaging
         shell: pwsh
-        run: npm run verify
+        run: |
+          $stdout = Join-Path $PWD "package-verify.stdout.log"
+          $stderr = Join-Path $PWD "package-verify.stderr.log"
+          $process = Start-Process npm.cmd -ArgumentList @("run", "verify") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if (Test-Path $stdout) { Get-Content $stdout }
+          if (Test-Path $stderr) { Get-Content $stderr }
+          if ($process.ExitCode -ne 0) { throw "OmniForge package verification failed with exit code $($process.ExitCode)." }
 
       - name: Build Windows desktop package
         shell: pwsh
