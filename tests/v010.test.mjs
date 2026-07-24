@@ -303,7 +303,7 @@ test('v0.10 existing Ground button and World tab synchronize through authoritati
 test('v0.10 bootstrap serves world systems and upgrades the existing Ground command', async () => {
   const port = await freePort();
   const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'omniforge-v010-runtime-'));
-  const child = spawn(process.execPath, ['server/v010-bootstrap.mjs'], {
+  const child = spawn(process.execPath, ['server/v011-bootstrap.mjs'], {
     cwd: ROOT,
     env: {
       ...process.env,
@@ -317,7 +317,7 @@ test('v0.10 bootstrap serves world systems and upgrades the existing Ground comm
   child.stderr.on('data', chunk => { stderr += chunk.toString(); });
   try {
     const health = await waitForHealth(port);
-    assert.equal(health.version, '0.10.0');
+    assert.equal(health.version, '0.11.0');
 
     const initial = await requestJson(port, '/api/v010/world');
     assert.equal(initial.status, 200);

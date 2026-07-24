@@ -1,3 +1,5 @@
+import { terrainHeightAt as sharedTerrainHeightAt, terrainNormalAt as sharedTerrainNormalAt, distanceToPaths as sharedDistanceToPaths } from '../app/worldgen.js';
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
 const now = () => new Date().toISOString();
 
@@ -9,60 +11,11 @@ export function seededRandom(seed = 1) {
   };
 }
 
-export function terrainHeightAt(terrain, x, z) {
-  if (!terrain) return 0;
-  const p = terrain.transform?.position || [0, 0, 0];
-  const s = terrain.transform?.scale || [1, 1, 1];
-  const props = terrain.properties || {};
-  const lx = (x - p[0]) / (s[0] || 1);
-  const lz = (z - p[2]) / (s[2] || 1);
-  const seed = Number(props.seed || 0);
-  const f = Number(props.frequency || 0.05);
-  const a = Number(props.amplitude || 0);
-  const n1 = Math.sin((lx + seed * 2.13) * f) * Math.cos((lz - seed * 0.73) * f * 1.17);
-  const n2 = Math.sin((lx + lz) * f * 0.47 + seed * 1.91) * 0.48;
-  const n3 = Math.cos((lx * 0.37 - lz * 0.61) * f * 1.9 - seed) * 0.22;
-  const n4 = Math.sin((lx * 0.73 + lz * 0.19) * f * 3.4 + seed * 0.31) * 0.09;
-  return p[1] + (n1 + n2 + n3 + n4) * a * (s[1] || 1);
-}
+export function terrainHeightAt(terrain, x, z, paths = []) { return sharedTerrainHeightAt(terrain, x, z, paths); }
 
-export function terrainNormalAt(terrain, x, z, step = 0.35) {
-  const hL = terrainHeightAt(terrain, x - step, z);
-  const hR = terrainHeightAt(terrain, x + step, z);
-  const hD = terrainHeightAt(terrain, x, z - step);
-  const hU = terrainHeightAt(terrain, x, z + step);
-  const nx = hL - hR;
-  const ny = step * 2;
-  const nz = hD - hU;
-  const length = Math.hypot(nx, ny, nz) || 1;
-  return [nx / length, ny / length, nz / length];
-}
+export function terrainNormalAt(terrain, x, z, paths = [], step = 0.35) { return sharedTerrainNormalAt(terrain, x, z, paths, step); }
 
-function segmentDistance(x, z, a, b) {
-  const vx = b[0] - a[0];
-  const vz = b[1] - a[1];
-  const wx = x - a[0];
-  const wz = z - a[1];
-  const den = vx * vx + vz * vz || 1;
-  const t = clamp((wx * vx + wz * vz) / den, 0, 1);
-  return Math.hypot(x - (a[0] + vx * t), z - (a[1] + vz * t));
-}
-
-export function distanceToPaths(paths, x, z) {
-  let nearest = Infinity;
-  for (const object of paths || []) {
-    const pts = object.properties?.points || [];
-    const ox = object.transform?.position?.[0] || 0;
-    const oz = object.transform?.position?.[2] || 0;
-    for (let i = 0; i < pts.length - 1; i += 1) {
-      nearest = Math.min(
-        nearest,
-        segmentDistance(x, z, [pts[i][0] + ox, pts[i][1] + oz], [pts[i + 1][0] + ox, pts[i + 1][1] + oz]) - Number(object.properties?.width || 3) / 2
-      );
-    }
-  }
-  return nearest;
-}
+export function distanceToPaths(paths, x, z) { return sharedDistanceToPaths(paths, x, z); }
 
 export function defaultWorldSettings(existing = {}) {
   return {
@@ -317,11 +270,11 @@ export function generateFoliagePlacements({ scene, species, center = [0, 0, 0], 
     if (blocked) continue;
     if (placements.some(item => Math.hypot(item.position[0] - x, item.position[2] - z) < spacing)) continue;
 
-    const normal = terrainNormalAt(terrain, x, z);
+    const normal = terrainNormalAt(terrain, x, z, paths);
     const slope = Math.acos(clamp(normal[1], -1, 1)) * 180 / Math.PI;
     if (slope > Number(species.maxSlope || 42)) continue;
     const scale = Number(species.scaleMin || 0.85) + random() * (Number(species.scaleMax || 1.2) - Number(species.scaleMin || 0.85));
-    const y = terrainHeightAt(terrain, x, z) - Number(species.rootBurial || 0.08);
+    const y = terrainHeightAt(terrain, x, z, paths) - Number(species.rootBurial || 0.08);
     placements.push({
       position: [x, y, z],
       rotation: [0, random() * 360, 0],

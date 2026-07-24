@@ -27,10 +27,15 @@ function currentSnapshot() {
 }
 
 function applyPayload(payload, forceSelection = false) {
-  foundation = payload;
+  if (payload?.presets || payload?.pathDiagnostics || payload?.foundation) foundation = payload;
   if (payload?.state) bridge()?.applyState?.(payload.state, { forceSelection });
   refreshToolbar();
   enhanceInspector();
+}
+
+async function applyMutation(payload, forceSelection = true) {
+  if (payload?.state) bridge()?.applyState?.(payload.state, { forceSelection });
+  await refreshFoundation();
 }
 
 async function refreshFoundation() {
@@ -136,6 +141,9 @@ function enhanceInspector() {
   const container = $('#inspectorContent');
   const object = selectedObject();
   if (!container || !object) return;
+  const signature = `${object.id}:${currentSnapshot()?.state?.engine?.revision || 0}:${foundation?.terrainDiagnostics?.checkedAt || ''}`;
+  if (container.dataset.v011Signature === signature && container.querySelector('[data-v011-panel]')) return;
+  container.dataset.v011Signature = signature;
   container.querySelectorAll('[data-v011-panel]').forEach(node => node.remove());
   const reference = referencePanel(object);
   if (object.type === 'terrain') container.insertAdjacentHTML('beforeend', terrainPanel(object));
@@ -166,7 +174,7 @@ function enhanceInspector() {
 
 async function updateTerrain(id, properties) {
   try {
-    applyPayload(await api(`/api/v011/terrain/${encodeURIComponent(id)}`, { method: 'PATCH', body: { properties } }), true);
+    await applyMutation(await api(`/api/v011/terrain/${encodeURIComponent(id)}`, { method: 'PATCH', body: { properties } }), true);
     bridge()?.showToast?.('Terrain regenerated from stable world-space coordinates', 'success');
   } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
 }
@@ -174,35 +182,40 @@ async function updateTerrain(id, properties) {
 async function expandWorld(id, direction) {
   const amount = Number(selectedObject()?.properties?.expandStep || 100);
   try {
-    applyPayload(await api(`/api/v011/terrain/${encodeURIComponent(id)}/expand`, { method: 'POST', body: { direction, amount } }), true);
+    await applyMutation(await api(`/api/v011/terrain/${encodeURIComponent(id)}/expand`, { method: 'POST', body: { direction, amount } }), true);
     bridge()?.showToast?.(`Expanded world ${direction} by ${amount} units`, 'success');
   } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
 }
 
 async function updatePath(id, properties) {
   try {
-    applyPayload(await api(`/api/v011/path/${encodeURIComponent(id)}`, { method: 'PATCH', body: { properties } }), true);
+    await applyMutation(await api(`/api/v011/path/${encodeURIComponent(id)}`, { method: 'PATCH', body: { properties } }), true);
     bridge()?.showToast?.('Spline and grade profile updated', 'success');
   } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
 }
 
 async function pathAction(id, action, body = {}) {
   try {
-    applyPayload(await api(`/api/v011/path/${encodeURIComponent(id)}/${action}`, { method: 'POST', body }), true);
+    await applyMutation(await api(`/api/v011/path/${encodeURIComponent(id)}/${action}`, { method: 'POST', body }), true);
     splineEditPathId = action === 'split' ? null : splineEditPathId;
     bridge()?.showToast?.(action === 'split' ? 'Path split into connected spline objects' : 'Path direction reversed', 'success');
   } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
 }
 
 function installToolbar() {
-  if ($('#splineToggle')) return;
-  const grid = $('#gridToggle')?.closest('label');
-  if (!grid) return;
-  const label = document.createElement('label');
-  label.className = 'toolbar-check';
-  label.innerHTML = '<input id="splineToggle" type="checkbox" checked><span>Splines</span>';
-  grid.insertAdjacentElement('afterend', label);
-  $('#splineToggle').addEventListener('change', async event => {
+  let input = $('#splineToggle');
+  if (!input) {
+    const grid = $('#gridToggle')?.closest('label');
+    if (!grid) return;
+    const label = document.createElement('label');
+    label.className = 'toolbar-check';
+    label.innerHTML = '<input id="splineToggle" type="checkbox" checked><span>Splines</span>';
+    grid.insertAdjacentElement('afterend', label);
+    input = $('#splineToggle');
+  }
+  if (input.dataset.v011Bound) return;
+  input.dataset.v011Bound = 'true';
+  input.addEventListener('change', async event => {
     try {
       applyPayload(await api('/api/v011/scene-settings', { method: 'PATCH', body: { splinesVisible: event.target.checked } }));
     } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
@@ -295,7 +308,7 @@ async function finishNodeDrag(event) {
   draggingNode = null;
   if (!point) return;
   try {
-    applyPayload(await api(`/api/v011/path/${encodeURIComponent(drag.pathId)}/node/${drag.index}`, { method: 'PATCH', body: { x: point[0], z: point[1] } }), true);
+    await applyMutation(await api(`/api/v011/path/${encodeURIComponent(drag.pathId)}/node/${drag.index}`, { method: 'PATCH', body: { x: point[0], z: point[1] } }), true);
   } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
 }
 
@@ -318,7 +331,7 @@ function installViewportEditing() {
     const point = bridge()?.renderer?.()?.terrainPointFromScreen?.(snapshot.scene, snapshot.camera, event.clientX, event.clientY);
     if (!point) return bridge()?.showToast?.('The cursor did not hit terrain.', 'error');
     try {
-      applyPayload(await api(`/api/v011/path/${encodeURIComponent(splineEditPathId)}/node`, { method: 'POST', body: { x: point[0], z: point[2] } }), true);
+      await applyMutation(await api(`/api/v011/path/${encodeURIComponent(splineEditPathId)}/node`, { method: 'POST', body: { x: point[0], z: point[2] } }), true);
       bridge()?.showToast?.('Spline node inserted', 'success');
     } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
   }, true);

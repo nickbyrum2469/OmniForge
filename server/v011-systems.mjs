@@ -1,5 +1,6 @@
 import {
   clamp,
+  TERRAIN_PRESETS,
   normalizeTerrainProperties,
   normalizePathProperties,
   migrateSceneWorldFoundation,
@@ -139,35 +140,27 @@ export function pathDiagnostics(pathObject, terrain) {
   const samples = samplePathSpline(pathObject, { spacing: Math.max(0.5, properties.width * 0.3) });
   const profile = compilePathProfile(pathObject, terrain);
   let rawMaxGrade = 0, compiledMaxGrade = 0, estimatedCut = 0, estimatedFill = 0;
-  for (let index = 1; index < samples.length; index += 1) {
-    const a = samples[index - 1], b = samples[index];
+  for (let index = 1; index < profile.length; index += 1) {
+    const a = profile[index - 1], b = profile[index];
     const distance = Math.max(0.001, Math.hypot(b.x - a.x, b.z - a.z));
     const rawA = terrainBaseHeightAt(terrain, a.x, a.z), rawB = terrainBaseHeightAt(terrain, b.x, b.z);
     rawMaxGrade = Math.max(rawMaxGrade, Math.abs(rawB - rawA) / distance * 100);
-    compiledMaxGrade = Math.max(compiledMaxGrade, Math.abs(profile[index].y - profile[index - 1].y) / distance * 100);
-    const base = rawB, target = profile[index].y;
-    if (target < base) estimatedCut += base - target; else estimatedFill += target - base;
+    compiledMaxGrade = Math.max(compiledMaxGrade, Math.abs(b.y - a.y) / distance * 100);
+    if (b.y < rawB) estimatedCut += rawB - b.y; else estimatedFill += b.y - rawB;
   }
   return {
-    schemaVersion: 1,
-    nodeCount: properties.points.length,
-    sampleCount: samples.length,
-    spline: properties.spline,
-    rawMaxGradePercent: rawMaxGrade,
-    compiledMaxGradePercent: compiledMaxGrade,
-    configuredMaxGradePercent: properties.maxGradePercent,
-    estimatedCut,
-    estimatedFill,
-    carveTerrain: properties.carveTerrain,
-    validation: compiledMaxGrade <= properties.maxGradePercent + 0.15 ? 'passed' : 'failed',
-    checkedAt: now()
+    schemaVersion: 1, nodeCount: properties.points.length, sampleCount: samples.length, profileSampleCount: profile.length, spline: properties.spline,
+    rawMaxGradePercent: rawMaxGrade, compiledMaxGradePercent: compiledMaxGrade, configuredMaxGradePercent: properties.maxGradePercent,
+    estimatedCut, estimatedFill, carveTerrain: properties.carveTerrain,
+    validation: compiledMaxGrade <= properties.maxGradePercent + 0.15 ? 'passed' : 'failed', checkedAt: now()
   };
 }
 
 export function updateTerrainProperties(terrain, patch = {}) {
   const current = normalizeTerrainProperties(terrain.properties || {}, terrain.transform || {});
   const protectedKeys = new Set(['bounds', 'sizeX', 'sizeZ']);
-  const next = { ...current };
+  const selectedPreset = patch.preset && TERRAIN_PRESETS[patch.preset] ? TERRAIN_PRESETS[patch.preset] : null;
+  const next = selectedPreset ? { ...current, ...selectedPreset, preset: patch.preset } : { ...current };
   for (const [key, value] of Object.entries(patch || {})) {
     if (protectedKeys.has(key)) continue;
     next[key] = value;

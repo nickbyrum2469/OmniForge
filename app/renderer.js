@@ -3,6 +3,7 @@ import {
   mat4Identity, mat4Multiply, mat4Perspective, mat4Ortho, mat4LookAt, mat4Invert,
   transformPoint, modelMatrix, normalMatrix3, hexToRgb, cameraForward
 } from './math.js';
+import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, samplePathSpline, normalizeTerrainProperties, normalizePathProperties, terrainBounds } from './worldgen.js';
 
 function compile(gl,type,source){
   const shader=gl.createShader(type); gl.shaderSource(shader,source); gl.compileShader(shader);
@@ -388,67 +389,26 @@ function cylinderMesh(seg=32){
   return meshData(p,n,idx,uv);
 }
 
-export function terrainHeight(terrain,x,z){
-  if(!terrain)return 0;
-  const p=terrain.transform.position,s=terrain.transform.scale,props=terrain.properties;
-  const lx=(x-p[0])/(s[0]||1),lz=(z-p[2])/(s[2]||1),seed=Number(props.seed||0),f=Number(props.frequency||.05),a=Number(props.amplitude||0);
-  const n1=Math.sin((lx+seed*2.13)*f)*Math.cos((lz-seed*.73)*f*1.17);
-  const n2=Math.sin((lx+lz)*f*.47+seed*1.91)*.48;
-  const n3=Math.cos((lx*.37-lz*.61)*f*1.9-seed)*.22;
-  const n4=Math.sin((lx*.73+lz*.19)*f*3.4+seed*.31)*.09;
-  return p[1]+(n1+n2+n3+n4)*a*(s[1]||1);
-}
-function segmentDistance(x,z,a,b){
-  const vx=b[0]-a[0],vz=b[1]-a[1],wx=x-a[0],wz=z-a[1],den=vx*vx+vz*vz||1;
-  const t=clamp((wx*vx+wz*vz)/den,0,1),dx=x-(a[0]+vx*t),dz=z-(a[1]+vz*t);
-  return Math.hypot(dx,dz);
-}
-export function pathBlendAt(paths,x,z){
-  let result=0;
-  for(const pathObject of paths||[]){
-    if(!pathObject.visible)continue;
-    const pts=pathObject.properties.points||[],ox=pathObject.transform.position[0]||0,oz=pathObject.transform.position[2]||0;
-    const width=Number(pathObject.properties.width||3),shoulder=Math.max(.05,Number(pathObject.properties.blendDistance??2.5));
-    const irregularity=Number(pathObject.properties.edgeNoise??.45);
-    let d=Infinity;
-    for(let i=0;i<pts.length-1;i++)d=Math.min(d,segmentDistance(x,z,[pts[i][0]+ox,pts[i][1]+oz],[pts[i+1][0]+ox,pts[i+1][1]+oz]));
-    const noise=(Math.sin(x*.71+z*.29)+Math.sin(z*1.17-x*.19)*.55)*irregularity*.22;
-    const blend=1-smoothstep(width*.5+noise,width*.5+shoulder+noise,d);
-    result=Math.max(result,blend);
-  }
-  return clamp(result,0,1);
-}
+export function terrainHeight(terrain,x,z,paths=[]){return sharedTerrainHeightAt(terrain,x,z,paths);}
+export function pathBlendAt(paths,x,z){return sharedPathBlendAt(paths,x,z);}
 function terrainMesh(object,paths){
-  const props=object.properties,res=clamp(Math.round(Number(props.resolution||64)),4,192),size=Number(props.size||80),p=[],n=[],idx=[],uv=[],blends=[];
-  for(let z=0;z<=res;z++)for(let x=0;x<=res;x++){
-    const lx=(x/res-.5)*size,lz=(z/res-.5)*size;
-    const y=terrainHeight({...object,transform:{...object.transform,position:[0,0,0],scale:[1,1,1]}},lx,lz);
-    p.push(lx,y,lz);n.push(0,1,0);uv.push(x/res,z/res);
-    const wx=object.transform.position[0]+lx*object.transform.scale[0],wz=object.transform.position[2]+lz*object.transform.scale[2];
-    blends.push(pathBlendAt(paths,wx,wz));
+  const props=normalizeTerrainProperties(object.properties||{},object.transform||{}),resX=clamp(Math.round(Number(props.resolutionX||props.resolution||128)),8,256),resZ=clamp(Math.round(Number(props.resolutionZ||props.resolution||128)),8,256),bounds=props.bounds,p=[],n=[],idx=[],uv=[],blends=[];
+  const ox=Number(object.transform.position?.[0]||0),oy=Number(object.transform.position?.[1]||0),oz=Number(object.transform.position?.[2]||0);
+  for(let z=0;z<=resZ;z++)for(let x=0;x<=resX;x++){
+    const wx=lerp(bounds.minX,bounds.maxX,x/resX),wz=lerp(bounds.minZ,bounds.maxZ,z/resZ),wy=terrainHeight(object,wx,wz,paths);
+    p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push(x/resX,z/resZ);blends.push(pathBlendAt(paths,wx,wz));
   }
-  for(let z=0;z<res;z++)for(let x=0;x<res;x++){const a=z*(res+1)+x,b=a+res+1;idx.push(a,b,a+1,b,b+1,a+1);}
+  for(let z=0;z<resZ;z++)for(let x=0;x<resX;x++){const a=z*(resX+1)+x,b=a+resX+1;idx.push(a,b,a+1,b,b+1,a+1);}
   const normals=new Float32Array(p.length);
-  for(let t=0;t<idx.length;t+=3){
-    const ia=idx[t]*3,ib=idx[t+1]*3,ic=idx[t+2]*3,A=[p[ia],p[ia+1],p[ia+2]],B=[p[ib],p[ib+1],p[ib+2]],C=[p[ic],p[ic+1],p[ic+2]],fn=normalize(cross(sub(B,A),sub(C,A)));
-    for(const ii of [ia,ib,ic]){normals[ii]+=fn[0];normals[ii+1]+=fn[1];normals[ii+2]+=fn[2];}
-  }
+  for(let t=0;t<idx.length;t+=3){const ia=idx[t]*3,ib=idx[t+1]*3,ic=idx[t+2]*3,A=[p[ia],p[ia+1],p[ia+2]],B=[p[ib],p[ib+1],p[ib+2]],C=[p[ic],p[ic+1],p[ic+2]],fn=normalize(cross(sub(B,A),sub(C,A)));for(const ii of [ia,ib,ic]){normals[ii]+=fn[0];normals[ii+1]+=fn[1];normals[ii+2]+=fn[2];}}
   for(let k=0;k<normals.length;k+=3){const q=normalize([normals[k],normals[k+1],normals[k+2]]);normals[k]=q[0];normals[k+1]=q[1];normals[k+2]=q[2];}
   return {positions:new Float32Array(p),normals,indices:new Uint32Array(idx),uvs:new Float32Array(uv),blends:new Float32Array(blends)};
 }
-function pathLineData(object,terrain){
-  const pts=object.properties.points||[],dense=[],ox=object.transform.position[0]||0,oz=object.transform.position[2]||0,width=Number(object.properties.width||3);
-  for(let i=0;i<pts.length-1;i++){
-    const a=pts[i],b=pts[i+1],dist=Math.hypot(b[0]-a[0],b[1]-a[1]),steps=Math.max(2,Math.ceil(dist/1.2));
-    for(let s=0;s<steps;s++){const t=s/steps;dense.push([a[0]+(b[0]-a[0])*t+ox,a[1]+(b[1]-a[1])*t+oz]);}
-  }
-  if(pts.length)dense.push([pts.at(-1)[0]+ox,pts.at(-1)[1]+oz]);
-  const center=[],edges=[];
+function pathLineData(object,terrain,paths){
+  const properties=normalizePathProperties(object.properties||{},object.transform||{}),dense=samplePathSpline(object,{spacing:Math.max(.45,Number(properties.width||3)*.28)}),width=Number(properties.width||3),center=[],edges=[];
   for(let i=0;i<dense.length-1;i++){
-    const a=dense[i],b=dense[i+1],dir=normalize([b[0]-a[0],0,b[1]-a[1]]),side=normalize([-dir[2],0,dir[0]]);
-    const ay=terrainHeight(terrain,a[0],a[1])+.09,by=terrainHeight(terrain,b[0],b[1])+.09;
-    center.push(a[0],ay,a[1],b[0],by,b[1]);
-    for(const sign of [-1,1])edges.push(a[0]+side[0]*width*.5*sign,ay,a[1]+side[2]*width*.5*sign,b[0]+side[0]*width*.5*sign,by,b[1]+side[2]*width*.5*sign);
+    const a=dense[i],b=dense[i+1],dir=normalize([b.x-a.x,0,b.z-a.z]),side=normalize([-dir[2],0,dir[0]]),ay=terrainHeight(terrain,a.x,a.z,paths)+Number(properties.surfaceOffset||.03)+.06,by=terrainHeight(terrain,b.x,b.z,paths)+Number(properties.surfaceOffset||.03)+.06;
+    center.push(a.x,ay,a.z,b.x,by,b.z);for(const sign of [-1,1])edges.push(a.x+side[0]*width*.5*sign,ay,a.z+side[2]*width*.5*sign,b.x+side[0]*width*.5*sign,by,b.z+side[2]*width*.5*sign);
   }
   return {center,edges};
 }
@@ -552,16 +512,19 @@ export class Renderer3D{
   pathBuffers(pathObject,scene){
     const terrain=scene.objects.find(o=>o.type==='terrain'),signature=JSON.stringify([pathObject.properties,pathObject.transform,terrain?.properties,terrain?.transform]),cached=this.pathLines.get(pathObject.id);if(cached?.signature===signature)return cached;
     if(cached){for(const item of [cached.center,cached.edges])if(item){this.gl.deleteVertexArray(item.vao);this.gl.deleteBuffer(item.buffer);}}
-    const data=pathLineData(pathObject,terrain),next={signature,center:createLineBuffer(this.gl,data.center),edges:createLineBuffer(this.gl,data.edges)};this.pathLines.set(pathObject.id,next);return next;
+    const data=pathLineData(pathObject,terrain,scene.objects.filter(object=>object.type==='path'&&object.visible!==false)),next={signature,center:createLineBuffer(this.gl,data.center),edges:createLineBuffer(this.gl,data.edges)};this.pathLines.set(pathObject.id,next);return next;
   }
-  cameraMatrices(camera){const forward=cameraForward(camera),target=add(camera.position,forward),view=mat4LookAt(camera.position,target),proj=mat4Perspective((camera.fov||62)*DEG,this.canvas.width/this.canvas.height,.08,1200);return {view,proj,viewProj:mat4Multiply(proj,view),inverse:mat4Invert(mat4Multiply(proj,view))};}
+  cameraMatrices(camera){const forward=cameraForward(camera),target=add(camera.position,forward),view=mat4LookAt(camera.position,target),proj=mat4Perspective((camera.fov||62)*DEG,this.canvas.width/this.canvas.height,.08,12000),viewProj=mat4Multiply(proj,view);return {view,proj,viewProj,inverse:mat4Invert(viewProj)};}
+  worldToScreen(camera,point){const rect=this.canvas.getBoundingClientRect(),{viewProj}=this.cameraMatrices(camera),x=point[0],y=point[1],z=point[2],cx=viewProj[0]*x+viewProj[4]*y+viewProj[8]*z+viewProj[12],cy=viewProj[1]*x+viewProj[5]*y+viewProj[9]*z+viewProj[13],cz=viewProj[2]*x+viewProj[6]*y+viewProj[10]*z+viewProj[14],cw=viewProj[3]*x+viewProj[7]*y+viewProj[11]*z+viewProj[15];if(cw<=.001)return {visible:false,x:0,y:0};const nx=cx/cw,ny=cy/cw;return {visible:cz/cw>=-1&&cz/cw<=1&&nx>=-1.2&&nx<=1.2&&ny>=-1.2&&ny<=1.2,x:(nx*.5+.5)*rect.width,y:(1-(ny*.5+.5))*rect.height};}
+  terrainHeightForScene(scene,x,z){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false),paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);return terrainHeight(terrain,x,z,paths);}
+  terrainPointFromScreen(scene,camera,x,y){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return null;const paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false),ray=this.rayFromScreen(camera,x,y),bounds=terrainBounds(terrain);let previous=null;for(let distance=0;distance<=12000;distance+=Math.max(1,Number(terrain.properties?.chunkSize||64)*.08)){const point=add(ray.origin,scale(ray.dir,distance));if(point[0]<bounds.minX-10||point[0]>bounds.maxX+10||point[2]<bounds.minZ-10||point[2]>bounds.maxZ+10)continue;const delta=point[1]-terrainHeight(terrain,point[0],point[2],paths);if(previous&&previous.delta>=0&&delta<=0){let low=previous.distance,high=distance;for(let step=0;step<18;step++){const mid=(low+high)*.5,p=add(ray.origin,scale(ray.dir,mid)),d=p[1]-terrainHeight(terrain,p[0],p[2],paths);if(d>0)low=mid;else high=mid;}const hit=add(ray.origin,scale(ray.dir,(low+high)*.5));return [hit[0],terrainHeight(terrain,hit[0],hit[2],paths),hit[2]];}previous={distance,delta};}return null;}
   lightState(scene){
     const sun=scene.objects.find(o=>o.type==='directionalLight'&&o.visible);let dir=[.45,-.8,.25],color=[1,.95,.82],intensity=1,shadows=true;
     if(sun){const rx=(sun.transform.rotation[0]||0)*DEG,ry=(sun.transform.rotation[1]||0)*DEG;dir=normalize([Math.sin(ry)*Math.cos(rx),Math.sin(rx),-Math.cos(ry)*Math.cos(rx)]);color=hexToRgb(sun.properties.color);intensity=Number(sun.properties.intensity||1);shadows=sun.properties.castsShadows!==false;}
     const points=scene.objects.filter(o=>o.type==='pointLight'&&o.visible).slice(0,4);return {dir,color,intensity,points,shadows};
   }
   lightMatrix(scene,lights){
-    const terrain=scene.objects.find(o=>o.type==='terrain'),size=Math.max(60,Number(terrain?.properties?.size||100)*.72),center=terrain?.transform?.position||[0,0,0],eye=sub(center,scale(lights.dir,size*.8)),view=mat4LookAt(eye,center,[0,1,0]),proj=mat4Ortho(-size,size,-size,size,1,size*3);return mat4Multiply(proj,view);
+    const terrain=scene.objects.find(o=>o.type==='terrain'),bounds=terrain?terrainBounds(terrain):{minX:-50,maxX:50,minZ:-50,maxZ:50},size=Math.max(60,Math.max(bounds.maxX-bounds.minX,bounds.maxZ-bounds.minZ)*.72),center=[(bounds.minX+bounds.maxX)*.5,terrain?.transform?.position?.[1]||0,(bounds.minZ+bounds.maxZ)*.5],eye=sub(center,scale(lights.dir,size*.8)),view=mat4LookAt(eye,center,[0,1,0]),proj=mat4Ortho(-size,size,-size,size,1,size*3);return mat4Multiply(proj,view);
   }
   renderShadow(scene,lightViewProj){
     const gl=this.gl;gl.bindFramebuffer(gl.FRAMEBUFFER,this.shadowFramebuffer);gl.viewport(0,0,this.shadowSize,this.shadowSize);gl.clear(gl.DEPTH_BUFFER_BIT);gl.colorMask(false,false,false,false);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT);gl.useProgram(this.depthProgram);
@@ -637,7 +600,7 @@ export class Renderer3D{
     const objects=scene.objects.filter(o=>o.visible&&!['empty','path'].includes(o.type)&&!foliageIds.has(o.id));objects.sort((a,b)=>{const rank=o=>o.type==='terrain'?-20:o.type==='decal'?20+Number(o.properties?.sortOrder||0):0;return rank(a)-rank(b);});for(const object of objects){const mesh=this.meshFor(object,scene);if(!mesh)continue;if(object.type==='decal'){gl.enable(gl.BLEND);gl.depthMask(false);gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);}this.drawMesh(object,mesh,viewProj,lightViewProj,scene,object.id===selectedId,camera,lights);if(object.type==='decal'){gl.disable(gl.POLYGON_OFFSET_FILL);gl.depthMask(true);gl.enable(gl.CULL_FACE);}}
     for(const instances of foliageGroups.values()){const object=instances[0],mesh=this.meshFor(object,scene);if(mesh)this.drawMesh(object,mesh,viewProj,lightViewProj,scene,false,camera,lights,instances);}
     this.ensureGrid(scene);if(scene.settings.gridVisible)this.drawLines(this.grid,mat4Identity(),viewProj,[.45,.56,.68,.18]);
-    for(const pathObject of scene.objects.filter(o=>o.type==='path'&&o.visible)){const buffers=this.pathBuffers(pathObject,scene),selected=pathObject.id===selectedId;this.drawLines(buffers.edges,mat4Identity(),viewProj,selected?[.83,.62,1,.9]:[.30,.22,.15,.28],selected?2:1);if(selected)this.drawLines(buffers.center,mat4Identity(),viewProj,[.92,.8,1,1],2);}
+    if(scene.settings.splinesVisible!==false)for(const pathObject of scene.objects.filter(o=>o.type==='path'&&o.visible&&o.properties?.showSpline!==false)){const buffers=this.pathBuffers(pathObject,scene),selected=pathObject.id===selectedId;this.drawLines(buffers.edges,mat4Identity(),viewProj,selected?[.83,.62,1,.9]:[.30,.22,.15,.28],selected?2:1);if(selected)this.drawLines(buffers.center,mat4Identity(),viewProj,[.92,.8,1,1],2);}
     const selected=scene.objects.find(o=>o.id===selectedId);if(selected&&selected.visible&&!['terrain','path','empty'].includes(selected.type)){gl.disable(gl.DEPTH_TEST);let selectionTransform=selected.transform;if(selected.type==='model'){const asset=this.assets.find(item=>item.type==='model'&&item.id===selected.properties?.assetId),bounds=asset?.bounds;if(bounds)selectionTransform={position:[selected.transform.position[0]+(bounds.center?.[0]||0)*selected.transform.scale[0],selected.transform.position[1]+(bounds.center?.[1]||0)*selected.transform.scale[1],selected.transform.position[2]+(bounds.center?.[2]||0)*selected.transform.scale[2]],rotation:selected.transform.rotation,scale:[Math.max(.02,Math.abs((bounds.size?.[0]||1)*selected.transform.scale[0])),Math.max(.02,Math.abs((bounds.size?.[1]||1)*selected.transform.scale[1])),Math.max(.02,Math.abs((bounds.size?.[2]||1)*selected.transform.scale[2]))]};}this.drawLines(this.selectionBox,modelMatrix(selectionTransform),viewProj,[.72,.45,1,1],2);gl.enable(gl.DEPTH_TEST);}
   }
   rayFromScreen(camera,x,y){const rect=this.canvas.getBoundingClientRect(),nx=((x-rect.left)/rect.width)*2-1,ny=1-((y-rect.top)/rect.height)*2,{inverse}=this.cameraMatrices(camera),near=transformPoint(inverse,[nx,ny,-1]),far=transformPoint(inverse,[nx,ny,1]);return {origin:[...camera.position],dir:normalize(sub(far,near))};}

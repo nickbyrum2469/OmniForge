@@ -10,8 +10,9 @@ import { terrainHeight } from '../app/renderer.js';
 import { createJob, cancelJob, retryJob, clearCompletedJobs } from '../server/job-manager.mjs';
 import { searchMarketplace, marketplaceDetails, prepareMarketplaceDownload, resolveMarketplaceImportFiles, createMaterialFromMarketplaceDownload, inspectDownloadedJob } from '../server/marketplace.mjs';
 import { v010Tools, callV010Tool } from './v010-tools.mjs';
+import { v011Tools, callV011Tool } from './v011-tools.mjs';
 
-const SERVER_INFO={name:'omniforge',version:'0.10.0'};
+const SERVER_INFO={name:'omniforge',version:'0.11.0'};
 const now=()=>new Date().toISOString();
 
 function upsertAssetRecipe(state,asset){
@@ -22,7 +23,7 @@ function upsertAssetRecipe(state,asset){
   return recipe;
 }
 
-const tools=[...v010Tools,
+const tools=[...v011Tools,...v010Tools,
   {
     name:'omniforge_get_state',
     description:'Read the authoritative OmniForge project, active 3D scene, selected object, editor state, Codex command queue, and recent evidence.',
@@ -321,6 +322,8 @@ function sceneSummary(state){const scene=activeScene(state);return {engine:state
 function searchState(query){const state=readState(),scene=activeScene(state),q=String(query||'').toLowerCase(),includes=v=>JSON.stringify(v).toLowerCase().includes(q);return {objects:scene.objects.filter(includes),assets:state.assets.filter(includes),commands:state.commands.filter(includes).slice(0,30),evidence:state.evidence.filter(includes).slice(0,30),activity:state.activity.filter(includes).slice(0,30)};}
 
 async function callTool(name,args={}){
+  const v011Result=await callV011Tool(name,args);
+  if(v011Result.handled)return response(v011Result.value);
   const v010Result=await callV010Tool(name,args);
   if(v010Result.handled)return response(v010Result.value);
   switch(name){

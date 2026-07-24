@@ -8,7 +8,7 @@ const crypto = require('node:crypto');
 
 const APP_ROOT = path.resolve(__dirname, '..');
 const PRODUCT_NAME = 'OmniForge';
-const PRODUCT_VERSION = '0.10.0';
+const PRODUCT_VERSION = '0.11.0';
 const APP_ID = 'com.omniforge.editor';
 const ICON = path.join(APP_ROOT, 'resources', process.platform === 'win32' ? 'omniforge-icon.ico' : 'omniforge-icon.png');
 
@@ -116,7 +116,7 @@ async function startRuntime() {
   await cleanupStaleRuntime();
   const port=await findFreePort();
   const token=crypto.randomBytes(24).toString('hex');
-  const serverScript=path.join(APP_ROOT,'server','v010-bootstrap.mjs');
+  const serverScript=path.join(APP_ROOT,'server','v011-bootstrap.mjs');
   const logFile=fs.openSync(path.join(LOG_DIR,'runtime.log'),'a');
   engineProcess=spawn(process.execPath,[serverScript],{
     cwd:APP_ROOT,windowsHide:true,detached:process.platform!=='win32',stdio:['ignore',logFile,logFile],

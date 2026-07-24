@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 set "APP=%~dp0dist\OmniForge-win32-x64\OmniForge.exe"
 set "VERSION_FILE=%~dp0dist\OmniForge-win32-x64\version"
-set "EXPECTED_VERSION=OmniForge 0.9.0"
+set "EXPECTED_VERSION=OmniForge 0.11.0"
 set "NEEDS_BUILD=0"
 
 if not exist "%APP%" set "NEEDS_BUILD=1"
