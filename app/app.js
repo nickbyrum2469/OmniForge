@@ -1,5 +1,6 @@
 import { Renderer3D, terrainHeight } from './renderer.js';
 import { add, sub, scale, length, normalize, clamp, cameraForward, cameraRight } from './math.js';
+import { cloneCamera, shouldPreserveViewportCamera } from './viewport-state.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -67,6 +68,8 @@ let physicsAccumulator = 0;
 let localMutationAt = 0;
 let captureTimer = null;
 let cameraPersistTimer = null;
+let cameraDirty = false;
+let cameraMutationVersion = 0;
 let toastTimer = null;
 let materialSaveTimer = null;
 let surfacePreviewBaseline = null;
@@ -106,6 +109,7 @@ function selectedModelAsset(){return state?.assets?.find(asset=>asset.id===selec
 function selectedSurfaceRecipe(){const material=selectedMaterial();if(!material)return null;return state?.assets?.find(asset=>asset.type==='surfaceRecipe'&&(asset.id===material.surfaceRecipeId||asset.baseMaterialId===material.id))||null;}
 function setSaveState(status='saved'){lastKnownSaveState=status;if(!ui.saveStateBadge)return;ui.saveStateBadge.textContent=({saved:'Saved',dirty:'Unsaved',saving:'Saving…',error:'Save error'})[status]||status;ui.saveStateBadge.className=`save-state ${status}`;}
 function markLocalMutation() { localMutationAt = Date.now();setSaveState('dirty'); }
+function noteCameraMutation() { cameraDirty = true;cameraMutationVersion += 1;localMutationAt = Date.now(); }
 
 function showToast(message, type='') {
   clearTimeout(toastTimer);
@@ -140,10 +144,19 @@ function fitLayoutToViewport(layout){
 
 function applyState(nextState, options={}) {
   const previousSceneId = state?.activeSceneId;
+  const previousProjectId = state?.project?.id;
   const previousSelected = selectedId;
+  const liveCamera = cloneCamera(camera);
+  const preserveLiveCamera = shouldPreserveViewportCamera({
+    sameAuthority: Boolean(liveCamera && previousProjectId === nextState?.project?.id && previousSceneId === nextState?.activeSceneId),
+    navigationActive: viewportNavigationActive(),
+    cameraDirty,
+    requested: Boolean(options.preserveCamera)
+  });
   state = nextState;
   scene = activeScene();
-  camera = scene.editorCamera;
+  camera = preserveLiveCamera && liveCamera ? liveCamera : scene.editorCamera;
+  if (preserveLiveCamera && liveCamera) scene.editorCamera = cloneCamera(liveCamera);
   const hasSelection=state.selection&&Object.prototype.hasOwnProperty.call(state.selection,'objectId');
   selectedId = hasSelection ? (state.selection.objectId&&scene.objects.some(o=>o.id===state.selection.objectId)?state.selection.objectId:null) : scene.objects[0]?.id||null;
   if (previousSceneId === state.activeSceneId && previousSelected && scene.objects.some(o=>o.id===previousSelected) && !options.forceSelection) selectedId = previousSelected;
@@ -1014,7 +1027,18 @@ function frameAll() {
   const visible=scene.objects.filter(o=>o.visible&&o.type!=='directionalLight');if(!visible.length)return;
   const center=visible.reduce((sum,o)=>add(sum,o.transform.position),[0,0,0]).map(v=>v/visible.length);camera.position=[center[0]+38,center[1]+28,center[2]+44];camera.yaw=-.71;camera.pitch=-.39;persistCameraSoon();showToast('Framed active world');
 }
-function persistCameraSoon(){clearTimeout(cameraPersistTimer);cameraPersistTimer=setTimeout(()=>api('/api/editor',{method:'POST',body:{camera:{...camera,position:[...camera.position]}}}).then(next=>{state.engine.revision=next.engine.revision;}).catch(()=>{}),500);}
+function persistCameraSoon(){
+  noteCameraMutation();
+  clearTimeout(cameraPersistTimer);
+  const requestedVersion=cameraMutationVersion;
+  cameraPersistTimer=setTimeout(()=>{
+    const persistedCamera=cloneCamera(camera);
+    api('/api/editor',{method:'POST',body:{camera:persistedCamera}}).then(next=>{
+      state.engine.revision=next.engine.revision;
+      if(cameraMutationVersion===requestedVersion){cameraDirty=false;scene.editorCamera=cloneCamera(camera);}
+    }).catch(()=>{});
+  },500);
+}
 
 async function captureViewport(title='3D viewport capture') {
   try{
@@ -1091,7 +1115,7 @@ function updateCamera(dt) {
   if(!viewportNavigationActive())return;
   const forward=cameraForward(camera),right=cameraRight(camera),speed=Number(camera.moveSpeed||12)*(keys.has('ShiftLeft')||keys.has('ShiftRight')?Number(camera.fastMultiplier||3.5):1);let movement=[0,0,0];
   if(keys.has('KeyW'))movement=add(movement,forward);if(keys.has('KeyS'))movement=sub(movement,forward);if(keys.has('KeyD'))movement=add(movement,right);if(keys.has('KeyA'))movement=sub(movement,right);if(keys.has('Space'))movement[1]+=1;if(keys.has('ControlLeft')||keys.has('ControlRight'))movement[1]-=1;
-  if(length(movement)>.001){camera.position=add(camera.position,scale(normalize(movement),speed*dt));scene.editorCamera=camera;}
+  if(length(movement)>.001){camera.position=add(camera.position,scale(normalize(movement),speed*dt));scene.editorCamera=cloneCamera(camera);noteCameraMutation();}
 }
 
 function animationLoop(now) {
@@ -1238,7 +1262,7 @@ function bindEvents() {
     if(document.pointerLockElement===ui.viewport){dx=event.movementX;dy=event.movementY;}
     else if(viewportDragLook&&viewportDragLast){dx=event.clientX-viewportDragLast[0];dy=event.clientY-viewportDragLast[1];viewportDragLast=[event.clientX,event.clientY];}
     else return;
-    const sensitivity=Number(camera.lookSensitivity||.0023);camera.yaw+=dx*sensitivity*(camera.invertHorizontal?-1:1);camera.pitch=clamp(camera.pitch+dy*sensitivity*(camera.invertVertical?1:-1),-Math.PI/2+.02,Math.PI/2-.02);
+    const sensitivity=Number(camera.lookSensitivity||.0023);camera.yaw+=dx*sensitivity*(camera.invertHorizontal?-1:1);camera.pitch=clamp(camera.pitch+dy*sensitivity*(camera.invertVertical?1:-1),-Math.PI/2+.02,Math.PI/2-.02);scene.editorCamera=cloneCamera(camera);noteCameraMutation();
   });
   document.addEventListener('keydown',event=>{
     keys.add(event.code);
@@ -1259,7 +1283,7 @@ function bindEvents() {
 }
 
 async function pollRemoteState() {
-  if(!state||Date.now()-localMutationAt<900||state.editor.mode==='play')return;
+  if(!state||viewportNavigationActive()||cameraDirty||Date.now()-localMutationAt<900||state.editor.mode==='play')return;
   try{
     const remote=await api('/api/state');
     if(remote.engine.revision>state.engine.revision){
