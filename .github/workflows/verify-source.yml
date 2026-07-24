@@ -9,15 +9,19 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
+    if: github.actor != 'github-actions[bot]'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout
+      - name: Checkout authoritative branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
 
       - name: Detect source
         id: source
@@ -47,18 +51,29 @@ jobs:
           }
 
       - name: Verify source and tests
+        id: verify_source
         if: steps.source.outputs.present == 'true'
         shell: pwsh
         run: |
           $stdout = Join-Path $PWD "windows-verify.stdout.log"
           $stderr = Join-Path $PWD "windows-verify.stderr.log"
+          $combined = Join-Path $PWD "WINDOWS_VERIFY_ERROR.txt"
           $process = Start-Process npm.cmd -ArgumentList @("run", "verify", "--if-present") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-          if (Test-Path $stdout) { Get-Content $stdout }
-          if (Test-Path $stderr) { Get-Content $stderr }
-          if ($process.ExitCode -ne 0) { throw "OmniForge verification failed with exit code $($process.ExitCode)." }
+          @(
+            "OmniForge Windows verification exit code: $($process.ExitCode)"
+            "Generated: $(Get-Date -Format o)"
+            ""
+            "--- STDOUT ---"
+            (Get-Content $stdout -Raw -ErrorAction SilentlyContinue)
+            ""
+            "--- STDERR ---"
+            (Get-Content $stderr -Raw -ErrorAction SilentlyContinue)
+          ) | Set-Content $combined -Encoding UTF8
+          Get-Content $combined
+          "exit_code=$($process.ExitCode)" >> $env:GITHUB_OUTPUT
 
       - name: Audit packaged workers
-        if: steps.source.outputs.present == 'true'
+        if: steps.source.outputs.present == 'true' && steps.verify_source.outputs.exit_code == '0'
         shell: pwsh
         run: |
           $registered = @()
@@ -75,13 +90,29 @@ jobs:
           }
           Write-Host "Windows packaging includes the worker registry."
 
+      - name: Commit Windows failure diagnostics
+        if: steps.source.outputs.present == 'true' && steps.verify_source.outputs.exit_code != '0'
+        shell: pwsh
+        run: |
+          git config user.name "OmniForge Windows Verifier"
+          git config user.email "omniforge-windows-verifier@users.noreply.github.com"
+          git add WINDOWS_VERIFY_ERROR.txt
+          git commit -m "Record Windows v0.10 verification diagnostics"
+          git push origin HEAD:${{ github.head_ref || github.ref_name }}
+
       - name: Upload Windows verification diagnostics
         if: always() && steps.source.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: windows-verification-${{ github.run_id }}
           path: |
+            WINDOWS_VERIFY_ERROR.txt
             windows-verify.stdout.log
             windows-verify.stderr.log
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Fail when Windows verification failed
+        if: steps.source.outputs.present == 'true' && steps.verify_source.outputs.exit_code != '0'
+        shell: pwsh
+        run: throw "OmniForge Windows verification failed. See WINDOWS_VERIFY_ERROR.txt."
