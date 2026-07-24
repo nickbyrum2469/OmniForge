@@ -219,10 +219,15 @@ function runJob(jobId) {
     runtimeRoot: RUNTIME_ROOT,
     projectRoot: state.project.root
   };
-  const child = spawn(process.execPath, [workerFile, Buffer.from(JSON.stringify(payload)).toString('base64')], {
+  const requestFolder=path.join(RUNTIME_ROOT,'job-requests');
+  fs.mkdirSync(requestFolder,{recursive:true});
+  const requestFile=path.join(requestFolder,`${jobId}.json`);
+  fs.writeFileSync(requestFile,JSON.stringify(payload),'utf8');
+  const child = spawn(process.execPath, [workerFile, '--request-file', requestFile], {
     cwd: RUNTIME_ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true
+    windowsHide: true,
+    shell: false
   });
   active.set(jobId, child);
   let stdout = '';
@@ -255,9 +260,11 @@ function runJob(jobId) {
     for (const line of lines) consume(line);
   });
   child.stderr.on('data', chunk => { stderr += chunk.toString(); });
+  child.on('error', error => { stderr += `${error.stack||error.message}\n`; });
   child.on('exit', (code, signal) => {
     if (stdout.trim()) consume(stdout);
     active.delete(jobId);
+    fs.rmSync(requestFile,{force:true});
     const current = (readState().jobs || []).find(item => item.id === jobId);
     if (current && !['succeeded', 'failed', 'cancelled'].includes(current.state)) {
       updateJob(jobId, (next, root) => {
