@@ -1,9 +1,9 @@
 name: Build OmniForge v0.11 Windows
-# Final verification trigger for generated source commit 09e52f2371ecc0c4ef6024576e18de567438922a.
 
 on:
   push:
     branches:
+      - main
       - milestone-11/terrain-path-world-foundation
     paths:
       - app/**
@@ -13,11 +13,13 @@ on:
       - workers/**
       - tests/**
       - package.json
+      - START_DESKTOP.bat
+      - BUILD_DESKTOP_WINDOWS.bat
       - BUILD_DESKTOP_WINDOWS.ps1
       - .github/workflows/build-v011-windows.yml
   pull_request:
     branches:
-      - milestone-10/foliage-lighting-foundation
+      - main
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
@@ -25,7 +27,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: omniforge-v011-windows
+  group: omniforge-v011-windows-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -33,10 +35,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout authoritative v0.11 branch
+      - name: Checkout authoritative v0.11 source
         uses: actions/checkout@v4
         with:
-          ref: milestone-11/terrain-path-world-foundation
+          ref: ${{ github.head_ref || github.ref_name }}
           fetch-depth: 0
 
       - name: Set up Node.js
@@ -70,6 +72,7 @@ jobs:
           $required=@(
             'OmniForge.exe',
             'version',
+            'source-commit',
             'resources\app\server\v011-bootstrap.mjs',
             'resources\app\server\v011-api.mjs',
             'resources\app\server\v011-systems.mjs',
@@ -82,6 +85,9 @@ jobs:
           foreach($relative in $required){if(-not(Test-Path (Join-Path $output $relative) -PathType Leaf)){throw "Packaged v0.11 file is missing: $relative"}}
           $version=Get-Content (Join-Path $output 'version') -Raw
           if($version -notmatch 'OmniForge 0\.11\.0'){throw 'Packaged version marker is not v0.11.0.'}
+          $sourceCommit=(Get-Content (Join-Path $output 'source-commit') -Raw).Trim()
+          $checkedOutCommit=(git rev-parse HEAD).Trim()
+          if($sourceCommit -ne $checkedOutCommit){throw "Packaged source commit $sourceCommit does not match checked-out commit $checkedOutCommit."}
           $package=Get-Content (Join-Path $output 'resources\app\package.json') -Raw | ConvertFrom-Json
           if($package.version -ne '0.11.0' -or $package.main -ne 'desktop/main.cjs'){throw 'Packaged v0.11 metadata is invalid.'}
 
@@ -127,7 +133,7 @@ jobs:
       - name: Upload OmniForge v0.11 Windows package
         uses: actions/upload-artifact@v4
         with:
-          name: OmniForge-3D-Engine-v0.11.0-Windows-x64
+          name: OmniForge-3D-Engine-v0.11.0-Windows-x64-${{ github.ref_name }}
           path: |
             OmniForge-3D-Engine-v0.11.0-Windows-x64.zip
             OmniForge-3D-Engine-v0.11.0-Windows-x64.sha256
