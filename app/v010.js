@@ -140,6 +140,19 @@ function installWorldPanel() {
   if (renderBadge) renderBadge.textContent = 'HYBRID PBR + ATMOSPHERE';
 }
 
+function applyViewportEnvironment() {
+  const wrap = document.getElementById('viewportWrap');
+  const settings = snapshot?.scene?.settings || snapshot?.state?.scenes?.find(item => item.id === snapshot?.state?.activeSceneId)?.settings || {};
+  if (!wrap) return;
+  wrap.style.setProperty('--v010-stars', String(Math.max(0, Math.min(1, Number(settings.starIntensity || 0) / 1.5))));
+  wrap.style.setProperty('--v010-star-density', String(Math.max(0.12, Math.min(1, Number(settings.starDensity || 0.72)))));
+  wrap.style.setProperty('--v010-milky-way', String(Math.max(0, Math.min(1, Number(settings.milkyWayIntensity || 0) / 1.5))));
+  wrap.style.setProperty('--v010-aurora', String(Math.max(0, Math.min(1, Number(settings.auroraIntensity || 0) / 1.5))));
+  wrap.style.setProperty('--v010-clouds', String(Math.max(0, Math.min(0.95, Number(settings.cloudCoverage || 0) * (0.45 + Number(settings.cloudDensity || 0) * 0.55)))));
+  wrap.style.setProperty('--v010-cloud-speed', `${Math.max(18, 130 - Number(snapshot?.world?.clouds?.windSpeed || 12) * 4)}s`);
+  wrap.dataset.weather = String(snapshot?.world?.weather?.preset || 'clear');
+}
+
 function populate() {
   if (!snapshot?.world) return;
   const world = snapshot.world;
@@ -165,6 +178,7 @@ function populate() {
   field('v010Species').innerHTML = species.map(item => `<option value="${item.id}">${item.name}</option>`).join('');
   field('v010FoliageCount').textContent = `${species.length} species`;
   field('v010SelectedAsset').textContent = selectedAssetId() || 'none';
+  applyViewportEnvironment();
 }
 
 async function refresh() {

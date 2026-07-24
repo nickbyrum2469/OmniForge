@@ -163,16 +163,37 @@ export function applyWorldToScene(scene, world) {
   const bottom = mix(nightBottom, dayBottom, day);
   for (let i = 0; i < 3; i += 1) bottom[i] = Math.round(bottom[i] * (1 - twilight * 0.35) + sunrise[i] * twilight * 0.35);
 
-  const fogMultiplier = 1 - Number(world.weather.fog || 0) * 0.88;
+  const weatherPreset = String(world.weather.preset || 'clear');
+  const presetPrecipitation = { rain: 0.65, storm: 1, snow: 0.55 }[weatherPreset] || 0;
+  const presetFog = { fog: 0.72, rain: 0.18, storm: 0.24, snow: 0.14, overcast: 0.1 }[weatherPreset] || 0;
+  const precipitation = clamp(Math.max(Number(world.weather.precipitation || 0), presetPrecipitation), 0, 1);
+  const weatherFog = clamp(Math.max(Number(world.weather.fog || 0), presetFog), 0, 1);
+  const cloudCoverage = clamp(Number(world.clouds.coverage || 0), 0, 1);
+  const cloudDensity = clamp(Number(world.clouds.density || 0), 0, 1);
+  const cloudAttenuation = 1 - clamp(cloudCoverage * cloudDensity * Number(world.clouds.shadowStrength || 0.28), 0, 0.82);
+  const atmosphericHaze = clamp(Number(world.atmosphere.haze || 0) + Number(world.atmosphere.mie || 0) * 0.45 + Number(world.atmosphere.humidity || 0) * 0.18, 0, 0.9);
+  const fogMultiplier = Math.max(0.04, (1 - weatherFog * 0.88) * (1 - atmosphericHaze * 0.55));
   scene.settings = {
     ...(scene.settings || {}),
     skyTop: hex(top),
     skyBottom: hex(bottom),
     ambientColor: hex(mix([55, 69, 104], [190, 207, 224], day)),
-    ambientIntensity: 0.08 + day * 0.42 + Number(world.lighting.indirectStrength || 0.4) * 0.12,
-    fogNear: Math.max(6, Number(world.atmosphere.visibilityKm || 120) * 0.55 * Math.max(0.08, fogMultiplier)),
-    fogFar: Math.max(22, Number(world.atmosphere.visibilityKm || 120) * 2.2 * Math.max(0.08, fogMultiplier)),
-    exposure: clamp(Number(world.atmosphere.exposure || 1) * (0.82 + day * 0.18), 0.2, 3),
+    ambientIntensity: (0.08 + day * 0.42 + Number(world.lighting.indirectStrength || 0.4) * 0.12) * (0.72 + cloudAttenuation * 0.28),
+    fogNear: Math.max(6, Number(world.atmosphere.visibilityKm || 120) * 0.55 * fogMultiplier),
+    fogFar: Math.max(22, Number(world.atmosphere.visibilityKm || 120) * 2.2 * fogMultiplier),
+    exposure: clamp(Number(world.atmosphere.exposure || 1) * (0.82 + day * 0.18) * (0.88 + cloudAttenuation * 0.12), 0.2, 3),
+    weatherWetness: clamp(Math.max(Number(world.weather.wetness || 0), precipitation * (weatherPreset === 'snow' ? 0.2 : 0.85)), 0, 1),
+    weatherSnow: clamp(Math.max(Number(world.weather.snow || 0), weatherPreset === 'snow' ? precipitation : 0), 0, 1),
+    windDirection: Array.isArray(world.weather.windDirection) ? world.weather.windDirection.slice(0, 3) : [1, 0, 0.25],
+    windStrength: clamp(Math.max(Number(world.weather.windStrength || 0), weatherPreset === 'storm' ? 0.88 : weatherPreset === 'rain' ? 0.48 : 0), 0, 1),
+    cloudCoverage,
+    cloudDensity,
+    cloudAttenuation,
+    starIntensity: clamp(Number(world.sky.starIntensity || 0) * night * (1 - cloudCoverage * 0.8), 0, 3),
+    starDensity: clamp(Number(world.sky.starDensity || 0.72), 0, 1),
+    milkyWayIntensity: clamp(Number(world.sky.milkyWayIntensity || 0) * night * (1 - cloudCoverage * 0.7), 0, 3),
+    auroraIntensity: clamp(Number(world.sky.auroraIntensity || 0) * night * (1 - cloudCoverage * 0.5), 0, 3),
+    atmosphereQuality: world.atmosphere.quality || 'balanced',
     environmentV010: {
       ...world,
       sunElevation: elevation,
@@ -205,7 +226,7 @@ export function applyWorldToScene(scene, world) {
     ...(sun.properties || {}),
     celestialRole: 'sun',
     color: hex(mix([255, 123, 79], [255, 244, 214], day)),
-    intensity: Number(world.lighting.sunIntensity || 3.2) * Math.max(0.015, day),
+    intensity: Number(world.lighting.sunIntensity || 3.2) * Math.max(0.015, day) * cloudAttenuation,
     castsShadows: true,
     shadowQuality: world.lighting.shadowQuality,
     hybridLightingProfile: world.lighting.profile
