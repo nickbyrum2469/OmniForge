@@ -22,6 +22,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: omniforge-v010-final-windows
+  cancel-in-progress: true
+
 jobs:
   build-windows:
     runs-on: windows-latest
