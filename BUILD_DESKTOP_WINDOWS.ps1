@@ -34,7 +34,7 @@ Remove-Item (Join-Path $Resources 'default_app.asar') -Force -ErrorAction Silent
 $AppDir = Join-Path $Resources 'app'
 New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
 
-$Folders = @('app','server','bridge','desktop','assets','data','workspace','captures','logs','docs','scripts','tests','resources')
+$Folders = @('app','server','bridge','desktop','workers','assets','data','workspace','captures','logs','docs','scripts','tests','resources')
 foreach ($Folder in $Folders) {
   $Source = Join-Path $PSScriptRoot $Folder
   if (Test-Path $Source) { Copy-Item $Source (Join-Path $AppDir $Folder) -Recurse -Force }
@@ -48,7 +48,7 @@ foreach ($File in $Files) {
 @{
   name = 'omniforge'
   productName = 'OmniForge'
-  version = '0.9.0'
+  version = '0.10.0'
   private = $true
   main = 'desktop/main.cjs'
 } | ConvertTo-Json | Set-Content (Join-Path $AppDir 'package.json') -Encoding UTF8
@@ -64,12 +64,12 @@ $Executable = Join-Path $Output 'OmniForge.exe'
   --set-version-string InternalName 'OmniForge' `
   --set-version-string OriginalFilename 'OmniForge.exe' `
   --set-version-string LegalCopyright 'Copyright (c) 2026 OmniForge' `
-  --set-file-version '0.9.0.0' `
-  --set-product-version '0.9.0.0'
+  --set-file-version '0.10.0.0' `
+  --set-product-version '0.10.0.0'
 if ($LASTEXITCODE -ne 0) { throw "Failed to stamp OmniForge executable resources." }
 
 $VersionFile = Join-Path $Output 'version'
-"OmniForge 0.9.0`nElectron $ElectronVersion`nBuilt $(Get-Date -Format o)" | Set-Content $VersionFile -Encoding UTF8
+"OmniForge 0.10.0`nElectron $ElectronVersion`nBuilt $(Get-Date -Format o)" | Set-Content $VersionFile -Encoding UTF8
 Write-Host ""
 Write-Host "Desktop build created:" -ForegroundColor Green
 Write-Host (Join-Path $Output 'OmniForge.exe') -ForegroundColor Cyan

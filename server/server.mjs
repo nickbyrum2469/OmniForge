@@ -262,7 +262,7 @@ function acquireActiveProjectLock(state=readState()){
 
 
 async function handleApi(req, res, url) {
-  if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, port, name: 'OmniForge', version:'0.9.0', sessionToken, pid:process.pid, safeMode:process.env.OMNIFORGE_SAFE_MODE==='1' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, port, name: 'OmniForge', version:'0.10.0', sessionToken, pid:process.pid, safeMode:process.env.OMNIFORGE_SAFE_MODE==='1' });
   if (req.method === 'GET' && url.pathname === '/api/state') return json(res, 200, readState());
 
   if (req.method === 'GET' && url.pathname === '/api/providers') {

@@ -10,7 +10,7 @@ import { terrainHeight } from '../app/renderer.js';
 import { createJob, cancelJob, retryJob, clearCompletedJobs } from '../server/job-manager.mjs';
 import { searchMarketplace, marketplaceDetails, prepareMarketplaceDownload, resolveMarketplaceImportFiles, createMaterialFromMarketplaceDownload, inspectDownloadedJob } from '../server/marketplace.mjs';
 
-const SERVER_INFO={name:'omniforge',version:'0.9.0'};
+const SERVER_INFO={name:'omniforge',version:'0.10.0'};
 const now=()=>new Date().toISOString();
 
 function upsertAssetRecipe(state,asset){

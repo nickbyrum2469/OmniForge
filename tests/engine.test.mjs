@@ -194,7 +194,7 @@ test('Windows desktop builder pins and stamps the native executable metadata',()
     /ElectronVersion = '43\.2\.0'/, /RceditVersion = '2\.0\.0'/,
     /Get-FileHash -Algorithm SHA256/, /Rename-Item .*electron\.exe.*OmniForge\.exe/,
     /--set-icon/, /ProductName 'OmniForge'/, /FileDescription 'OmniForge AI-Native 3D Game Engine'/,
-    /--set-file-version '0\.9\.0\.0'/, /--set-product-version '0\.9\.0\.0'/
+    /--set-file-version '0\.10\.0\.0'/, /--set-product-version '0\.10\.0\.0'/
   ]) assert.match(source,pattern);
   assert.ok(fs.existsSync(path.join(ROOT,'resources','omniforge-icon.ico')));
 });
@@ -519,7 +519,7 @@ test('real provider health, project validation, cancellation, retry, and restart
   const server=spawn(process.execPath,['server/server.mjs'],{cwd:ROOT,env:{...process.env,OMNIFORGE_DATA_ROOT:runtime,OMNIFORGE_PORT:String(port),OMNIFORGE_SESSION_TOKEN:'provider-api-test'},stdio:['ignore','pipe','pipe']});
   let stderr='';server.stderr.on('data',chunk=>stderr+=chunk);
   try{
-    const health=await waitForHealth(port);assert.equal(health.version,'0.9.0');
+    const health=await waitForHealth(port);assert.equal(health.version,'0.10.0');
     const initial=await requestJson(port,'/api/state');assert.ok(initial.body.providers.some(provider=>provider.id==='local-worker-host'));
     const healthQueued=await postJson(port,'/api/providers/local-worker-host/health',{});assert.equal(healthQueued.status,202);const healthJob=await waitForJob(port,healthQueued.body.job.id);assert.equal(healthJob.state,'succeeded');assert.equal(healthJob.validation.state,'passed');assert.equal(healthJob.outputs[0].type,'hardware-report');
     const afterHealth=await requestJson(port,'/api/state');const provider=afterHealth.body.providers.find(item=>item.id==='local-worker-host');assert.ok(provider.status.lastHealthCheck);assert.equal(provider.status.state,'connected');
@@ -549,7 +549,7 @@ test('mocked Poly Haven search completes a real staged download job and imports 
   fs.writeFileSync(path.join(mockRoot,'poly-haven-files-marketplace-cube.json'),JSON.stringify({gltf:{'1k':{glb:{url:'https://mock.invalid/marketplace_cube.glb',localPath:fixture,size:fs.statSync(fixture).size,md5:crypto.createHash('md5').update(fs.readFileSync(fixture)).digest('hex')}}}}));
   const server=spawn(process.execPath,['server/server.mjs'],{cwd:ROOT,env:{...process.env,OMNIFORGE_DATA_ROOT:runtime,OMNIFORGE_PORT:String(port),OMNIFORGE_SESSION_TOKEN:'marketplace-api-test',OMNIFORGE_MARKETPLACE_MOCK_ROOT:mockRoot},stdio:['ignore','pipe','pipe']});let stderr='';server.stderr.on('data',chunk=>stderr+=chunk);
   try{
-    const health=await waitForHealth(port);assert.equal(health.version,'0.9.0');
+    const health=await waitForHealth(port);assert.equal(health.version,'0.10.0');
     const search=await requestJson(port,'/api/marketplace/search?providerId=poly-haven&q=cube&type=model&limit=10');assert.equal(search.status,200);assert.equal(search.body.results.length,1);assert.equal(search.body.results[0].license,'CC0');
     const details=await requestJson(port,'/api/marketplace/details?providerId=poly-haven&assetId=marketplace_cube');assert.equal(details.status,200);assert.ok(details.body.asset.downloadChoices.length>=1);
     const queued=await postJson(port,'/api/marketplace/download',{providerId:'poly-haven',assetId:'marketplace_cube',choiceId:details.body.asset.downloadChoices[0].id});assert.equal(queued.status,202);
@@ -597,7 +597,7 @@ test('v0.9 Production Surface Studio exposes map processing, advanced graph, dec
 test('v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts',async()=>{
   const runtime=tempRoot('omniforge-surface-v09-'),port=await freePort(),server=spawn(process.execPath,['server/server.mjs'],{cwd:ROOT,env:{...process.env,OMNIFORGE_DATA_ROOT:runtime,OMNIFORGE_PORT:String(port),OMNIFORGE_SESSION_TOKEN:'surface-v09-test'},stdio:['ignore','pipe','pipe']});let stderr='';server.stderr.on('data',chunk=>stderr+=chunk);
   try{
-    const health=await waitForHealth(port);assert.equal(health.version,'0.9.0');const state=(await requestJson(port,'/api/state')).body,source=state.assets.find(item=>item.type==='material');assert.ok(source);
+    const health=await waitForHealth(port);assert.equal(health.version,'0.10.0');const state=(await requestJson(port,'/api/state')).body,source=state.assets.find(item=>item.type==='material');assert.ok(source);
     const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XjT5WQAAAABJRU5ErkJggg==';
     const derivative=await postJson(port,'/api/material/derivative',{materialId:source.id,name:'Processed Test',operation:'seam-repair',maps:{baseColor:png,normal:png,roughness:png,ambientOcclusion:png,height:png},shareUnchangedMaps:true});assert.equal(derivative.status,201);assert.equal(derivative.body.material.sourceAssetId,source.id);assert.equal(derivative.body.recipe.compilation.state,'ready');
     const compiled=await postJson(port,`/api/surface-recipe/${encodeURIComponent(derivative.body.recipe.id)}/compile`,{});assert.equal(compiled.status,200);assert.equal(compiled.body.recipe.compilation.state,'ready');

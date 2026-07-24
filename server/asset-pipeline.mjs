@@ -25,18 +25,40 @@ function componentCount(type){const map={SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT2:4,MA
 function normalizedValue(value,componentType){
   if(componentType===5120)return Math.max(value/127,-1);if(componentType===5121)return value/255;if(componentType===5122)return Math.max(value/32767,-1);if(componentType===5123)return value/65535;return value;
 }
-function accessorArray(gltf,buffers,index){
-  const accessor=gltf.accessors?.[index];if(!accessor)throw new Error(`Missing accessor ${index}.`);
-  if(accessor.sparse)throw new Error('Sparse glTF accessors are not supported by the current canonical importer.');
-  const view=gltf.bufferViews?.[accessor.bufferView];if(!view)throw new Error(`Accessor ${index} has no buffer view.`);
-  const source=buffers[view.buffer];if(!source)throw new Error(`Missing glTF buffer ${view.buffer}.`);
-  const info=componentInfo(accessor.componentType),size=componentCount(accessor.type),stride=view.byteStride||info.bytes*size;
-  const start=(view.byteOffset||0)+(accessor.byteOffset||0),out=new Array(accessor.count*size);
-  for(let item=0;item<accessor.count;item++)for(let c=0;c<size;c++){
-    const offset=start+item*stride+c*info.bytes;if(offset+info.bytes>source.length)throw new Error(`Accessor ${index} exceeds its buffer.`);
-    let value=source[info.read](offset);if(accessor.normalized)value=normalizedValue(value,accessor.componentType);out[item*size+c]=value;
+function accessorArray(gltf, buffers, index) {
+  if (!Number.isInteger(index) || index < 0) throw new Error(`Invalid accessor index ${index}.`);
+  const accessor = gltf.accessors?.[index];
+  if (!accessor) throw new Error(`Missing accessor ${index}.`);
+  if (!Number.isInteger(accessor.count) || accessor.count < 0 || accessor.count > 50_000_000) throw new Error(`Accessor ${index} has an invalid element count.`);
+  if (accessor.sparse) throw new Error(`Accessor ${index} uses sparse data, which is preserved in the source but is not yet supported by the canonical preview.`);
+  if (!Number.isInteger(accessor.bufferView)) throw new Error(`Accessor ${index} has no buffer view.`);
+  const view = gltf.bufferViews?.[accessor.bufferView];
+  if (!view) throw new Error(`Accessor ${index} references missing buffer view ${accessor.bufferView}.`);
+  if (!Number.isInteger(view.buffer) || view.buffer < 0) throw new Error(`Buffer view ${accessor.bufferView} references an invalid buffer.`);
+  const source = buffers[view.buffer];
+  if (!source) throw new Error(`Missing glTF buffer ${view.buffer}.`);
+  const info = componentInfo(accessor.componentType);
+  const size = componentCount(accessor.type);
+  const packed = info.bytes * size;
+  const stride = view.byteStride || packed;
+  if (stride < packed || stride % info.bytes !== 0) throw new Error(`Accessor ${index} has invalid byte stride ${stride}.`);
+  const viewStart = Number(view.byteOffset || 0);
+  const viewLength = Number(view.byteLength || 0);
+  const accessorOffset = Number(accessor.byteOffset || 0);
+  const start = viewStart + accessorOffset;
+  if (viewStart < 0 || viewLength < 0 || start < 0 || viewStart + viewLength > source.length) throw new Error(`Buffer view ${accessor.bufferView} exceeds buffer ${view.buffer}.`);
+  const required = accessor.count ? ((accessor.count - 1) * stride + packed) : 0;
+  if (accessorOffset + required > viewLength || start + required > source.length) throw new Error(`Accessor ${index} exceeds its declared buffer view.`);
+  const out = new Array(accessor.count * size);
+  for (let item = 0; item < accessor.count; item += 1) {
+    for (let component = 0; component < size; component += 1) {
+      const offset = start + item * stride + component * info.bytes;
+      let value = source[info.read](offset);
+      if (accessor.normalized) value = normalizedValue(value, accessor.componentType);
+      out[item * size + component] = value;
+    }
   }
-  return {values:out,count:accessor.count,size,componentType:accessor.componentType,min:accessor.min||null,max:accessor.max||null};
+  return { values: out, count: accessor.count, size, componentType: accessor.componentType, min: accessor.min || null, max: accessor.max || null };
 }
 function decodeDataUri(uri){
   const match=/^data:([^;,]+)?;base64,([A-Za-z0-9+/=]+)$/.exec(String(uri||''));if(!match)return null;return Buffer.from(match[2],'base64');
@@ -90,27 +112,76 @@ function normalMatrixFromMat4(m){
 }
 function transformNormal(matrix3,x,y,z){const nx=matrix3[0]*x+matrix3[3]*y+matrix3[6]*z,ny=matrix3[1]*x+matrix3[4]*y+matrix3[7]*z,nz=matrix3[2]*x+matrix3[5]*y+matrix3[8]*z,length=Math.hypot(nx,ny,nz)||1;return [nx/length,ny/length,nz/length];}
 function transformDeterminant(matrix){return matrix[0]*(matrix[5]*matrix[10]-matrix[9]*matrix[6])-matrix[4]*(matrix[1]*matrix[10]-matrix[9]*matrix[2])+matrix[8]*(matrix[1]*matrix[6]-matrix[5]*matrix[2]);}
-function sceneMeshInstances(gltf){
-  const nodes=gltf.nodes||[],scenes=gltf.scenes||[];
-  if(!nodes.length)return (gltf.meshes||[]).map((_,meshIndex)=>({meshIndex,nodeIndex:null,nodeName:`Mesh ${meshIndex}`,worldMatrix:mat4Identity()}));
-  const childSet=new Set(nodes.flatMap(node=>Array.isArray(node.children)?node.children:[]));
-  const configured=scenes[gltf.scene??0]?.nodes;
-  const roots=Array.isArray(configured)&&configured.length?configured:nodes.map((_,index)=>index).filter(index=>!childSet.has(index));
-  const instances=[],visiting=new Set();
-  const walk=(nodeIndex,parentMatrix)=>{
-    if(visiting.has(nodeIndex))throw new Error(`glTF node hierarchy contains a cycle at node ${nodeIndex}.`);
-    const node=nodes[nodeIndex];if(!node)return;
-    visiting.add(nodeIndex);const worldMatrix=mat4Multiply(parentMatrix,nodeLocalMatrix(node));
-    if(Number.isInteger(node.mesh)&&gltf.meshes?.[node.mesh])instances.push({meshIndex:node.mesh,nodeIndex,nodeName:node.name||`Node ${nodeIndex}`,worldMatrix});
-    for(const child of node.children||[])walk(child,worldMatrix);
-    visiting.delete(nodeIndex);
-  };
-  for(const root of roots)walk(root,mat4Identity());
-  if(!instances.length)return (gltf.meshes||[]).map((_,meshIndex)=>({meshIndex,nodeIndex:null,nodeName:`Mesh ${meshIndex}`,worldMatrix:mat4Identity()}));
+function sceneMeshInstances(gltf) {
+  const nodes = Array.isArray(gltf.nodes) ? gltf.nodes : [];
+  const scenes = Array.isArray(gltf.scenes) ? gltf.scenes : [];
+  if (!nodes.length) return (gltf.meshes || []).map((_, meshIndex) => ({ meshIndex, nodeIndex: null, nodeName: `Mesh ${meshIndex}`, worldMatrix: mat4Identity() }));
+
+  const childSet = new Set();
+  for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex += 1) {
+    const node = nodes[nodeIndex] || {};
+    if (!Array.isArray(node.children)) continue;
+    for (const child of node.children) {
+      if (!Number.isInteger(child) || child < 0 || child >= nodes.length) throw new Error(`Node ${nodeIndex} references invalid child ${child}.`);
+      childSet.add(child);
+    }
+  }
+
+  const configured = scenes[gltf.scene ?? 0]?.nodes;
+  let roots = Array.isArray(configured) && configured.length
+    ? configured.slice()
+    : nodes.map((_, index) => index).filter(index => !childSet.has(index));
+  roots = roots.filter(index => Number.isInteger(index) && index >= 0 && index < nodes.length);
+  if (!roots.length) roots = nodes.map((_, index) => index);
+
+  const instances = [];
+  const stack = roots.slice().reverse().map(nodeIndex => ({ nodeIndex, parentMatrix: mat4Identity(), ancestors: new Set(), depth: 0 }));
+  let visitedSteps = 0;
+  const maxSteps = Math.max(1000, nodes.length * 64);
+  const maxDepth = Math.min(4096, Math.max(256, nodes.length * 4));
+  while (stack.length) {
+    const entry = stack.pop();
+    if (++visitedSteps > maxSteps) throw new Error('glTF node traversal exceeded its safety budget. The source may contain a cycle or pathological repeated hierarchy.');
+    if (entry.depth > maxDepth) throw new Error(`glTF node hierarchy exceeds the maximum safe depth at node ${entry.nodeIndex}.`);
+    if (entry.ancestors.has(entry.nodeIndex)) throw new Error(`glTF node hierarchy contains a cycle at node ${entry.nodeIndex}.`);
+    const node = nodes[entry.nodeIndex];
+    if (!node) continue;
+    const worldMatrix = mat4Multiply(entry.parentMatrix, nodeLocalMatrix(node));
+    if (Number.isInteger(node.mesh)) {
+      if (!gltf.meshes?.[node.mesh]) throw new Error(`Node ${entry.nodeIndex} references missing mesh ${node.mesh}.`);
+      instances.push({ meshIndex: node.mesh, nodeIndex: entry.nodeIndex, nodeName: node.name || `Node ${entry.nodeIndex}`, worldMatrix });
+    }
+    const ancestors = new Set(entry.ancestors);
+    ancestors.add(entry.nodeIndex);
+    const children = Array.isArray(node.children) ? node.children : [];
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      stack.push({ nodeIndex: children[index], parentMatrix: worldMatrix, ancestors, depth: entry.depth + 1 });
+    }
+  }
+  if (!instances.length) return (gltf.meshes || []).map((_, meshIndex) => ({ meshIndex, nodeIndex: null, nodeName: `Mesh ${meshIndex}`, worldMatrix: mat4Identity() }));
   return instances;
 }
-function materialInfo(gltf,index){
-  const material=gltf.materials?.[index]||{},pbr=material.pbrMetallicRoughness||{},factor=pbr.baseColorFactor||[.65,.68,.74,1];return {name:material.name||`Material ${index??0}`,baseColor:[finite(factor[0],.65),finite(factor[1],.68),finite(factor[2],.74),finite(factor[3],1)],metallic:finite(pbr.metallicFactor,0),roughness:finite(pbr.roughnessFactor,.8),doubleSided:Boolean(material.doubleSided),alphaMode:material.alphaMode||'OPAQUE'};
+function materialInfo(gltf, index) {
+  const material = gltf.materials?.[index] || {};
+  const pbr = material.pbrMetallicRoughness || {};
+  const factor = pbr.baseColorFactor || [0.65, 0.68, 0.74, 1];
+  return {
+    name: material.name || `Material ${index ?? 0}`,
+    baseColor: [finite(factor[0], 0.65), finite(factor[1], 0.68), finite(factor[2], 0.74), finite(factor[3], 1)],
+    metallic: finite(pbr.metallicFactor, 0),
+    roughness: finite(pbr.roughnessFactor, 0.8),
+    doubleSided: Boolean(material.doubleSided),
+    alphaMode: material.alphaMode || 'OPAQUE',
+    alphaCutoff: finite(material.alphaCutoff, 0.5),
+    emissiveFactor: Array.isArray(material.emissiveFactor) ? material.emissiveFactor.map(value => finite(value, 0)).slice(0, 3) : [0, 0, 0],
+    textureSlots: {
+      baseColor: Number.isInteger(pbr.baseColorTexture?.index) ? pbr.baseColorTexture.index : null,
+      metallicRoughness: Number.isInteger(pbr.metallicRoughnessTexture?.index) ? pbr.metallicRoughnessTexture.index : null,
+      normal: Number.isInteger(material.normalTexture?.index) ? material.normalTexture.index : null,
+      occlusion: Number.isInteger(material.occlusionTexture?.index) ? material.occlusionTexture.index : null,
+      emissive: Number.isInteger(material.emissiveTexture?.index) ? material.emissiveTexture.index : null
+    }
+  };
 }
 function mergePrimitives(gltf,buffers){
   const positions=[],normals=[],uvs=[],indices=[],materials=[],groups=[];let vertexOffset=0;const unsupported=[],instances=sceneMeshInstances(gltf);
