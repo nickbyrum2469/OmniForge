@@ -34,7 +34,22 @@ jobs:
           node-version: '20'
 
       - name: Apply connected v0.10 pass
-        run: node tools/apply-v010.mjs
+        id: apply
+        shell: bash
+        run: |
+          set +e
+          node tools/apply-v010.mjs > APPLY_V010_ERROR.txt 2>&1
+          result=$?
+          cat APPLY_V010_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge Build Bot"
+            git config user.email "omniforge-build-bot@users.noreply.github.com"
+            git add APPLY_V010_ERROR.txt
+            git commit -m "Record v0.10 application failure diagnostics"
+            git push origin milestone-10/foliage-lighting-foundation
+            exit "$result"
+          fi
+          rm -f APPLY_V010_ERROR.txt
 
       - name: Syntax-check v0.10 runtime files
         run: |
