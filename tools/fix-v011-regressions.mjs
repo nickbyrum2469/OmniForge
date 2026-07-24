@@ -36,7 +36,19 @@ for(const name of fs.readdirSync('tests')){
     .replaceAll('schemaVersion===8','schemaVersion===9')
     .replaceAll('schemaVersion !== 8','schemaVersion !== 9')
     .replaceAll('schemaVersion === 8','schemaVersion === 9');
+  if(name==='engine.test.mjs'){
+    source=source.replace(
+      "const terrain=scene.objects.find(object=>object.type==='terrain');\n  for(const object of scene.objects.filter(object=>['box','sphere'].includes(object.type))){\n    const surface=terrainHeight(terrain,object.transform.position[0],object.transform.position[2]);",
+      "const terrain=scene.objects.find(object=>object.type==='terrain');\n  const paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);\n  for(const object of scene.objects.filter(object=>['box','sphere'].includes(object.type))){\n    const surface=terrainHeight(terrain,object.transform.position[0],object.transform.position[2],paths);"
+    );
+  }
   write(file,source);
 }
 
-console.log('Repaired starter grounding, profile diagnostics, and v0.11 migration expectations.');
+for(const launcher of ['RUN_OMNIFORGE.bat','RUN_OMNIFORGE_DESKTOP.bat']){
+  if(!fs.existsSync(path.resolve(launcher)))continue;
+  let source=read(launcher).replaceAll('EXPECTED_VERSION=OmniForge 0.9.0','EXPECTED_VERSION=OmniForge 0.11.0').replaceAll('EXPECTED_VERSION=OmniForge 0.10.0','EXPECTED_VERSION=OmniForge 0.11.0');
+  write(launcher,source);
+}
+
+console.log('Repaired path-aware starter grounding, profile diagnostics, v0.11 migration expectations, and desktop launcher identity.');
