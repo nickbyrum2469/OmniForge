@@ -4,6 +4,7 @@ import {
   transformPoint, modelMatrix, normalMatrix3, hexToRgb, cameraForward
 } from './math.js';
 import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, samplePathSpline, normalizeTerrainProperties, normalizePathProperties, terrainBounds } from './worldgen.js';
+import { buildPathGuideSegments } from './path-visuals.js';
 
 function compile(gl,type,source){
   const shader=gl.createShader(type); gl.shaderSource(shader,source); gl.compileShader(shader);
@@ -406,12 +407,8 @@ export function terrainMesh(object,paths){
   return {positions:new Float32Array(p),normals,indices:new Uint32Array(idx),uvs:new Float32Array(uv),blends:new Float32Array(blends)};
 }
 function pathLineData(object,terrain,paths){
-  const properties=normalizePathProperties(object.properties||{},object.transform||{}),dense=samplePathSpline(object,{spacing:Math.max(.45,Number(properties.width||3)*.28)}),width=Number(properties.width||3),center=[],edges=[];
-  for(let i=0;i<dense.length-1;i++){
-    const a=dense[i],b=dense[i+1],dir=normalize([b.x-a.x,0,b.z-a.z]),side=normalize([-dir[2],0,dir[0]]),ay=terrainHeight(terrain,a.x,a.z,paths)+Number(properties.surfaceOffset||.03)+.06,by=terrainHeight(terrain,b.x,b.z,paths)+Number(properties.surfaceOffset||.03)+.06;
-    center.push(a.x,ay,a.z,b.x,by,b.z);for(const sign of [-1,1])edges.push(a.x+side[0]*width*.5*sign,ay,a.z+side[2]*width*.5*sign,b.x+side[0]*width*.5*sign,by,b.z+side[2]*width*.5*sign);
-  }
-  return {center,edges};
+  const properties=normalizePathProperties(object.properties||{},object.transform||{}),width=Number(properties.width||3),dense=samplePathSpline(object,{spacing:Math.max(.25,width*.16)}),offset=Number(properties.surfaceOffset||.03)+.08;
+  return buildPathGuideSegments(dense,width,(x,z)=>terrainHeight(terrain,x,z,paths),offset);
 }
 function createBufferMesh(gl,data){
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);const buffers=[];
