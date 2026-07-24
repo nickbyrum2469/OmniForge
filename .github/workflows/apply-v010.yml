@@ -1,0 +1,60 @@
+name: Apply OmniForge v0.10
+
+on:
+  push:
+    branches:
+      - milestone-10/foliage-lighting-foundation
+    paths:
+      - tools/apply-v010.mjs
+      - .github/workflows/apply-v010.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out authoritative milestone branch
+        uses: actions/checkout@v4
+        with:
+          ref: milestone-10/foliage-lighting-foundation
+          fetch-depth: 0
+
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Apply connected v0.10 pass
+        run: node tools/apply-v010.mjs
+
+      - name: Syntax-check v0.10 runtime files
+        run: |
+          node --check server/v010-bootstrap.mjs
+          node --check server/v010-api.mjs
+          node --check server/v010-systems.mjs
+          node --check app/v010.js
+          node --check server/job-manager.mjs
+          node --check server/asset-pipeline.mjs
+
+      - name: Run full automated tests
+        run: npm test
+
+      - name: Run package verification
+        run: npm run verify
+
+      - name: Commit verified v0.10 implementation
+        run: |
+          git config user.name "OmniForge Build Bot"
+          git config user.email "omniforge-build-bot@users.noreply.github.com"
+          git add --all
+          if git diff --cached --quiet; then
+            echo "No implementation changes were produced."
+            exit 0
+          fi
+          git commit -m "Implement OmniForge v0.10 connected foliage lighting atmosphere and import repair"
+          git push origin milestone-10/foliage-lighting-foundation
