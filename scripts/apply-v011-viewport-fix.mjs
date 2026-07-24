@@ -107,3 +107,5 @@ replaceOnce(
   return buildPathGuideSegments(dense,width,(x,z)=>terrainHeight(terrain,x,z,paths),offset);
 }`
 );
+
+console.log('Applied deterministic v0.11 viewport camera and path continuity repair.');
