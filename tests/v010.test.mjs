@@ -6,6 +6,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { importModelAsset } from '../server/asset-pipeline.mjs';
 import {
   seededRandom,
   defaultWorldSettings,
@@ -156,6 +157,34 @@ test('v0.10 foliage uses root-socket grounding and vehicles remain upright', () 
   assert.equal(fitGroundContact({ object: vehicle, asset: vehicleAsset, terrain }).mode, 'wheel-contact');
   assert.equal(vehicle.transform.rotation[0], 0);
   assert.equal(vehicle.transform.rotation[2], 0);
+});
+
+test('v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow', () => {
+  const assetRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'omniforge-cyclic-gltf-'));
+  try {
+    const gltf = {
+      asset: { version: '2.0', generator: 'OmniForge cycle-safety fixture' },
+      scene: 0,
+      scenes: [{ nodes: [0] }],
+      nodes: [{ name: 'Cycle A', children: [1] }, { name: 'Cycle B', children: [0] }],
+      meshes: []
+    };
+    const dataUrl = `data:model/gltf+json;base64,${Buffer.from(JSON.stringify(gltf)).toString('base64')}`;
+    const asset = importModelAsset({
+      assetRoot,
+      name: 'Cyclic hierarchy fixture',
+      fileName: 'cyclic.gltf',
+      dataUrl,
+      category: 'static-prop'
+    });
+    assert.equal(asset.health.state, 'failed');
+    const errorText = asset.health.blocking.join(' ');
+    assert.match(errorText, /cycle|safety budget|hierarchy/i);
+    assert.doesNotMatch(errorText, /Maximum call stack size exceeded/i);
+    assert.ok(fs.existsSync(path.join(assetRoot, 'models', asset.id, 'source', 'original.gltf')));
+  } finally {
+    fs.rmSync(assetRoot, { recursive: true, force: true });
+  }
 });
 
 test('v0.10 desktop package, UI, and MCP share the connected authorities', () => {
