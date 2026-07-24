@@ -75,18 +75,35 @@ jobs:
         run: node tools/update-v010-test-expectations.mjs
 
       - name: Syntax-check v0.10 runtime files
+        shell: bash
         run: |
-          node --check server/v010-bootstrap.mjs
-          node --check server/v010-api.mjs
-          node --check server/v010-systems.mjs
-          node --check app/app.js
-          node --check app/v010.js
-          node --check app/renderer.js
-          node --check server/job-manager.mjs
-          node --check server/asset-pipeline.mjs
-          node --check workers/local-worker.mjs
-          node --check bridge/v010-tools.mjs
-          node --check bridge/mcp-server.mjs
+          set +e
+          {
+            node --check server/v010-bootstrap.mjs
+            node --check server/v010-api.mjs
+            node --check server/v010-systems.mjs
+            node --check app/app.js
+            node --check app/v010.js
+            node --check app/renderer.js
+            node --check server/job-manager.mjs
+            node --check server/asset-pipeline.mjs
+            node --check workers/local-worker.mjs
+            node --check bridge/v010-tools.mjs
+            node --check bridge/mcp-server.mjs
+          } > SYNTAX_V010_ERROR.txt 2>&1
+          result=$?
+          cat SYNTAX_V010_ERROR.txt
+          if [ "$result" -ne 0 ]; then
+            git config user.name "OmniForge Build Bot"
+            git config user.email "omniforge-build-bot@users.noreply.github.com"
+            git add SYNTAX_V010_ERROR.txt
+            git commit -m "Record v0.10 syntax failure diagnostics"
+            git reset --hard HEAD
+            git pull --rebase origin milestone-10/foliage-lighting-foundation
+            git push origin milestone-10/foliage-lighting-foundation
+            exit "$result"
+          fi
+          rm -f SYNTAX_V010_ERROR.txt
 
       - name: Run full automated tests
         shell: bash
@@ -130,7 +147,7 @@ jobs:
         run: |
           git config user.name "OmniForge Build Bot"
           git config user.email "omniforge-build-bot@users.noreply.github.com"
-          rm -f WINDOWS_VERIFY_ERROR.txt APPLY_V010_ERROR.txt TEST_V010_ERROR.txt VERIFY_V010_ERROR.txt
+          rm -f WINDOWS_VERIFY_ERROR.txt APPLY_V010_ERROR.txt SYNTAX_V010_ERROR.txt TEST_V010_ERROR.txt VERIFY_V010_ERROR.txt
           git add --all
           if git diff --cached --quiet; then
             echo "No implementation changes were produced."
