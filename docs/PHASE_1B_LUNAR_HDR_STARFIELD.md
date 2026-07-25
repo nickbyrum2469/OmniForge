@@ -124,3 +124,5 @@ The final merge requires direct rendered inspection of:
 ## Explicit non-goals
 
 Phase 1B does not yet claim production GGX PBR, image-based lighting, global illumination, cascaded Sun shadows, temporal cloud reconstruction, water reflections, or path-traced lighting. It establishes the correct celestial and HDR/display foundation those systems require.
+
+Validation trigger: the authoritative source-and-Windows gate must apply both Phase 1B migrations, commit the integrated renderer, remove temporary diagnostics, and package the exact resulting commit before this milestone can advance.
