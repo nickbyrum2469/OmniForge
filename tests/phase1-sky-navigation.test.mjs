@@ -49,6 +49,21 @@ test('yaw remains normalized and pitch remains bounded', () => {
   assert.ok(next.pitch < Math.PI / 2 && next.pitch > -Math.PI / 2);
 });
 
+test('viewport acquisition protects camera authority before pointer lock and releases cleanly', () => {
+  const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
+  const intentIndex = app.indexOf('viewportNavigationIntentUntil=Date.now()+1600');
+  const selectionIndex = app.indexOf('selectObject(pick?.id||null,true)', intentIndex);
+  const lockRequestIndex = app.indexOf('requestPointerLock?.()', selectionIndex);
+  assert.ok(intentIndex >= 0, 'navigation intent guard is missing');
+  assert.ok(selectionIndex > intentIndex, 'camera authority must be protected before click selection applies state');
+  assert.ok(lockRequestIndex > selectionIndex, 'pointer lock must begin after guarded selection');
+  assert.match(app, /beginLookInputSession\(lookInputState,'pointer-lock'\)/);
+  assert.match(app, /viewport-look-delta-rejected/);
+  assert.match(app, /window\.addEventListener\('blur',releaseViewportInput\)/);
+  assert.match(app, /visibilitychange.*releaseViewportInput/);
+  assert.match(app, /viewportNavigationActive\(\).*viewportNavigationIntentUntil/s);
+});
+
 test('normal rendering no longer depends on the legacy CSS atmosphere', () => {
   const renderer = fs.readFileSync(new URL('../app/renderer.js', import.meta.url), 'utf8');
   const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
