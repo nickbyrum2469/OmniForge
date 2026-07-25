@@ -19,7 +19,9 @@ test('sky rays rotate with the camera but ignore camera translation', () => {
 
 test('environment state is bounded and shares the directional light authority', () => {
   const state = normalizeEnvironmentState({ settings: { skyTop: '#123456', skyBottom: '#789abc', cloudCoverage: 0.6, cloudDensity: 0.7, starIntensity: 1.2 } }, { dir: [0, -1, 0], color: [1, 0.9, 0.8], exposure: 1.1 }, 12);
-  assert.deepEqual(state.sunDirection, [0, 1, 0]);
+  assert.ok(Math.abs(state.sunDirection[0]) < 1e-12);
+  assert.equal(state.sunDirection[1], 1);
+  assert.ok(Math.abs(state.sunDirection[2]) < 1e-12);
   for (const key of ['dayFactor', 'nightFactor', 'twilightFactor', 'starVisibility', 'cloudCoverage', 'cloudDensity']) assert.ok(state[key] >= 0 && state[key] <= 1, key);
   assert.equal(state.timeSeconds, 12);
 });
