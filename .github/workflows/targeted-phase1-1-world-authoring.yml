@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - milestone-12-1/celestial-path-terrain-corrections
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -11,7 +14,7 @@ permissions:
 
 jobs:
   integrate-phase1-1:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && (github.event_name != 'pull_request' || github.head_ref == 'milestone-12-1/celestial-path-terrain-corrections')
     runs-on: ubuntu-latest
     steps:
       - name: Check out corrective branch
