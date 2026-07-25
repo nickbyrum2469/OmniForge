@@ -1,7 +1,17 @@
-file:///home/runner/work/OmniForge/OmniForge/scripts/apply-phase1-1-world-authoring.mjs:206
-`  field('v010Humidity').value = world.atmosphere.humidity;
+Repaired raw source templates in the Phase 1.1 migration.
+/home/runner/work/OmniForge/OmniForge/scripts/apply-phase1-1-world-authoring.mjs:404
+      });
+       ^
 
-SyntaxError: missing ) after argument list
+SyntaxError: Unexpected token ')'
+    at checkSyntax (node:internal/main/check_syntax:74:5)
+
+Node.js v20.20.2
+file:///home/runner/work/OmniForge/OmniForge/scripts/apply-phase1-1-world-authoring.mjs:404
+      });
+       ^
+
+SyntaxError: Unexpected token ')'
     at compileSourceTextModule (node:internal/modules/esm/utils:346:16)
     at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:146:18)
     at #translate (node:internal/modules/esm/loader:497:12)
