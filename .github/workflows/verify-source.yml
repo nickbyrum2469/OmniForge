@@ -33,7 +33,7 @@ jobs:
         run: if (Test-Path package-lock.json) { npm ci } else { npm install --no-audit --no-fund }
       - name: Run authoritative Phase 1B integration and Windows gate
         shell: pwsh
-        run: .\scripts\run-phase1b-ci.ps1
+        run: .\scripts\run-phase1b-ci-with-evidence.ps1
       - name: Upload exact Phase 1B package
         if: success()
         uses: actions/upload-artifact@v4
@@ -52,6 +52,7 @@ jobs:
         with:
           name: OmniForge-Phase1B-failure-${{ github.run_id }}
           path: |
+            PHASE1B_CI_ERROR.txt
             PHASE1B_TEST_OUTPUT.txt
             PHASE1B_VERIFY_OUTPUT.txt
             PHASE1B_IDEMPOTENCY_DIFF.txt
