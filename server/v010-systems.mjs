@@ -206,6 +206,10 @@ export function applyWorldToScene(scene, world) {
     celestialRole: 'sun',
     color: hex(mix([255, 123, 79], [255, 244, 214], day)),
     intensity: Number(world.lighting.sunIntensity || 3.2) * Math.max(0.015, day) * cloudAttenuation,
+    azimuth: sunAzimuth,
+    elevation: sunElevationDegrees,
+    angularSize: Number(world.sky.sunSize ?? 1),
+    glow: Number(world.sky.sunGlow ?? 1),
     castsShadows: true,
     shadowQuality: world.lighting.shadowQuality,
     hybridLightingProfile: world.lighting.profile
@@ -237,6 +241,9 @@ export function applyWorldToScene(scene, world) {
     angularSize: Number(world.sky.moonSize ?? 1.45),
     azimuth: moonAzimuth,
     elevation: moonElevationDegrees,
+    brightness: Number(world.sky.moonBrightness ?? 1),
+    glow: Number(world.sky.moonGlow ?? 0.7),
+    detail: Number(world.sky.moonDetail ?? 1),
     castsShadows: false
   };
   return { hour, day, night, twilight, elevation, sunId: sun.id, moonId: moon.id, sunAzimuth, sunElevationDegrees, moonAzimuth, moonElevationDegrees };
