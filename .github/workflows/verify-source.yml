@@ -43,10 +43,12 @@ jobs:
         run: |
           $files=@('app/celestial-mechanics.js','app/environment-presets.js','app/environment-runtime.js','app/hdr-pipeline.js','app/sky-pass.js','app/renderer.js','app/v010.js','server/v010-systems.mjs','server/v010-api.mjs')
           foreach($file in $files){node --check $file;if($LASTEXITCODE -ne 0){throw "Syntax failed: $file"}}
-          npm test
-          if($LASTEXITCODE -ne 0){throw 'Phase 1B tests failed.'}
-          npm run verify
-          if($LASTEXITCODE -ne 0){throw 'Phase 1B verification failed.'}
+          npm test 2>&1 | Tee-Object -FilePath PHASE1B_TEST_OUTPUT.txt
+          $testExit=$LASTEXITCODE
+          if($testExit -ne 0){throw 'Phase 1B tests failed.'}
+          npm run verify 2>&1 | Tee-Object -FilePath PHASE1B_VERIFY_OUTPUT.txt
+          $verifyExit=$LASTEXITCODE
+          if($verifyExit -ne 0){throw 'Phase 1B verification failed.'}
       - name: Prove integration idempotency
         shell: pwsh
         run: |
@@ -60,11 +62,11 @@ jobs:
         id: source
         shell: pwsh
         run: |
-          Remove-Item PHASE1B_TEST_OUTPUT.txt,WINDOWS_VERIFY_ERROR.txt -Force -ErrorAction SilentlyContinue
+          Remove-Item PHASE1B_TEST_OUTPUT.txt,PHASE1B_VERIFY_OUTPUT.txt,WINDOWS_VERIFY_ERROR.txt -Force -ErrorAction SilentlyContinue
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app server
-          git add -u PHASE1B_TEST_OUTPUT.txt WINDOWS_VERIFY_ERROR.txt 2>$null
+          git add -u PHASE1B_TEST_OUTPUT.txt PHASE1B_VERIFY_OUTPUT.txt WINDOWS_VERIFY_ERROR.txt 2>$null
           if(git status --porcelain){
             git commit -m "Add independent lunar cycles, HDR display, starfields, and lighting presets"
             if($LASTEXITCODE -ne 0){throw 'Verified source commit failed.'}
@@ -130,6 +132,16 @@ jobs:
             PHASE1B_WINDOWS_EVIDENCE.txt
           if-no-files-found: error
           retention-days: 30
+      - name: Upload Phase 1B failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniForge-Phase1B-failure-${{ github.run_id }}
+          path: |
+            PHASE1B_TEST_OUTPUT.txt
+            PHASE1B_VERIFY_OUTPUT.txt
+          if-no-files-found: warn
+          retention-days: 14
 
   verify:
     if: github.actor != 'github-actions[bot]' && !(github.event_name == 'pull_request' && github.head_ref == 'phase1b/lunar-cycle-hdr-lighting-presets')
