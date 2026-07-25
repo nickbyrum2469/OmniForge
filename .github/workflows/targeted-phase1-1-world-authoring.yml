@@ -32,19 +32,46 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Apply corrective migrations
+        id: apply
+        shell: bash
         run: |
-          node scripts/apply-phase1-1-world-authoring.mjs
-          node scripts/apply-phase1-1-followup.mjs
+          set +e
+          {
+            node scripts/apply-phase1-1-world-authoring.mjs
+            node scripts/apply-phase1-1-followup.mjs
+          } > PHASE1_1_OUTPUT.txt 2>&1
+          status=$?
+          cat PHASE1_1_OUTPUT.txt
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Record migration failure
+        if: steps.apply.outputs.status != '0'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PHASE1_1_OUTPUT.txt
+          git commit -m "Record Phase 1.1 migration failure"
+          git push origin HEAD:milestone-12-1/celestial-path-terrain-corrections
+
+      - name: Stop after migration failure
+        if: steps.apply.outputs.status != '0'
+        run: exit 1
 
       - name: Run complete automated tests
+        if: steps.apply.outputs.status == '0'
         run: npm test
 
       - name: Run repository verification
+        if: steps.apply.outputs.status == '0'
         run: npm run verify
 
       - name: Commit verified source
+        if: steps.apply.outputs.status == '0'
         shell: bash
         run: |
+          rm -f PHASE1_1_OUTPUT.txt
           if git diff --quiet; then
             echo "Corrective source is already integrated."
             exit 0
