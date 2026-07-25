@@ -15,6 +15,8 @@ import { normalizeProvider, normalizeIntegrationSettings } from './provider-fram
 import { initializeJobManager, createJob, cancelJob, retryJob, clearCompletedJobs, shutdownJobs } from './job-manager.mjs';
 import { searchMarketplace, marketplaceDetails, prepareMarketplaceDownload, resolveMarketplaceImportFiles, createMaterialFromMarketplaceDownload, inspectDownloadedJob } from './marketplace.mjs';
 import { terrainHeightAt as sharedTerrainHeightAt } from '../app/worldgen.js';
+import { defaultWorldSettings, applyWorldToScene } from './v010-systems.mjs';
+import { celestialAuthorityNeedsRepair, isCelestialProxy, patchCelestialWorldFromProxy, repairCelestialAuthority } from './celestial-authority.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.join(ROOT, 'app');
@@ -169,6 +171,18 @@ function upsertAssetRecipe(state,asset){
   return recipe;
 }
 
+function ensureCelestialState(state, reason = 'state-read') {
+  return repairCelestialAuthority(state, { activeScene, defaultWorldSettings, applyWorldToScene, addActivity, reason });
+}
+
+function readStateWithCelestialAuthority(reason = 'state-read') {
+  let snapshot = readState();
+  if (celestialAuthorityNeedsRepair(snapshot, activeScene)) {
+    snapshot = mutateState(state => ensureCelestialState(state, reason)).state;
+  }
+  return snapshot;
+}
+
 function applyObjectPatch(object, patch) {
   const allowed = ['name','parentId','visible','locked','transform','properties','components'];
   for (const key of allowed) {
@@ -262,7 +276,7 @@ function acquireActiveProjectLock(state=readState()){
 
 async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, port, name: 'OmniForge', version:'0.11.0', sessionToken, pid:process.pid, safeMode:process.env.OMNIFORGE_SAFE_MODE==='1' });
-  if (req.method === 'GET' && url.pathname === '/api/state') return json(res, 200, readState());
+  if (req.method === 'GET' && url.pathname === '/api/state') return json(res, 200, readStateWithCelestialAuthority('initial-state-read'));
 
   if (req.method === 'GET' && url.pathname === '/api/providers') {
     const state=readState();return json(res,200,{providers:state.providers||[],settings:state.settings?.integrations||{},jobs:state.jobs||[]});
@@ -338,18 +352,18 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/projects/create') {
-    const body=await readBody(req);releaseActiveProjectLock();const state=createProject({name:body.name,template:body.template,id:body.id});acquireActiveProjectLock(state);
+    const body=await readBody(req);releaseActiveProjectLock();const state=createProject({name:body.name,template:body.template,id:body.id});ensureCelestialState(state, 'project-create');acquireActiveProjectLock(state);
     addActivity(state,'project',`Created project: ${state.project.name}`);writeState(state);
     return json(res,201,{state,projects:listProjects()});
   }
 
   if (req.method === 'POST' && url.pathname === '/api/projects/open') {
-    const body=await readBody(req);await assertProjectUnlocked(body.projectId);releaseActiveProjectLock();const state=openProject(body.projectId);acquireActiveProjectLock(state);
+    const body=await readBody(req);await assertProjectUnlocked(body.projectId);releaseActiveProjectLock();const state=openProject(body.projectId);ensureCelestialState(state, 'project-open');writeState(state);acquireActiveProjectLock(state);
     return json(res,200,{state,projects:listProjects()});
   }
 
   if (req.method === 'POST' && url.pathname === '/api/projects/duplicate') {
-    const body=await readBody(req);const state=duplicateProject(body.projectId,body.name);releaseActiveProjectLock();acquireActiveProjectLock(state);
+    const body=await readBody(req);const state=duplicateProject(body.projectId,body.name);ensureCelestialState(state, 'project-duplicate');writeState(state);releaseActiveProjectLock();acquireActiveProjectLock(state);
     return json(res,201,{state,projects:listProjects()});
   }
 
@@ -359,17 +373,17 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/projects/import') {
-    const body=await readBody(req);const state=importProject(body.sourcePath,{name:body.name});releaseActiveProjectLock();acquireActiveProjectLock(state);
+    const body=await readBody(req);const state=importProject(body.sourcePath,{name:body.name});ensureCelestialState(state, 'project-import');writeState(state);releaseActiveProjectLock();acquireActiveProjectLock(state);
     return json(res,201,{state,projects:listProjects()});
   }
 
   if (req.method === 'POST' && url.pathname === '/api/projects/locate') {
-    const body=await readBody(req);const state=locateProject(body.projectId,body.sourcePath);releaseActiveProjectLock();acquireActiveProjectLock(state);
+    const body=await readBody(req);const state=locateProject(body.projectId,body.sourcePath);ensureCelestialState(state, 'project-locate');writeState(state);releaseActiveProjectLock();acquireActiveProjectLock(state);
     return json(res,200,{state,projects:listProjects()});
   }
 
   if (req.method === 'POST' && url.pathname === '/api/project') {
-    const body=await readBody(req);const state=createProject({name:body.name,template:body.template,id:body.id});releaseActiveProjectLock();acquireActiveProjectLock(state);
+    const body=await readBody(req);const state=createProject({name:body.name,template:body.template,id:body.id});ensureCelestialState(state, 'legacy-project-create');writeState(state);releaseActiveProjectLock();acquireActiveProjectLock(state);
     return json(res,201,state);
   }
 
@@ -381,6 +395,7 @@ async function handleApi(req, res, url) {
       if (index < 0) state.scenes.push(incoming); else state.scenes[index] = incoming;
       state.activeSceneId = incoming.id;
       if (body.selection) state.selection = body.selection;
+      ensureCelestialState(state, 'scene-save');
       if (body.editor) state.editor = { ...state.editor, ...body.editor };
       addActivity(state, 'scene', `Saved scene ${incoming.name} with ${incoming.objects.length} objects.`);
     });
@@ -406,6 +421,7 @@ async function handleApi(req, res, url) {
       state.scenes.push(scene);
       state.activeSceneId = scene.id;
       state.selection = { objectId: scene.objects[0]?.id || null };
+      ensureCelestialState(state, 'scene-create');
       addActivity(state, 'scene', `Created scene: ${scene.name}`);
       return scene;
     });
@@ -418,6 +434,7 @@ async function handleApi(req, res, url) {
       if (!state.scenes.some(scene => scene.id === body.sceneId)) throw new Error('Scene not found.');
       state.activeSceneId = body.sceneId;
       state.selection = { objectId: activeScene(state).objects[0]?.id || null };
+      ensureCelestialState(state, 'scene-select');
       addActivity(state, 'scene', `Activated scene: ${activeScene(state).name}`);
     });
     return json(res, 200, state);
@@ -440,9 +457,14 @@ async function handleApi(req, res, url) {
     const objectId = decodeURIComponent(url.pathname.slice('/api/object/'.length));
     const body = await readBody(req);
     const { state, result } = mutateState(state => {
-      const object = findObject(state, objectId);
+      let object = findObject(state, objectId);
+      if (!object) { ensureCelestialState(state, 'object-patch-repair'); object = findObject(state, objectId); }
       if (!object) throw new Error('Object not found.');
-      applyObjectPatch(object, body);
+      if (isCelestialProxy(object)) {
+        patchCelestialWorldFromProxy(state, object, body, defaultWorldSettings);
+        const repaired = ensureCelestialState(state, 'celestial-proxy-patch');
+        object = object.properties?.celestialRole === 'moon' ? repaired.moon : repaired.sun;
+      } else applyObjectPatch(object, body);
       state.selection.objectId = object.id;
       state.editor.lastFocusObjectId = object.id;
       addActivity(state, 'object', `Updated ${object.name}.`, { objectId });
@@ -457,6 +479,7 @@ async function handleApi(req, res, url) {
       const scene = activeScene(state);
       const object = scene.objects.find(item => item.id === objectId);
       if (!object) throw new Error('Object not found.');
+      if (isCelestialProxy(object)) throw new Error('The authoritative Sun and Moon cannot be deleted. Edit them in Celestial Studio.');
       if (object.locked) throw new Error('Object is locked.');
       scene.objects = scene.objects.filter(item => item.id !== objectId && item.parentId !== objectId);
       state.selection.objectId = scene.objects[0]?.id || null;
@@ -470,6 +493,7 @@ async function handleApi(req, res, url) {
     const { state, result } = mutateState(state => {
       const object = findObject(state, body.objectId);
       if (!object) throw new Error('Object not found.');
+      if (isCelestialProxy(object)) throw new Error('Celestial proxies cannot be duplicated. Configure additional celestial bodies through Celestial Studio.');
       const clone = structuredClone(object);
       clone.id = `${object.type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
       clone.name = `${object.name} Copy`;
@@ -485,6 +509,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/selection') {
     const body = await readBody(req);
     const { state } = mutateState(state => {
+      if (body.objectId && !findObject(state, body.objectId)) ensureCelestialState(state, 'selection-repair');
       if (body.objectId && !findObject(state, body.objectId)) throw new Error('Object not found.');
       state.selection.objectId = body.objectId || null;
       if (body.objectId) state.editor.lastFocusObjectId = body.objectId;

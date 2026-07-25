@@ -157,11 +157,11 @@ export function applyWorldToScene(scene, world) {
     ...(scene.settings || {}),
     skyTop: hex(top),
     skyBottom: hex(bottom),
-    ambientColor: hex(mix([55, 69, 104], [190, 207, 224], day)),
-    ambientIntensity: (0.08 + day * 0.42 + Number(world.lighting.indirectStrength || 0.4) * 0.12) * (0.72 + cloudAttenuation * 0.28),
-    fogNear: Math.max(6, Number(world.atmosphere.visibilityKm || 120) * 0.55 * fogMultiplier),
-    fogFar: Math.max(22, Number(world.atmosphere.visibilityKm || 120) * 2.2 * fogMultiplier),
-    exposure: clamp(Number(world.atmosphere.exposure || 1) * (0.82 + day * 0.18) * (0.88 + cloudAttenuation * 0.12), 0.2, 3),
+    ambientColor: hex(mix([24, 36, 70], [142, 172, 211], day)),
+    ambientIntensity: (0.055 + day * 0.28 + Number(world.lighting.indirectStrength || 0.4) * 0.09) * (0.78 + cloudAttenuation * 0.22),
+    fogNear: Math.max(12, Number(world.atmosphere.visibilityKm || 120) * 1.1 * fogMultiplier),
+    fogFar: Math.max(48, Number(world.atmosphere.visibilityKm || 120) * 4.8 * fogMultiplier),
+    exposure: clamp(Number(world.atmosphere.exposure || 1) * (0.92 + day * 0.08) * (0.96 + cloudAttenuation * 0.04), 0.2, 2.2),
     weatherWetness: clamp(Math.max(Number(world.weather.wetness || 0), precipitation * (weatherPreset === 'snow' ? 0.2 : 0.85)), 0, 1),
     weatherSnow: clamp(Math.max(Number(world.weather.snow || 0), weatherPreset === 'snow' ? precipitation : 0), 0, 1),
     windDirection: Array.isArray(world.weather.windDirection) ? world.weather.windDirection.slice(0, 3) : [1, 0, 0.25],
@@ -184,7 +184,7 @@ export function applyWorldToScene(scene, world) {
   };
 
   let sun = scene.objects.find(object => object.type === 'directionalLight' && object.properties?.celestialRole === 'sun')
-    || scene.objects.find(object => object.type === 'directionalLight');
+    || scene.objects.find(object => object.type === 'directionalLight' && String(object.name || '').trim().toLowerCase() === 'sun');
   if (!sun) {
     sun = {
       id: 'directionalLight-v010-sun',
@@ -206,6 +206,10 @@ export function applyWorldToScene(scene, world) {
     celestialRole: 'sun',
     color: hex(mix([255, 123, 79], [255, 244, 214], day)),
     intensity: Number(world.lighting.sunIntensity || 3.2) * Math.max(0.015, day) * cloudAttenuation,
+    azimuth: sunAzimuth,
+    elevation: sunElevationDegrees,
+    angularSize: Number(world.sky.sunSize ?? 1),
+    glow: Number(world.sky.sunGlow ?? 1),
     castsShadows: true,
     shadowQuality: world.lighting.shadowQuality,
     hybridLightingProfile: world.lighting.profile
@@ -237,6 +241,9 @@ export function applyWorldToScene(scene, world) {
     angularSize: Number(world.sky.moonSize ?? 1.45),
     azimuth: moonAzimuth,
     elevation: moonElevationDegrees,
+    brightness: Number(world.sky.moonBrightness ?? 1),
+    glow: Number(world.sky.moonGlow ?? 0.7),
+    detail: Number(world.sky.moonDetail ?? 1),
     castsShadows: false
   };
   return { hour, day, night, twilight, elevation, sunId: sun.id, moonId: moon.id, sunAzimuth, sunElevationDegrees, moonAzimuth, moonElevationDegrees };
