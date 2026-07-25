@@ -66,6 +66,7 @@ jobs:
           if ! git diff --quiet; then
             git add app server
             git commit -m "Complete Phase 0 celestial authority and smooth runtime stabilization"
+            git pull --rebase origin phase0/celestial-authority-stabilization
             git push origin HEAD:phase0/celestial-authority-stabilization
           fi
           echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -124,7 +125,7 @@ jobs:
           if($packaged -ne $head){throw "Packaged source $packaged does not match $head."}
           if($head -ne '${{ needs.integrate-and-verify.outputs.commit_sha }}'){throw 'Windows package was not built from the verified source commit.'}
 
-      - name: Validate packaged Sun/Moon authority and persistence
+      - name: Validate packaged Sun/Moon authority and clean restart persistence
         shell: pwsh
         run: |
           $output=Join-Path $PWD 'dist\OmniForge-win32-x64'
@@ -135,9 +136,26 @@ jobs:
           $env:OMNIFORGE_PORT="$port"
 
           function Wait-Health {
-            $deadline=(Get-Date).AddSeconds(35)
+            $deadline=(Get-Date).AddSeconds(40)
             while((Get-Date)-lt $deadline){Start-Sleep -Milliseconds 400;try{return Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2}catch{}}
             throw 'Packaged executable did not become healthy.'
+          }
+          function Wait-PortClosed {
+            $deadline=(Get-Date).AddSeconds(18)
+            while((Get-Date)-lt $deadline){try{Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 1 | Out-Null}catch{return};Start-Sleep -Milliseconds 300}
+            throw 'Runtime server did not release its port after clean close.'
+          }
+          function Close-Cleanly([System.Diagnostics.Process]$AppProcess) {
+            if($AppProcess -and -not $AppProcess.HasExited){
+              $null=$AppProcess.CloseMainWindow()
+              if(-not $AppProcess.WaitForExit(15000)){throw 'OmniForge did not complete a clean window close within 15 seconds.'}
+            }
+            Wait-PortClosed
+          }
+          function Force-Cleanup {
+            Get-Process OmniForge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            try{Wait-PortClosed}catch{}
           }
           function Authority($state) {
             $scene=$state.scenes | Where-Object {$_.id -eq $state.activeSceneId} | Select-Object -First 1
@@ -173,19 +191,22 @@ jobs:
             }catch{$rejected=$true}
             if(-not $rejected){throw 'Celestial proxy duplication was not blocked.'}
 
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            Close-Cleanly $process
             $process=$null
-            Start-Sleep -Milliseconds 800
+            $lifecycle=Get-Content (Join-Path $runtime 'sessions\lifecycle.json') -Raw | ConvertFrom-Json
+            if($lifecycle.cleanShutdown -ne $true){throw 'The packaged editor did not record a clean shutdown.'}
+
             $process=Start-Process -FilePath (Join-Path $output 'OmniForge.exe') -PassThru
             Wait-Health | Out-Null
             $reloaded=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 8
             $persisted=Authority $reloaded
             $selection=@{objectId=$persisted.Moon.id}|ConvertTo-Json
             Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/selection" -ContentType 'application/json' -Body $selection -TimeoutSec 8 | Out-Null
-            Write-Host 'Packaged celestial authority, legacy deduplication, selection, and restart persistence passed.'
+            Write-Host 'Packaged celestial authority, legacy deduplication, selection, clean close, and restart persistence passed.'
+            Close-Cleanly $process
+            $process=$null
           }finally{
-            if($process -and -not $process.HasExited){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue}
-            Get-Process OmniForge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Force-Cleanup
             Remove-Item Env:OMNIFORGE_DATA_ROOT -ErrorAction SilentlyContinue
             Remove-Item Env:OMNIFORGE_PORT -ErrorAction SilentlyContinue
             Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
