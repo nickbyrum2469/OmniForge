@@ -64,6 +64,15 @@ export function repairCelestialAuthority(state, {
     || scene.objects.find(object => roleOf(object) === 'moon');
   if (!sun || !moon) throw new Error('The celestial authority could not create a canonical Sun and Moon.');
 
+  const authorityBefore = {
+    sunProxy: isCelestialProxy(sun),
+    moonProxy: isCelestialProxy(moon),
+    sunLocked: sun.locked === true,
+    moonLocked: moon.locked === true,
+    sunName: sun.name,
+    moonName: moon.name
+  };
+
   sun.name = 'Sun';
   sun.locked = true;
   sun.properties = {
@@ -93,11 +102,20 @@ export function repairCelestialAuthority(state, {
   remapEditorReferences(state, duplicateMoonIds, moon.id);
 
   const createdIds = scene.objects.filter(object => !beforeIds.has(object.id)).map(object => object.id);
-  const changed = createdIds.length > 0 || removedIds.size > 0
-    || !beforeIds.has(sun.id) || !beforeIds.has(moon.id)
-    || sun.properties.celestialProxy !== true || moon.properties.celestialProxy !== true;
+  const authorityChanged = !authorityBefore.sunProxy
+    || !authorityBefore.moonProxy
+    || !authorityBefore.sunLocked
+    || !authorityBefore.moonLocked
+    || authorityBefore.sunName !== 'Sun'
+    || authorityBefore.moonName !== 'Moon';
+  const changed = authorityChanged
+    || createdIds.length > 0
+    || removedIds.size > 0
+    || !beforeIds.has(sun.id)
+    || !beforeIds.has(moon.id);
   const diagnostics = {
     changed,
+    authorityChanged,
     reason,
     sunId: sun.id,
     moonId: moon.id,
@@ -106,8 +124,8 @@ export function repairCelestialAuthority(state, {
     sunCandidatesBefore: duplicateSunIds.size + 1,
     moonCandidatesBefore: duplicateMoonIds.size + 1
   };
-  if ((createdIds.length || removedIds.size) && addActivity) {
-    addActivity(state, 'world', `Repaired celestial authority: one Sun and one Moon remain.`, diagnostics);
+  if (changed && addActivity) {
+    addActivity(state, 'world', 'Repaired celestial authority: one Sun and one Moon remain.', diagnostics);
   }
   return { world: state.worldV010, scene, sun, moon, derived, diagnostics };
 }
