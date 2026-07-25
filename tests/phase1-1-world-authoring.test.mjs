@@ -2,11 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { defaultWorldSettings, applyWorldToScene } from '../server/v010-systems.mjs';
-import { normalizeEnvironmentState } from '../app/environment-runtime.js';
+import { directionFromAzimuthElevation, normalizeEnvironmentState } from '../app/environment-runtime.js';
 import { normalizeTerrainProperties, terrainBaseHeightAt, expandTerrain, addTerrainSculptLayer, undoTerrainSculpt } from '../app/worldgen.js';
 
 function scene() {
   return { id: 'scene-test', settings: {}, objects: [] };
+}
+
+function assertDirectionClose(actual, expected, tolerance = 1e-9) {
+  assert.equal(actual.length, 3);
+  for (let index = 0; index < 3; index += 1) assert.ok(Math.abs(actual[index] - expected[index]) <= tolerance);
 }
 
 test('Celestial Studio settings normalize and create authoritative Sun and Moon entities', () => {
@@ -27,6 +32,10 @@ test('Celestial Studio settings normalize and create authoritative Sun and Moon 
   assert.equal(derived.sunAzimuth, 120);
   assert.equal(derived.moonElevationDegrees, 41);
   assert.equal(moon.properties.phase, 0.5);
+  assert.equal(moon.properties.azimuth, 300);
+  assert.equal(moon.properties.elevation, 41);
+  const environment = normalizeEnvironmentState(target, { dir: [0, -1, 0], color: [1, 0.95, 0.85], exposure: 1 }, 0);
+  assertDirectionClose(environment.moonDirection, directionFromAzimuthElevation(300, 41));
 });
 
 test('renderer environment exposes adjustable discs, detailed moon, planet, moonlight, and volumetric cloud inputs', () => {
@@ -82,6 +91,7 @@ test('World, path, terrain, renderer, and API source expose the corrective autho
   const pathUi = fs.readFileSync(new URL('../app/v011.js', import.meta.url), 'utf8');
   const renderer = fs.readFileSync(new URL('../app/renderer.js', import.meta.url), 'utf8');
   const sky = fs.readFileSync(new URL('../app/sky-pass.js', import.meta.url), 'utf8');
+  const environment = fs.readFileSync(new URL('../app/environment-runtime.js', import.meta.url), 'utf8');
   const api010 = fs.readFileSync(new URL('../server/v010-api.mjs', import.meta.url), 'utf8');
   const api011 = fs.readFileSync(new URL('../server/v011-api.mjs', import.meta.url), 'utf8');
   assert.match(worldUi, /Array\.isArray\(snapshot\.assets\)/);
@@ -95,6 +105,8 @@ test('World, path, terrain, renderer, and API source expose the corrective autho
   assert.match(sky, /volumetricCloud/);
   assert.match(sky, /uMoonPhase/);
   assert.match(sky, /uPlanetEnabled/);
+  assert.match(environment, /object\.properties\?\.azimuth/);
+  assert.match(environment, /object\.properties\?\.elevation/);
   assert.match(api010, /\(state\.assets \|\| \[\]\)\.filter/);
   assert.match(api011, /sculpt\\\/undo/);
   assert.match(api011, /Number\.isInteger\(Number\(input\.index\)\)/);
