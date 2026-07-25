@@ -1,4 +1,4 @@
-import { applyCompactWorldRuntime, shouldAdvanceWorldTime } from './world-runtime.js';
+import { applyCompactWorldRuntime, clearCelestialRuntimeInterpolation, shouldAdvanceWorldTime, updateCelestialRuntimeInterpolation } from './world-runtime.js';
 
 const $ = selector => document.querySelector(selector);
 
@@ -25,10 +25,13 @@ const numeric = (id, fallback = 0) => {
 let snapshot = null;
 let lastFoliageTransaction = null;
 let timeTimer = null;
+let celestialAnimationFrame = null;
 let timeStepInFlight = false;
 let previewTimeInEditor = sessionStorage.getItem('omniforge.previewTimeInEditor') === '1';
 
 function synchronizeAuthoritativeEditor() {
+  const target = window.__omniforgeV011Bridge?.snapshot?.();
+  if (target?.scene?.id) clearCelestialRuntimeInterpolation(target.scene.id);
   if (snapshot?.state) window.dispatchEvent(new CustomEvent('omniforge:apply-state', { detail: { state: snapshot.state } }));
 }
 
@@ -38,6 +41,16 @@ function synchronizeRuntimeOnly() {
   const wrap = document.getElementById('viewportWrap');
   if (wrap) wrap.dataset.environmentRenderer = 'webgl';
   return true;
+}
+
+function animateCelestialRuntime(now) {
+  const target = window.__omniforgeV011Bridge?.snapshot?.();
+  if (target) updateCelestialRuntimeInterpolation(target, now);
+  celestialAnimationFrame = window.requestAnimationFrame(animateCelestialRuntime);
+}
+
+function ensureCelestialAnimation() {
+  if (celestialAnimationFrame === null) celestialAnimationFrame = window.requestAnimationFrame(animateCelestialRuntime);
 }
 
 function setStatus(message, error = false) {
@@ -119,6 +132,7 @@ function installWorldPanel() {
         <label>Planet rings<input id="v010PlanetRings" type="range" min="0" max="1" step="0.01"></label>
       </div>
       <p class="v010-section-note">Time-driven mode follows world time. Manual mode preserves the exact Sun, Moon, and planet positions entered here.</p>
+      <div id="v010EnvironmentDiagnostics" class="v010-status">Celestial authority loading…</div>
     </div>
 
     <div class="v010-card">
@@ -241,6 +255,9 @@ function populate(options = {}) {
   field('v010Fog').value = world.weather.fog;
   field('v010Weather').value = world.weather.preset;
   field('v010CelestialReadout').textContent = (world.sky.celestialMode === 'manual' ? 'MANUAL' : formatTime(world.time.hours)) + ' · MOON ' + (Number(world.sky.moonPhase ?? 0.72) * 100).toFixed(0) + '%';
+  const environment = snapshot.scene?.settings?.environmentV010 || snapshot.state?.scenes?.find(item => item.id === snapshot.state?.activeSceneId)?.settings?.environmentV010 || {};
+  const diagnostics = field('v010EnvironmentDiagnostics');
+  if (diagnostics) diagnostics.textContent = `Authority: 1 Sun + 1 Moon · Day ${Number(environment.sunDayFactor || 0).toFixed(2)} · Twilight ${Number(environment.twilightFactor || 0).toFixed(2)} · Night ${Number(environment.nightFactor || 0).toFixed(2)} · Exposure ${Number(snapshot.scene?.settings?.exposure ?? 1).toFixed(2)} · ${previewTimeInEditor ? 'smooth editor preview' : 'authoritative edit pause'}`;
 
   const assets = Array.isArray(snapshot.assets) ? snapshot.assets : Array.isArray(snapshot.state?.assets) ? snapshot.state.assets : [];
   const models = assets.filter(item => item.type === 'model' && !item.archived);
@@ -480,7 +497,8 @@ function bindControls() {
 
 window.addEventListener('beforeunload', () => {
   if (timeTimer) window.clearInterval(timeTimer);
+  if (celestialAnimationFrame !== null) window.cancelAnimationFrame(celestialAnimationFrame);
 });
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installWorldPanel);
-else installWorldPanel();
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { installWorldPanel(); ensureCelestialAnimation(); });
+else { installWorldPanel(); ensureCelestialAnimation(); }

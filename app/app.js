@@ -440,6 +440,7 @@ function objectPropertiesHtml(object) {
   if (object.type==='terrain') return materialSelect(p.materialId)+propColor('Fallback color','color',p.color)+propNumber('Mesh resolution','resolution',p.resolution||128,'1',8,256)+propCheck('Receive shadows','receivesShadows',p.receivesShadows!==false)+propCheck('Collision','collider',p.collider!==false)+`<div class="surface-blend-callout"><strong>Stable world bounds</strong><p>Terrain scale is locked. Use the v0.11 Terrain Generator below to change landforms or expand north, south, east, west, or all directions without stretching paths.</p></div>`;
   if (object.type==='path') return materialSelect(p.materialId)+propColor('Fallback color','color',p.color)+propNumber('Path width','width',p.width||3,'0.1',.2,50)+propNumber('Blend shoulder','blendDistance',p.blendDistance??2.5,'0.1',.1,30)+propNumber('Edge irregularity','edgeNoise',p.edgeNoise??.5,'0.05',0,4)+propCheck('Conform to terrain','conformToTerrain',p.conformToTerrain!==false)+propCheck('Collision','collider',p.collider!==false)+propCheck('Navigation','navigation',p.navigation!==false)+propNumber('Nature clearance','vegetationExclusion',p.vegetationExclusion||0,'0.1',0,20)+`<div class="surface-blend-callout">The terrain remains authoritative. This path paints a soft, noise-broken material mask into the terrain instead of floating a hard-edged mesh above it.</div>`;
   if (object.type==='decal') return materialSelect(p.materialId)+propColor('Tint','color',p.color)+propNumber('Opacity','opacity',p.opacity??.85,'0.05',0,1)+propNumber('Projection depth','projectionDepth',p.projectionDepth??.25,'0.05',.001,20)+propNumber('Sort order','sortOrder',p.sortOrder||0,'1',-1000,1000)+`<div class="surface-blend-callout">This is an authored surface decal. Keep projection depth narrow and inspect nearby geometry before approval.</div>`;
+  if (p.celestialProxy) { const role=String(p.celestialRole||'celestial'); return `<div class="surface-blend-callout celestial-proxy-callout"><strong>Authoritative ${escapeHtml(role === 'sun' ? 'Sun' : 'Moon')} proxy</strong><p>This hierarchy entry is a protected view of the shared Celestial Studio authority. It cannot be duplicated or deleted, and it survives save/reload with a stable identity.</p><div class="property-row"><label>Azimuth</label><span>${Number(p.azimuth ?? 0).toFixed(2)}°</span></div><div class="property-row"><label>Elevation</label><span>${Number(p.elevation ?? 0).toFixed(2)}°</span></div><div class="property-row"><label>Angular size</label><span>${Number(p.angularSize ?? 1).toFixed(2)}×</span></div><button id="openCelestialStudioButton" class="button primary" type="button">Open Celestial Studio</button></div>`; }
   if (object.type==='directionalLight') return propColor('Light color','color',p.color)+propNumber('Intensity','intensity',p.intensity||1,'0.05',0,12)+propCheck('Cast shadows','castsShadows',p.castsShadows!==false);
   if (object.type==='pointLight') return propColor('Light color','color',p.color)+propNumber('Intensity','intensity',p.intensity||1,'0.1',0,50)+propNumber('Range','range',p.range||10,'0.5',.5,100);
   if (object.type==='model') {const asset=(state.assets||[]).find(item=>item.type==='model'&&item.id===p.assetId);return `<div class="model-object-reference"><div class="property-row"><label>Asset</label><span>${escapeHtml(asset?.name||p.assetId||'Missing')}</span></div><div class="property-row"><label>Asset ID</label><code>${escapeHtml(p.assetId||'')}</code></div>${propColor('Fallback color','color',p.color)}${propCheck('Collision','collider',Boolean(p.collider))}${propCheck('Cast shadows','castsShadows',p.castsShadows!==false)}${propCheck('Receive shadows','receivesShadows',p.receivesShadows!==false)}</div>`;}
@@ -448,9 +449,10 @@ function objectPropertiesHtml(object) {
 
 function renderInspector() {
   const object = selectedObject();
-  ui.duplicateButton.disabled = !object;
-  ui.prefabButton.disabled = !object;
-  ui.deleteButton.disabled = !object || object.locked;
+  const celestialProxy = Boolean(object?.properties?.celestialProxy);
+  ui.duplicateButton.disabled = !object || celestialProxy;
+  ui.prefabButton.disabled = !object || celestialProxy;
+  ui.deleteButton.disabled = !object || object.locked || celestialProxy;
   if (!object) {
     ui.inspectorTitle.textContent='Nothing selected';
     ui.inspectorContent.innerHTML='<div class="inspector-empty"><div><strong>Select a 3D object</strong><p>Click an object in the viewport or choose it from the hierarchy to edit its live scene data.</p></div></div>';
@@ -467,14 +469,10 @@ function renderInspector() {
   }).join('');
   const pathPoints=object.type==='path'?section('Spline control points',`<div class="path-points">${(object.properties.points||[]).map((point,index)=>`<div class="path-point"><span>${index+1}</span><input data-path-point="${index}.0" type="number" step=".5" value="${point[0]}"><input data-path-point="${index}.1" type="number" step=".5" value="${point[1]}"><button data-remove-point="${index}" type="button">×</button></div>`).join('')}<button id="addPathPoint" class="path-add" type="button">Add control point</button></div>`,`${object.properties.points?.length||0} points`):'';
   ui.inspectorContent.innerHTML=`
-    <div class="object-summary"><div class="object-type-icon">${objectIcon(object.type)}</div><div><input id="objectNameInput" value="${escapeHtml(object.name)}"><div class="object-meta">${escapeHtml(typeLabel(object.type))} · ${escapeHtml(object.id)}</div></div></div>
+    <div class="object-summary"><div class="object-type-icon">${objectIcon(object.type)}</div><div><input id="objectNameInput" value="${escapeHtml(object.name)}" ${celestialProxy?'readonly':''}><div class="object-meta">${escapeHtml(celestialProxy?'Celestial Authority Proxy':typeLabel(object.type))} · ${escapeHtml(object.id)}</div></div></div>
     ${object.properties?.prefabId?`<div class="prefab-pill"><span>Prefab instance</span><span>${escapeHtml(object.properties.prefabId)}</span></div>`:''}
     ${object.type==='model'&&object.properties?.previewOnly?`<div class="surface-blend-callout"><strong>Placement preview</strong><p>This model is temporary. Inspect grounding, scale, orientation, collision clearance, and composition before committing.</p><div class="material-tuner-actions"><button id="commitAssetPreviewButton" class="button primary" type="button">Commit placement</button><button id="cancelAssetPreviewButton" class="button subtle" type="button">Cancel preview</button></div></div>`:''}
-    ${section('Transform',vectorField('Position',object.transform.position,'position')+vectorField('Rotation',object.transform.rotation,'rotation')+vectorField('Scale',object.transform.scale,'scale'),'WORLD')}
-    ${section('Properties',objectPropertiesHtml(object),object.type.toUpperCase())}
-    ${pathPoints}
-    ${section('Components',`${components || '<p class="panel-hint">No extra behavior components.</p>'}<div class="component-add-row"><button id="addRigidbody" class="add-component" type="button">+ Rigidbody</button><button id="addCollider" class="add-component" type="button">+ Collider</button><button id="addRotator" class="add-component" type="button">+ Rotator</button></div>`,`${object.components?.length||0}`)}
-    ${section('Entity flags',propCheck('Visible','__visible',object.visible)+propCheck('Locked','__locked',object.locked),'SCENE')}
+    ${celestialProxy ? section('Celestial authority',objectPropertiesHtml(object),'WORLD AUTHORITY') : section('Transform',vectorField('Position',object.transform.position,'position')+vectorField('Rotation',object.transform.rotation,'rotation')+vectorField('Scale',object.transform.scale,'scale'),'WORLD') + section('Properties',objectPropertiesHtml(object),object.type.toUpperCase()) + pathPoints + section('Components',`${components || '<p class="panel-hint">No extra behavior components.</p>'}<div class="component-add-row"><button id="addRigidbody" class="add-component" type="button">+ Rigidbody</button><button id="addCollider" class="add-component" type="button">+ Collider</button><button id="addRotator" class="add-component" type="button">+ Rotator</button></div>`,`${object.components?.length||0}`) + section('Entity flags',propCheck('Visible','__visible',object.visible)+propCheck('Locked','__locked',object.locked),'SCENE')}
   `;
   bindInspector(object);
   $('#commitAssetPreviewButton')?.addEventListener('click',()=>commitAssetPreview(object.id));
@@ -483,6 +481,7 @@ function renderInspector() {
 
 function setNested(arrayRoot,index,value){ arrayRoot[Number(index)] = Number(value); }
 function bindInspector(object) {
+  if(object.properties?.celestialProxy)return;
   $('#objectNameInput')?.addEventListener('change',event=>patchObject(object.id,{name:event.target.value.trim()||object.name}));
   $$('[data-number-path]').forEach(input=>input.addEventListener('change',event=>{
     const [root,index]=input.dataset.numberPath.split('.');
