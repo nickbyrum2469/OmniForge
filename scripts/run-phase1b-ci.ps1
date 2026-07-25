@@ -18,6 +18,25 @@ function Stop-OmniForgeProcesses {
         Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
+function Get-CelestialRole {
+    param([object]$Object)
+    if ($null -eq $Object -or $null -eq $Object.properties) { return $null }
+    $property = $Object.properties.PSObject.Properties['celestialRole']
+    if ($null -eq $property) { return $null }
+    return [string]$property.Value
+}
+
+function Get-ObjectPropertyValue {
+    param(
+        [object]$Object,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+    if ($null -eq $Object) { return $null }
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
 $root = (Get-Location).Path
 $testOutput = Join-Path $root 'PHASE1B_TEST_OUTPUT.txt'
 $verifyOutput = Join-Path $root 'PHASE1B_VERIFY_OUTPUT.txt'
@@ -166,12 +185,14 @@ try {
     if (-not $healthy) { throw 'Packaged Phase 1B editor did not become healthy.' }
 
     $world = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/v010/world" -TimeoutSec 8
-    $sun = @($world.scene.objects | Where-Object { $_.properties.celestialRole -eq 'sun' })
-    $moon = @($world.scene.objects | Where-Object { $_.properties.celestialRole -eq 'moon' })
+    $sun = @($world.scene.objects | Where-Object { (Get-CelestialRole $_) -eq 'sun' })
+    $moon = @($world.scene.objects | Where-Object { (Get-CelestialRole $_) -eq 'moon' })
     if ($sun.Count -ne 1 -or $moon.Count -ne 1) {
         throw "Celestial authority regression: Sun=$($sun.Count), Moon=$($moon.Count)."
     }
-    if ($moon[0].properties.phaseName -eq $null -or $moon[0].properties.ageDays -eq $null) {
+    $phaseName = Get-ObjectPropertyValue $moon[0].properties 'phaseName'
+    $ageDays = Get-ObjectPropertyValue $moon[0].properties 'ageDays'
+    if ($null -eq $phaseName -or $null -eq $ageDays) {
         throw 'Lunar phase metadata is missing.'
     }
 
@@ -197,8 +218,11 @@ try {
     } | ConvertTo-Json -Depth 8
     $updated = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/v010/world" -Method Patch -ContentType 'application/json' -Body $body -TimeoutSec 8
     $active = $updated.state.scenes | Where-Object { $_.id -eq $updated.state.activeSceneId } | Select-Object -First 1
-    $updatedMoon = $active.objects | Where-Object { $_.properties.celestialRole -eq 'moon' } | Select-Object -First 1
-    if ($updatedMoon.properties.eventType -ne 'lunar-eclipse' -or $updatedMoon.properties.lunarEclipse -lt 0.99) {
+    $updatedMoon = $active.objects | Where-Object { (Get-CelestialRole $_) -eq 'moon' } | Select-Object -First 1
+    if ($null -eq $updatedMoon) { throw 'Updated Moon authority is missing.' }
+    $eventType = Get-ObjectPropertyValue $updatedMoon.properties 'eventType'
+    $lunarEclipse = [double](Get-ObjectPropertyValue $updatedMoon.properties 'lunarEclipse')
+    if ($eventType -ne 'lunar-eclipse' -or $lunarEclipse -lt 0.99) {
         throw 'Forced lunar eclipse did not reach the Moon authority.'
     }
     if ($updated.state.worldV010.sky.starTwinkleAmount -ne 0.8) {
