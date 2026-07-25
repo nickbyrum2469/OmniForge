@@ -1,9 +1,6 @@
 name: Targeted Phase 1.1 world authoring runner
 
 on:
-  push:
-    branches:
-      - milestone-12-1/celestial-path-terrain-corrections
   pull_request:
     branches:
       - main
@@ -36,7 +33,10 @@ jobs:
         shell: bash
         run: |
           set +e
-          python3 scripts/apply-phase1-1-world-authoring.py > PHASE1_1_OUTPUT.txt 2>&1
+          {
+            python3 scripts/apply-phase1-1-world-authoring.py
+            python3 scripts/cleanup-phase1-1-sculpt-routes.py
+          } > PHASE1_1_OUTPUT.txt 2>&1
           status=$?
           cat PHASE1_1_OUTPUT.txt
           echo "status=$status" >> "$GITHUB_OUTPUT"
@@ -76,5 +76,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app server
-          git commit -m "Add celestial controls, volumetric clouds, path tools, and local terrain sculpting"
+          git commit -m "Finalize celestial, cloud, path, and terrain authoring corrections"
           git push origin HEAD:milestone-12-1/celestial-path-terrain-corrections
