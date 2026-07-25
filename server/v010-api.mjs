@@ -182,7 +182,12 @@ export async function handleV010Request(req, res) {
         const world = ensureWorld(state);
         const seconds = Math.max(0, Math.min(60, Number(input.seconds || 1)));
         if (world.time.enabled !== false) {
-          world.time.hours = ((Number(world.time.hours || 0) + seconds * Number(world.time.timeScale || 0) / 3600) % 24 + 24) % 24;
+          const currentHours = Number(world.time.hours || 0);
+          const totalHours = currentHours + seconds * Number(world.time.timeScale || 0) / 3600;
+          const dayDelta = Math.floor(totalHours / 24);
+          world.time.hours = ((totalHours % 24) + 24) % 24;
+          world.time.absoluteDay = Number(world.time.absoluteDay ?? world.time.dayOfYear ?? 172) + dayDelta;
+          world.time.dayOfYear = ((Math.floor(world.time.absoluteDay) % 365) + 365) % 365;
         }
         world.updatedAt = now();
         const derived = applyWorldToScene(activeScene(state), world);

@@ -328,8 +328,12 @@ test('v0.10 bootstrap serves world systems and upgrades the existing Ground comm
     const stateBeforeReadOnlyQueries = await requestJson(port, '/api/state');
     const initial = await requestJson(port, '/api/v010/world');
     assert.equal(initial.status, 200);
-    assert.equal(initial.body.world.schemaVersion, 1);
+    assert.equal(initial.body.world.schemaVersion, 2);
+    assert.ok(Number.isFinite(initial.body.world.time.absoluteDay));
+    assert.equal(initial.body.world.sky.moonPhaseMode, 'sun-relative');
+    assert.ok(Number(initial.body.world.sky.moonOrbitPeriodDays) > 1);
     assert.ok(initial.body.scene.settings.environmentV010);
+    assert.ok(initial.body.scene.settings.environmentV010.celestial?.moon);
     const worldgen = await requestJson(port, '/api/v011/worldgen');
     assert.equal(worldgen.status, 200);
     assert.ok(worldgen.body.foundation);

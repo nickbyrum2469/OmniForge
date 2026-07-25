@@ -10,6 +10,7 @@ import { normalizeEnvironmentState } from './environment-runtime.js';
 import { SkyPass } from './sky-pass.js';
 import { RenderGraph } from './render-graph.js';
 import { FrameResources, detectRenderCapabilities } from './frame-resources.js';
+import { HDRPipeline } from './hdr-pipeline.js';
 
 function compile(gl,type,source){
   const shader=gl.createShader(type); gl.shaderSource(shader,source); gl.compileShader(shader);
@@ -323,10 +324,7 @@ void main(){
   float distanceToCamera=length(uCameraPos-vWorld);
   float fog=smoothstep(uFogNear,uFogFar,distanceToCamera);
   color=mix(color,pow(max(uFogColor,vec3(.001)),vec3(2.2)),fog*.86);
-  color*=max(.05,uExposure);
-  color=(color*(2.51*color+.03))/(color*(2.43*color+.59)+.14);
-  color=pow(clamp(color,0.0,1.0),vec3(1.0/2.2));
-  outColor=vec4(color,clamp(uOpacity,0.0,1.0));
+  outColor=vec4(max(color,vec3(0.0)),clamp(uOpacity,0.0,1.0));
 }`;
 const depthVS=`#version 300 es
 precision highp float;
@@ -440,7 +438,9 @@ export class Renderer3D{
     const gl=this.gl;
     this.contextLost=false;this.frameCounter=0;this.lastFrameReport=null;
     this.capabilities=detectRenderCapabilities(gl);
+    this.hdrPipeline=new HDRPipeline(gl,this.capabilities);
     this.frameResources=new FrameResources(canvas,gl,{maxDevicePixelRatio:2,onResize:result=>{
+      this.hdrPipeline?.ensureSize(result.width,result.height);
       this.renderGraph?.setResource('default-framebuffer',null,{kind:'framebuffer',format:'canvas',width:result.width,height:result.height,pixelRatio:result.pixelRatio,revision:result.revision});
       window.__omniforgeDiagnostics?.event?.('frame-resources-resized',result);
     }});
@@ -621,23 +621,33 @@ export class Renderer3D{
     const graph=new RenderGraph({gl:this.gl,diagnostics:window.__omniforgeDiagnostics,gpuSampleInterval:30});
     for(const [name,descriptor] of [
       ['scene',{kind:'authority'}],['camera',{kind:'authority'}],['lighting',{kind:'frame-state'}],['environment',{kind:'frame-state'}],
-      ['default-framebuffer',{kind:'framebuffer',format:'canvas'}]
+      ['default-framebuffer',{kind:'framebuffer',format:'canvas'}],['hdr-scene-color',{kind:'texture',format:'rgba16f'}],['hdr-scene-depth',{kind:'renderbuffer',format:'depth24'}]
     ])graph.importResource(name,name==='default-framebuffer'?null:null,descriptor);
     graph.addPass({name:'shadow',category:'shadow',reads:['scene','camera','lighting'],writes:['shadow-map'],enabled:frame=>Boolean(frame.lights.shadows),execute:frame=>this.renderShadow(frame.scene,frame.lightViewProj)});
-    graph.addPass({name:'environment',category:'environment',after:['shadow'],reads:['camera','environment','default-framebuffer'],writes:['scene-color','scene-depth'],execute:frame=>this.renderEnvironmentPass(frame)});
-    graph.addPass({name:'opaque-world',category:'geometry',after:['environment'],reads:['scene','camera','lighting','environment','shadow-map','scene-color','scene-depth'],writes:['scene-color','scene-depth'],execute:frame=>this.renderOpaqueWorldPass(frame)});
-    graph.addPass({name:'editor-overlays',category:'editor',after:['opaque-world'],reads:['scene','camera','scene-color','scene-depth'],writes:['scene-color'],execute:frame=>this.renderEditorOverlayPass(frame)});
+    graph.addPass({name:'environment',category:'environment',after:['shadow'],reads:['camera','environment','default-framebuffer'],writes:['hdr-scene-color','hdr-scene-depth'],execute:frame=>this.renderEnvironmentPass(frame)});
+    graph.addPass({name:'opaque-world',category:'geometry',after:['environment'],reads:['scene','camera','lighting','environment','shadow-map','hdr-scene-color','hdr-scene-depth'],writes:['hdr-scene-color','hdr-scene-depth'],execute:frame=>this.renderOpaqueWorldPass(frame)});
+    graph.addPass({name:'display-transform',category:'display',after:['opaque-world'],reads:['hdr-scene-color','hdr-scene-depth','environment'],writes:['scene-color','scene-depth'],execute:frame=>this.renderDisplayPass(frame)});
+    graph.addPass({name:'editor-overlays',category:'editor',after:['display-transform'],reads:['scene','camera','scene-color','scene-depth'],writes:['scene-color'],execute:frame=>this.renderEditorOverlayPass(frame)});
     graph.addPass({name:'diagnostics',category:'diagnostics',after:['editor-overlays'],reads:['scene-color'],writes:['frame-telemetry'],critical:false,execute:frame=>this.renderDiagnosticsPass(frame)});
     graph.compile();
     return graph;
   }
   renderEnvironmentPass(frame){
     const {gl,camera,environment}=frame;
-    gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);
+    this.hdrPipeline.bindScene(this.canvas.width,this.canvas.height);
     gl.clearColor(environment.groundColor[0],environment.groundColor[1],environment.groundColor[2],1);
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     if(this.skyPass){try{this.skyPass.render(camera,environment);}catch(error){window.__omniforgeDiagnostics?.warn?.('sky-pass-failed',{message:error.message});}}
     gl.clear(gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.cullFace(gl.BACK);
+  }
+  renderDisplayPass(frame){
+    this.hdrPipeline.present({
+      exposure: frame.environment.exposureEV,
+      saturation: frame.environment.saturation,
+      contrast: frame.environment.contrast,
+      vibrance: frame.environment.vibrance,
+      toneMapper: frame.environment.toneMapper
+    });
   }
   renderOpaqueWorldPass(frame){
     const {gl,scene,camera,selectedId,viewProj,lightViewProj,lights,foliageGroups,foliageIds}=frame;
@@ -680,9 +690,9 @@ export class Renderer3D{
     window.__omniforgeDiagnostics?.event?.('webgl-context-restored',{recoveryMode:this.capabilities.contextRecoveryMode,contextGeneration:this.frameResources.contextGeneration});
     setTimeout(()=>globalThis.location?.reload?.(),0);
   }
-  getRenderDiagnostics(){return {capabilities:this.capabilities,frameResources:this.frameResources.snapshot(),renderGraph:this.renderGraph.diagnosticsSnapshot(),lastFrameReport:this.lastFrameReport};}
+  getRenderDiagnostics(){return {capabilities:this.capabilities,frameResources:this.frameResources.snapshot(),hdrPipeline:this.hdrPipeline.snapshot(),renderGraph:this.renderGraph.diagnosticsSnapshot(),lastFrameReport:this.lastFrameReport};}
   dispose(){
-    this.resizeObserver?.disconnect?.();this.canvas.removeEventListener('webglcontextlost',this.boundContextLost,false);this.canvas.removeEventListener('webglcontextrestored',this.boundContextRestored,false);this.renderGraph?.dispose?.();
+    this.resizeObserver?.disconnect?.();this.canvas.removeEventListener('webglcontextlost',this.boundContextLost,false);this.canvas.removeEventListener('webglcontextrestored',this.boundContextRestored,false);this.renderGraph?.dispose?.();this.hdrPipeline?.dispose?.();
   }
   render(scene,camera,selectedId,options={}){
     const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('Renderer3D.render',{objects:scene.objects.length},12)||(()=>{});
@@ -698,7 +708,7 @@ export class Renderer3D{
     let graphReport;
     try{graphReport=this.renderGraph.execute(frame);}catch(error){
       window.__omniforgeDiagnostics?.warn?.('render-graph-frame-failed',{message:error.message,frameIndex:this.frameCounter});
-      gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.clearColor(environment.groundColor[0],environment.groundColor[1],environment.groundColor[2],1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+      this.hdrPipeline.bindScene(this.canvas.width,this.canvas.height);gl.clearColor(environment.groundColor[0],environment.groundColor[1],environment.groundColor[2],1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
       graphReport=this.renderGraph.lastReport;
     }
     this.lastFrameReport={frameIndex:this.frameCounter,frameResources,graph:graphReport,capabilities:this.capabilities};
