@@ -1,0 +1,126 @@
+OmniForge Windows verification exit code: 1
+Generated: 2026-07-25T05:01:54.0781417+00:00
+
+--- STDOUT ---
+
+> omniforge-3d-engine@0.11.0 verify
+> node scripts/verify.mjs
+
+Syntax: server: passed
+Syntax: provider framework: passed
+Syntax: job manager: passed
+Syntax: marketplace: passed
+Syntax: local worker: passed
+Syntax: MCP bridge: passed
+Syntax: editor: passed
+Syntax: runtime diagnostics: passed
+Syntax: renderer: passed
+Syntax: desktop shell: passed
+✔ automatic world time cannot replace the editor workspace while authoring (1.0403ms)
+✔ compact world runtime patches lighting and celestial objects without replacing editor state (21.7389ms)
+✔ night remains readable in Edit mode without changing authored Play lighting (0.6229ms)
+✔ runtime source contains polling, compact-step, read-only GET, and traceable-build safeguards (2.4407ms)
+✔ default project is general-purpose and contains a real 3D starter scene (17.3708ms)
+✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (5.1868ms)
+✔ all supported scene primitives receive valid transforms and properties (3.1486ms)
+✔ terrain height is deterministic and responds to world position (1.0164ms)
+✔ path defaults preserve terrain-conforming system relationships (0.2995ms)
+✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.9275ms)
+✔ starter PBR materials include real texture-map files and are protected (5.7427ms)
+✔ horizontal mouse look uses the intuitive right-positive yaw convention (0.6821ms)
+✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (1.2574ms)
+✔ Windows desktop builder pins and stamps the native executable metadata (1.0875ms)
+✔ project hub and editor usability controls are wired into the authoritative editor (2.8896ms)
+✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (606.5339ms)
+✔ two runtime sessions cannot write the same active project simultaneously (761.4306ms)
+✔ starter objects are grounded against the authoritative terrain surface (3.5635ms)
+✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.3482ms)
+✔ managed workspace path cannot escape the projects root (0.7895ms)
+✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (228.4956ms)
+✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (303.8019ms)
+✔ material authoring settings clamp safely and preserve tiling transforms (0.2536ms)
+✔ material tuner exposes live tiling and PBR response controls (1.1812ms)
+✔ active source and documentation contain no legacy product assumptions (14.7793ms)
+✔ desktop clipboard and pointer-lock permissions use guarded native paths (1.131ms)
+✔ surface recipes are stable linked assets with validation and deterministic masks (3.4852ms)
+✔ Surface Studio preview, commit, revert, and recipe rendering are wired (1.2019ms)
+✔ desktop launcher rejects stale packaged executables (0.2412ms)
+✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (18.2006ms)
+✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (2.0986ms)
+✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (11.7196ms)
+✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (598.0962ms)
+✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (7.8434ms)
+✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (12.6318ms)
+✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.3676ms)
+✔ provider framework normalizes independent providers, settings, and persistent job records (3.3427ms)
+✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.6414ms)
+✔ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (7655.0071ms)
+✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (6.1061ms)
+✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (839.1406ms)
+✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (1.1996ms)
+✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.4451ms)
+✔ v0.9 decal and atlas recipes validate stable production metadata (0.7695ms)
+✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (2.0051ms)
+✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (555.7449ms)
+✔ Git-aware desktop launcher rebuilds after source commits and local edits (1.4493ms)
+file:///D:/a/OmniForge/OmniForge/tests/phase1-1-world-authoring.test.mjs:6
+import { normalizeTerrainProperties, terrainBaseHeightAt, expandTerrain, addTerrainSculptLayer, undoTerrainSculpt } from '../app/worldgen.js';
+                                                                         ^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: The requested module '../app/worldgen.js' does not provide an export named 'addTerrainSculptLayer'
+    at #asyncInstantiate (node:internal/modules/esm/module_job:327:21)
+    at async ModuleJob.run (node:internal/modules/esm/module_job:431:5)
+    at async node:internal/modules/esm/loader:643:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.18.0
+✖ tests\phase1-1-world-authoring.test.mjs (117.1333ms)
+✔ sky rays rotate with the camera but ignore camera translation (3.0709ms)
+✔ environment state is bounded and shares the directional light authority (1.0789ms)
+✔ nested World settings drive weather, cloud wind, quality, and twilight (0.3686ms)
+✔ viewport look ignores acquisition noise and rejects implausible direction snaps (0.5549ms)
+✔ yaw remains normalized and pitch remains bounded (0.197ms)
+✔ viewport acquisition protects camera authority before pointer lock and releases cleanly (1.3932ms)
+✔ normal rendering no longer depends on the legacy CSS atmosphere (1.5231ms)
+✔ v0.10 worker IPC drains stdout before finalizing jobs (1.758ms)
+✔ v0.10 seeded random and foliage placement are deterministic (21.3178ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (2.6217ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.9435ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.6108ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (34.4163ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (15.0165ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (1.202ms)
+✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (1.3746ms)
+✔ v0.10 existing Ground button and World tab synchronize through authoritative state (1.5215ms)
+✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (1060.4938ms)
+✔ Scene Block inspector enhancement has a stable marker and coalesced observer (1.7799ms)
+✔ diagnostic mode includes input, event-loop, WebGL, and long-task evidence (0.4553ms)
+✔ v0.11 renderer constructs a finite terrain mesh without missing runtime helpers (22.552ms)
+✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (19.0738ms)
+✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (0.6581ms)
+✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (1.0487ms)
+✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (1.7395ms)
+✔ path grade compilation respects configured maximum grade and bounded terrain cut/fill (10.1557ms)
+✔ path material blending follows the sampled spline instead of straight control-point chords (2.927ms)
+✔ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (2.9419ms)
+✔ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (802.4211ms)
+✔ same-scene live viewport camera remains authoritative during navigation and pending persistence (1.7853ms)
+✔ path guide edges share exact joined endpoints and follow edge terrain height (0.7518ms)
+ℹ tests 79
+ℹ suites 0
+ℹ pass 78
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12001.6457
+
+✖ failing tests:
+
+test at tests\phase1-1-world-authoring.test.mjs:1:1
+✖ tests\phase1-1-world-authoring.test.mjs (117.1333ms)
+  'test failed'
+
+
+--- STDERR ---
+Automated tests failed.
+

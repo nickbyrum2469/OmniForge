@@ -280,13 +280,19 @@ test('v0.10 atmosphere controls affect lighting weather surfaces and optimized f
   const renderer = fs.readFileSync(path.join(ROOT, 'app', 'renderer.js'), 'utf8');
   const worldUi = fs.readFileSync(path.join(ROOT, 'app', 'v010.js'), 'utf8');
   const worldCss = fs.readFileSync(path.join(ROOT, 'app', 'v010.css'), 'utf8');
+  const skyPass = fs.readFileSync(path.join(ROOT, 'app', 'sky-pass.js'), 'utf8');
+  const environment = fs.readFileSync(path.join(ROOT, 'app', 'environment-runtime.js'), 'utf8');
   assert.match(renderer, /drawElementsInstanced/);
   assert.match(renderer, /vertexAttribDivisor/);
   assert.match(renderer, /uFoliageWindStrength/);
   assert.match(renderer, /foliageGroups\(scene,camera\)/);
+  assert.match(renderer, /new SkyPass\(gl\)/);
   assert.match(worldUi, /applyViewportEnvironment/);
-  assert.match(worldCss, /v010-cloud-drift/);
-  assert.match(worldCss, /--v010-stars/);
+  assert.match(worldUi, /environmentRenderer = 'webgl'/);
+  assert.match(skyPass, /uCloudCoverage/);
+  assert.match(environment, /normalizeEnvironmentState/);
+  assert.doesNotMatch(worldCss, /v010-cloud-drift/);
+  assert.doesNotMatch(worldCss, /--v010-stars/);
 });
 
 test('v0.10 existing Ground button and World tab synchronize through authoritative state', () => {

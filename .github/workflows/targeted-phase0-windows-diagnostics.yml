@@ -1,0 +1,10 @@
+name: Archived Phase 0 Windows diagnostics
+
+on:
+  workflow_dispatch:
+
+jobs:
+  archived:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Superseded by targeted-phase0-final-gate.yml."

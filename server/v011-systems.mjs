@@ -11,7 +11,10 @@ import {
   samplePathSpline,
   expandTerrain,
   insertPathPoint,
-  splitPath
+  splitPath,
+  addTerrainSculptLayer,
+  undoTerrainSculpt,
+  clearTerrainSculpt
 } from '../app/worldgen.js';
 
 const now = () => new Date().toISOString();
@@ -179,4 +182,4 @@ export function updatePathProperties(pathObject, patch = {}) {
   return pathObject.properties;
 }
 
-export { expandTerrain, insertPathPoint, splitPath, normalizeTerrainProperties, normalizePathProperties, migrateSceneWorldFoundation, terrainHeightAt, terrainNormalAt, samplePathSpline };
+export { expandTerrain, insertPathPoint, splitPath, addTerrainSculptLayer, undoTerrainSculpt, clearTerrainSculpt, normalizeTerrainProperties, normalizePathProperties, migrateSceneWorldFoundation, terrainHeightAt, terrainNormalAt, samplePathSpline };

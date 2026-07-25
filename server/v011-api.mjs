@@ -16,6 +16,9 @@ import {
   expandTerrain,
   insertPathPoint,
   splitPath,
+  addTerrainSculptLayer,
+  undoTerrainSculpt,
+  clearTerrainSculpt,
   normalizePathProperties,
   migrateSceneWorldFoundation
 } from './v011-systems.mjs';
@@ -168,6 +171,42 @@ export async function handleV011Request(req, res) {
       return true;
     }
 
+    ids = match(url.pathname, /^\/api\/v011\/terrain\/([^/]+)\/sculpt$/);
+    if (ids && req.method === 'POST') {
+      const input = await readJsonBody(req);
+      const result = mutateState(state => {
+        ensureWorldFoundationState(state);
+        const terrain = requireTerrain(state, ids[0]);
+        const layer = addTerrainSculptLayer(terrain, input);
+        addActivity(state, 'worldgen', 'Applied ' + layer.mode + ' sculpt stamp to ' + terrain.name + '.', { terrainId: terrain.id, layer });
+        return { terrain, layer };
+      });
+      json(res, 201, { ...result.result, state: result.state });
+      return true;
+    }
+
+    ids = match(url.pathname, /^\/api\/v011\/terrain\/([^/]+)\/sculpt\/undo$/);
+    if (ids && req.method === 'POST') {
+      const result = mutateState(state => {
+        ensureWorldFoundationState(state);
+        const terrain = requireTerrain(state, ids[0]);
+        return { terrain, removed: undoTerrainSculpt(terrain) };
+      });
+      json(res, 200, { ...result.result, state: result.state });
+      return true;
+    }
+
+    ids = match(url.pathname, /^\/api\/v011\/terrain\/([^/]+)\/sculpt$/);
+    if (ids && req.method === 'DELETE') {
+      const result = mutateState(state => {
+        ensureWorldFoundationState(state);
+        const terrain = requireTerrain(state, ids[0]);
+        return { terrain, removedCount: clearTerrainSculpt(terrain) };
+      });
+      json(res, 200, { ...result.result, state: result.state });
+      return true;
+    }
+
     ids = match(url.pathname, /^\/api\/v011\/path\/([^/]+)$/);
     if (ids && req.method === 'PATCH') {
       const input = await readJsonBody(req);
@@ -190,7 +229,14 @@ export async function handleV011Request(req, res) {
       const result = mutateState(state => {
         ensureWorldFoundationState(state);
         const path = requirePath(state, ids[0]);
-        const inserted = insertPathPoint(path, Number(input.x), Number(input.z));
+        let inserted;
+        if (Number.isInteger(Number(input.index))) {
+          const properties = normalizePathProperties(path.properties || {}, path.transform || {});
+          const points = properties.points.map(point => [...point]);
+          const index = Math.max(0, Math.min(points.length, Number(input.index)));
+          points.splice(index, 0, [Number(input.x), Number(input.z)]);
+          inserted = { points, index };
+        } else inserted = insertPathPoint(path, Number(input.x), Number(input.z));
         updatePathProperties(path, { points: inserted.points });
         state.selection.objectId = path.id;
         addActivity(state, 'path', `Inserted spline node ${inserted.index + 1} on ${path.name}.`, { pathId: path.id, index: inserted.index, point: inserted.points[inserted.index] });

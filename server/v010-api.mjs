@@ -140,7 +140,7 @@ export async function handleV010Request(req, res) {
       json(res, 200, {
         world,
         scene: activeScene(state),
-        assets: state.assets.filter(item => ['model', 'foliageSpecies', 'foliageFamily', 'biomeRecipe', 'windProfile'].includes(item.type)),
+        assets: (state.assets || []).filter(item => ['model', 'foliageSpecies', 'foliageFamily', 'biomeRecipe', 'windProfile'].includes(item.type)),
         transactions: state.foliageTransactions || [],
         runtimeDiagnostics: state.runtimeDiagnostics || {},
         state
