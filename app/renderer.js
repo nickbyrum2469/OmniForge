@@ -6,6 +6,8 @@ import {
 import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, samplePathSpline, normalizeTerrainProperties, normalizePathProperties, terrainBounds } from './worldgen.js';
 import { buildPathGuideSegments } from './path-visuals.js';
 import { resolveViewportLighting } from './world-runtime.js';
+import { normalizeEnvironmentState } from './environment-runtime.js';
+import { SkyPass } from './sky-pass.js';
 
 function compile(gl,type,source){
   const shader=gl.createShader(type); gl.shaderSource(shader,source); gl.compileShader(shader);
@@ -426,9 +428,9 @@ function createLineBuffer(gl,positions){
 
 export class Renderer3D{
   constructor(canvas){
-    this.canvas=canvas;this.gl=canvas.getContext('webgl2',{antialias:true,alpha:true,preserveDrawingBuffer:true,premultipliedAlpha:false});
+    this.canvas=canvas;this.gl=canvas.getContext('webgl2',{antialias:true,alpha:false,preserveDrawingBuffer:true,premultipliedAlpha:false});
     if(!this.gl)throw new Error('WebGL 2 is required.');
-    const gl=this.gl;this.meshProgram=program(gl,meshVS,meshFS);this.depthProgram=program(gl,depthVS,depthFS);this.lineProgram=program(gl,lineVS,lineFS);
+    const gl=this.gl;this.meshProgram=program(gl,meshVS,meshFS);this.depthProgram=program(gl,depthVS,depthFS);this.lineProgram=program(gl,lineVS,lineFS);this.skyPass=new SkyPass(gl);
     this.staticMeshes={cube:createBufferMesh(gl,cubeMesh()),plane:createBufferMesh(gl,planeMesh()),sphere:createBufferMesh(gl,sphereMesh()),cylinder:createBufferMesh(gl,cylinderMesh())};
     this.dynamic=new Map();this.pathLines=new Map();this.textureCache=new Map();this.instanceBuffers=new Set();this.renderStart=performance.now();this.assets=[];this.modelMeshes=new Map();this.modelLoads=new Map();this.modelRevisions=new Map();this.modelLoadRevisions=new Map();this.grid=null;this.gridKey='';this.selectionBox=createLineBuffer(gl,this.boxLines());this.whiteTexture=this.createSolidTexture([255,255,255,255]);this.flatNormalTexture=this.createSolidTexture([128,128,255,255]);
     this.createShadowResources(2048);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
@@ -579,7 +581,7 @@ export class Renderer3D{
     bindMap(0,'uBaseTexture',baseMaps.baseColor);bindMap(1,'uPathTexture',pathMaps.baseColor);bindMap(2,'uBaseNormalTexture',baseMaps.normal);bindMap(3,'uPathNormalTexture',pathMaps.normal);bindMap(4,'uBaseRoughnessTexture',baseMaps.roughness);bindMap(5,'uPathRoughnessTexture',pathMaps.roughness);bindMap(6,'uBaseAOTexture',baseMaps.ao);bindMap(7,'uPathAOTexture',pathMaps.ao);bindMap(8,'uBaseHeightTexture',baseMaps.height);bindMap(9,'uPathHeightTexture',pathMaps.height);
     set1('uUseBaseTexture',baseAsset&&baseMaps.baseColor.ready?1:0);set1('uUsePathTexture',pathAsset&&pathMaps.baseColor.ready?1:0);set1('uUseBaseNormal',baseAsset&&baseMaps.normal.ready?1:0);set1('uUsePathNormal',pathAsset&&pathMaps.normal.ready?1:0);set1('uUseBaseRoughness',baseAsset&&baseMaps.roughness.ready?1:0);set1('uUsePathRoughness',pathAsset&&pathMaps.roughness.ready?1:0);set1('uUseBaseAO',baseAsset&&baseMaps.ao.ready?1:0);set1('uUsePathAO',pathAsset&&pathMaps.ao.ready?1:0);set1('uUseBaseHeight',baseAsset&&baseMaps.height.ready?1:0);set1('uUsePathHeight',pathAsset&&pathMaps.height.ready?1:0);
     gl.activeTexture(gl.TEXTURE10);gl.bindTexture(gl.TEXTURE_2D,this.shadowTexture);gl.uniform1i(gl.getUniformLocation(p,'uShadowMap'),10);set1('uShadowEnabled',lights.shadows&&object.properties?.receivesShadows!==false?1:0);
-    set3('uFogColor',hexToRgb(scene.settings.skyBottom||'#8ca6b8'));set1('uFogNear',Number(scene.settings.fogNear??80));set1('uFogFar',Number(scene.settings.fogFar??260));set1('uExposure',lights.exposure);
+    set3('uFogColor',lights.environment?.fogColor||hexToRgb(scene.settings.skyBottom||'#8ca6b8'));set1('uFogNear',Number(scene.settings.fogNear??80));set1('uFogFar',Number(scene.settings.fogFar??260));set1('uExposure',lights.exposure);
     const useImportedGroups=object.type==='model'&&!baseAsset&&Array.isArray(mesh.groups)&&mesh.groups.length;
     if(useImportedGroups){
       for(const group of mesh.groups){
@@ -598,7 +600,16 @@ export class Renderer3D{
   drawLines(buffer,model,viewProj,color,width=1){if(!buffer?.count)return;const gl=this.gl,p=this.lineProgram;gl.useProgram(p);gl.bindVertexArray(buffer.vao);gl.uniformMatrix4fv(gl.getUniformLocation(p,'uModel'),false,model);gl.uniformMatrix4fv(gl.getUniformLocation(p,'uViewProj'),false,viewProj);gl.uniform4fv(gl.getUniformLocation(p,'uColor'),color);gl.lineWidth(width);gl.drawArrays(gl.LINES,0,buffer.count);gl.bindVertexArray(null);}
   render(scene,camera,selectedId,options={}){
     const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('Renderer3D.render',{objects:scene.objects.length},12)||(()=>{});
-    this.resize();const gl=this.gl,{viewProj}=this.cameraMatrices(camera),lights=this.lightState(scene,options.editorMode||'edit'),lightViewProj=this.lightMatrix(scene,lights);if(lights.shadows)this.renderShadow(scene,lightViewProj);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.cullFace(gl.BACK);
+    this.resize();
+    const gl=this.gl,{viewProj}=this.cameraMatrices(camera),lights=this.lightState(scene,options.editorMode||'edit'),lightViewProj=this.lightMatrix(scene,lights);
+    const environment=normalizeEnvironmentState(scene,lights,(performance.now()-this.renderStart)/1000);
+    lights.environment=environment;
+    if(lights.shadows)this.renderShadow(scene,lightViewProj);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);
+    gl.clearColor(environment.groundColor[0],environment.groundColor[1],environment.groundColor[2],1);
+    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    try{this.skyPass.render(camera,environment);}catch(error){window.__omniforgeDiagnostics?.warn?.('sky-pass-failed',{message:error.message});}
+    gl.clear(gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.cullFace(gl.BACK);
     const foliageGroups=this.foliageGroups(scene,camera),foliageIds=new Set([...foliageGroups.values()].flat().map(item=>item.id));
     const objects=scene.objects.filter(o=>o.visible&&!['empty','path'].includes(o.type)&&!foliageIds.has(o.id));objects.sort((a,b)=>{const rank=o=>o.type==='terrain'?-20:o.type==='decal'?20+Number(o.properties?.sortOrder||0):0;return rank(a)-rank(b);});for(const object of objects){const mesh=this.meshFor(object,scene);if(!mesh)continue;if(object.type==='decal'){gl.enable(gl.BLEND);gl.depthMask(false);gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);}this.drawMesh(object,mesh,viewProj,lightViewProj,scene,object.id===selectedId,camera,lights);if(object.type==='decal'){gl.disable(gl.POLYGON_OFFSET_FILL);gl.depthMask(true);gl.enable(gl.CULL_FACE);}}
     for(const instances of foliageGroups.values()){const object=instances[0],mesh=this.meshFor(object,scene);if(mesh)this.drawMesh(object,mesh,viewProj,lightViewProj,scene,false,camera,lights,instances);}
