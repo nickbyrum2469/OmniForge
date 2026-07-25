@@ -1,0 +1,458 @@
+
+> omniforge-3d-engine@0.11.0 test
+> node --test tests/*.test.mjs
+
+✔ automatic world time cannot replace the editor workspace while authoring (0.705907ms)
+✔ compact world runtime patches lighting and celestial objects without replacing editor state (0.881838ms)
+✔ night remains readable in Edit mode without changing authored Play lighting (1.019552ms)
+✔ runtime source contains polling, compact-step, read-only GET, and traceable-build safeguards (1.430892ms)
+✔ default project is general-purpose and contains a real 3D starter scene (13.383759ms)
+✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (3.10838ms)
+✔ all supported scene primitives receive valid transforms and properties (2.188656ms)
+✔ terrain height is deterministic and responds to world position (0.602193ms)
+✔ path defaults preserve terrain-conforming system relationships (0.227077ms)
+✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.664055ms)
+✔ starter PBR materials include real texture-map files and are protected (3.659157ms)
+✖ horizontal mouse look uses the intuitive right-positive yaw convention (2.045704ms)
+✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (0.661932ms)
+✔ Windows desktop builder pins and stamps the native executable metadata (0.443899ms)
+✔ project hub and editor usability controls are wired into the authoritative editor (2.229686ms)
+✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (902.175286ms)
+✔ two runtime sessions cannot write the same active project simultaneously (548.545041ms)
+✔ starter objects are grounded against the authoritative terrain surface (1.916325ms)
+✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.034165ms)
+✔ managed workspace path cannot escape the projects root (0.29342ms)
+✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (155.62247ms)
+✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (299.781855ms)
+✔ material authoring settings clamp safely and preserve tiling transforms (0.196355ms)
+✔ material tuner exposes live tiling and PBR response controls (1.02613ms)
+✔ active source and documentation contain no legacy product assumptions (5.143987ms)
+✔ desktop clipboard and pointer-lock permissions use guarded native paths (0.578857ms)
+✔ surface recipes are stable linked assets with validation and deterministic masks (2.398613ms)
+✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.606715ms)
+✔ desktop launcher rejects stale packaged executables (0.097236ms)
+✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (4.167732ms)
+✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.044202ms)
+✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (1.322446ms)
+✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (489.412273ms)
+✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (1.790936ms)
+✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (2.577623ms)
+✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.022676ms)
+✔ provider framework normalizes independent providers, settings, and persistent job records (1.750116ms)
+✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.661393ms)
+✔ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (2512.740586ms)
+✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (2.600667ms)
+✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (2414.680352ms)
+✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.66051ms)
+✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (0.879926ms)
+✔ v0.9 decal and atlas recipes validate stable production metadata (0.463387ms)
+✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.443421ms)
+✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (3245.42769ms)
+✔ Git-aware desktop launcher rebuilds after source commits and local edits (1.177426ms)
+✔ sky rays rotate with the camera but ignore camera translation (1.978935ms)
+✔ environment state is bounded and shares the directional light authority (0.453022ms)
+✔ viewport look ignores acquisition noise and rejects implausible direction snaps (0.307867ms)
+✔ yaw remains normalized and pitch remains bounded (0.166827ms)
+✖ normal rendering no longer depends on the legacy CSS atmosphere (2.69051ms)
+✔ v0.10 worker IPC drains stdout before finalizing jobs (1.131338ms)
+✔ v0.10 seeded random and foliage placement are deterministic (20.988081ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (1.045671ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.872304ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.471099ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (2.584793ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (3.235458ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.57303ms)
+✖ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (1.708484ms)
+✔ v0.10 existing Ground button and World tab synchronize through authoritative state (0.944521ms)
+✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (1164.013215ms)
+✔ Scene Block inspector enhancement has a stable marker and coalesced observer (0.855689ms)
+✔ diagnostic mode includes input, event-loop, WebGL, and long-task evidence (0.247858ms)
+✔ v0.11 renderer constructs a finite terrain mesh without missing runtime helpers (27.59237ms)
+✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (9.250378ms)
+✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (0.495745ms)
+✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (0.448014ms)
+✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (0.842059ms)
+✔ path grade compilation respects configured maximum grade and bounded terrain cut/fill (5.958347ms)
+✔ path material blending follows the sampled spline instead of straight control-point chords (0.619008ms)
+✔ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (1.305426ms)
+✔ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (1018.436464ms)
+✔ same-scene live viewport camera remains authoritative during navigation and pending persistence (1.11195ms)
+✔ path guide edges share exact joined endpoints and follow edge terrain height (0.458701ms)
+ℹ tests 76
+ℹ suites 0
+ℹ pass 73
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10743.207419
+
+✖ failing tests:
+
+test at tests/engine.test.mjs:174:1
+✖ horizontal mouse look uses the intuitive right-positive yaw convention (2.045704ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /camera\.yaw\+=dx\*sensitivity\*\(camera\.invertHorizontal\?-1:1\)/. Input:
+  
+  "import { Renderer3D, terrainHeight } from './renderer.js';\n" +
+    "import { add, sub, scale, length, normalize, clamp, cameraForward, cameraRight } from './math.js';\n" +
+    "import { cloneCamera, shouldPreserveViewportCamera } from './viewport-state.js';\n" +
+    "import { createLookInputState, beginLookInputSession, endLookInputSession, applyLookDelta } from './viewport-navigation.js';\n" +
+    '\n' +
+    'const $ = selector => document.querySelector(selector);\n' +
+    'const $$ = selector => [...document.querySelectorAll(selector)];\n' +
+    'const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));\n' +
+    `const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));\n` +
+    'const deepClone = value => structuredClone(value);\n' +
+    '\n' +
+    'const ui = {\n' +
+    "  projectName: $('#projectName'), projectButton: $('#projectButton'), sceneSelect: $('#sceneSelect'), newSceneButton: $('#newSceneButton'),\n" +
+    "  saveButton: $('#saveButton'), playButton: $('#playButton'), captureButton: $('#captureButton'), engineVersion: $('#engineVersion'), connectionBadge: $('#connectionBadge'),\n" +
+    "  hierarchySearch: $('#hierarchySearch'), hierarchyList: $('#hierarchyList'), sceneNameLabel: $('#sceneNameLabel'), objectCount: $('#objectCount'),\n" +
+    "  addQuickButton: $('#addQuickButton'), viewport: $('#viewport'), viewportWrap: $('#viewportWrap'), navPrompt: $('#navPrompt'),\n" +
+    "  viewportToast: $('#viewportToast'), viewportModeBadge: $('#viewportModeBadge'), cameraPositionBadge: $('#cameraPositionBadge'),\n" +
+    "  gridToggle: $('#gridToggle'), autoCaptureToggle: $('#autoCaptureToggle'), focusButton: $('#focusButton'), groundButton: $('#groundButton'), frameAllButton: $('#frameAllButton'),\n" +
+    "  viewportSettingsButton: $('#viewportSettingsButton'), selectionStatus: $('#selectionStatus'), fpsStatus: $('#fpsStatus'),\n" +
+    "  inspectorTitle: $('#inspectorTitle'), inspectorContent: $('#inspectorContent'), duplicateButton: $('#duplicateButton'), deleteButton: $('#deleteButton'),\n" +
+    "  commandInput: $('#commandInput'), queueCommandButton: $('#queueCommandButton'), commandQueue: $('#commandQueue'), commandCount: $('#commandCount'),\n" +
+    "  consoleList: $('#consoleList'), worldSettings: $('#worldSettings'), openProjectFolder: $('#openProjectFolder'),\n" +
+    "  projectDialog: $('#projectDialog'), projectNameInput: $('#projectNameInput'), projectTemplateInput: $('#projectTemplateInput'), applyProjectButton: $('#applyProjectButton'),\n" +
+    "  newSceneDialog: $('#newSceneDialog'), newSceneNameInput: $('#newSceneNameInput'), newSceneTemplateInput: $('#newSceneTemplateInput'), createSceneButton: $('#createSceneButton'),\n" +
+    "  helpDialog: $('#helpDialog'),\n" +
+    "  modelImportInput: $('#modelImportInput'), modelCategory: $('#modelCategory'), modelLicense: $('#modelLicense'), importModelButton: $('#importModelButton'), modelImportStatus: $('#modelImportStatus'), modelAssetCount: $('#modelAssetCount'), modelAssetList: $('#modelAssetList'), modelAssetInspector: $('#modelAssetInspector'), assetSearchInput: $('#assetSearchInput'), assetStatusFilter: $('#assetStatusFilter'),\n" +
+    "  texturePrompt: $('#texturePrompt'), textureCategory: $('#textureCategory'), textureResolution: $('#textureResolution'), generateTextureButton: $('#generateTextureButton'), sendTextureBriefButton: $('#sendTextureBriefButton'), textureImportInput: $('#textureImportInput'), materialList: $('#materialList'), materialCount: $('#materialCount'), materialInspector: $('#materialInspector'),\n" +
+    "  lookSensitivityInput: $('#lookSensitivityInput'), invertHorizontalInput: $('#invertHorizontalInput'), invertVerticalInput: $('#invertVerticalInput'), moveSpeedInput: $('#moveSpeedInput'), fovInput: $('#fovInput'), saveViewportSettingsButton: $('#saveViewportSettingsButton'),\n" +
+    "  prefabButton: $('#prefabButton'), prefabDialog: $('#prefabDialog'), prefabNameInput: $('#prefabNameInput'), createPrefabButton: $('#createPrefabButton'), prefabCount: $('#prefabCount'), prefabList: $('#prefabList'),\n" +
+    "  saveStateBadge: $('#saveStateBadge'), layoutButton: $('#layoutButton'), commandPaletteButton: $('#commandPaletteButton'), selectionBreadcrumb: $('#selectionBreadcrumb'),\n" +
+    "  workspace: $('.workspace'), centerStage: $('#centerStage'), leftPanel: $('#leftPanel'), rightPanel: $('#rightPanel'), bottomDock: $('#bottomDock'),\n" +
+    "  leftResizeHandle: $('#leftResizeHandle'), rightResizeHandle: $('#rightResizeHandle'), bottomResizeHandle: $('#bottomResizeHandle'), collapseLeftButton: $('#collapseLeftButton'), collapseRightButton: $('#collapseRightButton'), collapseBottomButton: $('#collapseBottomButton'),\n" +
+    "  projectHubDialog: $('#projectHubDialog'), projectSearchInput: $('#projectSearchInput'), projectGrid: $('#projectGrid'), projectHubStatus: $('#projectHubStatus'), newProjectHubButton: $('#newProjectHubButton'), importProjectButton: $('#importProjectButton'), refreshProjectsButton: $('#refreshProjectsButton'),\n" +
+    "  duplicateProjectDialog: $('#duplicateProjectDialog'), duplicateProjectNameInput: $('#duplicateProjectNameInput'), duplicateProjectIdInput: $('#duplicateProjectIdInput'), confirmDuplicateProjectButton: $('#confirmDuplicateProjectButton'),\n" +
+    "  layoutDialog: $('#layoutDialog'), layoutPresetList: $('#layoutPresetList'), layoutNameInput: $('#layoutNameInput'), saveLayoutButton: $('#saveLayoutButton'), resetLayoutButton: $('#resetLayoutButton'),\n" +
+    "  shortcutDialog: $('#shortcutDialog'), shortcutList: $('#shortcutList'), saveShortcutsButton: $('#saveShortcutsButton'), resetShortcutsButton: $('#resetShortcutsButton'),\n" +
+    "  commandPaletteDialog: $('#commandPaletteDialog'), commandPaletteInput: $('#commandPaletteInput'), commandPaletteList: $('#commandPaletteList'),\n" +
+    "  tutorialDialog: $('#tutorialDialog'), tutorialStepLabel: $('#tutorialStepLabel'), tutorialTitle: $('#tutorialTitle'), tutorialText: $('#tutorialText'), tutorialProgress: $('#tutorialProgress'), tutorialBackButton: $('#tutorialBackButton'), tutorialNextButton: $('#tutorialNextButton'), skipTutorialButton: $('#skipTutorialButton'),\n" +
+    "  errorDialog: $('#errorDialog'), errorDialogTitle: $('#errorDialogTitle'), errorDialogMessage: $('#errorDialogMessage'), errorDialogDetails: $('#errorDialogDetails'), copyErrorButton: $('#copyErrorButton'),\n" +
+    "  providerSummaryBadge: $('#providerSummaryBadge'), providerList: $('#providerList'), runIntegrationSetupButton: $('#runIntegrationSetupButton'), testAllProvidersButton: $('#testAllProvidersButton'), integrationJobCount: $('#integrationJobCount'), openJobsButton: $('#openJobsButton'), integrationStorageSummary: $('#integrationStorageSummary'),\n" +
+    "  jobCountBadge: $('#jobCountBadge'), jobList: $('#jobList'), runProjectIntegrityButton: $('#runProjectIntegrityButton'), runAssetIndexButton: $('#runAssetIndexButton'), runDiagnosticJobButton: $('#runDiagnosticJobButton'), clearCompletedJobsButton: $('#clearCompletedJobsButton'),\n" +
+    "  integrationSetupDialog: $('#integrationSetupDialog'), setupProviderList: $('#setupProviderList'), maxConcurrentJobsInput: $('#maxConcurrentJobsInput'), cacheLimitInput: $('#cacheLimitInput'), downloadDirectoryInput: $('#downloadDirectoryInput'), offlineModeInput: $('#offlineModeInput'), chooseDownloadDirectoryButton: $('#chooseDownloadDirectoryButton'), dismissIntegrationSetupButton: $('#dismissIntegrationSetupButton'), saveIntegrationSetupButton: $('#saveIntegrationSetupButton'),\n" +
+    "  marketplaceProviderSelect: $('#marketplaceProviderSelect'), marketplaceTypeSelect: $('#marketplaceTypeSelect'), marketplaceSearchInput: $('#marketplaceSearchInput'), marketplaceSearchButton: $('#marketplaceSearchButton'), marketplaceStatusBadge: $('#marketplaceStatusBadge'), marketplaceAttribution: $('#marketplaceAttribution'), marketplaceResults: $('#marketplaceResults'), marketplaceInspector: $('#marketplaceInspector'), marketplaceResultCount: $('#marketplaceResultCount'),\n" +
+    "  surfaceGraphSummary: $('#surfaceGraphSummary'), repairSurfaceSeamsButton: $('#repairSurfaceSeamsButton'), generateMissingMapsButton: $('#generateMissingMapsButton'), seamBlendWidthInput: $('#seamBlendWidthInput'), surfaceMapAudit: $('#surfaceMapAudit'), surfaceSourcePreview: $('#surfaceSourcePreview'), surfaceSeamPreview: $('#surfaceSeamPreview'),\n" +
+    "  decalNameInput: $('#decalNameInput'), decalCategoryInput: $('#decalCategoryInput'), decalOpacityInput: $('#decalOpacityInput'), decalDepthInput: $('#decalDepthInput'), createDecalButton: $('#createDecalButton'), placeDecalButton: $('#placeDecalButton'), decalList: $('#decalList'),\n" +
+    "  atlasNameInput: $('#atlasNameInput'), atlasKindInput: $('#atlasKindInput'), atlasResolutionInput: $('#atlasResolutionInput'), atlasSourceCount: $('#atlasSourceCount'), createAtlasButton: $('#createAtlasButton'), atlasList: $('#atlasList')\n" +
+    '};\n' +
+    '\n' +
+    'let state = null;\n' +
+    'let scene = null;\n' +
+    'let camera = null;\n' +
+    'let renderer = null;\n' +
+    'let selectedId = null;\n' +
+    'let selectedMaterialId = null;\n' +
+    'let selectedAssetId = null;\n' +
+    'let selectedDecalId = null;\n' +
+    "let selectedProviderId = 'local-worker-host';\n" +
+    'let pendingModelFile = null;\n' +
+    'let marketplaceSearchResults=[];\n' +
+    'let selectedMarketplaceAsset=null;\n' +
+    'let marketplaceLoading=false;\n' +
+    'let keys = new Set();\n' +
+    'let lastFrame = performance.now();\n' +
+    'let frameCounter = 0;\n' +
+    'let fpsTimer = 0;\n' +
+    'let playSnapshot = null;\n' +
+    'let rigidBodies = new Map();\n' +
+    'let physicsAccumulator = 0;\n' +
+    'let localMutationAt = 0;\n' +
+    'let captureTimer = null;\n' +
+    'let cameraPersistTimer = null;\n' +
+    'let cameraDirty = false;\n' +
+    'let cameraMutationVersion = 0;\n' +
+    'let toastTimer = null;\n' +
+    'let materialSaveTimer = null;\n' +
+    'let surfacePreviewBaseline = null;\n' +
+    'let loading = true;\n' +
+    'let projects = [];\n' +
+    'let layoutPersistTimer = null;\n' +
+    'let paletteActiveIndex = 0;\n' +
+    'let tutorialIndex = 0;\n' +
+    "let lastErrorDetails = '';\n" +
+    "let lastKnownSaveState = 'saved';\n" +
+    'let viewportDragLook = false;\n' +
+    'let viewportDragLast = null;\n' +
+    "let pointerLockSupported = 'pointerLockElement' in document;\n" +
+    'let interactionActiveUntil = 0;\n' +
+    'let remotePollInFlight = false;\n' +
+    'let viewportNavigationIntentUntil = 0;\n' +
+    'const lookInputState = createLookInputState();\n' +
+    '\n' +
+    'async function api(path, options={}) {\n' +
+    "  const method=String(options.method||'GET').toUpperCase(),mutating=!['GET','HEAD'].includes(method);\n" +
+    "  if(mutating)setSaveState('saving');\n" +
+    '  try{\n' +
+    '    const '... 158562 more characters
+  
+      at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/engine.test.mjs:176:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: `import { Renderer3D, terrainHeight } from './renderer.js';\nimport { add, sub, scale, length, normalize, clamp, cameraForward, cameraRight } from './math.js';\nimport { cloneCamera, shouldPreserveViewportCamera } from './viewport-state.js';\nimport { createLookInputState, beginLookInputSession, endLookInputSession, applyLookDelta } from './viewport-navigation.js';\n\nconst $ = selector => document.querySelector(selector);\nconst $$ = selector => [...document.querySelectorAll(selector)];\nconst sleep = ms => new Promise(resolve => setTimeout(resolve, ms));\nconst escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));\nconst deepClone = value => structuredClone(value);\n\nconst ui = {\n  projectName: $('#projectName'), projectButton: $('#projectButton'), sceneSelect: $('#sceneSelect'), newSceneButton: $('#newSceneButton'),\n  saveButton: $('#saveButton'), playButton: $('#playButton'), captureButton: $('#captureButton'), engineVersion: $('#engineVersion'), connectionBadge: $('#connectionBadge'),\n  hierarchySearch: $('#hierarchySearch'), hierarchyList: $('#hierarchyList'), sceneNameLabel: $('#sceneNameLabel'), objectCount: $('#objectCount'),\n  addQuickButton: $('#addQuickButton'), viewport: $('#viewport'), viewportWrap: $('#viewportWrap'), navPrompt: $('#navPrompt'),\n  viewportToast: $('#viewportToast'), viewportModeBadge: $('#viewportModeBadge'), cameraPositionBadge: $('#cameraPositionBadge'),\n  gridToggle: $('#gridToggle'), autoCaptureToggle: $('#autoCaptureToggle'), focusButton: $('#focusButton'), groundButton: $('#groundButton'), frameAllButton: $('#frameAllButton'),\n  viewportSettingsButton: $('#viewportSettingsButton'), selectionStatus: $('#selectionStatus'), fpsStatus: $('#fpsStatus'),\n  inspectorTitle: $('#inspectorTitle'), inspectorContent: $('#inspectorContent'), duplicateButton: $('#duplicateButton'), deleteButton: $('#deleteButton'),\n  commandInput: $('#commandInput'), queueCommandButton: $('#queueCommandButton'), commandQueue: $('#commandQueue'), commandCount: $('#commandCount'),\n  consoleList: $('#consoleList'), worldSettings: $('#worldSettings'), openProjectFolder: $('#openProjectFolder'),\n  projectDialog: $('#projectDialog'), projectNameInput: $('#projectNameInput'), projectTemplateInput: $('#projectTemplateInput'), applyProjectButton: $('#applyProjectButton'),\n  newSceneDialog: $('#newSceneDialog'), newSceneNameInput: $('#newSceneNameInput'), newSceneTemplateInput: $('#newSceneTemplateInput'), createSceneButton: $('#createSceneButton'),\n  helpDialog: $('#helpDialog'),\n  modelImportInput: $('#modelImportInput'), modelCategory: $('#modelCategory'), modelLicense: $('#modelLicense'), importModelButton: $('#importModelButton'), modelImportStatus: $('#modelImportStatus'), modelAssetCount: $('#modelAssetCount'), modelAssetList: $('#modelAssetList'), modelAssetInspector: $('#modelAssetInspector'), assetSearchInput: $('#assetSearchInput'), assetStatusFilter: $('#assetStatusFilter'),\n  texturePrompt: $('#texturePrompt'), textureCategory: $('#textureCategory'), textureResolution: $('#textureResolution'), generateTextureButton: $('#generateTextureButton'), sendTextureBriefButton: $('#sendTextureBriefButton'), textureImportInput: $('#textureImportInput'), materialList: $('#materialList'), materialCount: $('#materialCount'), materialInspector: $('#materialInspector'),\n  lookSensitivityInput: $('#lookSensitivityInput'), invertHorizontalInput: $('#invertHorizontalInput'), invertVerticalInput: $('#invertVerticalInput'), moveSpeedInput: $('#moveSpeedInput'), fovInput: $('#fovInput'), saveViewportSettingsButton: $('#saveViewportSettingsButton'),\n  prefabButton: $('#prefabButton'), prefabDialog: $('#prefabDialog'), prefabNameInput: $('#prefabNameInput'), createPrefabButton: $('#createPrefabButton'), prefabCount: $('#prefabCount'), prefabList: $('#prefabList'),\n  saveStateBadge: $('#saveStateBadge'), layoutButton: $('#layoutButton'), commandPaletteButton: $('#commandPaletteButton'), selectionBreadcrumb: $('#selectionBreadcrumb'),\n  workspace: $('.workspace'), centerStage: $('#centerStage'), leftPanel: $('#leftPanel'), rightPanel: $('#rightPanel'), bottomDock: $('#bottomDock'),\n  leftResizeHandle: $('#leftResizeHandle'), rightResizeHandle: $('#rightResizeHandle'), bottomResizeHandle: $('#bottomResizeHandle'), collapseLeftButton: $('#collapseLeftButton'), collapseRightButton: $('#collapseRightButton'), collapseBottomButton: $('#collapseBottomButton'),\n  projectHubDialog: $('#projectHubDialog'), projectSearchInput: $('#projectSearchInput'), projectGrid: $('#projectGrid'), projectHubStatus: $('#projectHubStatus'), newProjectHubButton: $('#newProjectHubButton'), importProjectButton: $('#importProjectButton'), refreshProjectsButton: $('#refreshProjectsButton'),\n  duplicateProjectDialog: $('#duplicateProjectDialog'), duplicateProjectNameInput: $('#duplicateProjectNameInput'), duplicateProjectIdInput: $('#duplicateProjectIdInput'), confirmDuplicateProjectButton: $('#confirmDuplicateProjectButton'),\n  layoutDialog: $('#layoutDialog'), layoutPresetList: $('#layoutPresetList'), layoutNameInput: $('#layoutNameInput'), saveLayoutButton: $('#saveLayoutButton'), resetLayoutButton: $('#resetLayoutButton'),\n  shortcutDialog: $('#shortcutDialog'), shortcutList: $('#shortcutList'), saveShortcutsButton: $('#saveShortcutsButton'), resetShortcutsButton: $('#resetShortcutsButton'),\n  commandPaletteDialog: $('#commandPaletteDialog'), commandPaletteInput: $('#commandPaletteInput'), commandPaletteList: $('#commandPaletteList'),\n  tutorialDialog: $('#tutorialDialog'), tutorialStepLabel: $('#tutorialStepLabel'), tutorialTitle: $('#tutorialTitle'), tutorialText: $('#tutorialText'), tutorialProgress: $('#tutorialProgress'), tutorialBackButton: $('#tutorialBackButton'), tutorialNextButton: $('#tutorialNextButton'), skipTutorialButton: $('#skipTutorialButton'),\n  errorDialog: $('#errorDialog'), errorDialogTitle: $('#errorDialogTitle'), errorDialogMessage: $('#errorDialogMessage'), errorDialogDetails: $('#errorDialogDetails'), copyErrorButton: $('#copyErrorButton'),\n  providerSummaryBadge: $('#providerSummaryBadge'), providerList: $('#providerList'), runIntegrationSetupButton: $('#runIntegrationSetupButton'), testAllProvidersButton: $('#testAllProvidersButton'), integrationJobCount: $('#integrationJobCount'), openJobsButton: $('#openJobsButton'), integrationStorageSummary: $('#integrationStorageSummary'),\n  jobCountBadge: $('#jobCountBadge'), jobList: $('#jobList'), runProjectIntegrityButton: $('#runProjectIntegrityButton'), runAssetIndexButton: $('#runAssetIndexButton'), runDiagnosticJobButton: $('#runDiagnosticJobButton'), clearCompletedJobsButton: $('#clearCompletedJobsButton'),\n  integrationSetupDialog: $('#integrationSetupDialog'), setupProviderList: $('#setupProviderList'), maxConcurrentJobsInput: $('#maxConcurrentJobsInput'), cacheLimitInput: $('#cacheLimitInput'), downloadDirectoryInput: $('#downloadDirectoryInput'), offlineModeInput: $('#offlineModeInput'), chooseDownloadDirectoryButton: $('#chooseDownloadDirectoryButton'), dismissIntegrationSetupButton: $('#dismissIntegrationSetupButton'), saveIntegrationSetupButton: $('#saveIntegrationSetupButton'),\n  marketplaceProviderSelect: $('#marketplaceProviderSelect'), marketplaceTypeSelect: $('#marketplaceTypeSelect'), marketplaceSearchInput: $('#marketplaceSearchInput'), marketplaceSearchButton: $('#marketplaceSearchButton'), marketplaceStatusBadge: $('#marketplaceStatusBadge'), marketplaceAttribution: $('#marketplaceAttribution'), marketplaceResults: $('#marketplaceResults'), marketplaceInspector: $('#marketplaceInspector'), marketplaceResultCount: $('#marketplaceResultCount'),\n  surfaceGraphSummary: $('#surfaceGraphSummary'), repairSurfaceSeamsButton: $('#repairSurfaceSeamsButton'), generateMissingMapsButton: $('#generateMissingMapsButton'), seamBlendWidthInput: $('#seamBlendWidthInput'), surfaceMapAudit: $('#surfaceMapAudit'), surfaceSourcePreview: $('#surfaceSourcePreview'), surfaceSeamPreview: $('#surfaceSeamPreview'),\n  decalNameInput: $('#decalNameInput'), decalCategoryInput: $('#decalCategoryInput'), decalOpacityInput: $('#decalOpacityInput'), decalDepthInput: $('#decalDepthInput'), createDecalButton: $('#createDecalButton'), placeDecalButton: $('#placeDecalButton'), decalList: $('#decalList'),\n  atlasNameInput: $('#atlasNameInput'), atlasKindInput: $('#atlasKindInput'), atlasResolutionInput: $('#atlasResolutionInput'), atlasSourceCount: $('#atlasSourceCount'), createAtlasButton: $('#createAtlasButton'), atlasList: $('#atlasList')\n};\n\nlet state = null;\nlet scene = null;\nlet camera = null;\nlet renderer = null;\nlet selectedId = null;\nlet selectedMaterialId = null;\nlet selectedAssetId = null;\nlet selectedDecalId = null;\nlet selectedProviderId = 'local-worker-host';\nlet pendingModelFile = null;\nlet marketplaceSearchResults=[];\nlet selectedMarketplaceAsset=null;\nlet marketplaceLoading=false;\nlet keys = new Set();\nlet lastFrame = performance.now();\nlet frameCounter = 0;\nlet fpsTimer = 0;\nlet playSnapshot = null;\nlet rigidBodies = new Map();\nlet physicsAccumulator = 0;\nlet localMutationAt = 0;\nlet captureTimer = null;\nlet cameraPersistTimer = null;\nlet cameraDirty = false;\nlet cameraMutationVersion = 0;\nlet toastTimer = null;\nlet materialSaveTimer = null;\nlet surfacePreviewBaseline = null;\nlet loading = true;\nlet projects = [];\nlet layoutPersistTimer = null;\nlet paletteActiveIndex = 0;\nlet tutorialIndex = 0;\nlet lastErrorDetails = '';\nlet lastKnownSaveState = 'saved';\nlet viewportDragLook = false;\nlet viewportDragLast = null;\nlet pointerLockSupported = 'pointerLockElement' in document;\nlet interactionActiveUntil = 0;\nlet remotePollInFlight = false;\nlet viewportNavigationIntentUntil = 0;\nconst lookInputState = createLookInputState();\n\nasync function api(path, options={}) {\n  const method=String(options.method||'GET').toUpperCase(),mutating=!['GET','HEAD'].includes(method);\n  if(mutating)setSaveState('saving');\n  try{\n    const `... 158562 more characters,
+    expected: /camera\.yaw\+=dx\*sensitivity\*\(camera\.invertHorizontal\?-1:1\)/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/phase1-sky-navigation.test.mjs:52:1
+✖ normal rendering no longer depends on the legacy CSS atmosphere (2.69051ms)
+  AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /viewportWrap\.style\.background\s*=\s*`linear-gradient/. Input:
+  
+  "import { Renderer3D, terrainHeight } from './renderer.js';\n" +
+    "import { add, sub, scale, length, normalize, clamp, cameraForward, cameraRight } from './math.js';\n" +
+    "import { cloneCamera, shouldPreserveViewportCamera } from './viewport-state.js';\n" +
+    "import { createLookInputState, beginLookInputSession, endLookInputSession, applyLookDelta } from './viewport-navigation.js';\n" +
+    '\n' +
+    'const $ = selector => document.querySelector(selector);\n' +
+    'const $$ = selector => [...document.querySelectorAll(selector)];\n' +
+    'const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));\n' +
+    `const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));\n` +
+    'const deepClone = value => structuredClone(value);\n' +
+    '\n' +
+    'const ui = {\n' +
+    "  projectName: $('#projectName'), projectButton: $('#projectButton'), sceneSelect: $('#sceneSelect'), newSceneButton: $('#newSceneButton'),\n" +
+    "  saveButton: $('#saveButton'), playButton: $('#playButton'), captureButton: $('#captureButton'), engineVersion: $('#engineVersion'), connectionBadge: $('#connectionBadge'),\n" +
+    "  hierarchySearch: $('#hierarchySearch'), hierarchyList: $('#hierarchyList'), sceneNameLabel: $('#sceneNameLabel'), objectCount: $('#objectCount'),\n" +
+    "  addQuickButton: $('#addQuickButton'), viewport: $('#viewport'), viewportWrap: $('#viewportWrap'), navPrompt: $('#navPrompt'),\n" +
+    "  viewportToast: $('#viewportToast'), viewportModeBadge: $('#viewportModeBadge'), cameraPositionBadge: $('#cameraPositionBadge'),\n" +
+    "  gridToggle: $('#gridToggle'), autoCaptureToggle: $('#autoCaptureToggle'), focusButton: $('#focusButton'), groundButton: $('#groundButton'), frameAllButton: $('#frameAllButton'),\n" +
+    "  viewportSettingsButton: $('#viewportSettingsButton'), selectionStatus: $('#selectionStatus'), fpsStatus: $('#fpsStatus'),\n" +
+    "  inspectorTitle: $('#inspectorTitle'), inspectorContent: $('#inspectorContent'), duplicateButton: $('#duplicateButton'), deleteButton: $('#deleteButton'),\n" +
+    "  commandInput: $('#commandInput'), queueCommandButton: $('#queueCommandButton'), commandQueue: $('#commandQueue'), commandCount: $('#commandCount'),\n" +
+    "  consoleList: $('#consoleList'), worldSettings: $('#worldSettings'), openProjectFolder: $('#openProjectFolder'),\n" +
+    "  projectDialog: $('#projectDialog'), projectNameInput: $('#projectNameInput'), projectTemplateInput: $('#projectTemplateInput'), applyProjectButton: $('#applyProjectButton'),\n" +
+    "  newSceneDialog: $('#newSceneDialog'), newSceneNameInput: $('#newSceneNameInput'), newSceneTemplateInput: $('#newSceneTemplateInput'), createSceneButton: $('#createSceneButton'),\n" +
+    "  helpDialog: $('#helpDialog'),\n" +
+    "  modelImportInput: $('#modelImportInput'), modelCategory: $('#modelCategory'), modelLicense: $('#modelLicense'), importModelButton: $('#importModelButton'), modelImportStatus: $('#modelImportStatus'), modelAssetCount: $('#modelAssetCount'), modelAssetList: $('#modelAssetList'), modelAssetInspector: $('#modelAssetInspector'), assetSearchInput: $('#assetSearchInput'), assetStatusFilter: $('#assetStatusFilter'),\n" +
+    "  texturePrompt: $('#texturePrompt'), textureCategory: $('#textureCategory'), textureResolution: $('#textureResolution'), generateTextureButton: $('#generateTextureButton'), sendTextureBriefButton: $('#sendTextureBriefButton'), textureImportInput: $('#textureImportInput'), materialList: $('#materialList'), materialCount: $('#materialCount'), materialInspector: $('#materialInspector'),\n" +
+    "  lookSensitivityInput: $('#lookSensitivityInput'), invertHorizontalInput: $('#invertHorizontalInput'), invertVerticalInput: $('#invertVerticalInput'), moveSpeedInput: $('#moveSpeedInput'), fovInput: $('#fovInput'), saveViewportSettingsButton: $('#saveViewportSettingsButton'),\n" +
+    "  prefabButton: $('#prefabButton'), prefabDialog: $('#prefabDialog'), prefabNameInput: $('#prefabNameInput'), createPrefabButton: $('#createPrefabButton'), prefabCount: $('#prefabCount'), prefabList: $('#prefabList'),\n" +
+    "  saveStateBadge: $('#saveStateBadge'), layoutButton: $('#layoutButton'), commandPaletteButton: $('#commandPaletteButton'), selectionBreadcrumb: $('#selectionBreadcrumb'),\n" +
+    "  workspace: $('.workspace'), centerStage: $('#centerStage'), leftPanel: $('#leftPanel'), rightPanel: $('#rightPanel'), bottomDock: $('#bottomDock'),\n" +
+    "  leftResizeHandle: $('#leftResizeHandle'), rightResizeHandle: $('#rightResizeHandle'), bottomResizeHandle: $('#bottomResizeHandle'), collapseLeftButton: $('#collapseLeftButton'), collapseRightButton: $('#collapseRightButton'), collapseBottomButton: $('#collapseBottomButton'),\n" +
+    "  projectHubDialog: $('#projectHubDialog'), projectSearchInput: $('#projectSearchInput'), projectGrid: $('#projectGrid'), projectHubStatus: $('#projectHubStatus'), newProjectHubButton: $('#newProjectHubButton'), importProjectButton: $('#importProjectButton'), refreshProjectsButton: $('#refreshProjectsButton'),\n" +
+    "  duplicateProjectDialog: $('#duplicateProjectDialog'), duplicateProjectNameInput: $('#duplicateProjectNameInput'), duplicateProjectIdInput: $('#duplicateProjectIdInput'), confirmDuplicateProjectButton: $('#confirmDuplicateProjectButton'),\n" +
+    "  layoutDialog: $('#layoutDialog'), layoutPresetList: $('#layoutPresetList'), layoutNameInput: $('#layoutNameInput'), saveLayoutButton: $('#saveLayoutButton'), resetLayoutButton: $('#resetLayoutButton'),\n" +
+    "  shortcutDialog: $('#shortcutDialog'), shortcutList: $('#shortcutList'), saveShortcutsButton: $('#saveShortcutsButton'), resetShortcutsButton: $('#resetShortcutsButton'),\n" +
+    "  commandPaletteDialog: $('#commandPaletteDialog'), commandPaletteInput: $('#commandPaletteInput'), commandPaletteList: $('#commandPaletteList'),\n" +
+    "  tutorialDialog: $('#tutorialDialog'), tutorialStepLabel: $('#tutorialStepLabel'), tutorialTitle: $('#tutorialTitle'), tutorialText: $('#tutorialText'), tutorialProgress: $('#tutorialProgress'), tutorialBackButton: $('#tutorialBackButton'), tutorialNextButton: $('#tutorialNextButton'), skipTutorialButton: $('#skipTutorialButton'),\n" +
+    "  errorDialog: $('#errorDialog'), errorDialogTitle: $('#errorDialogTitle'), errorDialogMessage: $('#errorDialogMessage'), errorDialogDetails: $('#errorDialogDetails'), copyErrorButton: $('#copyErrorButton'),\n" +
+    "  providerSummaryBadge: $('#providerSummaryBadge'), providerList: $('#providerList'), runIntegrationSetupButton: $('#runIntegrationSetupButton'), testAllProvidersButton: $('#testAllProvidersButton'), integrationJobCount: $('#integrationJobCount'), openJobsButton: $('#openJobsButton'), integrationStorageSummary: $('#integrationStorageSummary'),\n" +
+    "  jobCountBadge: $('#jobCountBadge'), jobList: $('#jobList'), runProjectIntegrityButton: $('#runProjectIntegrityButton'), runAssetIndexButton: $('#runAssetIndexButton'), runDiagnosticJobButton: $('#runDiagnosticJobButton'), clearCompletedJobsButton: $('#clearCompletedJobsButton'),\n" +
+    "  integrationSetupDialog: $('#integrationSetupDialog'), setupProviderList: $('#setupProviderList'), maxConcurrentJobsInput: $('#maxConcurrentJobsInput'), cacheLimitInput: $('#cacheLimitInput'), downloadDirectoryInput: $('#downloadDirectoryInput'), offlineModeInput: $('#offlineModeInput'), chooseDownloadDirectoryButton: $('#chooseDownloadDirectoryButton'), dismissIntegrationSetupButton: $('#dismissIntegrationSetupButton'), saveIntegrationSetupButton: $('#saveIntegrationSetupButton'),\n" +
+    "  marketplaceProviderSelect: $('#marketplaceProviderSelect'), marketplaceTypeSelect: $('#marketplaceTypeSelect'), marketplaceSearchInput: $('#marketplaceSearchInput'), marketplaceSearchButton: $('#marketplaceSearchButton'), marketplaceStatusBadge: $('#marketplaceStatusBadge'), marketplaceAttribution: $('#marketplaceAttribution'), marketplaceResults: $('#marketplaceResults'), marketplaceInspector: $('#marketplaceInspector'), marketplaceResultCount: $('#marketplaceResultCount'),\n" +
+    "  surfaceGraphSummary: $('#surfaceGraphSummary'), repairSurfaceSeamsButton: $('#repairSurfaceSeamsButton'), generateMissingMapsButton: $('#generateMissingMapsButton'), seamBlendWidthInput: $('#seamBlendWidthInput'), surfaceMapAudit: $('#surfaceMapAudit'), surfaceSourcePreview: $('#surfaceSourcePreview'), surfaceSeamPreview: $('#surfaceSeamPreview'),\n" +
+    "  decalNameInput: $('#decalNameInput'), decalCategoryInput: $('#decalCategoryInput'), decalOpacityInput: $('#decalOpacityInput'), decalDepthInput: $('#decalDepthInput'), createDecalButton: $('#createDecalButton'), placeDecalButton: $('#placeDecalButton'), decalList: $('#decalList'),\n" +
+    "  atlasNameInput: $('#atlasNameInput'), atlasKindInput: $('#atlasKindInput'), atlasResolutionInput: $('#atlasResolutionInput'), atlasSourceCount: $('#atlasSourceCount'), createAtlasButton: $('#createAtlasButton'), atlasList: $('#atlasList')\n" +
+    '};\n' +
+    '\n' +
+    'let state = null;\n' +
+    'let scene = null;\n' +
+    'let camera = null;\n' +
+    'let renderer = null;\n' +
+    'let selectedId = null;\n' +
+    'let selectedMaterialId = null;\n' +
+    'let selectedAssetId = null;\n' +
+    'let selectedDecalId = null;\n' +
+    "let selectedProviderId = 'local-worker-host';\n" +
+    'let pendingModelFile = null;\n' +
+    'let marketplaceSearchResults=[];\n' +
+    'let selectedMarketplaceAsset=null;\n' +
+    'let marketplaceLoading=false;\n' +
+    'let keys = new Set();\n' +
+    'let lastFrame = performance.now();\n' +
+    'let frameCounter = 0;\n' +
+    'let fpsTimer = 0;\n' +
+    'let playSnapshot = null;\n' +
+    'let rigidBodies = new Map();\n' +
+    'let physicsAccumulator = 0;\n' +
+    'let localMutationAt = 0;\n' +
+    'let captureTimer = null;\n' +
+    'let cameraPersistTimer = null;\n' +
+    'let cameraDirty = false;\n' +
+    'let cameraMutationVersion = 0;\n' +
+    'let toastTimer = null;\n' +
+    'let materialSaveTimer = null;\n' +
+    'let surfacePreviewBaseline = null;\n' +
+    'let loading = true;\n' +
+    'let projects = [];\n' +
+    'let layoutPersistTimer = null;\n' +
+    'let paletteActiveIndex = 0;\n' +
+    'let tutorialIndex = 0;\n' +
+    "let lastErrorDetails = '';\n" +
+    "let lastKnownSaveState = 'saved';\n" +
+    'let viewportDragLook = false;\n' +
+    'let viewportDragLast = null;\n' +
+    "let pointerLockSupported = 'pointerLockElement' in document;\n" +
+    'let interactionActiveUntil = 0;\n' +
+    'let remotePollInFlight = false;\n' +
+    'let viewportNavigationIntentUntil = 0;\n' +
+    'const lookInputState = createLookInputState();\n' +
+    '\n' +
+    'async function api(path, options={}) {\n' +
+    "  const method=String(options.method||'GET').toUpperCase(),mutating=!['GET','HEAD'].includes(method);\n" +
+    "  if(mutating)setSaveState('saving');\n" +
+    '  try{\n' +
+    '    const '... 158562 more characters
+  
+      at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/phase1-sky-navigation.test.mjs:60:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: `import { Renderer3D, terrainHeight } from './renderer.js';\nimport { add, sub, scale, length, normalize, clamp, cameraForward, cameraRight } from './math.js';\nimport { cloneCamera, shouldPreserveViewportCamera } from './viewport-state.js';\nimport { createLookInputState, beginLookInputSession, endLookInputSession, applyLookDelta } from './viewport-navigation.js';\n\nconst $ = selector => document.querySelector(selector);\nconst $$ = selector => [...document.querySelectorAll(selector)];\nconst sleep = ms => new Promise(resolve => setTimeout(resolve, ms));\nconst escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));\nconst deepClone = value => structuredClone(value);\n\nconst ui = {\n  projectName: $('#projectName'), projectButton: $('#projectButton'), sceneSelect: $('#sceneSelect'), newSceneButton: $('#newSceneButton'),\n  saveButton: $('#saveButton'), playButton: $('#playButton'), captureButton: $('#captureButton'), engineVersion: $('#engineVersion'), connectionBadge: $('#connectionBadge'),\n  hierarchySearch: $('#hierarchySearch'), hierarchyList: $('#hierarchyList'), sceneNameLabel: $('#sceneNameLabel'), objectCount: $('#objectCount'),\n  addQuickButton: $('#addQuickButton'), viewport: $('#viewport'), viewportWrap: $('#viewportWrap'), navPrompt: $('#navPrompt'),\n  viewportToast: $('#viewportToast'), viewportModeBadge: $('#viewportModeBadge'), cameraPositionBadge: $('#cameraPositionBadge'),\n  gridToggle: $('#gridToggle'), autoCaptureToggle: $('#autoCaptureToggle'), focusButton: $('#focusButton'), groundButton: $('#groundButton'), frameAllButton: $('#frameAllButton'),\n  viewportSettingsButton: $('#viewportSettingsButton'), selectionStatus: $('#selectionStatus'), fpsStatus: $('#fpsStatus'),\n  inspectorTitle: $('#inspectorTitle'), inspectorContent: $('#inspectorContent'), duplicateButton: $('#duplicateButton'), deleteButton: $('#deleteButton'),\n  commandInput: $('#commandInput'), queueCommandButton: $('#queueCommandButton'), commandQueue: $('#commandQueue'), commandCount: $('#commandCount'),\n  consoleList: $('#consoleList'), worldSettings: $('#worldSettings'), openProjectFolder: $('#openProjectFolder'),\n  projectDialog: $('#projectDialog'), projectNameInput: $('#projectNameInput'), projectTemplateInput: $('#projectTemplateInput'), applyProjectButton: $('#applyProjectButton'),\n  newSceneDialog: $('#newSceneDialog'), newSceneNameInput: $('#newSceneNameInput'), newSceneTemplateInput: $('#newSceneTemplateInput'), createSceneButton: $('#createSceneButton'),\n  helpDialog: $('#helpDialog'),\n  modelImportInput: $('#modelImportInput'), modelCategory: $('#modelCategory'), modelLicense: $('#modelLicense'), importModelButton: $('#importModelButton'), modelImportStatus: $('#modelImportStatus'), modelAssetCount: $('#modelAssetCount'), modelAssetList: $('#modelAssetList'), modelAssetInspector: $('#modelAssetInspector'), assetSearchInput: $('#assetSearchInput'), assetStatusFilter: $('#assetStatusFilter'),\n  texturePrompt: $('#texturePrompt'), textureCategory: $('#textureCategory'), textureResolution: $('#textureResolution'), generateTextureButton: $('#generateTextureButton'), sendTextureBriefButton: $('#sendTextureBriefButton'), textureImportInput: $('#textureImportInput'), materialList: $('#materialList'), materialCount: $('#materialCount'), materialInspector: $('#materialInspector'),\n  lookSensitivityInput: $('#lookSensitivityInput'), invertHorizontalInput: $('#invertHorizontalInput'), invertVerticalInput: $('#invertVerticalInput'), moveSpeedInput: $('#moveSpeedInput'), fovInput: $('#fovInput'), saveViewportSettingsButton: $('#saveViewportSettingsButton'),\n  prefabButton: $('#prefabButton'), prefabDialog: $('#prefabDialog'), prefabNameInput: $('#prefabNameInput'), createPrefabButton: $('#createPrefabButton'), prefabCount: $('#prefabCount'), prefabList: $('#prefabList'),\n  saveStateBadge: $('#saveStateBadge'), layoutButton: $('#layoutButton'), commandPaletteButton: $('#commandPaletteButton'), selectionBreadcrumb: $('#selectionBreadcrumb'),\n  workspace: $('.workspace'), centerStage: $('#centerStage'), leftPanel: $('#leftPanel'), rightPanel: $('#rightPanel'), bottomDock: $('#bottomDock'),\n  leftResizeHandle: $('#leftResizeHandle'), rightResizeHandle: $('#rightResizeHandle'), bottomResizeHandle: $('#bottomResizeHandle'), collapseLeftButton: $('#collapseLeftButton'), collapseRightButton: $('#collapseRightButton'), collapseBottomButton: $('#collapseBottomButton'),\n  projectHubDialog: $('#projectHubDialog'), projectSearchInput: $('#projectSearchInput'), projectGrid: $('#projectGrid'), projectHubStatus: $('#projectHubStatus'), newProjectHubButton: $('#newProjectHubButton'), importProjectButton: $('#importProjectButton'), refreshProjectsButton: $('#refreshProjectsButton'),\n  duplicateProjectDialog: $('#duplicateProjectDialog'), duplicateProjectNameInput: $('#duplicateProjectNameInput'), duplicateProjectIdInput: $('#duplicateProjectIdInput'), confirmDuplicateProjectButton: $('#confirmDuplicateProjectButton'),\n  layoutDialog: $('#layoutDialog'), layoutPresetList: $('#layoutPresetList'), layoutNameInput: $('#layoutNameInput'), saveLayoutButton: $('#saveLayoutButton'), resetLayoutButton: $('#resetLayoutButton'),\n  shortcutDialog: $('#shortcutDialog'), shortcutList: $('#shortcutList'), saveShortcutsButton: $('#saveShortcutsButton'), resetShortcutsButton: $('#resetShortcutsButton'),\n  commandPaletteDialog: $('#commandPaletteDialog'), commandPaletteInput: $('#commandPaletteInput'), commandPaletteList: $('#commandPaletteList'),\n  tutorialDialog: $('#tutorialDialog'), tutorialStepLabel: $('#tutorialStepLabel'), tutorialTitle: $('#tutorialTitle'), tutorialText: $('#tutorialText'), tutorialProgress: $('#tutorialProgress'), tutorialBackButton: $('#tutorialBackButton'), tutorialNextButton: $('#tutorialNextButton'), skipTutorialButton: $('#skipTutorialButton'),\n  errorDialog: $('#errorDialog'), errorDialogTitle: $('#errorDialogTitle'), errorDialogMessage: $('#errorDialogMessage'), errorDialogDetails: $('#errorDialogDetails'), copyErrorButton: $('#copyErrorButton'),\n  providerSummaryBadge: $('#providerSummaryBadge'), providerList: $('#providerList'), runIntegrationSetupButton: $('#runIntegrationSetupButton'), testAllProvidersButton: $('#testAllProvidersButton'), integrationJobCount: $('#integrationJobCount'), openJobsButton: $('#openJobsButton'), integrationStorageSummary: $('#integrationStorageSummary'),\n  jobCountBadge: $('#jobCountBadge'), jobList: $('#jobList'), runProjectIntegrityButton: $('#runProjectIntegrityButton'), runAssetIndexButton: $('#runAssetIndexButton'), runDiagnosticJobButton: $('#runDiagnosticJobButton'), clearCompletedJobsButton: $('#clearCompletedJobsButton'),\n  integrationSetupDialog: $('#integrationSetupDialog'), setupProviderList: $('#setupProviderList'), maxConcurrentJobsInput: $('#maxConcurrentJobsInput'), cacheLimitInput: $('#cacheLimitInput'), downloadDirectoryInput: $('#downloadDirectoryInput'), offlineModeInput: $('#offlineModeInput'), chooseDownloadDirectoryButton: $('#chooseDownloadDirectoryButton'), dismissIntegrationSetupButton: $('#dismissIntegrationSetupButton'), saveIntegrationSetupButton: $('#saveIntegrationSetupButton'),\n  marketplaceProviderSelect: $('#marketplaceProviderSelect'), marketplaceTypeSelect: $('#marketplaceTypeSelect'), marketplaceSearchInput: $('#marketplaceSearchInput'), marketplaceSearchButton: $('#marketplaceSearchButton'), marketplaceStatusBadge: $('#marketplaceStatusBadge'), marketplaceAttribution: $('#marketplaceAttribution'), marketplaceResults: $('#marketplaceResults'), marketplaceInspector: $('#marketplaceInspector'), marketplaceResultCount: $('#marketplaceResultCount'),\n  surfaceGraphSummary: $('#surfaceGraphSummary'), repairSurfaceSeamsButton: $('#repairSurfaceSeamsButton'), generateMissingMapsButton: $('#generateMissingMapsButton'), seamBlendWidthInput: $('#seamBlendWidthInput'), surfaceMapAudit: $('#surfaceMapAudit'), surfaceSourcePreview: $('#surfaceSourcePreview'), surfaceSeamPreview: $('#surfaceSeamPreview'),\n  decalNameInput: $('#decalNameInput'), decalCategoryInput: $('#decalCategoryInput'), decalOpacityInput: $('#decalOpacityInput'), decalDepthInput: $('#decalDepthInput'), createDecalButton: $('#createDecalButton'), placeDecalButton: $('#placeDecalButton'), decalList: $('#decalList'),\n  atlasNameInput: $('#atlasNameInput'), atlasKindInput: $('#atlasKindInput'), atlasResolutionInput: $('#atlasResolutionInput'), atlasSourceCount: $('#atlasSourceCount'), createAtlasButton: $('#createAtlasButton'), atlasList: $('#atlasList')\n};\n\nlet state = null;\nlet scene = null;\nlet camera = null;\nlet renderer = null;\nlet selectedId = null;\nlet selectedMaterialId = null;\nlet selectedAssetId = null;\nlet selectedDecalId = null;\nlet selectedProviderId = 'local-worker-host';\nlet pendingModelFile = null;\nlet marketplaceSearchResults=[];\nlet selectedMarketplaceAsset=null;\nlet marketplaceLoading=false;\nlet keys = new Set();\nlet lastFrame = performance.now();\nlet frameCounter = 0;\nlet fpsTimer = 0;\nlet playSnapshot = null;\nlet rigidBodies = new Map();\nlet physicsAccumulator = 0;\nlet localMutationAt = 0;\nlet captureTimer = null;\nlet cameraPersistTimer = null;\nlet cameraDirty = false;\nlet cameraMutationVersion = 0;\nlet toastTimer = null;\nlet materialSaveTimer = null;\nlet surfacePreviewBaseline = null;\nlet loading = true;\nlet projects = [];\nlet layoutPersistTimer = null;\nlet paletteActiveIndex = 0;\nlet tutorialIndex = 0;\nlet lastErrorDetails = '';\nlet lastKnownSaveState = 'saved';\nlet viewportDragLook = false;\nlet viewportDragLast = null;\nlet pointerLockSupported = 'pointerLockElement' in document;\nlet interactionActiveUntil = 0;\nlet remotePollInFlight = false;\nlet viewportNavigationIntentUntil = 0;\nconst lookInputState = createLookInputState();\n\nasync function api(path, options={}) {\n  const method=String(options.method||'GET').toUpperCase(),mutating=!['GET','HEAD'].includes(method);\n  if(mutating)setSaveState('saving');\n  try{\n    const `... 158562 more characters,
+    expected: /viewportWrap\.style\.background\s*=\s*`linear-gradient/,
+    operator: 'doesNotMatch',
+    diff: 'simple'
+  }
+
+test at tests/v010.test.mjs:264:1
+✖ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (1.708484ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /v010-cloud-drift/. Input:
+  
+  '.v010-world-tab {\n' +
+    '  overflow: auto;\n' +
+    '  padding: 12px;\n' +
+    '}\n' +
+    '\n' +
+    '.v010-card {\n' +
+    '  margin: 0 0 10px;\n' +
+    '  padding: 10px;\n' +
+    '  border: 1px solid var(--border, #2b3442);\n' +
+    '  border-radius: 10px;\n' +
+    '  background: rgba(12, 18, 28, 0.82);\n' +
+    '}\n' +
+    '\n' +
+    '.v010-card > header {\n' +
+    '  display: flex;\n' +
+    '  align-items: center;\n' +
+    '  justify-content: space-between;\n' +
+    '  gap: 8px;\n' +
+    '  margin-bottom: 8px;\n' +
+    '}\n' +
+    '\n' +
+    '.v010-grid {\n' +
+    '  display: grid;\n' +
+    '  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);\n' +
+    '  gap: 8px;\n' +
+    '}\n' +
+    '\n' +
+    '.v010-grid label {\n' +
+    '  display: flex;\n' +
+    '  flex-direction: column;\n' +
+    '  gap: 4px;\n' +
+    '  min-width: 0;\n' +
+    '  color: #9eabbc;\n' +
+    '  font-size: 11px;\n' +
+    '}\n' +
+    '\n' +
+    '.v010-grid input,\n' +
+    '.v010-grid select {\n' +
+    '  width: 100%;\n' +
+    '  box-sizing: border-box;\n' +
+    '}\n' +
+    '\n' +
+    '.v010-actions {\n' +
+    '  display: flex;\n' +
+    '  flex-wrap: wrap;\n' +
+    '  gap: 6px;\n' +
+    '  margin-top: 9px;\n' +
+    '}\n' +
+    '\n' +
+    '.v010-world-tab .button {\n' +
+    '  min-height: 30px;\n' +
+    '}\n' +
+    '\n' +
+    '.v010-section-note,\n' +
+    '.v010-status {\n' +
+    '  color: #9ba8b9;\n' +
+    '  font-size: 11px;\n' +
+    '  line-height: 1.45;\n' +
+    '}\n' +
+    '\n' +
+    '.v010-section-note {\n' +
+    '  margin: 0 0 8px;\n' +
+    '}\n' +
+    '\n' +
+    '.v010-status {\n' +
+    '  min-height: 42px;\n' +
+    '  padding: 8px;\n' +
+    '  white-space: pre-wrap;\n' +
+    '  border: 1px solid rgba(108, 132, 164, 0.25);\n' +
+    '  border-radius: 8px;\n' +
+    '  background: rgba(7, 11, 18, 0.65);\n' +
+    '}\n' +
+    '\n' +
+    '.v010-chip {\n' +
+    '  padding: 2px 7px;\n' +
+    '  border-radius: 999px;\n' +
+    '  background: #1b2a3f;\n' +
+    '  color: #9ecfff;\n' +
+    '  font-size: 10px;\n' +
+    '  white-space: nowrap;\n' +
+    '}\n' +
+    '\n' +
+    '.v010-danger-card {\n' +
+    '  border-color: #5d3038;\n' +
+    '}\n' +
+    '\n' +
+    '@media (max-width: 1250px) {\n' +
+    '  .v010-grid {\n' +
+    '    grid-template-columns: 1fr;\n' +
+    '  }\n' +
+    '}\n' +
+    '\n' +
+    '\n' +
+    '#viewportWrap {\n' +
+    '  isolation: isolate;\n' +
+    '  overflow: hidden;\n' +
+    '  background: #0b1018;\n' +
+    '}\n' +
+    '\n' +
+    '#viewportWrap::before,\n' +
+    '#viewportWrap::after {\n' +
+    '  content: none;\n' +
+    '  display: none;\n' +
+    '  pointer-events: none;\n' +
+    '}\n' +
+    '\n' +
+    "#viewportWrap[data-legacy-sky='1']::before,\n" +
+    "#viewportWrap[data-legacy-sky='1']::after {\n" +
+    "  content: '';\n" +
+    '}\n' +
+    '\n' +
+    '#viewport {\n' +
+    '  position: relative;\n' +
+    '  z-index: 1;\n' +
+    '  background: transparent;\n' +
+    '}\n'
+  
+      at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/v010.test.mjs:288:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: ".v010-world-tab {\n  overflow: auto;\n  padding: 12px;\n}\n\n.v010-card {\n  margin: 0 0 10px;\n  padding: 10px;\n  border: 1px solid var(--border, #2b3442);\n  border-radius: 10px;\n  background: rgba(12, 18, 28, 0.82);\n}\n\n.v010-card > header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 8px;\n}\n\n.v010-grid {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);\n  gap: 8px;\n}\n\n.v010-grid label {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  min-width: 0;\n  color: #9eabbc;\n  font-size: 11px;\n}\n\n.v010-grid input,\n.v010-grid select {\n  width: 100%;\n  box-sizing: border-box;\n}\n\n.v010-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n  margin-top: 9px;\n}\n\n.v010-world-tab .button {\n  min-height: 30px;\n}\n\n.v010-section-note,\n.v010-status {\n  color: #9ba8b9;\n  font-size: 11px;\n  line-height: 1.45;\n}\n\n.v010-section-note {\n  margin: 0 0 8px;\n}\n\n.v010-status {\n  min-height: 42px;\n  padding: 8px;\n  white-space: pre-wrap;\n  border: 1px solid rgba(108, 132, 164, 0.25);\n  border-radius: 8px;\n  background: rgba(7, 11, 18, 0.65);\n}\n\n.v010-chip {\n  padding: 2px 7px;\n  border-radius: 999px;\n  background: #1b2a3f;\n  color: #9ecfff;\n  font-size: 10px;\n  white-space: nowrap;\n}\n\n.v010-danger-card {\n  border-color: #5d3038;\n}\n\n@media (max-width: 1250px) {\n  .v010-grid {\n    grid-template-columns: 1fr;\n  }\n}\n\n\n#viewportWrap {\n  isolation: isolate;\n  overflow: hidden;\n  background: #0b1018;\n}\n\n#viewportWrap::before,\n#viewportWrap::after {\n  content: none;\n  display: none;\n  pointer-events: none;\n}\n\n#viewportWrap[data-legacy-sky='1']::before,\n#viewportWrap[data-legacy-sky='1']::after {\n  content: '';\n}\n\n#viewport {\n  position: relative;\n  z-index: 1;\n  background: transparent;\n}\n",
+    expected: /v010-cloud-drift/,
+    operator: 'match',
+    diff: 'simple'
+  }
