@@ -31,7 +31,7 @@ jobs:
           npm run verify
           if ($LASTEXITCODE -ne 0) { throw 'Windows verification failed.' }
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\BUILD_DESKTOP_WINDOWS.ps1
-      - name: Run restart-safe packaged celestial diagnostics
+      - name: Run clean-close packaged celestial diagnostics
         id: smoke
         shell: pwsh
         run: |
@@ -52,18 +52,27 @@ jobs:
             throw 'Packaged executable did not become healthy.'
           }
           function Wait-PortClosed {
-            $deadline=(Get-Date).AddSeconds(15)
+            $deadline=(Get-Date).AddSeconds(18)
             while((Get-Date)-lt $deadline){
               try{Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 1 | Out-Null}catch{return}
               Start-Sleep -Milliseconds 300
             }
-            throw 'Runtime server did not release its port.'
+            throw 'Runtime server did not release its port after clean close.'
           }
-          function Stop-Runtime {
+          function Close-OmniForgeCleanly([System.Diagnostics.Process]$AppProcess) {
+            if($AppProcess -and -not $AppProcess.HasExited){
+              "Requesting clean window close for pid=$($AppProcess.Id)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append
+              $null=$AppProcess.CloseMainWindow()
+              if(-not $AppProcess.WaitForExit(15000)){
+                throw 'OmniForge did not complete a clean window close within 15 seconds.'
+              }
+            }
+            Wait-PortClosed
+          }
+          function Force-Cleanup {
             Get-Process OmniForge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            Wait-PortClosed
+            try{Wait-PortClosed}catch{}
           }
           function Authority($state) {
             $scene=$state.scenes | Where-Object {$_.id -eq $state.activeSceneId} | Select-Object -First 1
@@ -78,6 +87,7 @@ jobs:
           }
 
           $status=0
+          $process=$null
           try {
             "Starting exact packaged build: $(Get-Content (Join-Path $output 'source-commit') -Raw)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt
             $process=Start-Process -FilePath (Join-Path $output 'OmniForge.exe') -PassThru
@@ -100,18 +110,25 @@ jobs:
             try{Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/object/duplicate" -ContentType 'application/json' -Body (@{objectId=$authority.Moon.id}|ConvertTo-Json) -TimeoutSec 8 | Out-Null}catch{$duplicateRejected=$true;"Duplicate rejection: $($_.Exception.Message)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append}
             if(-not $duplicateRejected){throw 'Moon duplication was accepted.'}
 
-            Stop-Runtime
+            Close-OmniForgeCleanly $process
+            $process=$null
+            $lifecycle=Get-Content (Join-Path $runtime 'sessions\lifecycle.json') -Raw | ConvertFrom-Json
+            if($lifecycle.cleanShutdown -ne $true){throw 'The packaged editor did not record a clean shutdown.'}
+            "Clean shutdown recorded before restart." | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append
+
             $process=Start-Process -FilePath (Join-Path $output 'OmniForge.exe') -PassThru
             Wait-Health | Out-Null
             $reloaded=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 8
             $persisted=Authority $reloaded
             Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/selection" -ContentType 'application/json' -Body (@{objectId=$persisted.Moon.id}|ConvertTo-Json) -TimeoutSec 8 | Out-Null
             "Restart persistence passed: Moon=$($persisted.Moon.id)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append
+            Close-OmniForgeCleanly $process
+            $process=$null
           } catch {
             $status=1
             "FAILURE: $($_.Exception.Message)`n$($_.ScriptStackTrace)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append
           } finally {
-            try{Stop-Runtime}catch{"CLEANUP: $($_.Exception.Message)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append}
+            Force-Cleanup
             Remove-Item Env:OMNIFORGE_DATA_ROOT -ErrorAction SilentlyContinue
             Remove-Item Env:OMNIFORGE_PORT -ErrorAction SilentlyContinue
             Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
@@ -126,7 +143,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add PHASE0_WINDOWS_DIAGNOSTIC.txt
-          git commit -m "Record Phase 0 Windows restart failure"
+          git commit -m "Record Phase 0 Windows clean-restart failure"
           git push origin HEAD:phase0/celestial-authority-stabilization
       - name: Stop after captured Windows failure
         if: steps.smoke.outputs.status != '0'
