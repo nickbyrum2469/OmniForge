@@ -1,0 +1,426 @@
+updated server/v010-systems.mjs
+updated server/v010-api.mjs
+updated app/v010.js
+updated app/sky-pass.js
+updated app/renderer.js
+Applied Phase 1B lunar astronomy, HDR display, starfield, Milky Way, and lighting preset integration.
+
+> omniforge-3d-engine@0.11.0 test
+> node --test tests/*.test.mjs
+
+✔ automatic world time cannot replace the editor workspace while authoring (1.362612ms)
+✔ compact world runtime queues smooth celestial interpolation without replacing editor state (2.257618ms)
+✔ night remains readable in Edit mode without changing authored Play lighting (0.481542ms)
+✔ runtime source contains polling, compact-step, persistent celestial migration, and traceable-build safeguards (2.695188ms)
+✔ default project is general-purpose and contains a real 3D starter scene (21.356495ms)
+✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (5.394894ms)
+✔ all supported scene primitives receive valid transforms and properties (3.232513ms)
+✔ terrain height is deterministic and responds to world position (1.726753ms)
+✔ path defaults preserve terrain-conforming system relationships (0.329567ms)
+✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.800119ms)
+✔ starter PBR materials include real texture-map files and are protected (8.200558ms)
+✔ horizontal mouse look uses the intuitive right-positive yaw convention (0.483475ms)
+✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (0.986438ms)
+✔ Windows desktop builder pins and stamps the native executable metadata (1.380325ms)
+✔ project hub and editor usability controls are wired into the authoritative editor (3.827798ms)
+✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (228.66679ms)
+✔ two runtime sessions cannot write the same active project simultaneously (394.850934ms)
+✔ starter objects are grounded against the authoritative terrain surface (4.229408ms)
+✔ browser automation bridge exposes read-only snapshots and controlled editor actions (2.450349ms)
+✔ managed workspace path cannot escape the projects root (0.477675ms)
+✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (162.922759ms)
+✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (203.522756ms)
+✔ material authoring settings clamp safely and preserve tiling transforms (0.242844ms)
+✔ material tuner exposes live tiling and PBR response controls (1.824837ms)
+✔ active source and documentation contain no legacy product assumptions (12.87992ms)
+✔ desktop clipboard and pointer-lock permissions use guarded native paths (1.132411ms)
+✔ surface recipes are stable linked assets with validation and deterministic masks (3.895676ms)
+✔ Surface Studio preview, commit, revert, and recipe rendering are wired (1.184428ms)
+✔ desktop launcher rejects stale packaged executables (0.185547ms)
+✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (7.019556ms)
+✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (2.548472ms)
+✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (2.666765ms)
+✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (281.115178ms)
+✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (2.130008ms)
+✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (3.114683ms)
+✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.189858ms)
+✔ provider framework normalizes independent providers, settings, and persistent job records (2.575213ms)
+✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.32942ms)
+✔ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (1728.274786ms)
+✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (4.297067ms)
+✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (1065.738708ms)
+✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.650558ms)
+✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.021733ms)
+✔ v0.9 decal and atlas recipes validate stable production metadata (0.60304ms)
+✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.532971ms)
+✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (260.564932ms)
+✔ FrameResources owns physical canvas size and caps device-pixel ratio (3.097791ms)
+✔ FrameResources increments revision only for a real size change (0.345978ms)
+✔ FrameResources tracks external resources and context generations (0.829513ms)
+✔ FrameResources emits immutable per-frame dimensions (0.402685ms)
+✔ render capability detection reports supported and missing optional features safely (0.732401ms)
+✔ Git-aware desktop launcher rebuilds after source commits and local edits (1.599015ms)
+✔ Phase 0A collapses legacy celestial duplicates into one protected Sun and one protected Moon (5.244762ms)
+✔ Phase 0A preserves a selectable persistent Moon identity across repeated repairs (1.571543ms)
+✔ Phase 0B interpolates celestial rotations through the shortest angular path (1.488538ms)
+✔ Phase 0C editor readability no longer invents a white directional Sun or forces high exposure (1.359657ms)
+✔ Phase 0 source contracts persist proxies, protect selection, smooth motion, and expose diagnostics (3.761083ms)
+file:///home/runner/work/OmniForge/OmniForge/tests/phase1-1-world-authoring.test.mjs:5
+import { directionFromAzimuthElevation, normalizeEnvironmentState } from '../app/environment-runtime.js';
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: The requested module '../app/environment-runtime.js' does not provide an export named 'directionFromAzimuthElevation'
+    at #asyncInstantiate (node:internal/modules/esm/module_job:327:21)
+    at async ModuleJob.run (node:internal/modules/esm/module_job:431:5)
+    at async node:internal/modules/esm/loader:643:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.18.0
+✖ tests/phase1-1-world-authoring.test.mjs (59.194914ms)
+✔ sky rays rotate with the camera but ignore camera translation (3.876389ms)
+✔ environment state is bounded and shares the directional light authority (2.257968ms)
+✔ nested World settings drive weather, cloud wind, quality, and twilight (0.654866ms)
+✔ viewport look ignores acquisition noise and rejects implausible direction snaps (0.677067ms)
+✔ yaw remains normalized and pitch remains bounded (0.28272ms)
+✔ viewport acquisition protects camera authority before pointer lock and releases cleanly (2.239815ms)
+✔ normal rendering no longer depends on the legacy CSS atmosphere (2.248872ms)
+✔ Renderer3D submits the frame through one authoritative RenderGraph (2.536179ms)
+✔ Phase 1A pass names and dependencies exist exactly once (0.593992ms)
+✔ monolithic renderer work is separated into explicit pass methods (0.344295ms)
+✔ WebGL context loss suspends graph submission and restoration reloads authoritative state (0.362669ms)
+✖ Phase 1A preserves the Phase 0 display mapping instead of silently claiming HDR (2.548994ms)
+✔ RenderGraph and FrameResources expose the required safety contracts (0.366006ms)
+✔ Moon illumination is derived from Sun–Moon geometry (4.473388ms)
+✔ Moon follows an independent orbit and can be above the horizon by day or absent at night (1.02021ms)
+✔ Forced eclipse modes are deterministic authoring tools (0.359734ms)
+✔ Environment presets edit the same authoritative world sections (0.508302ms)
+✔ Phase 1B renderer source has one HDR display transform and controllable non-aurora star systems (1.94915ms)
+✔ RenderGraph compiles stable dependency order and resource contracts (7.340075ms)
+✔ RenderGraph rejects dependency cycles (0.769511ms)
+✔ RenderGraph rejects missing pass dependencies (0.448791ms)
+✔ RenderGraph rejects reads before import or production (0.336229ms)
+✔ disabled passes are reported and not executed (0.371305ms)
+✔ noncritical pass failures are contained and later passes continue (1.232979ms)
+✔ critical pass failures propagate with a partial diagnostic report (0.637022ms)
+✔ RenderGraph suspend and resume preserve explicit frame status (0.586489ms)
+✔ v0.10 worker IPC drains stdout before finalizing jobs (1.609924ms)
+✔ v0.10 seeded random and foliage placement are deterministic (35.481687ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (5.631356ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.990775ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.876762ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (4.660758ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (4.855002ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.852707ms)
+✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (1.470434ms)
+✔ v0.10 existing Ground button and World tab synchronize through authoritative state (2.464315ms)
+✖ v0.10 bootstrap serves world systems and upgrades the existing Ground command (322.376189ms)
+✔ Scene Block inspector enhancement has a stable marker and coalesced observer (1.603323ms)
+✔ diagnostic mode includes input, event-loop, WebGL, and long-task evidence (0.513141ms)
+✔ v0.11 renderer constructs a finite terrain mesh without missing runtime helpers (26.871593ms)
+✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (15.434764ms)
+✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (0.648594ms)
+✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (0.825375ms)
+✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (1.791976ms)
+✔ path grade compilation respects configured maximum grade and bounded terrain cut/fill (12.073764ms)
+✔ path material blending follows the sampled spline instead of straight control-point chords (1.294684ms)
+✔ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (2.359078ms)
+✔ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (492.331511ms)
+✔ same-scene live viewport camera remains authoritative during navigation and pending persistence (1.491743ms)
+✔ path guide edges share exact joined endpoints and follow edge terrain height (0.679001ms)
+ℹ tests 108
+ℹ suites 0
+ℹ pass 105
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4598.282074
+
+✖ failing tests:
+
+test at tests/phase1-1-world-authoring.test.mjs:1:1
+✖ tests/phase1-1-world-authoring.test.mjs (59.194914ms)
+  'test failed'
+
+test at tests/phase1a-renderer-contract.test.mjs:47:1
+✖ Phase 1A preserves the Phase 0 display mapping instead of silently claiming HDR (2.548994ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /color\*=max\(\.05,uExposure\)/. Input:
+  
+  'import {\n' +
+    '  DEG, add, sub, scale, dot, cross, length, normalize, clamp,\n' +
+    '  mat4Identity, mat4Multiply, mat4Perspective, mat4Ortho, mat4LookAt, mat4Invert,\n' +
+    '  transformPoint, modelMatrix, normalMatrix3, hexToRgb, cameraForward\n' +
+    "} from './math.js';\n" +
+    "import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, samplePathSpline, normalizeTerrainProperties, normalizePathProperties, terrainBounds } from './worldgen.js';\n" +
+    "import { buildPathGuideSegments } from './path-visuals.js';\n" +
+    "import { resolveViewportLighting } from './world-runtime.js';\n" +
+    "import { normalizeEnvironmentState } from './environment-runtime.js';\n" +
+    "import { SkyPass } from './sky-pass.js';\n" +
+    "import { RenderGraph } from './render-graph.js';\n" +
+    "import { FrameResources, detectRenderCapabilities } from './frame-resources.js';\n" +
+    "import { HDRPipeline } from './hdr-pipeline.js';\n" +
+    '\n' +
+    'function compile(gl,type,source){\n' +
+    '  const shader=gl.createShader(type); gl.shaderSource(shader,source); gl.compileShader(shader);\n' +
+    '  if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));\n' +
+    '  return shader;\n' +
+    '}\n' +
+    'function program(gl,vs,fs){\n' +
+    '  const p=gl.createProgram(); gl.attachShader(p,compile(gl,gl.VERTEX_SHADER,vs)); gl.attachShader(p,compile(gl,gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p);\n' +
+    '  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));\n' +
+    '  return p;\n' +
+    '}\n' +
+    'function smoothstep(a,b,x){const t=clamp((x-a)/(b-a||1),0,1);return t*t*(3-2*t);}\n' +
+    'function lerp(a,b,t){return a+(b-a)*t;}\n' +
+    '\n' +
+    'const meshVS=`#version 300 es\n' +
+    'precision highp float;\n' +
+    'layout(location=0) in vec3 aPosition;\n' +
+    'layout(location=1) in vec3 aNormal;\n' +
+    'layout(location=2) in vec2 aUV;\n' +
+    'layout(location=3) in float aBlend;\n' +
+    'layout(location=4) in vec4 aInstance0;\n' +
+    'layout(location=5) in vec4 aInstance1;\n' +
+    'layout(location=6) in vec4 aInstance2;\n' +
+    'layout(location=7) in vec4 aInstance3;\n' +
+    'uniform mat4 uModel;\n' +
+    'uniform float uInstanced;\n' +
+    'uniform float uTime;\n' +
+    'uniform float uFoliageWind;\n' +
+    'uniform float uFoliageWindStrength;\n' +
+    'uniform float uFoliageWindFrequency;\n' +
+    'uniform float uFoliageBaseY;\n' +
+    'uniform float uFoliageHeight;\n' +
+    'uniform vec3 uFoliageWindDirection;\n' +
+    'uniform mat4 uViewProj;\n' +
+    'uniform mat4 uLightViewProj;\n' +
+    'uniform mat3 uNormalMat;\n' +
+    'out vec3 vNormal;\n' +
+    'out vec3 vWorld;\n' +
+    'out vec2 vUV;\n' +
+    'out float vBlend;\n' +
+    'out vec4 vShadowCoord;\n' +
+    'void main(){\n' +
+    '  mat4 instanceModel=mat4(aInstance0,aInstance1,aInstance2,aInstance3);\n' +
+    '  mat4 model=uInstanced>.5?instanceModel:uModel;\n' +
+    '  vec3 localPosition=aPosition;\n' +
+    '  if(uFoliageWind>.5){\n' +
+    '    float height=max(uFoliageHeight,.001);\n' +
+    '    float bend=clamp((aPosition.y-uFoliageBaseY)/height,0.0,1.0);\n' +
+    '    float phase=dot(model[3].xz,vec2(.173,.119));\n' +
+    '    float sway=sin(uTime*uFoliageWindFrequency+phase)*uFoliageWindStrength*bend*bend;\n' +
+    '    localPosition.xz+=normalize(uFoliageWindDirection.xz+vec2(.0001))*sway;\n' +
+    '  }\n' +
+    '  vec4 world=model*vec4(localPosition,1.0);\n' +
+    '  vWorld=world.xyz;\n' +
+    '  vNormal=normalize(uInstanced>.5?mat3(model)*aNormal:uNormalMat*aNormal);\n' +
+    '  vUV=aUV;\n' +
+    '  vBlend=aBlend;\n' +
+    '  vShadowCoord=uLightViewProj*world;\n' +
+    '  gl_Position=uViewProj*world;\n' +
+    '}`;\n' +
+    'const meshFS=`#version 300 es\n' +
+    'precision highp float;\n' +
+    'in vec3 vNormal;\n' +
+    'in vec3 vWorld;\n' +
+    'in vec2 vUV;\n' +
+    'in float vBlend;\n' +
+    'in vec4 vShadowCoord;\n' +
+    'out vec4 outColor;\n' +
+    'uniform vec3 uBaseColor;\n' +
+    'uniform vec3 uPathColor;\n' +
+    'uniform vec3 uAmbientColor;\n' +
+    'uniform float uAmbientIntensity;\n' +
+    'uniform float uEditorFill;\n' +
+    'uniform vec3 uLightDir;\n' +
+    'uniform vec3 uLightColor;\n' +
+    'uniform float uLightIntensity;\n' +
+    'uniform vec3 uMoonDir;\n' +
+    'uniform vec3 uMoonColor;\n' +
+    'uniform float uMoonIntensity;\n' +
+    'uniform int uPointCount;\n' +
+    'uniform vec3 uPointPos[4];\n' +
+    'uniform vec3 uPointColor[4];\n' +
+    'uniform vec2 uPointData[4];\n' +
+    'uniform float uSelected;\n' +
+    'uniform vec3 uCameraPos;\n' +
+    'uniform float uRoughness;\n' +
+    'uniform float uMetallic;\n' +
+    'uniform float uIsTerrain;\n' +
+    'uniform float uUseBaseTexture;\n' +
+    'uniform float uUsePathTexture;\n' +
+    'uniform float uUseBaseNormal;\n' +
+    'uniform float uUsePathNormal;\n' +
+    'uniform float uUseBaseRoughness;\n' +
+    'uniform float uUsePathRoughness;\n' +
+    'uniform float uUseBaseAO;\n' +
+    'uniform float uUsePathAO;\n' +
+    'uniform float uBaseNormalStrength;\n' +
+    'uniform float uPathNormalStrength;\n' +
+    'uniform float uBaseTextureScale;\n' +
+    'uniform float uPathTextureScale;\n' +
+    'uniform float uBaseTextureRotation;\n' +
+    'uniform float uPathTextureRotation;\n' +
+    'uniform vec2 uBaseTextureOffset;\n' +
+    'uniform vec2 uPathTextureOffset;\n' +
+    'uniform float uBaseRoughnessMultiplier;\n' +
+    'uniform float uPathRoughnessMultiplier;\n' +
+    'uniform float uBaseAOStrength;\n' +
+    'uniform float uPathAOStrength;\n' +
+    'uniform float uBaseHeightStrength;\n' +
+    'uniform float uPathHeightStrength;\n' +
+    'uniform float uUseBaseHeight;\n' +
+    'uniform float uUsePathHeight;\n' +
+    'uniform sampler2D uBaseTexture;\n' +
+    'uniform sampler2D uPathTexture;\n' +
+    'uniform sampler2D uBaseNormalTexture;\n' +
+    'uniform sampler2D uPathNormalTexture;\n' +
+    'uniform sampler2D uBaseRoughnessTexture;\n' +
+    'uniform sampler2D uPathRoughnessTexture;\n' +
+    'uniform sampler2D uBaseAOTexture;\n' +
+    'uniform sampler2D uPathAOTexture;\n' +
+    'uniform sampler2D uBaseHeightTexture;\n' +
+    'uniform sampler2D uPathHeightTexture;\n' +
+    'uniform sampler2D uShadowMap;\n' +
+    'uniform float uShadowEnabled;\n' +
+    'uniform vec3 uFogColor;\n' +
+    'uniform float uFogNear;\n' +
+    'uniform float uFogFar;\n' +
+    'uniform float uExposure;\n' +
+    'uniform vec4 uBaseSurfaceLayers;\n' +
+    'uniform vec4 uPathSurfaceLayers;\n' +
+    'uniform vec4 uBaseSurfaceExtra;\n' +
+    'uniform vec4 uPathSurfaceExtra;\n' +
+    'uniform vec4 uBaseSurfaceMasks;\n' +
+    'uniform vec4 uPathSurfaceMasks;\n' +
+    'uniform vec4 uBaseSurfaceMasks2;\n' +
+    'uniform vec4 uPathSurfaceMasks2;\n' +
+    'uniform vec4 uBaseSurfaceMasks3;\n' +
+    'uniform vec4 uPathSurfaceMasks3;\n' +
+    'uniform vec4 uBaseWeatherResponse;\n' +
+    'uniform vec4 uPathWeatherResponse;\n' +
+    'uniform vec4 uBaseAdvanced;\n' +
+    'uniform vec4 uPathAdvanced;\n' +
+    'uniform vec3 uBaseDirtColor;\n' +
+    'uniform vec3 uBaseMossColor;\n' +
+    'uniform vec3 uBaseSnowColor;\n' +
+    'uniform vec3 uBaseDamageColor;\n' +
+    'uniform vec3 uPathDirtColor;\n' +
+    'uniform vec3 uPathMossColor;\n' +
+    'uniform vec3 uPathSnowColor;\n' +
+    'uniform vec3 uPathDamageColor;\n' +
+    'uniform vec4 uEnvironmentState;\n' +
+    'uniform vec3 uWindDirection;\n' +
+    'uniform int uStructureCount;\n' +
+    'uniform vec3 uStructurePos[4];\n' +
+    'uniform float uOpacity;\n' +
+    '\n' +
+    'float hash21(vec2 p){\n' +
+    '  p=fract(p*vec2(123.34,456.21));\n' +
+    '  p+=dot(p,p+45.32);\n' +
+    '  return fract(p.x*p.y);\n' +
+    '}\n' +
+    'float noise2(vec2 p){\n' +
+    '  vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);\n' +
+    '  return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x),mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x),f.y);\n' +
+    '}\n' +
+    'float shadowFactor(){\n' +
+    '  if(uShadowEnabled<0.5)return 1.0;\n' +
+    '  vec3 proj=vShadowCoord.xyz/max(vShadowCoord.w,0.0001);\n' +
+    '  proj=proj*0.5+0.5;\n' +
+    '  if(proj.z<=0.0||proj.z>=1.0||proj.x<=0.0||proj.x>=1.0||proj.y<=0.0||proj.y>=1.0)return 1.0;\n' +
+    '  vec2 texel=1.0/vec2(textureSize(uShadowMap,0));\n' +
+    '  float current=proj.z-max(.0007,.0024*(1.0-max(dot(normalize(vNormal),normalize(-uLightDir)),0.0)));\n' +
+    '  float sum=0.0;\n' +
+    '  for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++){\n' +
+    '    float closest=texture(uShadowMap,proj.xy+vec2(x,y)*texel).r;\n' +
+    '    sum+=current<=closest?1.0:0.0;\n' +
+    '  }\n' +
+    '  return mix(0.32,1.0,sum/9.0);\n' +
+    '}\n' +
+    'vec3 applyWorldNormal(vec3 geometricNormal, vec3 sampledNormal, float strength){\n' +
+    '  vec3 n=normalize(geometricNormal);\n' +
+    '  vec3 tangent=normalize(vec3(1.0,0.0,0.0)-n*dot(n,vec3(1.0,0.0,0.0)));\n' +
+    '  if(length(tangent)<.05)tangent=normalize(vec3(0.0,0.0,1.0)-n*dot(n,vec3(0.0,0.0,1.0)));\n' +
+    '  vec3 bitangent=normalize(cross(n,tangent));\n' +
+    '  sampledNormal.xy*=strength;\n' +
+    '  return normalize(tangent*sampledNormal.x+bitangent*sampledNormal.y+n*max(.05,sampledNormal.z));\n' +
+    '}\n' +
+    'float nearestStructureMask(){\n' +
+    '  float nearest=9999.0;\n' +
+    '  for(int i=0;i<4;i++){if(i>=uStructureCount)break;nearest=min(nearest,length(vWorld.xz-uStructurePos[i].xz));}\n' +
+    '  return 1.0-smoothstep(0.0,12.0,nearest);\n' +
+    '}\n' +
+    'vec3 applySurfaceRecipe(vec3 color, vec4 layers, vec4 extra, vec4 masks, vec4 masks2, vec4 masks3, vec4 weatherResponse, vec4 advanced, vec3 dirtColor, vec3 mossColor, vec3 snowColor, vec3 damageColor, vec3 n, vec2 uv, float lightAmount){\n' +
+    '  float rawUp=smoothstep(.12,.92,n.y),upward=rawUp*masks.x;\n' +
+    '  float downward=smoothstep(.12,.92,-n.y)*masks2.x;\n' +
+    '  float slope=(1.0-rawUp)*masks.y;\n' +
+    '  float macroScale=max(.1,advanced.x),detailScale=max(.05,advanced.y);\n' +
+    '  float cavity=(1.0-noise2(uv*1.9+.17))*masks.z;\n' +
+    '  float convex=noise2(uv*detailScale*1.73+.41)*masks3.w;\n' +
+    '  float ground=(1.0-smoothstep(0.0,8.0,abs(vWorld.y)))*masks.w;\n' +
+    '  float water=(1.0-smoothstep(0.0,2.0,abs(vWorld.y-uEnvironmentState.x)))*masks2.y;\n' +
+    '  float sun=lightAmount*masks2.z,shade=(1.0-lightAmount)*masks2.w;\n' +
+    '  float windFacing=(dot(normalize(n),normalize(uWindDirection))*.5+.5)*masks3.x*uEnvironmentState.w;\n' +
+    '  float pathNear=vBlend*masks3.y;\n' +
+    '  float structureNear=nearestStructureMask()*masks3.z;\n' +
+    '  float weatherWet=clamp(uEnvironmentState.y*weatherResponse.x,0.0,1.0);\n' +
+    '  float weatherSnow=clamp(uEnvironmentState.z*weatherResponse.y,0.0,1.0);\n' +
+    '  float dirtMask=clamp(layers.x*(.12+cavity*.48+ground*.36+slope*.22+structureNear*.22+pathNear*.30+downward*.12),0.0,1.0);\n' +
+    '  float mossMask=clamp(layers.y*(cavity*.42+ground*.24+shade*.58+water*.65)*(1.0-slope*.22),0.0,1.0);\n' +
+    '  float wetMask=clamp(layers.z*(.35+cavity*.31+ground*.18+water*.72)+weatherWet,0.0,1.0);\n' +
+    '  float snowMask=clamp((layers.w+weatherSnow)*upward*(.48+shade*.22)*(1.0-water*.65),0.0,1.0);\n' +
+    '  float damageMask=clamp(extra.x*(noise2(uv*detailScale)+slope*.28+convex*.24+windFacing*.10),0.0,1.0);\n' +
+    '  color=mix(color,dirtColor,dirtMask*.74);\n' +
+    '  color=mix(color,mossColor,mossMask*.70);\n' +
+    '  color*=1.0-wetMask*.30;\n' +
+    '  color=mix(color,snowColor,snowMask*.90);\n' +
+    '  color=mix(color,damageColor,damageMask*.46);\n' +
+    '  float macro=(noise2(vWorld.xz/macroScale)-.5)*extra.y;\n' +
+    '  return max(vec3(.001),color*(1.0+macro));\n' +
+    '}\n' +
+    'void main(){\n' +
+    '  vec3 viewDir=normalize(uCameraPos-vWorld);\n' +
+    '  vec2 baseUV=uIsTerrain>.5?vWorld.xz/max(uBaseTextureScale,0.05):vUV;\n' +
+    '  vec2 pathUV=vWorld.xz/max(uPathTextureScale,0.05);\n' +
+    '  float baseC=cos(uBaseTextureRotation),baseS=sin(uBaseTextureRotation);\n' +
+    '  float pathC=cos(uPathTextureRotation),pathS=sin(uPathTextureRotation);\n' +
+    '  baseUV=mat2(baseC,-baseS,baseS,baseC)*baseUV+uBaseTextureOffset;\n' +
+    '  pathUV=mat2(pathC,-pathS,pathS,pathC)*pathUV+uPathTextureOffset;\n' +
+    '  if(uUseBaseHeight>.5&&uBaseHeightStrength>0.0){\n' +
+    '    float h=texture(uBaseHeightTexture,baseUV).r-.5;\n' +
+    '    baseUV-=normalize(viewDir.xz+vec2(.0001))*h*uBaseHeightStrength;\n' +
+    '  }\n' +
+    '  if(uUsePathH'... 53690 more characters
+  
+      at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/phase1a-renderer-contract.test.mjs:48:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: "import {\n  DEG, add, sub, scale, dot, cross, length, normalize, clamp,\n  mat4Identity, mat4Multiply, mat4Perspective, mat4Ortho, mat4LookAt, mat4Invert,\n  transformPoint, modelMatrix, normalMatrix3, hexToRgb, cameraForward\n} from './math.js';\nimport { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, samplePathSpline, normalizeTerrainProperties, normalizePathProperties, terrainBounds } from './worldgen.js';\nimport { buildPathGuideSegments } from './path-visuals.js';\nimport { resolveViewportLighting } from './world-runtime.js';\nimport { normalizeEnvironmentState } from './environment-runtime.js';\nimport { SkyPass } from './sky-pass.js';\nimport { RenderGraph } from './render-graph.js';\nimport { FrameResources, detectRenderCapabilities } from './frame-resources.js';\nimport { HDRPipeline } from './hdr-pipeline.js';\n\nfunction compile(gl,type,source){\n  const shader=gl.createShader(type); gl.shaderSource(shader,source); gl.compileShader(shader);\n  if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));\n  return shader;\n}\nfunction program(gl,vs,fs){\n  const p=gl.createProgram(); gl.attachShader(p,compile(gl,gl.VERTEX_SHADER,vs)); gl.attachShader(p,compile(gl,gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p);\n  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));\n  return p;\n}\nfunction smoothstep(a,b,x){const t=clamp((x-a)/(b-a||1),0,1);return t*t*(3-2*t);}\nfunction lerp(a,b,t){return a+(b-a)*t;}\n\nconst meshVS=`#version 300 es\nprecision highp float;\nlayout(location=0) in vec3 aPosition;\nlayout(location=1) in vec3 aNormal;\nlayout(location=2) in vec2 aUV;\nlayout(location=3) in float aBlend;\nlayout(location=4) in vec4 aInstance0;\nlayout(location=5) in vec4 aInstance1;\nlayout(location=6) in vec4 aInstance2;\nlayout(location=7) in vec4 aInstance3;\nuniform mat4 uModel;\nuniform float uInstanced;\nuniform float uTime;\nuniform float uFoliageWind;\nuniform float uFoliageWindStrength;\nuniform float uFoliageWindFrequency;\nuniform float uFoliageBaseY;\nuniform float uFoliageHeight;\nuniform vec3 uFoliageWindDirection;\nuniform mat4 uViewProj;\nuniform mat4 uLightViewProj;\nuniform mat3 uNormalMat;\nout vec3 vNormal;\nout vec3 vWorld;\nout vec2 vUV;\nout float vBlend;\nout vec4 vShadowCoord;\nvoid main(){\n  mat4 instanceModel=mat4(aInstance0,aInstance1,aInstance2,aInstance3);\n  mat4 model=uInstanced>.5?instanceModel:uModel;\n  vec3 localPosition=aPosition;\n  if(uFoliageWind>.5){\n    float height=max(uFoliageHeight,.001);\n    float bend=clamp((aPosition.y-uFoliageBaseY)/height,0.0,1.0);\n    float phase=dot(model[3].xz,vec2(.173,.119));\n    float sway=sin(uTime*uFoliageWindFrequency+phase)*uFoliageWindStrength*bend*bend;\n    localPosition.xz+=normalize(uFoliageWindDirection.xz+vec2(.0001))*sway;\n  }\n  vec4 world=model*vec4(localPosition,1.0);\n  vWorld=world.xyz;\n  vNormal=normalize(uInstanced>.5?mat3(model)*aNormal:uNormalMat*aNormal);\n  vUV=aUV;\n  vBlend=aBlend;\n  vShadowCoord=uLightViewProj*world;\n  gl_Position=uViewProj*world;\n}`;\nconst meshFS=`#version 300 es\nprecision highp float;\nin vec3 vNormal;\nin vec3 vWorld;\nin vec2 vUV;\nin float vBlend;\nin vec4 vShadowCoord;\nout vec4 outColor;\nuniform vec3 uBaseColor;\nuniform vec3 uPathColor;\nuniform vec3 uAmbientColor;\nuniform float uAmbientIntensity;\nuniform float uEditorFill;\nuniform vec3 uLightDir;\nuniform vec3 uLightColor;\nuniform float uLightIntensity;\nuniform vec3 uMoonDir;\nuniform vec3 uMoonColor;\nuniform float uMoonIntensity;\nuniform int uPointCount;\nuniform vec3 uPointPos[4];\nuniform vec3 uPointColor[4];\nuniform vec2 uPointData[4];\nuniform float uSelected;\nuniform vec3 uCameraPos;\nuniform float uRoughness;\nuniform float uMetallic;\nuniform float uIsTerrain;\nuniform float uUseBaseTexture;\nuniform float uUsePathTexture;\nuniform float uUseBaseNormal;\nuniform float uUsePathNormal;\nuniform float uUseBaseRoughness;\nuniform float uUsePathRoughness;\nuniform float uUseBaseAO;\nuniform float uUsePathAO;\nuniform float uBaseNormalStrength;\nuniform float uPathNormalStrength;\nuniform float uBaseTextureScale;\nuniform float uPathTextureScale;\nuniform float uBaseTextureRotation;\nuniform float uPathTextureRotation;\nuniform vec2 uBaseTextureOffset;\nuniform vec2 uPathTextureOffset;\nuniform float uBaseRoughnessMultiplier;\nuniform float uPathRoughnessMultiplier;\nuniform float uBaseAOStrength;\nuniform float uPathAOStrength;\nuniform float uBaseHeightStrength;\nuniform float uPathHeightStrength;\nuniform float uUseBaseHeight;\nuniform float uUsePathHeight;\nuniform sampler2D uBaseTexture;\nuniform sampler2D uPathTexture;\nuniform sampler2D uBaseNormalTexture;\nuniform sampler2D uPathNormalTexture;\nuniform sampler2D uBaseRoughnessTexture;\nuniform sampler2D uPathRoughnessTexture;\nuniform sampler2D uBaseAOTexture;\nuniform sampler2D uPathAOTexture;\nuniform sampler2D uBaseHeightTexture;\nuniform sampler2D uPathHeightTexture;\nuniform sampler2D uShadowMap;\nuniform float uShadowEnabled;\nuniform vec3 uFogColor;\nuniform float uFogNear;\nuniform float uFogFar;\nuniform float uExposure;\nuniform vec4 uBaseSurfaceLayers;\nuniform vec4 uPathSurfaceLayers;\nuniform vec4 uBaseSurfaceExtra;\nuniform vec4 uPathSurfaceExtra;\nuniform vec4 uBaseSurfaceMasks;\nuniform vec4 uPathSurfaceMasks;\nuniform vec4 uBaseSurfaceMasks2;\nuniform vec4 uPathSurfaceMasks2;\nuniform vec4 uBaseSurfaceMasks3;\nuniform vec4 uPathSurfaceMasks3;\nuniform vec4 uBaseWeatherResponse;\nuniform vec4 uPathWeatherResponse;\nuniform vec4 uBaseAdvanced;\nuniform vec4 uPathAdvanced;\nuniform vec3 uBaseDirtColor;\nuniform vec3 uBaseMossColor;\nuniform vec3 uBaseSnowColor;\nuniform vec3 uBaseDamageColor;\nuniform vec3 uPathDirtColor;\nuniform vec3 uPathMossColor;\nuniform vec3 uPathSnowColor;\nuniform vec3 uPathDamageColor;\nuniform vec4 uEnvironmentState;\nuniform vec3 uWindDirection;\nuniform int uStructureCount;\nuniform vec3 uStructurePos[4];\nuniform float uOpacity;\n\nfloat hash21(vec2 p){\n  p=fract(p*vec2(123.34,456.21));\n  p+=dot(p,p+45.32);\n  return fract(p.x*p.y);\n}\nfloat noise2(vec2 p){\n  vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);\n  return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x),mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x),f.y);\n}\nfloat shadowFactor(){\n  if(uShadowEnabled<0.5)return 1.0;\n  vec3 proj=vShadowCoord.xyz/max(vShadowCoord.w,0.0001);\n  proj=proj*0.5+0.5;\n  if(proj.z<=0.0||proj.z>=1.0||proj.x<=0.0||proj.x>=1.0||proj.y<=0.0||proj.y>=1.0)return 1.0;\n  vec2 texel=1.0/vec2(textureSize(uShadowMap,0));\n  float current=proj.z-max(.0007,.0024*(1.0-max(dot(normalize(vNormal),normalize(-uLightDir)),0.0)));\n  float sum=0.0;\n  for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++){\n    float closest=texture(uShadowMap,proj.xy+vec2(x,y)*texel).r;\n    sum+=current<=closest?1.0:0.0;\n  }\n  return mix(0.32,1.0,sum/9.0);\n}\nvec3 applyWorldNormal(vec3 geometricNormal, vec3 sampledNormal, float strength){\n  vec3 n=normalize(geometricNormal);\n  vec3 tangent=normalize(vec3(1.0,0.0,0.0)-n*dot(n,vec3(1.0,0.0,0.0)));\n  if(length(tangent)<.05)tangent=normalize(vec3(0.0,0.0,1.0)-n*dot(n,vec3(0.0,0.0,1.0)));\n  vec3 bitangent=normalize(cross(n,tangent));\n  sampledNormal.xy*=strength;\n  return normalize(tangent*sampledNormal.x+bitangent*sampledNormal.y+n*max(.05,sampledNormal.z));\n}\nfloat nearestStructureMask(){\n  float nearest=9999.0;\n  for(int i=0;i<4;i++){if(i>=uStructureCount)break;nearest=min(nearest,length(vWorld.xz-uStructurePos[i].xz));}\n  return 1.0-smoothstep(0.0,12.0,nearest);\n}\nvec3 applySurfaceRecipe(vec3 color, vec4 layers, vec4 extra, vec4 masks, vec4 masks2, vec4 masks3, vec4 weatherResponse, vec4 advanced, vec3 dirtColor, vec3 mossColor, vec3 snowColor, vec3 damageColor, vec3 n, vec2 uv, float lightAmount){\n  float rawUp=smoothstep(.12,.92,n.y),upward=rawUp*masks.x;\n  float downward=smoothstep(.12,.92,-n.y)*masks2.x;\n  float slope=(1.0-rawUp)*masks.y;\n  float macroScale=max(.1,advanced.x),detailScale=max(.05,advanced.y);\n  float cavity=(1.0-noise2(uv*1.9+.17))*masks.z;\n  float convex=noise2(uv*detailScale*1.73+.41)*masks3.w;\n  float ground=(1.0-smoothstep(0.0,8.0,abs(vWorld.y)))*masks.w;\n  float water=(1.0-smoothstep(0.0,2.0,abs(vWorld.y-uEnvironmentState.x)))*masks2.y;\n  float sun=lightAmount*masks2.z,shade=(1.0-lightAmount)*masks2.w;\n  float windFacing=(dot(normalize(n),normalize(uWindDirection))*.5+.5)*masks3.x*uEnvironmentState.w;\n  float pathNear=vBlend*masks3.y;\n  float structureNear=nearestStructureMask()*masks3.z;\n  float weatherWet=clamp(uEnvironmentState.y*weatherResponse.x,0.0,1.0);\n  float weatherSnow=clamp(uEnvironmentState.z*weatherResponse.y,0.0,1.0);\n  float dirtMask=clamp(layers.x*(.12+cavity*.48+ground*.36+slope*.22+structureNear*.22+pathNear*.30+downward*.12),0.0,1.0);\n  float mossMask=clamp(layers.y*(cavity*.42+ground*.24+shade*.58+water*.65)*(1.0-slope*.22),0.0,1.0);\n  float wetMask=clamp(layers.z*(.35+cavity*.31+ground*.18+water*.72)+weatherWet,0.0,1.0);\n  float snowMask=clamp((layers.w+weatherSnow)*upward*(.48+shade*.22)*(1.0-water*.65),0.0,1.0);\n  float damageMask=clamp(extra.x*(noise2(uv*detailScale)+slope*.28+convex*.24+windFacing*.10),0.0,1.0);\n  color=mix(color,dirtColor,dirtMask*.74);\n  color=mix(color,mossColor,mossMask*.70);\n  color*=1.0-wetMask*.30;\n  color=mix(color,snowColor,snowMask*.90);\n  color=mix(color,damageColor,damageMask*.46);\n  float macro=(noise2(vWorld.xz/macroScale)-.5)*extra.y;\n  return max(vec3(.001),color*(1.0+macro));\n}\nvoid main(){\n  vec3 viewDir=normalize(uCameraPos-vWorld);\n  vec2 baseUV=uIsTerrain>.5?vWorld.xz/max(uBaseTextureScale,0.05):vUV;\n  vec2 pathUV=vWorld.xz/max(uPathTextureScale,0.05);\n  float baseC=cos(uBaseTextureRotation),baseS=sin(uBaseTextureRotation);\n  float pathC=cos(uPathTextureRotation),pathS=sin(uPathTextureRotation);\n  baseUV=mat2(baseC,-baseS,baseS,baseC)*baseUV+uBaseTextureOffset;\n  pathUV=mat2(pathC,-pathS,pathS,pathC)*pathUV+uPathTextureOffset;\n  if(uUseBaseHeight>.5&&uBaseHeightStrength>0.0){\n    float h=texture(uBaseHeightTexture,baseUV).r-.5;\n    baseUV-=normalize(viewDir.xz+vec2(.0001))*h*uBaseHeightStrength;\n  }\n  if(uUsePathH"... 53690 more characters,
+    expected: /color\*=max\(\.05,uExposure\)/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/v010.test.mjs:309:1
+✖ v0.10 bootstrap serves world systems and upgrades the existing Ground command (322.376189ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 1
+  
+      at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/v010.test.mjs:331:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
