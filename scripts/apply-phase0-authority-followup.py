@@ -21,13 +21,28 @@ def replace_regex_once(source, pattern, replacement, path, marker, flags=0):
 
 
 def patch_world_system(source):
-    return replace_regex_once(
+    source = replace_regex_once(
         source,
         r"  let sun = scene\.objects\.find\(object => object\.type === 'directionalLight' && object\.properties\?\.celestialRole === 'sun'\)\s*\|\| scene\.objects\.find\(object => object\.type === 'directionalLight' && String\(object\.name \|\| ''\)\.trim\(\)\.toLowerCase\(\) === 'sun'\)\s*\|\| scene\.objects\.find\(object => object\.type === 'directionalLight'\);",
         "  let sun = scene.objects.find(object => object.type === 'directionalLight' && object.properties?.celestialRole === 'sun')\n    || scene.objects.find(object => object.type === 'directionalLight' && String(object.name || '').trim().toLowerCase() === 'sun');",
         'server/v010-systems.mjs',
         "trim().toLowerCase() === 'sun');\n  if (!sun)"
     )
+    source = replace_regex_once(
+        source,
+        r"(    celestialRole: 'sun',\n    color: hex\(mix\(\[255, 123, 79\], \[255, 244, 214\], day\)\),\n    intensity: Number\(world\.lighting\.sunIntensity \|\| 3\.2\) \* Math\.max\(0\.015, day\) \* cloudAttenuation,)",
+        "\\1\n    azimuth: sunAzimuth,\n    elevation: sunElevationDegrees,\n    angularSize: Number(world.sky.sunSize ?? 1),\n    glow: Number(world.sky.sunGlow ?? 1),",
+        'server/v010-systems.mjs',
+        'angularSize: Number(world.sky.sunSize ?? 1)'
+    )
+    source = replace_regex_once(
+        source,
+        r"(    angularSize: Number\(world\.sky\.moonSize \?\? 1\.45\),\n    azimuth: moonAzimuth,\n    elevation: moonElevationDegrees,)",
+        "\\1\n    brightness: Number(world.sky.moonBrightness ?? 1),\n    glow: Number(world.sky.moonGlow ?? 0.7),\n    detail: Number(world.sky.moonDetail ?? 1),",
+        'server/v010-systems.mjs',
+        'brightness: Number(world.sky.moonBrightness ?? 1)'
+    )
+    return source
 
 
 edit('server/v010-systems.mjs', patch_world_system)
@@ -86,4 +101,4 @@ def patch_server(source):
 
 
 edit('server/server.mjs', patch_server)
-print('Applied Phase 0 authority follow-up: preserve unrelated lights and repair project lifecycle responses.')
+print('Applied Phase 0 authority follow-up: preserve unrelated lights, expose complete proxy details, and repair project lifecycle responses.')
