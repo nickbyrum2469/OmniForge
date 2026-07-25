@@ -1,0 +1,46 @@
+name: Phase 1B test diagnostics
+
+on:
+  push:
+    branches:
+      - phase1b/lunar-cycle-hdr-lighting-presets
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase1b/lunar-cycle-hdr-lighting-presets
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+      - name: Apply integration and capture tests
+        id: test
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/apply-phase1b-lunar-hdr.py > PHASE1B_TEST_OUTPUT.txt 2>&1
+          npm test >> PHASE1B_TEST_OUTPUT.txt 2>&1
+          status=$?
+          cat PHASE1B_TEST_OUTPUT.txt
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Commit failure output
+        if: steps.test.outputs.status != '0'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PHASE1B_TEST_OUTPUT.txt
+          git commit -m "Record Phase 1B test failure"
+          git push origin HEAD:phase1b/lunar-cycle-hdr-lighting-presets
+      - name: Fail diagnostic
+        if: steps.test.outputs.status != '0'
+        run: exit 1
