@@ -1,0 +1,13 @@
+Starting exact packaged build: b374703157c6f64316ea0e1cb19325b5d1d8d417
+
+Initial Sun=sun-main, Moon=celestial-v010-moon
+After legacy repair Sun=sun-main, Moon=celestial-v010-moon
+Duplicate rejection: Response status code does not indicate success: 500 (Internal Server Error).
+Requesting clean window close for pid=8760
+Clean shutdown recorded before restart.
+Restart persistence passed: Moon=celestial-v010-moon
+Requesting clean window close for pid=8448
+FAILURE: OmniForge did not complete a clean window close within 15 seconds.
+at Close-OmniForgeCleanly, D:\a\_temp\2d31baaa-356b-4b82-8250-e298a367e4d6.ps1: line 31
+at <ScriptBlock>, D:\a\_temp\2d31baaa-356b-4b82-8250-e298a367e4d6.ps1: line 89
+at <ScriptBlock>, <No file>: line 1
