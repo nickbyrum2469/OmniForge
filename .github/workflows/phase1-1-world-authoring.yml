@@ -35,4 +35,4 @@ jobs:
       - name: Run repository verification
         run: npm run verify
 
-# Final user-authored build trigger after route deduplication; this workflow remains manual-only.
+# Final package-validation trigger after the complete canonical sculpt route group landed.
