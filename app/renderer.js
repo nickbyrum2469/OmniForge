@@ -78,6 +78,7 @@ uniform vec3 uBaseColor;
 uniform vec3 uPathColor;
 uniform vec3 uAmbientColor;
 uniform float uAmbientIntensity;
+uniform float uEditorFill;
 uniform vec3 uLightDir;
 uniform vec3 uLightColor;
 uniform float uLightIntensity;
@@ -289,13 +290,14 @@ void main(){
   float shadow=shadowFactor();
   float hemi=n.y*.5+.5;
   vec3 ambient=pow(max(uAmbientColor,vec3(.001)),vec3(2.2))*uAmbientIntensity*(.38+.62*hemi)*materialAO;
+  vec3 editorAmbient=baseLinear*vec3(uEditorFill)*(.55+.45*hemi)*materialAO;
   float slopeCavity=mix(.72,1.0,smoothstep(.03,.82,abs(n.y)));
   vec3 diffuse=uLightColor*ndl*uLightIntensity*shadow;
   vec3 halfDir=normalize(lightDir+viewDir);
   float specPower=mix(128.0,6.0,roughness);
   float f0=mix(.04,1.0,uMetallic);
   float spec=pow(max(dot(n,halfDir),0.0),specPower)*f0*(1.05-roughness*.52)*shadow;
-  vec3 color=baseLinear*(ambient+diffuse)*slopeCavity+uLightColor*spec*uLightIntensity;
+  vec3 color=(baseLinear*(ambient+diffuse)+editorAmbient)*slopeCavity+uLightColor*spec*uLightIntensity;
 
   for(int i=0;i<4;i++){
     if(i>=uPointCount)break;
@@ -544,7 +546,7 @@ export class Renderer3D{
     const instanceCount=instanced?this.prepareInstances(mesh,instances):0,asset=object.type==='model'?this.assets.find(item=>item.type==='model'&&item.id===object.properties?.assetId):null,bounds=asset?.bounds||{min:[0,0,0],size:[1,1,1]},foliageWind=object.properties?.wind||{};
     set1('uTime',(performance.now()-this.renderStart)/1000);set1('uFoliageWind',instanced?1:0);set1('uFoliageWindStrength',Number(foliageWind.strength??.35)*Number(scene.settings.windStrength??.35));set1('uFoliageWindFrequency',Number(foliageWind.frequency??1));set1('uFoliageBaseY',Number(bounds.min?.[1]??0));set1('uFoliageHeight',Math.max(.001,Number(bounds.size?.[1]??1)));set3('uFoliageWindDirection',new Float32Array(Array.isArray(scene.settings.windDirection)?scene.settings.windDirection:[1,0,.25]));
     const drawRange=(count,offset=0)=>{if(instanced)gl.drawElementsInstanced(gl.TRIANGLES,count,mesh.indexType,offset,instanceCount);else gl.drawElements(gl.TRIANGLES,count,mesh.indexType,offset);};
-    set3('uBaseColor',hexToRgb(object.properties.color||'#9da7b8'));set3('uPathColor',hexToRgb(firstPath?.properties?.color||'#73573d'));set3('uAmbientColor',hexToRgb(scene.settings.ambientColor||'#ffffff'));set1('uAmbientIntensity',lights.ambientIntensity);
+    set3('uBaseColor',hexToRgb(object.properties.color||'#9da7b8'));set3('uPathColor',hexToRgb(firstPath?.properties?.color||'#73573d'));set3('uAmbientColor',hexToRgb(scene.settings.ambientColor||'#ffffff'));set1('uAmbientIntensity',lights.ambientIntensity);set1('uEditorFill',lights.editorFill);
     set3('uLightDir',lights.dir);set3('uLightColor',lights.color);set1('uLightIntensity',lights.intensity);gl.uniform1i(gl.getUniformLocation(p,'uPointCount'),lights.points.length);
     const pp=new Float32Array(12),pc=new Float32Array(12),pd=new Float32Array(8);lights.points.forEach((l,i)=>{pp.set(l.transform.position,i*3);pc.set(hexToRgb(l.properties.color),i*3);pd.set([Number(l.properties.intensity||1),Number(l.properties.range||10)],i*2);});gl.uniform3fv(gl.getUniformLocation(p,'uPointPos[0]'),pp);gl.uniform3fv(gl.getUniformLocation(p,'uPointColor[0]'),pc);gl.uniform2fv(gl.getUniformLocation(p,'uPointData[0]'),pd);
     set1('uSelected',selected?1:0);set3('uCameraPos',camera.position);set1('uRoughness',Number(baseAsset?.settings?.roughness??object.properties.roughness??.75));set1('uMetallic',Number(baseAsset?.settings?.metallic??object.properties.metallic??0));set1('uIsTerrain',object.type==='terrain'?1:0);
@@ -595,6 +597,7 @@ export class Renderer3D{
   }
   drawLines(buffer,model,viewProj,color,width=1){if(!buffer?.count)return;const gl=this.gl,p=this.lineProgram;gl.useProgram(p);gl.bindVertexArray(buffer.vao);gl.uniformMatrix4fv(gl.getUniformLocation(p,'uModel'),false,model);gl.uniformMatrix4fv(gl.getUniformLocation(p,'uViewProj'),false,viewProj);gl.uniform4fv(gl.getUniformLocation(p,'uColor'),color);gl.lineWidth(width);gl.drawArrays(gl.LINES,0,buffer.count);gl.bindVertexArray(null);}
   render(scene,camera,selectedId,options={}){
+    const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('Renderer3D.render',{objects:scene.objects.length},12)||(()=>{});
     this.resize();const gl=this.gl,{viewProj}=this.cameraMatrices(camera),lights=this.lightState(scene,options.editorMode||'edit'),lightViewProj=this.lightMatrix(scene,lights);if(lights.shadows)this.renderShadow(scene,lightViewProj);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.cullFace(gl.BACK);
     const foliageGroups=this.foliageGroups(scene,camera),foliageIds=new Set([...foliageGroups.values()].flat().map(item=>item.id));
     const objects=scene.objects.filter(o=>o.visible&&!['empty','path'].includes(o.type)&&!foliageIds.has(o.id));objects.sort((a,b)=>{const rank=o=>o.type==='terrain'?-20:o.type==='decal'?20+Number(o.properties?.sortOrder||0):0;return rank(a)-rank(b);});for(const object of objects){const mesh=this.meshFor(object,scene);if(!mesh)continue;if(object.type==='decal'){gl.enable(gl.BLEND);gl.depthMask(false);gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);}this.drawMesh(object,mesh,viewProj,lightViewProj,scene,object.id===selectedId,camera,lights);if(object.type==='decal'){gl.disable(gl.POLYGON_OFFSET_FILL);gl.depthMask(true);gl.enable(gl.CULL_FACE);}}
@@ -602,6 +605,12 @@ export class Renderer3D{
     this.ensureGrid(scene);if(scene.settings.gridVisible)this.drawLines(this.grid,mat4Identity(),viewProj,[.45,.56,.68,.18]);
     if(scene.settings.splinesVisible!==false)for(const pathObject of scene.objects.filter(o=>o.type==='path'&&o.visible&&o.properties?.showSpline!==false)){const buffers=this.pathBuffers(pathObject,scene),selected=pathObject.id===selectedId;this.drawLines(buffers.edges,mat4Identity(),viewProj,selected?[.83,.62,1,.9]:[.30,.22,.15,.28],selected?2:1);if(selected)this.drawLines(buffers.center,mat4Identity(),viewProj,[.92,.8,1,1],2);}
     const selected=scene.objects.find(o=>o.id===selectedId);if(selected&&selected.visible&&!['terrain','path','empty'].includes(selected.type)){gl.disable(gl.DEPTH_TEST);let selectionTransform=selected.transform;if(selected.type==='model'){const asset=this.assets.find(item=>item.type==='model'&&item.id===selected.properties?.assetId),bounds=asset?.bounds;if(bounds)selectionTransform={position:[selected.transform.position[0]+(bounds.center?.[0]||0)*selected.transform.scale[0],selected.transform.position[1]+(bounds.center?.[1]||0)*selected.transform.scale[1],selected.transform.position[2]+(bounds.center?.[2]||0)*selected.transform.scale[2]],rotation:selected.transform.rotation,scale:[Math.max(.02,Math.abs((bounds.size?.[0]||1)*selected.transform.scale[0])),Math.max(.02,Math.abs((bounds.size?.[1]||1)*selected.transform.scale[1])),Math.max(.02,Math.abs((bounds.size?.[2]||1)*selected.transform.scale[2]))]};}this.drawLines(this.selectionBox,modelMatrix(selectionTransform),viewProj,[.72,.45,1,1],2);gl.enable(gl.DEPTH_TEST);}
+    let webglError;
+    if(window.__omniforgeDiagnostics?.enabled&&performance.now()-Number(this.lastDiagnosticGlCheck||0)>=1000){
+      this.lastDiagnosticGlCheck=performance.now();
+      webglError=gl.getError();
+    }
+    finishDiagnostic(webglError===undefined?{}:{webglError});
   }
   rayFromScreen(camera,x,y){const rect=this.canvas.getBoundingClientRect(),nx=((x-rect.left)/rect.width)*2-1,ny=1-((y-rect.top)/rect.height)*2,{inverse}=this.cameraMatrices(camera),near=transformPoint(inverse,[nx,ny,-1]),far=transformPoint(inverse,[nx,ny,1]);return {origin:[...camera.position],dir:normalize(sub(far,near))};}
   pick(scene,camera,x,y){const ray=this.rayFromScreen(camera,x,y);let best=null,bestT=Infinity;for(const object of scene.objects){if(!object.visible||object.locked||['terrain','path','empty'].includes(object.type))continue;let center=object.transform.position,s=object.transform.scale;let radius=.5*Math.hypot(s[0],s[1],s[2]);if(object.type==='model'){const asset=this.assets.find(item=>item.type==='model'&&item.id===object.properties?.assetId),bounds=asset?.bounds;if(bounds){center=[object.transform.position[0]+(bounds.center?.[0]||0)*s[0],object.transform.position[1]+(bounds.center?.[1]||0)*s[1],object.transform.position[2]+(bounds.center?.[2]||0)*s[2]];radius=Math.max(.15,(bounds.radius||Math.hypot(...(bounds.size||[1,1,1]))*.5)*Math.max(...s.map(Math.abs)));}}if(object.type.includes('Light'))radius=1;const oc=sub(ray.origin,center),b=dot(oc,ray.dir),c=dot(oc,oc)-radius*radius,disc=b*b-c;if(disc<0)continue;const t=-b-Math.sqrt(disc);if(t>0&&t<bestT){bestT=t;best=object;}}return best;}

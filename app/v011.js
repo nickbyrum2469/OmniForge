@@ -5,6 +5,7 @@ let foundation = null;
 let splineEditPathId = null;
 let draggingNode = null;
 let inspectorObserver = null;
+let inspectorEnhanceQueued = false;
 let overlayFrame = 0;
 let foundationRefreshPromise = null;
 let foundationSignature = '';
@@ -57,6 +58,7 @@ function currentFoundationSignature() {
 
 async function refreshFoundation() {
   if (foundationRefreshPromise) return foundationRefreshPromise;
+  const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('worldgen-refresh')||(()=>{});
   foundationRefreshPromise = (async () => {
     try {
       applyPayload(await api('/api/v011/worldgen'));
@@ -64,6 +66,7 @@ async function refreshFoundation() {
     } catch (error) {
       bridge()?.showToast?.(error.message, 'error');
     } finally {
+      finishDiagnostic({signature:foundationSignature});
       foundationRefreshPromise = null;
     }
   })();
@@ -158,7 +161,7 @@ function pathPanel(object) {
 
 function referencePanel(object) {
   if (object.id !== 'block-main' && object.name !== 'Scene Block' && object.name !== 'Scale Reference Block') return '';
-  return `<section class="v011-authoring-panel"><div class="v011-panel-title"><div><small>STARTER REFERENCE</small><strong>Scale Reference Block</strong></div></div><p class="v011-note">This is only a starter scale, lighting, collision, and shadow reference. It has no hidden scene-management behavior and can be moved or deleted. A production animated character and Character Studio are separate roadmap systems—not disguised inside this box.</p></section>`;
+  return `<section class="v011-authoring-panel" data-v011-panel="reference"><div class="v011-panel-title"><div><small>STARTER REFERENCE</small><strong>Scale Reference Block</strong></div></div><p class="v011-note">This is only a starter scale, lighting, collision, and shadow reference. It has no hidden scene-management behavior and can be moved or deleted. A production animated character and Character Studio are separate roadmap systems—not disguised inside this box.</p></section>`;
 }
 
 function enhanceInspector() {
@@ -364,11 +367,19 @@ function installViewportEditing() {
 function watchInspector() {
   const target = $('#inspectorContent');
   if (!target || inspectorObserver) return;
-  inspectorObserver = new MutationObserver(() => queueMicrotask(enhanceInspector));
+  inspectorObserver = new MutationObserver(() => {
+    if (inspectorEnhanceQueued) return;
+    inspectorEnhanceQueued = true;
+    queueMicrotask(() => {
+      inspectorEnhanceQueued = false;
+      enhanceInspector();
+    });
+  });
   inspectorObserver.observe(target, { childList: true, subtree: false });
 }
 
 async function bootstrap() {
+  const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('v011-bootstrap')||(()=>{});
   const deadline = Date.now() + 15000;
   while (!bridge() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
   if (!bridge()) return;
@@ -383,6 +394,7 @@ async function bootstrap() {
     if (nextSignature !== foundationSignature) refreshFoundation();
     enhanceInspector();
   }));
+  finishDiagnostic({ready:true});
 }
 
 bootstrap();

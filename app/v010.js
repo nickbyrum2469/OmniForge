@@ -386,6 +386,7 @@ function bindControls() {
       inFlight: timeStepInFlight
     })) return;
     timeStepInFlight = true;
+    const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('world-time-step')||(()=>{});
     try {
       const stepped = await api('/api/v010/world/step', { method: 'POST', body: JSON.stringify({ seconds: 2 }) });
       snapshot = {
@@ -399,7 +400,9 @@ function bindControls() {
       };
       synchronizeRuntimeOnly();
       populate({ runtimeOnly: true });
-    } catch {
+      finishDiagnostic({advanced:true});
+    } catch (error) {
+      finishDiagnostic({error:error.message});
       // The regular refresh/error UI handles runtime disconnects.
     } finally {
       timeStepInFlight = false;

@@ -91,6 +91,9 @@ test('runtime source contains polling, compact-step, read-only GET, and traceabl
   assert.match(editor, /remotePollInFlight/);
   assert.match(editor, /interactionActiveUntil/);
   assert.match(editor, /renderer\.render\(scene,camera,selectedId,\{editorMode:/);
+  assert.match(renderer, /uniform float uEditorFill/);
+  assert.match(renderer, /set1\('uEditorFill',lights\.editorFill\)/);
+  assert.match(renderer, /baseLinear\*vec3\(uEditorFill\)/);
 
   const timer = worldUi.slice(worldUi.indexOf('timeTimer = window.setInterval'), worldUi.indexOf("window.addEventListener('beforeunload'"));
   assert.match(timer, /shouldAdvanceWorldTime/);

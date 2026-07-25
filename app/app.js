@@ -146,6 +146,10 @@ function fitLayoutToViewport(layout){
 }
 
 function applyState(nextState, options={}) {
+  const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('applyState',{
+    revision:nextState?.engine?.revision,
+    forceSelection:Boolean(options.forceSelection)
+  })||(()=>{});
   const previousSceneId = state?.activeSceneId;
   const previousProjectId = state?.project?.id;
   const previousSelected = selectedId;
@@ -201,6 +205,7 @@ function applyState(nextState, options={}) {
   setSaveState('saved');
   updateStatus();
   if(ui.projectHubDialog?.open)renderProjectHub();
+  finishDiagnostic({selectedId,sceneId:scene?.id,objectCount:scene?.objects?.length||0});
 }
 
 
@@ -1122,8 +1127,10 @@ function updateCamera(dt) {
 }
 
 function animationLoop(now) {
+  const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('animationLoop',{},20)||(()=>{});
   const dt=Math.min(.05,(now-lastFrame)/1000);lastFrame=now;updateCamera(dt);if(state?.editor.mode==='play'){behaviorStep(dt);physicsAccumulator=Math.min(.2,physicsAccumulator+dt);while(physicsAccumulator>=1/60){physicsStep(1/60);physicsAccumulator-=1/60;}}if(renderer&&scene)renderer.render(scene,camera,selectedId,{editorMode:state?.editor?.mode||'edit'});
   frameCounter++;fpsTimer+=dt;if(fpsTimer>=.5){ui.fpsStatus.textContent=`${Math.round(frameCounter/fpsTimer)} FPS`;frameCounter=0;fpsTimer=0;ui.cameraPositionBadge.textContent=`X ${camera.position[0].toFixed(1)} · Y ${camera.position[1].toFixed(1)} · Z ${camera.position[2].toFixed(1)}`;}
+  finishDiagnostic({dtMs:Number((dt*1000).toFixed(3))});
   requestAnimationFrame(animationLoop);
 }
 
@@ -1292,6 +1299,8 @@ function bindEvents() {
 async function pollRemoteState() {
   if(!state||remotePollInFlight||Date.now()<interactionActiveUntil||viewportNavigationActive()||cameraDirty||Date.now()-localMutationAt<900||state.editor.mode==='play'||document.hidden)return;
   remotePollInFlight=true;
+  const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('pollRemoteState')||(()=>{});
+  let diagnosticResult={};
   try{
     const remote=await api('/api/state');
     if(remote.engine.revision>state.engine.revision){
@@ -1308,7 +1317,7 @@ async function pollRemoteState() {
         state.engine.revision=next.engine.revision;
       }
     }
-  }catch{}finally{remotePollInFlight=false;}
+  }catch(error){diagnosticResult={error:error.message};}finally{remotePollInFlight=false;finishDiagnostic(diagnosticResult);}
 }
 
 async function bootstrap() {

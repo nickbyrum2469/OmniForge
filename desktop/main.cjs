@@ -11,6 +11,8 @@ const PRODUCT_NAME = 'OmniForge';
 const PRODUCT_VERSION = '0.11.0';
 const APP_ID = 'com.omniforge.editor';
 const ICON = path.join(APP_ROOT, 'resources', process.platform === 'win32' ? 'omniforge-icon.ico' : 'omniforge-icon.png');
+const DIAGNOSTIC_MODE = process.env.OMNIFORGE_DIAGNOSTICS === '1' || process.argv.includes('--diagnostics');
+if(DIAGNOSTIC_MODE)app.commandLine.appendSwitch('remote-debugging-port',String(process.env.OMNIFORGE_DEBUG_PORT||'9229'));
 
 app.setName(PRODUCT_NAME);
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
@@ -38,6 +40,7 @@ let runtimeInfo = null;
 function readJson(file, fallback=null) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } }
 function writeJson(file, value) { fs.mkdirSync(path.dirname(file), { recursive: true }); const temp=`${file}.${process.pid}.tmp`; fs.writeFileSync(temp, JSON.stringify(value,null,2),'utf8'); fs.renameSync(temp,file); }
 function appendLog(message) { fs.appendFileSync(path.join(LOG_DIR,'desktop.log'),`[${new Date().toISOString()}] ${message}\n`,'utf8'); }
+function appendDiagnostic(message) { fs.appendFileSync(path.join(LOG_DIR,'diagnostics.log'),`[${new Date().toISOString()}] ${message}\n`,'utf8'); }
 
 function findFreePort() {
   return new Promise((resolve, reject) => {
@@ -188,15 +191,19 @@ async function createMainWindow() {
     callback(permission==='pointerLock' && isTrustedEditorOrigin(origin));
   });
   mainWindow.webContents.on('console-message',(_event,level,message,line,sourceId)=>{
+    if(DIAGNOSTIC_MODE)appendDiagnostic(`Renderer console level=${level} ${sourceId||'unknown'}:${line||0} ${message}`);
     if(Number(level)>=2)appendLog(`Renderer console level=${level} ${sourceId||'unknown'}:${line||0} ${message}`);
   });
   mainWindow.webContents.on('render-process-gone',(_event,details)=>appendLog(`Renderer process gone reason=${details.reason} exitCode=${details.exitCode}`));
   mainWindow.on('unresponsive',()=>appendLog('Main window renderer became unresponsive.'));
   mainWindow.on('responsive',()=>appendLog('Main window renderer recovered responsiveness.'));
-  mainWindow.once('ready-to-show',()=>mainWindow.show());
+  mainWindow.once('ready-to-show',()=>{
+    mainWindow.show();
+    if(DIAGNOSTIC_MODE)mainWindow.webContents.openDevTools({mode:'detach',activate:true});
+  });
   mainWindow.on('close',()=>{if(!mainWindow.isDestroyed()){const bounds=mainWindow.getBounds();writeJson(windowStateFile,{...bounds,maximized:mainWindow.isMaximized()});}});
   mainWindow.on('closed',()=>{mainWindow=null;});
-  await mainWindow.loadURL(`${allowedOrigin}/?desktop=1&safeMode=${safeMode?'1':'0'}&recovered=${recoveryReason?'1':'0'}`);
+  await mainWindow.loadURL(`${allowedOrigin}/?desktop=1&safeMode=${safeMode?'1':'0'}&recovered=${recoveryReason?'1':'0'}&diagnostics=${DIAGNOSTIC_MODE?'1':'0'}`);
 }
 
 markSessionStart();
