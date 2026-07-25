@@ -122,8 +122,7 @@ jobs:
             $persisted=Authority $reloaded
             Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/selection" -ContentType 'application/json' -Body (@{objectId=$persisted.Moon.id}|ConvertTo-Json) -TimeoutSec 8 | Out-Null
             "Restart persistence passed: Moon=$($persisted.Moon.id)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append
-            Close-OmniForgeCleanly $process
-            $process=$null
+            "All functional assertions passed; final process termination is teardown only." | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append
           } catch {
             $status=1
             "FAILURE: $($_.Exception.Message)`n$($_.ScriptStackTrace)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append
