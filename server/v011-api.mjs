@@ -196,6 +196,17 @@ export async function handleV011Request(req, res) {
       return true;
     }
 
+    ids = match(url.pathname, /^\/api\/v011\/terrain\/([^/]+)\/sculpt$/);
+    if (ids && req.method === 'DELETE') {
+      const result = mutateState(state => {
+        ensureWorldFoundationState(state);
+        const terrain = requireTerrain(state, ids[0]);
+        return { terrain, removedCount: clearTerrainSculpt(terrain) };
+      });
+      json(res, 200, { ...result.result, state: result.state });
+      return true;
+    }
+
     ids = match(url.pathname, /^\/api\/v011\/path\/([^/]+)$/);
     if (ids && req.method === 'PATCH') {
       const input = await readJsonBody(req);
