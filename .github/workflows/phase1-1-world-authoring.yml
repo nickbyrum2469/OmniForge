@@ -51,3 +51,5 @@ jobs:
           git add app server
           git commit -m "Add celestial controls, volumetric clouds, path tools, and local terrain sculpting"
           git push origin HEAD:milestone-12-1/celestial-path-terrain-corrections
+
+# Triggered after the default-branch runner was installed.
