@@ -17,4 +17,6 @@ for (const path of targets) {
   fs.writeFileSync(path, source.replace(/\n/g, '\r\n'));
 }
 
+await import('./phase1-followup.mjs');
+
 console.log('Phase 1 integration completed with original line-ending conventions preserved.');
