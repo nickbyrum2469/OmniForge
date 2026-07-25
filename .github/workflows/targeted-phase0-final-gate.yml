@@ -1,0 +1,265 @@
+name: Phase 0 Final Gate
+
+on:
+  pull_request:
+    branches:
+      - milestone-12-1/celestial-path-terrain-corrections
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase0-final-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    if: github.event_name != 'pull_request' || github.head_ref == 'phase0/celestial-authority-stabilization'
+    runs-on: ubuntu-latest
+    outputs:
+      commit_sha: ${{ steps.identity.outputs.commit_sha }}
+    steps:
+      - name: Check out exact Phase 0 branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase0/celestial-authority-stabilization
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+
+      - name: Prove deterministic migrations are fully integrated
+        run: |
+          python3 scripts/apply-phase0-celestial-stabilization.py
+          python3 scripts/apply-phase0-authority-followup.py
+          git diff --exit-code -- app server
+
+      - name: Check Phase 0 source syntax
+        run: |
+          node --check server/celestial-authority.mjs
+          node --check server/v010-systems.mjs
+          node --check server/v010-api.mjs
+          node --check server/server.mjs
+          node --check app/world-runtime.js
+          node --check app/v010.js
+          node --check app/app.js
+
+      - name: Run the complete automated suite
+        run: npm test
+
+      - name: Run repository verification
+        run: npm run verify
+
+      - name: Record exact verified identity
+        id: identity
+        shell: bash
+        run: |
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Verified Phase 0 source: $(git rev-parse HEAD)"
+
+  windows:
+    needs: source
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - name: Check out exact verified Phase 0 commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.commit_sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          if (Test-Path package-lock.json) { npm ci } else { npm install --no-audit --no-fund }
+
+      - name: Re-run all tests and verification on Windows
+        shell: pwsh
+        run: |
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw 'Phase 0 Windows tests failed.' }
+          npm run verify
+          if ($LASTEXITCODE -ne 0) { throw 'Phase 0 Windows verification failed.' }
+
+      - name: Build native Windows package
+        shell: pwsh
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\BUILD_DESKTOP_WINDOWS.ps1
+
+      - name: Audit package identity and required files
+        shell: pwsh
+        run: |
+          $output=Join-Path $PWD 'dist\OmniForge-win32-x64'
+          $required=@(
+            'OmniForge.exe','source-commit','version',
+            'resources\app\server\celestial-authority.mjs',
+            'resources\app\server\v010-systems.mjs',
+            'resources\app\server\v010-api.mjs',
+            'resources\app\server\server.mjs',
+            'resources\app\app\world-runtime.js',
+            'resources\app\app\v010.js',
+            'resources\app\app\app.js'
+          )
+          foreach($relative in $required){
+            if(-not(Test-Path (Join-Path $output $relative) -PathType Leaf)){throw "Missing packaged Phase 0 file: $relative"}
+          }
+          $packaged=(Get-Content (Join-Path $output 'source-commit') -Raw).Trim()
+          $head=(git rev-parse HEAD).Trim()
+          if($packaged -ne $head){throw "Packaged source $packaged does not match checked-out source $head."}
+          if($head -ne '${{ needs.source.outputs.commit_sha }}'){throw 'Windows package was not built from the verified Phase 0 commit.'}
+
+      - name: Validate packaged authority, clean close, and restart persistence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $output=Join-Path $PWD 'dist\OmniForge-win32-x64'
+          $runtime=Join-Path $env:TEMP "omniforge-phase0-final-$env:GITHUB_RUN_ID"
+          $port=43163
+          $evidence=Join-Path $PWD 'PHASE0_FINAL_WINDOWS_EVIDENCE.txt'
+          $env:OMNIFORGE_DATA_ROOT=$runtime
+          $env:OMNIFORGE_PORT="$port"
+          New-Item -ItemType Directory -Force -Path $runtime | Out-Null
+
+          function Log([string]$Message) {
+            $Message | Tee-Object -FilePath $evidence -Append
+          }
+          function Wait-Health {
+            $deadline=(Get-Date).AddSeconds(45)
+            while((Get-Date)-lt $deadline){
+              Start-Sleep -Milliseconds 400
+              try{return Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2}catch{}
+            }
+            throw 'Packaged OmniForge did not become healthy.'
+          }
+          function Wait-MainWindow([System.Diagnostics.Process]$AppProcess) {
+            $deadline=(Get-Date).AddSeconds(30)
+            while((Get-Date)-lt $deadline){
+              if($AppProcess.HasExited){throw 'OmniForge exited before creating its main window.'}
+              $AppProcess.Refresh()
+              if($AppProcess.MainWindowHandle -ne 0){return}
+              Start-Sleep -Milliseconds 250
+            }
+            throw 'OmniForge did not create a closable main window within 30 seconds.'
+          }
+          function Wait-PortClosed {
+            $deadline=(Get-Date).AddSeconds(20)
+            while((Get-Date)-lt $deadline){
+              try{Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 1 | Out-Null}catch{return}
+              Start-Sleep -Milliseconds 300
+            }
+            throw 'The packaged runtime did not release its port after clean close.'
+          }
+          function Close-Cleanly([System.Diagnostics.Process]$AppProcess) {
+            Wait-MainWindow $AppProcess
+            Start-Sleep -Milliseconds 500
+            Log "Requesting clean close for pid=$($AppProcess.Id), hwnd=$($AppProcess.MainWindowHandle)."
+            if(-not $AppProcess.CloseMainWindow()){throw 'The packaged main window rejected the clean-close request.'}
+            if(-not $AppProcess.WaitForExit(30000)){throw 'OmniForge did not finish clean shutdown within 30 seconds.'}
+            Wait-PortClosed
+          }
+          function Force-Cleanup {
+            Get-Process OmniForge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            try{Wait-PortClosed}catch{}
+          }
+          function Authority($state) {
+            $scene=$state.scenes | Where-Object {$_.id -eq $state.activeSceneId} | Select-Object -First 1
+            if(-not $scene){throw 'The active scene was missing.'}
+            $suns=@($scene.objects | Where-Object {$_.properties.celestialRole -eq 'sun'})
+            $moons=@($scene.objects | Where-Object {$_.properties.celestialRole -eq 'moon'})
+            if($suns.Count -ne 1 -or $moons.Count -ne 1){throw "Expected one Sun and one Moon; found Sun=$($suns.Count), Moon=$($moons.Count)."}
+            if(-not $suns[0].properties.celestialProxy -or -not $moons[0].properties.celestialProxy){throw 'Celestial proxy markers were missing.'}
+            if(-not $suns[0].locked -or -not $moons[0].locked){throw 'Celestial proxies were not protected.'}
+            if(-not $suns[0].properties.angularSize -or -not $moons[0].properties.angularSize){throw 'Celestial proxy size details were missing.'}
+            return @{Scene=$scene;Sun=$suns[0];Moon=$moons[0]}
+          }
+
+          $process=$null
+          try {
+            Set-Content -Path $evidence -Value "Phase 0 final packaged validation`nSource: $((Get-Content (Join-Path $output 'source-commit') -Raw).Trim())" -Encoding utf8
+            $process=Start-Process -FilePath (Join-Path $output 'OmniForge.exe') -PassThru
+            Wait-Health | Out-Null
+            Wait-MainWindow $process
+            $initial=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 8
+            $authority=Authority $initial
+            $sunId=$authority.Sun.id
+            $moonId=$authority.Moon.id
+            Log "Initial authority passed: Sun=$sunId, Moon=$moonId."
+
+            $fill=@{type='directionalLight';name='Fill Light';position=@(0,10,0)} | ConvertTo-Json -Depth 8
+            $fillResult=Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/object" -ContentType 'application/json' -Body $fill -TimeoutSec 8
+            $fillId=$fillResult.object.id
+            $legacy=@{type='directionalLight';name='Sun';position=@(0,15,0)} | ConvertTo-Json -Depth 8
+            Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/object" -ContentType 'application/json' -Body $legacy -TimeoutSec 8 | Out-Null
+            $world=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/v010/world" -TimeoutSec 8
+            $authority=Authority $world.state
+            if(-not($authority.Scene.objects | Where-Object {$_.id -eq $fillId})){throw 'Celestial cleanup deleted an unrelated directional light.'}
+            if($authority.Sun.id -ne $sunId -or $authority.Moon.id -ne $moonId){throw 'Celestial IDs changed while removing a legacy duplicate.'}
+            Log 'Legacy Sun removed; unrelated Fill Light preserved.'
+
+            foreach($bodyObject in @($authority.Sun,$authority.Moon)){
+              Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/selection" -ContentType 'application/json' -Body (@{objectId=$bodyObject.id}|ConvertTo-Json) -TimeoutSec 8 | Out-Null
+            }
+            Log 'Sun and Moon selection persistence accepted without Object not found.'
+
+            foreach($route in @('/api/object/duplicate','/api/object/delete')){
+              $rejected=$false
+              try{Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port$route" -ContentType 'application/json' -Body (@{objectId=$moonId}|ConvertTo-Json) -TimeoutSec 8 | Out-Null}catch{$rejected=$true}
+              if(-not $rejected){throw "Protected Moon operation unexpectedly succeeded: $route"}
+            }
+            Log 'Protected celestial duplication and deletion were rejected.'
+
+            Close-Cleanly $process
+            $process=$null
+            $lifecycle=Get-Content (Join-Path $runtime 'sessions\lifecycle.json') -Raw | ConvertFrom-Json
+            if($lifecycle.cleanShutdown -ne $true){throw 'The packaged editor did not record cleanShutdown=true.'}
+            Log 'Clean shutdown was recorded.'
+
+            $process=Start-Process -FilePath (Join-Path $output 'OmniForge.exe') -PassThru
+            Wait-Health | Out-Null
+            Wait-MainWindow $process
+            $reloaded=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 8
+            $persisted=Authority $reloaded
+            if($persisted.Sun.id -ne $sunId -or $persisted.Moon.id -ne $moonId){throw 'Celestial identities changed after restart.'}
+            Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/selection" -ContentType 'application/json' -Body (@{objectId=$moonId}|ConvertTo-Json) -TimeoutSec 8 | Out-Null
+            Log 'Restart persistence and Moon reselection passed.'
+            Log 'All Phase 0 packaged assertions passed; final process termination is teardown only.'
+          } finally {
+            Force-Cleanup
+            Remove-Item Env:OMNIFORGE_DATA_ROOT -ErrorAction SilentlyContinue
+            Remove-Item Env:OMNIFORGE_PORT -ErrorAction SilentlyContinue
+            Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Archive exact package and evidence
+        shell: pwsh
+        run: |
+          $archive='OmniForge-Phase0-Celestial-Stabilization-Windows-x64.zip'
+          if(Test-Path $archive){Remove-Item $archive -Force}
+          Compress-Archive -Path '.\dist\OmniForge-win32-x64\*' -DestinationPath $archive -CompressionLevel Optimal
+          $hash=(Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $archive" | Set-Content 'OmniForge-Phase0-Celestial-Stabilization-Windows-x64.sha256' -Encoding ascii
+          Add-Content PHASE0_FINAL_WINDOWS_EVIDENCE.txt "Archive SHA-256: $hash"
+
+      - name: Upload verified Phase 0 Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniForge-Phase0-Final-${{ github.run_id }}
+          path: |
+            OmniForge-Phase0-Celestial-Stabilization-Windows-x64.zip
+            OmniForge-Phase0-Celestial-Stabilization-Windows-x64.sha256
+            PHASE0_FINAL_WINDOWS_EVIDENCE.txt
+          if-no-files-found: error
+          retention-days: 30
