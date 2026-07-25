@@ -1,0 +1,152 @@
+name: Targeted Phase 0 Windows restart diagnostics
+
+on:
+  pull_request:
+    branches:
+      - milestone-12-1/celestial-path-terrain-corrections
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  windows-diagnostics:
+    if: github.actor != 'github-actions[bot]' && github.head_ref == 'phase0/celestial-authority-stabilization'
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase0/celestial-authority-stabilization
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install, test, verify, and package
+        shell: pwsh
+        run: |
+          if (Test-Path package-lock.json) { npm ci } else { npm install --no-audit --no-fund }
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw 'Windows source tests failed.' }
+          npm run verify
+          if ($LASTEXITCODE -ne 0) { throw 'Windows verification failed.' }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\BUILD_DESKTOP_WINDOWS.ps1
+      - name: Run restart-safe packaged celestial diagnostics
+        id: smoke
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Continue'
+          $output=Join-Path $PWD 'dist\OmniForge-win32-x64'
+          $runtime=Join-Path $env:TEMP "omniforge-phase0-diagnostic-$env:GITHUB_RUN_ID"
+          $port=43137
+          $env:OMNIFORGE_DATA_ROOT=$runtime
+          $env:OMNIFORGE_PORT="$port"
+          New-Item -ItemType Directory -Force -Path $runtime | Out-Null
+
+          function Wait-Health {
+            $deadline=(Get-Date).AddSeconds(40)
+            while((Get-Date)-lt $deadline){
+              Start-Sleep -Milliseconds 400
+              try{return Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2}catch{}
+            }
+            throw 'Packaged executable did not become healthy.'
+          }
+          function Wait-PortClosed {
+            $deadline=(Get-Date).AddSeconds(15)
+            while((Get-Date)-lt $deadline){
+              try{Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 1 | Out-Null}catch{return}
+              Start-Sleep -Milliseconds 300
+            }
+            throw 'Runtime server did not release its port.'
+          }
+          function Stop-Runtime {
+            Get-Process OmniForge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Wait-PortClosed
+          }
+          function Authority($state) {
+            $scene=$state.scenes | Where-Object {$_.id -eq $state.activeSceneId} | Select-Object -First 1
+            if(-not $scene){throw 'Active scene was missing.'}
+            $suns=@($scene.objects | Where-Object {$_.properties.celestialRole -eq 'sun'})
+            $moons=@($scene.objects | Where-Object {$_.properties.celestialRole -eq 'moon'})
+            Write-Host "Authority count: Sun=$($suns.Count), Moon=$($moons.Count)"
+            if($suns.Count -ne 1 -or $moons.Count -ne 1){throw 'Celestial authority count was invalid.'}
+            if(-not $suns[0].properties.celestialProxy -or -not $moons[0].properties.celestialProxy){throw 'Celestial proxy marker missing.'}
+            if(-not $suns[0].locked -or -not $moons[0].locked){throw 'Celestial proxy protection missing.'}
+            return @{Sun=$suns[0];Moon=$moons[0]}
+          }
+
+          $status=0
+          try {
+            "Starting exact packaged build: $(Get-Content (Join-Path $output 'source-commit') -Raw)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt
+            $process=Start-Process -FilePath (Join-Path $output 'OmniForge.exe') -PassThru
+            Wait-Health | Out-Null
+            $initial=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 8
+            $authority=Authority $initial
+            "Initial Sun=$($authority.Sun.id), Moon=$($authority.Moon.id)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append
+
+            $legacy=@{type='directionalLight';name='Sun';position=@(0,15,0)} | ConvertTo-Json -Depth 8
+            Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/object" -ContentType 'application/json' -Body $legacy -TimeoutSec 8 | Out-Null
+            $world=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/v010/world" -TimeoutSec 8
+            $authority=Authority $world.state
+            "After legacy repair Sun=$($authority.Sun.id), Moon=$($authority.Moon.id)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append
+
+            foreach($bodyObject in @($authority.Sun,$authority.Moon)){
+              Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/selection" -ContentType 'application/json' -Body (@{objectId=$bodyObject.id}|ConvertTo-Json) -TimeoutSec 8 | Out-Null
+            }
+
+            $duplicateRejected=$false
+            try{Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/object/duplicate" -ContentType 'application/json' -Body (@{objectId=$authority.Moon.id}|ConvertTo-Json) -TimeoutSec 8 | Out-Null}catch{$duplicateRejected=$true;"Duplicate rejection: $($_.Exception.Message)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append}
+            if(-not $duplicateRejected){throw 'Moon duplication was accepted.'}
+
+            Stop-Runtime
+            $process=Start-Process -FilePath (Join-Path $output 'OmniForge.exe') -PassThru
+            Wait-Health | Out-Null
+            $reloaded=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 8
+            $persisted=Authority $reloaded
+            Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/selection" -ContentType 'application/json' -Body (@{objectId=$persisted.Moon.id}|ConvertTo-Json) -TimeoutSec 8 | Out-Null
+            "Restart persistence passed: Moon=$($persisted.Moon.id)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append
+          } catch {
+            $status=1
+            "FAILURE: $($_.Exception.Message)`n$($_.ScriptStackTrace)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append
+          } finally {
+            try{Stop-Runtime}catch{"CLEANUP: $($_.Exception.Message)" | Tee-Object -FilePath PHASE0_WINDOWS_DIAGNOSTIC.txt -Append}
+            Remove-Item Env:OMNIFORGE_DATA_ROOT -ErrorAction SilentlyContinue
+            Remove-Item Env:OMNIFORGE_PORT -ErrorAction SilentlyContinue
+            Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          Get-Content PHASE0_WINDOWS_DIAGNOSTIC.txt
+          echo "status=$status" >> $env:GITHUB_OUTPUT
+          exit 0
+      - name: Commit exact Windows failure evidence
+        if: steps.smoke.outputs.status != '0'
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PHASE0_WINDOWS_DIAGNOSTIC.txt
+          git commit -m "Record Phase 0 Windows restart failure"
+          git push origin HEAD:phase0/celestial-authority-stabilization
+      - name: Stop after captured Windows failure
+        if: steps.smoke.outputs.status != '0'
+        run: exit 1
+      - name: Archive successful Windows build
+        if: steps.smoke.outputs.status == '0'
+        shell: pwsh
+        run: |
+          $archive='OmniForge-Phase0-Celestial-Stabilization-Windows-x64.zip'
+          Compress-Archive -Path '.\dist\OmniForge-win32-x64\*' -DestinationPath $archive -CompressionLevel Optimal
+          $hash=(Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $archive" | Set-Content 'OmniForge-Phase0-Celestial-Stabilization-Windows-x64.sha256' -Encoding ascii
+      - name: Upload successful Windows evidence
+        if: steps.smoke.outputs.status == '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniForge-Phase0-Windows-${{ github.run_id }}
+          path: |
+            OmniForge-Phase0-Celestial-Stabilization-Windows-x64.zip
+            OmniForge-Phase0-Celestial-Stabilization-Windows-x64.sha256
+            PHASE0_WINDOWS_DIAGNOSTIC.txt
+          if-no-files-found: error
+          retention-days: 30
