@@ -37,6 +37,8 @@ jobs:
         run: |
           set +e
           {
+            node scripts/repair-phase1-1-migration-source.mjs
+            node --check scripts/apply-phase1-1-world-authoring.mjs
             node scripts/apply-phase1-1-world-authoring.mjs
             node scripts/apply-phase1-1-followup.mjs
           } > PHASE1_1_OUTPUT.txt 2>&1
@@ -78,6 +80,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app server
+          git add app server scripts/apply-phase1-1-world-authoring.mjs
           git commit -m "Add celestial controls, volumetric clouds, path tools, and local terrain sculpting"
           git push origin HEAD:milestone-12-1/celestial-path-terrain-corrections
