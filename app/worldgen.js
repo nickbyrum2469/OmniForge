@@ -64,6 +64,30 @@ export function ridgedNoise(x, z, options = {}) {
   return ridge * ridge * 2 - 1;
 }
 
+function normalizeSculptLayer(layer = {}) {
+  return {
+    id: String(layer.id || `sculpt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`),
+    mode: ['raise', 'lower', 'flatten'].includes(layer.mode) ? layer.mode : 'raise',
+    x: Number(layer.x || 0), z: Number(layer.z || 0), radius: clamp(layer.radius ?? 8, 0.25, 5000),
+    strength: clamp(layer.strength ?? 2, 0.001, 1000), targetHeight: Number(layer.targetHeight || 0),
+    falloff: clamp(layer.falloff ?? 0.72, 0.05, 1), createdAt: layer.createdAt || new Date().toISOString()
+  };
+}
+
+function applySculptLayers(height, x, z, layers = []) {
+  let result = height;
+  for (const layer of layers) {
+    const distance = Math.hypot(x - layer.x, z - layer.z);
+    if (distance >= layer.radius) continue;
+    const normalized = distance / Math.max(EPSILON, layer.radius);
+    const influence = 1 - smoothstep(Math.max(0, layer.falloff - 0.35), 1, normalized);
+    if (layer.mode === 'lower') result -= layer.strength * influence;
+    else if (layer.mode === 'flatten') result = lerp(result, layer.targetHeight, clamp(layer.strength, 0, 1) * influence);
+    else result += layer.strength * influence;
+  }
+  return result;
+}
+
 function presetKey(value) {
   return Object.prototype.hasOwnProperty.call(TERRAIN_PRESETS, value) ? value : 'rollingHills';
 }
@@ -132,6 +156,8 @@ export function normalizeTerrainProperties(properties = {}, transform = {}) {
     shapeOrigin,
     expandStep: clamp(properties.expandStep ?? 100, 1, 10000),
     chunkSize: clamp(properties.chunkSize ?? 64, 8, 1024),
+    sculptLayers: (Array.isArray(properties.sculptLayers) ? properties.sculptLayers : []).slice(-512).map(normalizeSculptLayer),
+    densityLimited: Boolean(properties.densityLimited),
     hydrologyReady: properties.hydrologyReady !== false,
     generatedRevision: Number(properties.generatedRevision || 1)
   };
@@ -216,7 +242,8 @@ export function terrainBaseHeightAt(terrain, x, z) {
     shape -= coast * 0.82;
   }
 
-  return properties.baseElevation + shape * properties.height;
+  const proceduralHeight = properties.baseElevation + shape * properties.height;
+  return applySculptLayers(proceduralHeight, x, z, properties.sculptLayers);
 }
 
 function normalizePoint(point) {
@@ -241,6 +268,9 @@ export function normalizePathProperties(properties = {}, transform = {}) {
     splineTension: clamp(properties.splineTension ?? 0.5, 0, 1),
     samplesPerSegment: Math.round(clamp(properties.samplesPerSegment ?? 14, 2, 64)),
     showSpline: properties.showSpline !== false,
+    width: clamp(properties.width ?? 3, 0.1, 200),
+    blendDistance: clamp(properties.blendDistance ?? 2.5, 0.05, 200),
+    edgeNoise: clamp(properties.edgeNoise ?? 0.45, 0, 5),
     carveTerrain: Boolean(properties.carveTerrain),
     maxGradePercent: clamp(properties.maxGradePercent ?? 12, 0.1, 100),
     maxCutDepth: clamp(properties.maxCutDepth ?? 6, 0, 1000),
@@ -404,6 +434,10 @@ export function terrainBounds(terrain) {
 
 export function expandTerrain(terrain, direction, amount) {
   const properties = normalizeTerrainProperties(terrain.properties || {}, terrain.transform || {});
+  const oldSizeX = properties.bounds.maxX - properties.bounds.minX;
+  const oldSizeZ = properties.bounds.maxZ - properties.bounds.minZ;
+  const spacingX = oldSizeX / Math.max(1, properties.resolutionX);
+  const spacingZ = oldSizeZ / Math.max(1, properties.resolutionZ);
   const delta = Math.max(1, Number(amount || properties.expandStep || 100));
   const bounds = { ...properties.bounds };
   if (direction === 'north') bounds.minZ -= delta;
@@ -412,9 +446,39 @@ export function expandTerrain(terrain, direction, amount) {
   else if (direction === 'east') bounds.maxX += delta;
   else if (direction === 'all') { bounds.minX -= delta; bounds.maxX += delta; bounds.minZ -= delta; bounds.maxZ += delta; }
   else throw new Error('Terrain expansion direction must be north, south, east, west, or all.');
-  terrain.properties = normalizeTerrainProperties({ ...properties, bounds, generatedRevision: properties.generatedRevision + 1 }, { ...terrain.transform, scale: [1, 1, 1] });
+  const requiredResolutionX = Math.ceil((bounds.maxX - bounds.minX) / Math.max(EPSILON, spacingX));
+  const requiredResolutionZ = Math.ceil((bounds.maxZ - bounds.minZ) / Math.max(EPSILON, spacingZ));
+  terrain.properties = normalizeTerrainProperties({
+    ...properties,
+    bounds,
+    resolutionX: Math.min(256, Math.max(properties.resolutionX, requiredResolutionX)),
+    resolutionZ: Math.min(256, Math.max(properties.resolutionZ, requiredResolutionZ)),
+    densityLimited: requiredResolutionX > 256 || requiredResolutionZ > 256,
+    generatedRevision: properties.generatedRevision + 1
+  }, { ...terrain.transform, scale: [1, 1, 1] });
   terrain.transform.scale = [1, 1, 1];
   return terrain.properties.bounds;
+}
+
+export function addTerrainSculptLayer(terrain, layer = {}) {
+  const properties = normalizeTerrainProperties(terrain.properties || {}, terrain.transform || {});
+  const nextLayer = normalizeSculptLayer(layer);
+  terrain.properties = normalizeTerrainProperties({ ...properties, sculptLayers: [...properties.sculptLayers, nextLayer], generatedRevision: properties.generatedRevision + 1 }, terrain.transform || {});
+  return nextLayer;
+}
+
+export function undoTerrainSculpt(terrain) {
+  const properties = normalizeTerrainProperties(terrain.properties || {}, terrain.transform || {});
+  const removed = properties.sculptLayers.at(-1) || null;
+  terrain.properties = normalizeTerrainProperties({ ...properties, sculptLayers: properties.sculptLayers.slice(0, -1), generatedRevision: properties.generatedRevision + 1 }, terrain.transform || {});
+  return removed;
+}
+
+export function clearTerrainSculpt(terrain) {
+  const properties = normalizeTerrainProperties(terrain.properties || {}, terrain.transform || {});
+  const removedCount = properties.sculptLayers.length;
+  terrain.properties = normalizeTerrainProperties({ ...properties, sculptLayers: [], generatedRevision: properties.generatedRevision + 1 }, terrain.transform || {});
+  return removedCount;
 }
 
 export function migrateSceneWorldFoundation(scene) {

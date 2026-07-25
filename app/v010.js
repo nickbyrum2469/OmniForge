@@ -98,6 +98,30 @@ function installWorldPanel() {
     </div>
 
     <div class="v010-card">
+      <header><b>Celestial Studio</b><span id="v010CelestialReadout" class="v010-chip">SUN + MOON</span></header>
+      <div class="v010-grid">
+        <label>Positioning<select id="v010CelestialMode"><option value="astronomical">Time-driven orbit</option><option value="manual">Manual azimuth/elevation</option></select></label>
+        <label>Sun size<input id="v010SunSize" type="range" min="0.1" max="8" step="0.05"></label>
+        <label>Sun glow<input id="v010SunGlow" type="range" min="0" max="5" step="0.05"></label>
+        <label>Sun azimuth<input id="v010SunAzimuth" type="number" min="-720" max="720" step="1"></label>
+        <label>Sun elevation<input id="v010SunElevation" type="number" min="-90" max="90" step="1"></label>
+        <label>Moon size<input id="v010MoonSize" type="range" min="0.1" max="12" step="0.05"></label>
+        <label>Moon phase<input id="v010MoonPhase" type="range" min="0" max="1" step="0.005"></label>
+        <label>Moon brightness<input id="v010MoonBrightness" type="range" min="0" max="5" step="0.05"></label>
+        <label>Moon glow<input id="v010MoonGlow" type="range" min="0" max="5" step="0.05"></label>
+        <label>Moon detail<input id="v010MoonDetail" type="range" min="0" max="3" step="0.05"></label>
+        <label>Moon azimuth<input id="v010MoonAzimuth" type="number" min="-720" max="720" step="1"></label>
+        <label>Moon elevation<input id="v010MoonElevation" type="number" min="-90" max="90" step="1"></label>
+        <label>Show planet<input id="v010PlanetEnabled" type="checkbox"></label>
+        <label>Planet size<input id="v010PlanetSize" type="range" min="0.1" max="18" step="0.1"></label>
+        <label>Planet azimuth<input id="v010PlanetAzimuth" type="number" min="-720" max="720" step="1"></label>
+        <label>Planet elevation<input id="v010PlanetElevation" type="number" min="-90" max="90" step="1"></label>
+        <label>Planet rings<input id="v010PlanetRings" type="range" min="0" max="1" step="0.01"></label>
+      </div>
+      <p class="v010-section-note">Time-driven mode follows world time. Manual mode preserves the exact Sun, Moon, and planet positions entered here.</p>
+    </div>
+
+    <div class="v010-card">
       <header><b>Atmosphere Studio</b><span class="v010-chip">SCATTERING + AERIAL PERSPECTIVE</span></header>
       <div class="v010-grid">
         <label>Quality<select id="v010AtmosphereQuality"><option value="compatibility">Compatibility LUT</option><option value="balanced">Balanced LUT</option><option value="quality">Quality volumetrics</option><option value="reference">Reference</option></select></label>
@@ -105,8 +129,17 @@ function installWorldPanel() {
         <label>Rayleigh<input id="v010Rayleigh" type="range" min="0" max="3" step="0.01"></label>
         <label>Mie haze<input id="v010Mie" type="range" min="0" max="1" step="0.01"></label>
         <label>Humidity<input id="v010Humidity" type="range" min="0" max="1" step="0.01"></label>
+        <label>Exposure<input id="v010Exposure" type="range" min="0.2" max="3" step="0.02"></label>
         <label>Stars<input id="v010Stars" type="range" min="0" max="3" step="0.05"></label>
+        <label>Star density<input id="v010StarDensity" type="range" min="0.08" max="2" step="0.02"></label>
+        <label>Daylight star extinction<input id="v010StarExtinction" type="range" min="0.1" max="4" step="0.05"></label>
+        <label>Milky Way<input id="v010MilkyWay" type="range" min="0" max="3" step="0.05"></label>
+        <label>Cloud mode<select id="v010CloudQuality"><option value="layered">Optimized layered</option><option value="balanced">Volumetric balanced</option><option value="quality">Volumetric quality</option><option value="reference">Volumetric reference</option></select></label>
         <label>Cloud cover<input id="v010Clouds" type="range" min="0" max="1" step="0.01"></label>
+        <label>Cloud density<input id="v010CloudDensity" type="range" min="0" max="1" step="0.01"></label>
+        <label>Cloud altitude<input id="v010CloudAltitude" type="number" min="50" max="20000" step="50"></label>
+        <label>Cloud thickness<input id="v010CloudThickness" type="number" min="50" max="20000" step="50"></label>
+        <label>Cloud wind speed<input id="v010CloudWindSpeed" type="number" min="0" max="300" step="1"></label>
         <label>Fog<input id="v010Fog" type="range" min="0" max="1" step="0.01"></label>
         <label>Weather<select id="v010Weather"><option value="clear">Clear</option><option value="partly-cloudy">Partly cloudy</option><option value="overcast">Overcast</option><option value="rain">Rain</option><option value="storm">Storm</option><option value="snow">Snow</option><option value="fog">Fog</option></select></label>
       </div>
@@ -177,13 +210,41 @@ function populate(options = {}) {
   field('v010Rayleigh').value = world.atmosphere.rayleigh;
   field('v010Mie').value = world.atmosphere.mie;
   field('v010Humidity').value = world.atmosphere.humidity;
+  field('v010Exposure').value = world.atmosphere.exposure;
+  field('v010CelestialMode').value = world.sky.celestialMode || 'astronomical';
+  field('v010SunSize').value = world.sky.sunSize ?? 1;
+  field('v010SunGlow').value = world.sky.sunGlow ?? 1;
+  field('v010SunAzimuth').value = world.sky.sunAzimuth ?? -90;
+  field('v010SunElevation').value = world.sky.sunElevation ?? 45;
+  field('v010MoonSize').value = world.sky.moonSize ?? 1.45;
+  field('v010MoonPhase').value = world.sky.moonPhase ?? 0.72;
+  field('v010MoonBrightness').value = world.sky.moonBrightness ?? 1;
+  field('v010MoonGlow').value = world.sky.moonGlow ?? 0.7;
+  field('v010MoonDetail').value = world.sky.moonDetail ?? 1;
+  field('v010MoonAzimuth').value = world.sky.moonAzimuth ?? 90;
+  field('v010MoonElevation').value = world.sky.moonElevation ?? 32;
+  field('v010PlanetEnabled').checked = Boolean(world.sky.planetEnabled);
+  field('v010PlanetSize').value = world.sky.planetSize ?? 4.5;
+  field('v010PlanetAzimuth').value = world.sky.planetAzimuth ?? 215;
+  field('v010PlanetElevation').value = world.sky.planetElevation ?? 28;
+  field('v010PlanetRings').value = world.sky.planetRings ?? 0.65;
   field('v010Stars').value = world.sky.starIntensity;
+  field('v010StarDensity').value = world.sky.starDensity ?? 0.72;
+  field('v010StarExtinction').value = world.sky.starDaylightExtinction ?? 1.35;
+  field('v010MilkyWay').value = world.sky.milkyWayIntensity ?? 0.35;
+  field('v010CloudQuality').value = world.clouds.quality || 'layered';
   field('v010Clouds').value = world.clouds.coverage;
+  field('v010CloudDensity').value = world.clouds.density ?? 0.45;
+  field('v010CloudAltitude').value = world.clouds.altitude ?? 2200;
+  field('v010CloudThickness').value = world.clouds.thickness ?? 1800;
+  field('v010CloudWindSpeed').value = world.clouds.windSpeed ?? 12;
   field('v010Fog').value = world.weather.fog;
   field('v010Weather').value = world.weather.preset;
+  field('v010CelestialReadout').textContent = (world.sky.celestialMode === 'manual' ? 'MANUAL' : formatTime(world.time.hours)) + ' · MOON ' + (Number(world.sky.moonPhase ?? 0.72) * 100).toFixed(0) + '%';
 
-  const models = snapshot.assets.filter(item => item.type === 'model' && !item.archived);
-  const species = snapshot.assets.filter(item => item.type === 'foliageSpecies');
+  const assets = Array.isArray(snapshot.assets) ? snapshot.assets : Array.isArray(snapshot.state?.assets) ? snapshot.state.assets : [];
+  const models = assets.filter(item => item.type === 'model' && !item.archived);
+  const species = assets.filter(item => item.type === 'foliageSpecies');
   field('v010FoliageAsset').innerHTML = models.map(item => `<option value="${item.id}">${item.name} · ${item.category}</option>`).join('');
   field('v010Species').innerHTML = species.map(item => `<option value="${item.id}">${item.name}</option>`).join('');
   field('v010FoliageCount').textContent = `${species.length} species`;
@@ -214,10 +275,26 @@ async function applyWorld(extra = {}) {
       visibilityKm: numeric('v010Visibility', 120),
       rayleigh: numeric('v010Rayleigh', 1),
       mie: numeric('v010Mie', 0.16),
-      humidity: numeric('v010Humidity', 0.22)
+      humidity: numeric('v010Humidity', 0.22),
+      exposure: numeric('v010Exposure', 1)
     },
-    sky: { starIntensity: numeric('v010Stars', 1) },
-    clouds: { coverage: numeric('v010Clouds', 0.25) },
+    sky: {
+      celestialMode: field('v010CelestialMode').value,
+      sunSize: numeric('v010SunSize', 1), sunGlow: numeric('v010SunGlow', 1),
+      sunAzimuth: numeric('v010SunAzimuth', -90), sunElevation: numeric('v010SunElevation', 45),
+      moonSize: numeric('v010MoonSize', 1.45), moonPhase: numeric('v010MoonPhase', 0.72),
+      moonBrightness: numeric('v010MoonBrightness', 1), moonGlow: numeric('v010MoonGlow', 0.7), moonDetail: numeric('v010MoonDetail', 1),
+      moonAzimuth: numeric('v010MoonAzimuth', 90), moonElevation: numeric('v010MoonElevation', 32),
+      planetEnabled: Boolean(field('v010PlanetEnabled').checked), planetSize: numeric('v010PlanetSize', 4.5),
+      planetAzimuth: numeric('v010PlanetAzimuth', 215), planetElevation: numeric('v010PlanetElevation', 28), planetRings: numeric('v010PlanetRings', 0.65),
+      starIntensity: numeric('v010Stars', 1), starDensity: numeric('v010StarDensity', 0.72),
+      starDaylightExtinction: numeric('v010StarExtinction', 1.35), milkyWayIntensity: numeric('v010MilkyWay', 0.35)
+    },
+    clouds: {
+      quality: field('v010CloudQuality').value,
+      coverage: numeric('v010Clouds', 0.25), density: numeric('v010CloudDensity', 0.45),
+      altitude: numeric('v010CloudAltitude', 2200), thickness: numeric('v010CloudThickness', 1800), windSpeed: numeric('v010CloudWindSpeed', 12)
+    },
     weather: { preset: field('v010Weather').value, fog: numeric('v010Fog', 0.04) }
   };
   snapshot = await api('/api/v010/world', { method: 'PATCH', body: JSON.stringify(payload) });

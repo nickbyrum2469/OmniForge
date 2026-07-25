@@ -3,6 +3,8 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character =>
 
 let foundation = null;
 let splineEditPathId = null;
+let selectedSplineNodeIndex = null;
+let terrainSculptMode = null;
 let draggingNode = null;
 let inspectorObserver = null;
 let inspectorEnhanceQueued = false;
@@ -95,6 +97,11 @@ function terrainPanel(object) {
   const properties = object.properties || {};
   const presets = foundation?.presets || [];
   const diagnostics = foundation?.terrainDiagnostics;
+  const resolutionX = Number(properties.resolutionX || properties.resolution || 128);
+  const resolutionZ = Number(properties.resolutionZ || properties.resolution || 128);
+  const spacingX = properties.bounds ? (properties.bounds.maxX - properties.bounds.minX) / Math.max(1, resolutionX) : 0;
+  const spacingZ = properties.bounds ? (properties.bounds.maxZ - properties.bounds.minZ) / Math.max(1, resolutionZ) : 0;
+  const densityStatus = properties.densityLimited ? 'LIMIT REACHED' : Math.max(spacingX, spacingZ) > 2 ? 'COARSE' : 'OK';
   return `<section class="v011-authoring-panel" data-v011-panel="terrain">
     <div class="v011-panel-title"><div><small>WORLD FOUNDATION v0.11</small><strong>Terrain generator</strong></div><span>${escapeHtml(properties.preset || 'rollingHills')}</span></div>
     <label class="v011-field"><span>Landform preset</span><select id="v011TerrainPreset">${presets.map(preset => `<option value="${escapeHtml(preset.id)}" ${preset.id === properties.preset ? 'selected' : ''}>${escapeHtml(preset.label)}</option>`).join('')}</select></label>
@@ -125,7 +132,19 @@ function terrainPanel(object) {
       <button data-v011-expand="east" type="button">Expand east</button>
       <button data-v011-expand="south" type="button">Expand south</button>
     </div>
+    <div class="v011-sculpt-controls">
+      <div class="v011-panel-title"><div><small>LOCAL TERRAIN EDITING</small><strong>Non-destructive sculpt stamps</strong></div><span>${properties.sculptLayers?.length || 0} edits</span></div>
+      <div class="v011-grid">
+        <label class="v011-field"><span>Mode</span><select id="v011SculptMode"><option value="raise">Raise</option><option value="lower">Lower</option><option value="flatten">Flatten</option></select></label>
+        ${numberControl('Radius', 'sculptRadius', 8, { step: 0.5, min: 0.25, max: 500 })}
+        ${numberControl('Strength', 'sculptStrength', 2, { step: 0.1, min: 0.001, max: 1000 })}
+        ${numberControl('Flatten height', 'sculptTargetHeight', properties.baseElevation || 0, { step: 0.25, min: -1000, max: 1000 })}
+      </div>
+      <div class="v011-actions"><button id="v011ToggleSculpt" type="button">${terrainSculptMode?.terrainId === object.id ? 'Finish sculpting' : 'Sculpt in viewport'}</button><button id="v011UndoSculpt" type="button">Undo last sculpt</button><button id="v011ClearSculpt" type="button">Clear sculpt layer</button></div>
+      <p class="v011-note">Click terrain to apply a local reversible stamp. Global procedural controls remain available above.</p>
+    </div>
     <div class="v011-readout"><span>Bounds</span><code>${properties.bounds ? `${properties.bounds.minX.toFixed(0)}, ${properties.bounds.minZ.toFixed(0)} → ${properties.bounds.maxX.toFixed(0)}, ${properties.bounds.maxZ.toFixed(0)}` : 'not migrated'}</code></div>
+    <div class="v011-readout"><span>Mesh density</span><code>${spacingX.toFixed(2)} × ${spacingZ.toFixed(2)} m/vertex · ${densityStatus}</code></div>
     <div class="v011-readout"><span>Relief</span><code>${diagnostics ? diagnostics.relief.toFixed(2) : '—'} m</code></div>
     <div class="v011-readout"><span>Pattern risk</span><code>${escapeHtml(diagnostics?.repetitiveBandRisk || '—')}</code></div>
     <p class="v011-note">World expansion changes explicit terrain bounds. It does not scale terrain coordinates, path nodes, noise frequency, or existing object positions.</p>
@@ -136,6 +155,8 @@ function pathPanel(object) {
   const properties = object.properties || {};
   const diagnostics = foundation?.pathDiagnostics?.find(item => item.pathId === object.id);
   const middle = Math.max(1, Math.floor((properties.points?.length || 2) / 2));
+  const selectedIndex = Math.max(0, Math.min((properties.points?.length || 1) - 1, Number(selectedSplineNodeIndex ?? middle)));
+  const selectedPoint = properties.points?.[selectedIndex] || [0, 0];
   return `<section class="v011-authoring-panel" data-v011-panel="path">
     <div class="v011-panel-title"><div><small>SPLINE + GRADE v0.11</small><strong>Path engineering</strong></div><span>${properties.points?.length || 0} nodes</span></div>
     <button id="v011SplineEdit" class="button ${splineEditPathId === object.id ? 'primary' : 'subtle'}" type="button">${splineEditPathId === object.id ? 'Finish spline editing' : 'Edit nodes in viewport'}</button>
@@ -143,6 +164,10 @@ function pathPanel(object) {
     <div class="v011-grid">
       <label class="v011-field"><span>Spline path</span><input data-v011-path-check="spline" type="checkbox" ${properties.spline !== false ? 'checked' : ''}></label>
       <label class="v011-field"><span>Show this spline</span><input data-v011-path-check="showSpline" type="checkbox" ${properties.showSpline !== false ? 'checked' : ''}></label>
+      ${numberControl('Width', 'width', properties.width ?? 3, { step: 0.25, min: 0.1, max: 200 })}
+      ${numberControl('Blend shoulder', 'blendDistance', properties.blendDistance ?? 2.5, { step: 0.25, min: 0.05, max: 200 })}
+      ${numberControl('Surface offset', 'surfaceOffset', properties.surfaceOffset ?? 0.03, { step: 0.01, min: -10, max: 10 })}
+      ${numberControl('Edge noise', 'edgeNoise', properties.edgeNoise ?? 0.45, { step: 0.05, min: 0, max: 5 })}
       ${numberControl('Spline tension', 'splineTension', properties.splineTension, { step: 0.05, min: 0, max: 1 })}
       ${numberControl('Samples/segment', 'samplesPerSegment', properties.samplesPerSegment, { step: 1, min: 2, max: 64 })}
       <label class="v011-field"><span>Cut/fill terrain</span><input data-v011-path-check="carveTerrain" type="checkbox" ${properties.carveTerrain ? 'checked' : ''}></label>
@@ -151,7 +176,12 @@ function pathPanel(object) {
       ${numberControl('Maximum fill', 'maxFillDepth', properties.maxFillDepth, { step: 0.25, min: 0, max: 1000 })}
       ${numberControl('Cut shoulder', 'cutShoulder', properties.cutShoulder, { step: 0.25, min: 0.1, max: 200 })}
     </div>
-    <div class="v011-actions"><button id="v011ReversePath" type="button">Reverse direction</button><label>Split at node <input id="v011SplitIndex" type="number" min="1" max="${Math.max(1, (properties.points?.length || 2) - 2)}" step="1" value="${middle}"></label><button id="v011SplitPath" type="button">Split path</button></div>
+    <div class="v011-node-editor">
+      <div class="v011-panel-title"><div><small>SELECTED NODE</small><strong>Node ${selectedIndex + 1}</strong></div><span>X/Z</span></div>
+      <div class="v011-grid"><label class="v011-field"><span>X</span><input id="v011NodeX" type="number" step="0.1" value="${Number(selectedPoint[0] || 0)}"></label><label class="v011-field"><span>Z</span><input id="v011NodeZ" type="number" step="0.1" value="${Number(selectedPoint[1] || 0)}"></label></div>
+      <div class="v011-actions"><button id="v011ApplyNode" type="button">Apply coordinates</button><button id="v011InsertBefore" type="button">Insert before</button><button id="v011InsertAfter" type="button">Insert after</button><button id="v011DeleteNode" type="button">Delete node</button><button id="v011SplitPath" type="button">Split selected node</button></div>
+    </div>
+    <div class="v011-actions"><button id="v011ReversePath" type="button">Reverse direction</button></div>
     <div class="v011-readout"><span>Raw maximum grade</span><code>${diagnostics ? diagnostics.rawMaxGradePercent.toFixed(1) : '—'}%</code></div>
     <div class="v011-readout"><span>Compiled grade</span><code>${diagnostics ? diagnostics.compiledMaxGradePercent.toFixed(1) : '—'}%</code></div>
     <div class="v011-readout"><span>Grade validation</span><code>${escapeHtml(diagnostics?.validation || '—')}</code></div>
@@ -185,8 +215,21 @@ function enhanceInspector() {
   }
 
   $('#v011TerrainPreset')?.addEventListener('change', event => updateTerrain(object.id, { preset: event.target.value }));
-  container.querySelectorAll('[data-v011-panel="terrain"] [data-v011-property]').forEach(input => input.addEventListener('change', () => updateTerrain(object.id, { [input.dataset.v011Property]: Number(input.value) })));
+  container.querySelectorAll('[data-v011-panel="terrain"] [data-v011-property]').forEach(input => { if (input.dataset.v011Property.startsWith('sculpt')) return; input.addEventListener('change', () => updateTerrain(object.id, { [input.dataset.v011Property]: Number(input.value) })); });
   container.querySelectorAll('[data-v011-expand]').forEach(button => button.addEventListener('click', () => expandWorld(object.id, button.dataset.v011Expand)));
+  $('#v011ToggleSculpt')?.addEventListener('click', () => {
+    terrainSculptMode = terrainSculptMode?.terrainId === object.id ? null : {
+      terrainId: object.id,
+      mode: $('#v011SculptMode')?.value || 'raise',
+      radius: Number(container.querySelector('[data-v011-property="sculptRadius"]')?.value || 8),
+      strength: Number(container.querySelector('[data-v011-property="sculptStrength"]')?.value || 2),
+      targetHeight: Number(container.querySelector('[data-v011-property="sculptTargetHeight"]')?.value || 0)
+    };
+    document.body.classList.toggle('v011-terrain-sculpting', Boolean(terrainSculptMode));
+    enhanceInspector();
+  });
+  $('#v011UndoSculpt')?.addEventListener('click', () => terrainSculptAction(object.id, 'undo'));
+  $('#v011ClearSculpt')?.addEventListener('click', () => terrainSculptAction(object.id, 'clear'));
 
   $('#v011SplineEdit')?.addEventListener('click', () => {
     splineEditPathId = splineEditPathId === object.id ? null : object.id;
@@ -196,7 +239,11 @@ function enhanceInspector() {
   container.querySelectorAll('[data-v011-panel="path"] [data-v011-property]').forEach(input => input.addEventListener('change', () => updatePath(object.id, { [input.dataset.v011Property]: Number(input.value) })));
   container.querySelectorAll('[data-v011-path-check]').forEach(input => input.addEventListener('change', () => updatePath(object.id, { [input.dataset.v011PathCheck]: input.checked })));
   $('#v011ReversePath')?.addEventListener('click', () => pathAction(object.id, 'reverse'));
-  $('#v011SplitPath')?.addEventListener('click', () => pathAction(object.id, 'split', { index: Number($('#v011SplitIndex')?.value || 1) }));
+  $('#v011ApplyNode')?.addEventListener('click', () => updatePathNode(object.id, selectedIndex, Number($('#v011NodeX')?.value || 0), Number($('#v011NodeZ')?.value || 0)));
+  $('#v011InsertBefore')?.addEventListener('click', () => insertPathNode(object.id, selectedIndex, selectedPoint));
+  $('#v011InsertAfter')?.addEventListener('click', () => insertPathNode(object.id, selectedIndex + 1, selectedPoint));
+  $('#v011DeleteNode')?.addEventListener('click', () => deletePathNode(object.id, selectedIndex));
+  $('#v011SplitPath')?.addEventListener('click', () => pathAction(object.id, 'split', { index: selectedIndex }));
 }
 
 async function updateTerrain(id, properties) {
@@ -214,6 +261,38 @@ async function expandWorld(id, direction) {
   } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
 }
 
+async function terrainSculptAction(id, action) {
+  try {
+    const route = action === 'undo' ? '/api/v011/terrain/' + encodeURIComponent(id) + '/sculpt/undo' : '/api/v011/terrain/' + encodeURIComponent(id) + '/sculpt';
+    const options = action === 'clear' ? { method: 'DELETE' } : { method: 'POST', body: {} };
+    await applyMutation(await api(route, options), true);
+    bridge()?.showToast?.(action === 'undo' ? 'Undid the last terrain sculpt stamp' : 'Cleared local terrain sculpt edits', 'success');
+  } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
+}
+
+async function updatePathNode(id, index, x, z) {
+  try {
+    await applyMutation(await api('/api/v011/path/' + encodeURIComponent(id) + '/node/' + index, { method: 'PATCH', body: { x, z } }), true);
+    selectedSplineNodeIndex = index;
+  } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
+}
+
+async function insertPathNode(id, index, point) {
+  try {
+    const x = Number(point?.[0] || 0) + 0.01;
+    const z = Number(point?.[1] || 0) + 0.01;
+    await applyMutation(await api('/api/v011/path/' + encodeURIComponent(id) + '/node', { method: 'POST', body: { x, z, index } }), true);
+    selectedSplineNodeIndex = index;
+  } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
+}
+
+async function deletePathNode(id, index) {
+  try {
+    await applyMutation(await api('/api/v011/path/' + encodeURIComponent(id) + '/node/' + index, { method: 'DELETE' }), true);
+    selectedSplineNodeIndex = Math.max(0, index - 1);
+  } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
+}
+
 async function updatePath(id, properties) {
   try {
     await applyMutation(await api(`/api/v011/path/${encodeURIComponent(id)}`, { method: 'PATCH', body: { properties } }), true);
@@ -224,7 +303,7 @@ async function updatePath(id, properties) {
 async function pathAction(id, action, body = {}) {
   try {
     await applyMutation(await api(`/api/v011/path/${encodeURIComponent(id)}/${action}`, { method: 'POST', body }), true);
-    splineEditPathId = action === 'split' ? null : splineEditPathId;
+    if (action === 'split') { splineEditPathId = null; selectedSplineNodeIndex = null; }
     bridge()?.showToast?.(action === 'split' ? 'Path split into connected spline objects' : 'Path direction reversed', 'success');
   } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
 }
@@ -293,6 +372,7 @@ function renderNodeOverlay() {
     existing.delete(index);
     if (!screen?.visible) { handle.hidden = true; return; }
     handle.hidden = false;
+    handle.classList.toggle('selected', index === Number(selectedSplineNodeIndex));
     handle.style.transform = `translate(${screen.x}px, ${screen.y}px)`;
     handle.textContent = String(index + 1);
   });
@@ -305,7 +385,9 @@ function beginNodeDrag(event) {
   const snapshot = currentSnapshot();
   const path = snapshot?.scene?.objects?.find(object => object.id === splineEditPathId);
   if (!path) return;
-  draggingNode = { pathId: path.id, index: Number(event.currentTarget.dataset.splineNode), pointerId: event.pointerId };
+  selectedSplineNodeIndex = Number(event.currentTarget.dataset.splineNode);
+  draggingNode = { pathId: path.id, index: selectedSplineNodeIndex, pointerId: event.pointerId };
+  enhanceInspector();
   event.currentTarget.setPointerCapture?.(event.pointerId);
   window.addEventListener('pointermove', dragNode, true);
   window.addEventListener('pointerup', finishNodeDrag, true);
@@ -343,6 +425,18 @@ function installViewportEditing() {
   const canvas = $('#viewport');
   if (!canvas || canvas.dataset.v011EditingBound) return;
   canvas.dataset.v011EditingBound = 'true';
+  canvas.addEventListener('click', async event => {
+    if (!terrainSculptMode || event.button !== 0) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const snapshot = currentSnapshot();
+    const point = bridge()?.renderer?.()?.terrainPointFromScreen?.(snapshot.scene, snapshot.camera, event.clientX, event.clientY);
+    if (!point) return bridge()?.showToast?.('The sculpt cursor did not hit terrain.', 'error');
+    try {
+      await applyMutation(await api('/api/v011/terrain/' + encodeURIComponent(terrainSculptMode.terrainId) + '/sculpt', { method: 'POST', body: { ...terrainSculptMode, x: point[0], z: point[2], targetHeight: terrainSculptMode.mode === 'flatten' ? terrainSculptMode.targetHeight : point[1] } }), true);
+      bridge()?.showToast?.('Applied ' + terrainSculptMode.mode + ' terrain sculpt', 'success');
+    } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
+  }, true);
   canvas.addEventListener('mousedown', event => {
     if (!splineEditPathId) return;
     if (event.button === 0 && event.target === canvas) {

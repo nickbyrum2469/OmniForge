@@ -58,15 +58,34 @@ export function defaultWorldSettings(existing = {}) {
       ...existing.atmosphere
     },
     sky: {
+      celestialMode: 'astronomical',
+      sunAzimuth: -90,
+      sunElevation: 45,
+      sunSize: 1,
+      sunGlow: 1,
       starIntensity: 1,
       starDensity: 0.72,
+      starDaylightExtinction: 1.35,
       milkyWayIntensity: 0.35,
-      moonSize: 1,
+      moonAzimuth: 90,
+      moonElevation: 32,
+      moonSize: 1.45,
       moonPhase: 0.72,
+      moonBrightness: 1,
+      moonGlow: 0.7,
+      moonDetail: 1,
+      moonColor: '#a9c5eb',
+      planetEnabled: false,
+      planetAzimuth: 215,
+      planetElevation: 28,
+      planetSize: 4.5,
+      planetColor: '#d49a72',
+      planetBrightness: 0.8,
+      planetRings: 0.65,
       auroraIntensity: 0,
       shootingStarRate: 0.05,
       suns: [{ id: 'sun-primary', enabled: true, size: 1, radiance: 1, orbitSpeed: 1 }],
-      moons: [{ id: 'moon-primary', enabled: true, size: 1, radiance: 1, orbitSpeed: 1, phase: 0.72 }],
+      moons: [{ id: 'moon-primary', enabled: true, size: 1.45, radiance: 1, orbitSpeed: 1, phase: 0.72 }],
       ...existing.sky
     },
     clouds: {
@@ -74,6 +93,7 @@ export function defaultWorldSettings(existing = {}) {
       coverage: 0.25,
       density: 0.45,
       altitude: 2200,
+      thickness: 1800,
       windSpeed: 12,
       shadowStrength: 0.28,
       ...existing.clouds
@@ -104,6 +124,13 @@ export function applyWorldToScene(scene, world) {
   const hour = ((Number(world.time.hours) || 0) % 24 + 24) % 24;
   const angle = ((hour - 6) / 24) * Math.PI * 2;
   const elevation = Math.sin(angle);
+  const astronomicalElevationDegrees = Math.asin(clamp(elevation, -1, 1)) * 180 / Math.PI;
+  const celestialMode = String(world.sky.celestialMode || 'astronomical');
+  const automaticSunAzimuth = (hour / 24) * 360 - 90;
+  const sunAzimuth = celestialMode === 'manual' ? Number(world.sky.sunAzimuth ?? automaticSunAzimuth) : automaticSunAzimuth;
+  const sunElevationDegrees = celestialMode === 'manual' ? Number(world.sky.sunElevation ?? astronomicalElevationDegrees) : astronomicalElevationDegrees;
+  const moonAzimuth = celestialMode === 'manual' ? Number(world.sky.moonAzimuth ?? sunAzimuth + 180) : sunAzimuth + 180;
+  const moonElevationDegrees = celestialMode === 'manual' ? Number(world.sky.moonElevation ?? -sunElevationDegrees) : -sunElevationDegrees * 0.92 + 5;
   const day = clamp((elevation + 0.08) / 0.32, 0, 1);
   const twilight = clamp(1 - Math.abs(elevation) / 0.22, 0, 1) * (1 - day * 0.55);
   const night = 1 - day;
@@ -172,9 +199,8 @@ export function applyWorldToScene(scene, world) {
     };
     scene.objects.push(sun);
   }
-  const azimuth = (hour / 24) * 360 - 90;
   sun.name = 'Sun';
-  sun.transform.rotation = [90 - elevation * 82, azimuth, 0];
+  sun.transform.rotation = [-sunElevationDegrees, sunAzimuth + 180, 0];
   sun.properties = {
     ...(sun.properties || {}),
     celestialRole: 'sun',
@@ -184,7 +210,36 @@ export function applyWorldToScene(scene, world) {
     shadowQuality: world.lighting.shadowQuality,
     hybridLightingProfile: world.lighting.profile
   };
-  return { hour, day, night, twilight, elevation, sunId: sun.id };
+
+  let moon = scene.objects.find(object => object.properties?.celestialRole === 'moon');
+  if (!moon) {
+    moon = {
+      id: 'celestial-v010-moon',
+      type: 'empty',
+      name: 'Moon',
+      visible: true,
+      locked: false,
+      parentId: null,
+      transform: { position: [0, 0, 0], rotation: [32, 90, 0], scale: [1, 1, 1] },
+      properties: {},
+      components: []
+    };
+    scene.objects.push(moon);
+  }
+  moon.name = 'Moon';
+  moon.transform.rotation = [moonElevationDegrees, moonAzimuth, 0];
+  moon.properties = {
+    ...(moon.properties || {}),
+    celestialRole: 'moon',
+    color: world.sky.moonColor || '#a9c5eb',
+    intensity: Number(world.lighting.moonIntensity || 0.12) * night * Number(world.sky.moonBrightness || 1),
+    phase: Number(world.sky.moonPhase ?? 0.72),
+    angularSize: Number(world.sky.moonSize ?? 1.45),
+    azimuth: moonAzimuth,
+    elevation: moonElevationDegrees,
+    castsShadows: false
+  };
+  return { hour, day, night, twilight, elevation, sunId: sun.id, moonId: moon.id, sunAzimuth, sunElevationDegrees, moonAzimuth, moonElevationDegrees };
 }
 
 function categoryGroundingMode(category) {
