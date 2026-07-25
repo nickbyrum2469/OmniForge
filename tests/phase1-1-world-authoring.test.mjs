@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { defaultWorldSettings, applyWorldToScene } from '../server/v010-systems.mjs';
-import { directionFromAzimuthElevation, normalizeEnvironmentState } from '../app/environment-runtime.js';
+import { normalizeEnvironmentState } from '../app/environment-runtime.js';
+import { directionFromAzimuthElevation } from '../app/celestial-mechanics.js';
 import { normalizeTerrainProperties, terrainBaseHeightAt, expandTerrain, addTerrainSculptLayer, undoTerrainSculpt } from '../app/worldgen.js';
 
 function scene() {
@@ -17,7 +18,7 @@ function assertDirectionClose(actual, expected, tolerance = 1e-9) {
 test('Celestial Studio settings normalize and create authoritative Sun and Moon entities', () => {
   const world = defaultWorldSettings({
     time: { hours: 18 },
-    sky: { celestialMode: 'manual', sunAzimuth: 120, sunElevation: 32, moonAzimuth: 300, moonElevation: 41, sunSize: 1.8, moonSize: 2.4, moonPhase: 0.5, planetEnabled: true },
+    sky: { celestialMode: 'manual', sunAzimuth: 120, sunElevation: 32, moonAzimuth: 300, moonElevation: 41, sunSize: 1.8, moonSize: 2.4, moonPhase: 0.5, moonPhaseMode: 'manual', planetEnabled: true },
     lighting: { moonIntensity: 0.2 }
   });
   assert.equal(world.sky.sunSize, 1.8);
@@ -41,7 +42,7 @@ test('Celestial Studio settings normalize and create authoritative Sun and Moon 
 test('renderer environment exposes adjustable discs, detailed moon, planet, moonlight, and volumetric cloud inputs', () => {
   const target = scene();
   const world = defaultWorldSettings({
-    sky: { sunSize: 2, moonSize: 3, moonPhase: 0.5, moonBrightness: 1.5, moonDetail: 2, planetEnabled: true, planetAzimuth: 210, planetElevation: 25 },
+    sky: { sunSize: 2, moonSize: 3, moonPhase: 0.5, moonPhaseMode: 'manual', moonBrightness: 1.5, moonDetail: 2, planetEnabled: true, planetAzimuth: 210, planetElevation: 25 },
     clouds: { quality: 'balanced', altitude: 1800, thickness: 1200 },
     lighting: { moonIntensity: 0.2 }
   });
