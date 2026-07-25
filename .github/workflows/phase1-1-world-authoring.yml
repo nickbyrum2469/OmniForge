@@ -35,4 +35,4 @@ jobs:
       - name: Run repository verification
         run: npm run verify
 
-# Manual fallback only. The default-branch targeted PR runner is the sole automatic source writer.
+# Final user-authored build trigger after route deduplication; this workflow remains manual-only.
