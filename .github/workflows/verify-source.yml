@@ -1,21 +1,19 @@
-name: Phase 1B Authoritative Windows Gate
+name: Verify OmniForge Source
 
 on:
   push:
     branches:
-      - phase1b/lunar-cycle-hdr-lighting-presets
+      - main
+      - "milestone-**"
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
 
-concurrency:
-  group: phase1b-authoritative-windows
-  cancel-in-progress: true
-
 jobs:
-  verify-package:
-    if: github.actor != 'github-actions[bot]'
+  phase1b:
+    if: github.actor != 'github-actions[bot]' && github.event_name == 'pull_request' && github.head_ref == 'phase1b/lunar-cycle-hdr-lighting-presets'
     runs-on: windows-latest
     timeout-minutes: 55
     steps:
@@ -24,63 +22,41 @@ jobs:
         with:
           ref: phase1b/lunar-cycle-hdr-lighting-presets
           fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-
       - name: Install dependencies
         shell: pwsh
-        run: |
-          if (Test-Path package-lock.json) { npm ci } else { npm install --no-audit --no-fund }
-
-      - name: Apply deterministic Phase 1B source integration
+        run: if (Test-Path package-lock.json) { npm ci } else { npm install --no-audit --no-fund }
+      - name: Apply deterministic Phase 1B integration
         shell: pwsh
         run: |
           python scripts/apply-phase1b-lunar-hdr.py
           if ($LASTEXITCODE -ne 0) { throw 'Primary Phase 1B migration failed.' }
           python scripts/apply-phase1b-followup.py
-          if ($LASTEXITCODE -ne 0) { throw 'Phase 1B HDR follow-up failed.' }
-
-      - name: Check integrated source syntax
+          if ($LASTEXITCODE -ne 0) { throw 'HDR display follow-up failed.' }
+      - name: Syntax, tests, and repository verification
         shell: pwsh
         run: |
           $files=@('app/celestial-mechanics.js','app/environment-presets.js','app/environment-runtime.js','app/hdr-pipeline.js','app/sky-pass.js','app/renderer.js','app/v010.js','server/v010-systems.mjs','server/v010-api.mjs')
           foreach($file in $files){node --check $file;if($LASTEXITCODE -ne 0){throw "Syntax failed: $file"}}
-
-      - name: Run complete tests
-        shell: pwsh
-        run: |
-          npm test 2>&1 | Tee-Object -FilePath PHASE1B_TEST_OUTPUT.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Phase 1B tests failed.' }
-
-      - name: Run repository verification
-        shell: pwsh
-        run: |
+          npm test
+          if($LASTEXITCODE -ne 0){throw 'Phase 1B tests failed.'}
           npm run verify
-          if ($LASTEXITCODE -ne 0) { throw 'Phase 1B repository verification failed.' }
-
-      - name: Prove deterministic idempotency
+          if($LASTEXITCODE -ne 0){throw 'Phase 1B verification failed.'}
+      - name: Prove integration idempotency
         shell: pwsh
         run: |
           git diff | Set-Content phase1b-before.diff
           python scripts/apply-phase1b-lunar-hdr.py
-          if ($LASTEXITCODE -ne 0) { throw 'Primary migration failed during idempotency check.' }
           python scripts/apply-phase1b-followup.py
-          if ($LASTEXITCODE -ne 0) { throw 'Follow-up failed during idempotency check.' }
           git diff | Set-Content phase1b-after.diff
-          $before=(Get-Content phase1b-before.diff -Raw)
-          $after=(Get-Content phase1b-after.diff -Raw)
-          if($before -ne $after){throw 'Phase 1B migrations are not idempotent.'}
+          if((Get-Content phase1b-before.diff -Raw) -ne (Get-Content phase1b-after.diff -Raw)){throw 'Phase 1B migrations are not idempotent.'}
           Remove-Item phase1b-before.diff,phase1b-after.diff -Force
-
-      - name: Commit verified integrated source
+      - name: Commit exact verified source
         id: source
         shell: pwsh
         run: |
@@ -89,98 +65,63 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app server
           git add -u PHASE1B_TEST_OUTPUT.txt WINDOWS_VERIFY_ERROR.txt 2>$null
-          $changes=git status --porcelain
-          if($changes){
+          if(git status --porcelain){
             git commit -m "Add independent lunar cycles, HDR display, starfields, and lighting presets"
-            if($LASTEXITCODE -ne 0){throw 'Could not commit verified Phase 1B source.'}
+            if($LASTEXITCODE -ne 0){throw 'Verified source commit failed.'}
             git push origin HEAD:phase1b/lunar-cycle-hdr-lighting-presets
-            if($LASTEXITCODE -ne 0){throw 'Could not push verified Phase 1B source.'}
+            if($LASTEXITCODE -ne 0){throw 'Verified source push failed.'}
           }
           $sha=(git rev-parse HEAD).Trim()
           "commit_sha=$sha" >> $env:GITHUB_OUTPUT
-          Write-Host "Verified Phase 1B source commit: $sha"
-
-      - name: Build native Windows package
+      - name: Build exact Windows package
         shell: pwsh
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\BUILD_DESKTOP_WINDOWS.ps1
-
-      - name: Audit exact package identity and required source
+      - name: Audit package identity and integrated source
         shell: pwsh
         run: |
           $output=Join-Path $PWD 'dist\OmniForge-win32-x64'
-          $required=@(
-            'OmniForge.exe','source-commit',
-            'resources\app\app\renderer.js','resources\app\app\render-graph.js','resources\app\app\frame-resources.js',
-            'resources\app\app\hdr-pipeline.js','resources\app\app\celestial-mechanics.js','resources\app\app\environment-presets.js',
-            'resources\app\app\environment-runtime.js','resources\app\app\sky-pass.js','resources\app\app\v010.js',
-            'resources\app\server\v010-systems.mjs','resources\app\server\v010-api.mjs'
-          )
+          $required=@('OmniForge.exe','source-commit','resources\app\app\renderer.js','resources\app\app\render-graph.js','resources\app\app\frame-resources.js','resources\app\app\hdr-pipeline.js','resources\app\app\celestial-mechanics.js','resources\app\app\environment-presets.js','resources\app\app\environment-runtime.js','resources\app\app\sky-pass.js','resources\app\app\v010.js','resources\app\server\v010-systems.mjs','resources\app\server\v010-api.mjs')
           foreach($relative in $required){if(-not(Test-Path (Join-Path $output $relative) -PathType Leaf)){throw "Missing packaged Phase 1B file: $relative"}}
-          $sourceCommit=(Get-Content (Join-Path $output 'source-commit') -Raw).Trim()
-          $head=(git rev-parse HEAD).Trim()
-          if($sourceCommit -ne $head){throw "Packaged source $sourceCommit does not match checkout $head."}
-          if($head -ne '${{ steps.source.outputs.commit_sha }}'){throw 'Package was not built from the verified integrated source commit.'}
+          $head=(git rev-parse HEAD).Trim();$packaged=(Get-Content (Join-Path $output 'source-commit') -Raw).Trim()
+          if($packaged -ne $head -or $head -ne '${{ steps.source.outputs.commit_sha }}'){throw 'Package source identity mismatch.'}
           $renderer=Get-Content (Join-Path $output 'resources\app\app\renderer.js') -Raw
           $sky=Get-Content (Join-Path $output 'resources\app\app\sky-pass.js') -Raw
-          if($renderer -notmatch 'HDRPipeline' -or $renderer -notmatch 'display-transform'){throw 'Packaged renderer is missing the HDR display pipeline.'}
-          if($sky -notmatch 'starLayer' -or $sky -notmatch 'milkyWay' -or $sky -notmatch 'uStarTwinkleAmount'){throw 'Packaged sky is missing the Phase 1B stellar system.'}
-
-      - name: Smoke-test packaged lunar authority and HDR startup
+          if($renderer -notmatch 'HDRPipeline' -or $renderer -notmatch 'display-transform'){throw 'Packaged HDR display pipeline is missing.'}
+          if($sky -notmatch 'starLayer' -or $sky -notmatch 'milkyWay' -or $sky -notmatch 'uStarTwinkleAmount'){throw 'Packaged stellar sky is missing.'}
+      - name: Run packaged lunar, eclipse, star, and HDR smoke
         shell: pwsh
         run: |
           $output=Join-Path $PWD 'dist\OmniForge-win32-x64'
-          $runtime=Join-Path $env:TEMP "omniforge-phase1b-final-$env:GITHUB_RUN_ID"
-          New-Item -ItemType Directory -Force -Path $runtime | Out-Null
-          $port=43143
-          $env:OMNIFORGE_DATA_ROOT=$runtime
-          $env:OMNIFORGE_PORT="$port"
-          $process=$null
-          try {
+          $runtime=Join-Path $env:TEMP "omniforge-phase1b-$env:GITHUB_RUN_ID";New-Item -ItemType Directory -Force -Path $runtime|Out-Null
+          $port=43143;$env:OMNIFORGE_DATA_ROOT=$runtime;$env:OMNIFORGE_PORT="$port";$process=$null
+          try{
             $process=Start-Process -FilePath (Join-Path $output 'OmniForge.exe') -PassThru
             $deadline=(Get-Date).AddSeconds(45);$healthy=$false
             while((Get-Date)-lt $deadline){Start-Sleep -Milliseconds 400;try{Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2|Out-Null;$healthy=$true;break}catch{}}
             if(-not $healthy){throw 'Packaged Phase 1B editor did not become healthy.'}
             $world=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/v010/world" -TimeoutSec 8
-            $scene=$world.scene
-            $sun=@($scene.objects|Where-Object{$_.properties.celestialRole -eq 'sun'})
-            $moon=@($scene.objects|Where-Object{$_.properties.celestialRole -eq 'moon'})
-            if($sun.Count -ne 1 -or $moon.Count -ne 1){throw "Celestial regression: Sun=$($sun.Count), Moon=$($moon.Count)."}
+            $sun=@($world.scene.objects|Where-Object{$_.properties.celestialRole -eq 'sun'});$moon=@($world.scene.objects|Where-Object{$_.properties.celestialRole -eq 'moon'})
+            if($sun.Count -ne 1 -or $moon.Count -ne 1){throw "Celestial authority regression: Sun=$($sun.Count), Moon=$($moon.Count)."}
             if($moon[0].properties.phaseName -eq $null -or $moon[0].properties.ageDays -eq $null){throw 'Lunar phase metadata is missing.'}
             $body=@{sky=@{eclipseMode='force-lunar';moonPhaseMode='sun-relative';starTwinkleAmount=0.8;starTwinkleSpeed=1.7;starSizeMin=0.25;starSizeMax=2.5;starColorVariation=0.8;milkyWayWidth=0.12;milkyWayDetail=1.1;milkyWayDust=0.72};atmosphere=@{saturation=1.15;contrast=1.08;vibrance=0.2;toneMapper='aces'}}|ConvertTo-Json -Depth 8
             $updated=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/v010/world" -Method Patch -ContentType 'application/json' -Body $body -TimeoutSec 8
-            $active=$updated.state.scenes|Where-Object{$_.id -eq $updated.state.activeSceneId}|Select-Object -First 1
-            $updatedMoon=$active.objects|Where-Object{$_.properties.celestialRole -eq 'moon'}|Select-Object -First 1
-            if($updatedMoon.properties.eventType -ne 'lunar-eclipse' -or $updatedMoon.properties.lunarEclipse -lt 0.99){throw 'Forced lunar eclipse did not reach the Moon authority.'}
-            if($updated.state.worldV010.sky.starTwinkleAmount -ne 0.8){throw 'Star controls did not persist through the authoritative World API.'}
-            if($updated.state.worldV010.sky.milkyWayDust -ne 0.72){throw 'Milky Way controls did not persist through the authoritative World API.'}
-            Start-Sleep -Seconds 5
-            if($process.HasExited){throw 'Editor exited during HDR or sky initialization.'}
-          } finally {
+            $active=$updated.state.scenes|Where-Object{$_.id -eq $updated.state.activeSceneId}|Select-Object -First 1;$updatedMoon=$active.objects|Where-Object{$_.properties.celestialRole -eq 'moon'}|Select-Object -First 1
+            if($updatedMoon.properties.eventType -ne 'lunar-eclipse' -or $updatedMoon.properties.lunarEclipse -lt 0.99){throw 'Forced lunar eclipse failed.'}
+            if($updated.state.worldV010.sky.starTwinkleAmount -ne 0.8 -or $updated.state.worldV010.sky.milkyWayDust -ne 0.72){throw 'Stellar controls did not persist.'}
+            Start-Sleep -Seconds 5;if($process.HasExited){throw 'Editor exited during HDR/sky initialization.'}
+          }finally{
             if($process -and -not $process.HasExited){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue}
             Get-Process OmniForge -ErrorAction SilentlyContinue|Stop-Process -Force -ErrorAction SilentlyContinue
-            Remove-Item Env:OMNIFORGE_DATA_ROOT -ErrorAction SilentlyContinue
-            Remove-Item Env:OMNIFORGE_PORT -ErrorAction SilentlyContinue
-            Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:OMNIFORGE_DATA_ROOT,Env:OMNIFORGE_PORT -ErrorAction SilentlyContinue;Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
           }
-
-      - name: Archive exact Phase 1B package and evidence
+      - name: Archive package and evidence
         shell: pwsh
         run: |
-          $archive='OmniForge-Phase1B-Lunar-HDR-Windows-x64.zip'
-          if(Test-Path $archive){Remove-Item $archive -Force}
+          $archive='OmniForge-Phase1B-Lunar-HDR-Windows-x64.zip';if(Test-Path $archive){Remove-Item $archive -Force}
           Compress-Archive -Path '.\dist\OmniForge-win32-x64\*' -DestinationPath $archive -CompressionLevel Optimal
-          $hash=(Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $archive"|Set-Content 'OmniForge-Phase1B-Lunar-HDR-Windows-x64.sha256' -Encoding ascii
-          @(
-            'Phase 1B authoritative Windows evidence',
-            'Source commit: ${{ steps.source.outputs.commit_sha }}',
-            "Archive SHA-256: $hash",
-            'Syntax: passed','Tests: passed','Verification: passed','Idempotency: passed','Package audit: passed',
-            'Independent lunar orbit and phase: passed','Forced eclipse API: passed','HDR startup: passed','Star and Milky Way authority: passed'
-          )|Set-Content 'PHASE1B_WINDOWS_EVIDENCE.txt' -Encoding utf8
-
-      - name: Upload exact Phase 1B package
-        uses: actions/upload-artifact@v4
+          $hash=(Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant();"$hash  $archive"|Set-Content 'OmniForge-Phase1B-Lunar-HDR-Windows-x64.sha256' -Encoding ascii
+          @('Phase 1B verified Windows evidence','Source commit: ${{ steps.source.outputs.commit_sha }}',"Archive SHA-256: $hash",'Tests/verification/idempotency: passed','Package identity: passed','Independent lunar orbit/phase: passed','Eclipse API: passed','HDR and stellar sky startup: passed')|Set-Content 'PHASE1B_WINDOWS_EVIDENCE.txt' -Encoding utf8
+      - uses: actions/upload-artifact@v4
         with:
           name: OmniForge-Phase1B-Lunar-HDR-${{ github.run_id }}
           path: |
@@ -190,13 +131,22 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload failure evidence
-        if: failure()
-        uses: actions/upload-artifact@v4
+  verify:
+    if: github.actor != 'github-actions[bot]' && !(github.event_name == 'pull_request' && github.head_ref == 'phase1b/lunar-cycle-hdr-lighting-presets')
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
         with:
-          name: OmniForge-Phase1B-failure-${{ github.run_id }}
-          path: |
-            PHASE1B_TEST_OUTPUT.txt
-            WINDOWS_VERIFY_ERROR.txt
-          if-no-files-found: warn
-          retention-days: 14
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        if: hashFiles('package.json') != ''
+        with:
+          node-version: 24
+      - name: Install and verify ordinary source
+        if: hashFiles('package.json') != ''
+        shell: pwsh
+        run: |
+          if(Test-Path package-lock.json){npm ci}else{npm install}
+          npm run verify --if-present
