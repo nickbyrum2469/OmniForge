@@ -11,10 +11,10 @@ def edit(path, transform):
         print(f'updated {path}')
 
 
-def replace_regex_once(source, pattern, replacement, path, marker):
+def replace_regex_once(source, pattern, replacement, path, marker, flags=0):
     if marker in source:
         return source
-    result, count = re.subn(pattern, replacement, source, count=1, flags=re.MULTILINE)
+    result, count = re.subn(pattern, replacement, source, count=1, flags=flags)
     if count != 1:
         raise RuntimeError(f'Expected Phase 0 follow-up pattern not found in {path}: {pattern[:180]!r}')
     return result
@@ -33,50 +33,51 @@ def patch_world_system(source):
 edit('server/v010-systems.mjs', patch_world_system)
 
 
-def insert_after_call(source, call_pattern, insertion, marker, path='server/server.mjs'):
+def insert_after_route_call(source, route, call_pattern, insertion, marker):
     if marker in source:
         return source
-    pattern = rf"(?P<prefix>{call_pattern})(?P<suffix>\s*;?)"
+    route_pattern = re.escape(f"url.pathname === '{route}'")
+    pattern = rf"(?P<prefix>{route_pattern}[\s\S]{{0,500}}?{call_pattern})(?P<suffix>\s*;?)"
     replacement = rf"\g<prefix>;{insertion}\g<suffix>"
     result, count = re.subn(pattern, replacement, source, count=1)
     if count != 1:
-        raise RuntimeError(f'Could not patch {marker} in {path}.')
+        raise RuntimeError(f'Could not patch {marker} in route {route}.')
     return result
 
 
 def patch_server(source):
-    source = insert_after_call(
-        source,
+    source = insert_after_route_call(
+        source, '/api/projects/create',
         r"const state=createProject\(\{name:body\.name,template:body\.template,id:body\.id\}\)",
         "ensureCelestialState(state, 'project-create')",
         "ensureCelestialState(state, 'project-create')"
     )
-    source = insert_after_call(
-        source,
+    source = insert_after_route_call(
+        source, '/api/projects/open',
         r"const state=openProject\(body\.projectId\)",
         "ensureCelestialState(state, 'project-open');writeState(state)",
         "ensureCelestialState(state, 'project-open')"
     )
-    source = insert_after_call(
-        source,
+    source = insert_after_route_call(
+        source, '/api/projects/duplicate',
         r"const state=duplicateProject\(body\.projectId,body\.name\)",
         "ensureCelestialState(state, 'project-duplicate');writeState(state)",
         "ensureCelestialState(state, 'project-duplicate')"
     )
-    source = insert_after_call(
-        source,
+    source = insert_after_route_call(
+        source, '/api/projects/import',
         r"const state=importProject\(body\.sourcePath,\{name:body\.name\}\)",
         "ensureCelestialState(state, 'project-import');writeState(state)",
         "ensureCelestialState(state, 'project-import')"
     )
-    source = insert_after_call(
-        source,
+    source = insert_after_route_call(
+        source, '/api/projects/locate',
         r"const state=locateProject\(body\.projectId,body\.sourcePath\)",
         "ensureCelestialState(state, 'project-locate');writeState(state)",
         "ensureCelestialState(state, 'project-locate')"
     )
-    source = insert_after_call(
-        source,
+    source = insert_after_route_call(
+        source, '/api/project',
         r"const state=createProject\(\{name:body\.name,template:body\.template,id:body\.id\}\)",
         "ensureCelestialState(state, 'legacy-project-create');writeState(state)",
         "ensureCelestialState(state, 'legacy-project-create')"
