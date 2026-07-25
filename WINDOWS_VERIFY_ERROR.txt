@@ -1,5 +1,5 @@
 OmniForge Windows verification exit code: 1
-Generated: 2026-07-25T14:15:12.6667099+00:00
+Generated: 2026-07-25T19:21:08.0685446+00:00
 
 --- STDOUT ---
 
@@ -16,133 +16,385 @@ Syntax: editor: passed
 Syntax: runtime diagnostics: passed
 Syntax: renderer: passed
 Syntax: desktop shell: passed
-✔ automatic world time cannot replace the editor workspace while authoring (0.9969ms)
-✖ compact world runtime patches lighting and celestial objects without replacing editor state (3.3219ms)
-✖ night remains readable in Edit mode without changing authored Play lighting (50.5372ms)
-✔ runtime source contains polling, compact-step, read-only GET, and traceable-build safeguards (2.9888ms)
-✔ default project is general-purpose and contains a real 3D starter scene (15.9246ms)
-✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (5.1165ms)
-✔ all supported scene primitives receive valid transforms and properties (3.1925ms)
-✔ terrain height is deterministic and responds to world position (0.8267ms)
-✔ path defaults preserve terrain-conforming system relationships (0.4074ms)
-✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.7623ms)
-✔ starter PBR materials include real texture-map files and are protected (5.5286ms)
-✔ horizontal mouse look uses the intuitive right-positive yaw convention (0.5685ms)
-✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (1.2424ms)
-✔ Windows desktop builder pins and stamps the native executable metadata (0.8316ms)
-✔ project hub and editor usability controls are wired into the authoritative editor (3.2734ms)
-✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (572.0767ms)
-✔ two runtime sessions cannot write the same active project simultaneously (651.634ms)
-✔ starter objects are grounded against the authoritative terrain surface (3.1248ms)
-✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.2475ms)
-✔ managed workspace path cannot escape the projects root (0.8396ms)
-✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (230.2289ms)
-✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (289.2761ms)
-✔ material authoring settings clamp safely and preserve tiling transforms (0.2287ms)
-✔ material tuner exposes live tiling and PBR response controls (1.18ms)
-✔ active source and documentation contain no legacy product assumptions (12.7285ms)
-✔ desktop clipboard and pointer-lock permissions use guarded native paths (0.7954ms)
-✔ surface recipes are stable linked assets with validation and deterministic masks (3.5569ms)
-✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.7829ms)
-✔ desktop launcher rejects stale packaged executables (0.1944ms)
-✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (14.985ms)
-✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.7414ms)
-✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (8.9706ms)
-✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (623.0199ms)
-✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (133.6074ms)
-✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (13.5882ms)
-✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.192ms)
-✔ provider framework normalizes independent providers, settings, and persistent job records (3.269ms)
-✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.7813ms)
-✔ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (2983.6369ms)
-✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (5.2455ms)
-✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (784.8632ms)
-✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.8987ms)
-✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.2046ms)
-✔ v0.9 decal and atlas recipes validate stable production metadata (0.5743ms)
-✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.8072ms)
-✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (674.8563ms)
-✔ Git-aware desktop launcher rebuilds after source commits and local edits (1.8094ms)
-✔ Phase 0A collapses legacy celestial duplicates into one protected Sun and one protected Moon (3.3605ms)
-✔ Phase 0A preserves a selectable persistent Moon identity across repeated repairs (1.0183ms)
-✔ Phase 0B interpolates celestial rotations through the shortest angular path (1.1437ms)
-✔ Phase 0C editor readability no longer invents a white directional Sun or forces high exposure (12.8592ms)
-✖ Phase 0 source contracts persist proxies, protect selection, smooth motion, and expose diagnostics (5.1217ms)
-✔ Celestial Studio settings normalize and create authoritative Sun and Moon entities (4.7694ms)
-✔ renderer environment exposes adjustable discs, detailed moon, planet, moonlight, and volumetric cloud inputs (0.6921ms)
-✔ terrain expansion preserves physical vertex density until the single-mesh safety ceiling (1.2322ms)
-✔ local terrain sculpt stamps are reversible and do not alter distant samples (2.4109ms)
-✔ World, path, terrain, renderer, and API source expose the corrective authoring contracts (2.8555ms)
-✔ sky rays rotate with the camera but ignore camera translation (2.8083ms)
-✔ environment state is bounded and shares the directional light authority (1.1258ms)
-✔ nested World settings drive weather, cloud wind, quality, and twilight (0.3513ms)
-✔ viewport look ignores acquisition noise and rejects implausible direction snaps (0.4915ms)
-✔ yaw remains normalized and pitch remains bounded (0.1828ms)
-✔ viewport acquisition protects camera authority before pointer lock and releases cleanly (1.5013ms)
-✔ normal rendering no longer depends on the legacy CSS atmosphere (1.7051ms)
-✔ v0.10 worker IPC drains stdout before finalizing jobs (1.6057ms)
-✔ v0.10 seeded random and foliage placement are deterministic (25.487ms)
-✔ v0.10 world system drives the authoritative scene sun and renderer settings (2.5105ms)
-✔ v0.10 support-plane grounding conforms a box to terrain at four corners (1.1414ms)
-✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.7414ms)
-✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (22.1958ms)
-✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (12.7625ms)
-✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.8569ms)
-✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (1.2242ms)
-✔ v0.10 existing Ground button and World tab synchronize through authoritative state (1.391ms)
-✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (862.817ms)
-✔ Scene Block inspector enhancement has a stable marker and coalesced observer (2.0696ms)
-✔ diagnostic mode includes input, event-loop, WebGL, and long-task evidence (1.2788ms)
-✔ v0.11 renderer constructs a finite terrain mesh without missing runtime helpers (41.8205ms)
-✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (15.9732ms)
-✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (1.0418ms)
-✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (1.1293ms)
-✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (1.844ms)
-✔ path grade compilation respects configured maximum grade and bounded terrain cut/fill (13.2785ms)
-✔ path material blending follows the sampled spline instead of straight control-point chords (1.2065ms)
-✔ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (2.2109ms)
-✔ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (870.1761ms)
-✔ same-scene live viewport camera remains authoritative during navigation and pending persistence (2.1592ms)
-✔ path guide edges share exact joined endpoints and follow edge terrain height (0.8832ms)
-ℹ tests 88
+✔ automatic world time cannot replace the editor workspace while authoring (1.0618ms)
+✔ compact world runtime queues smooth celestial interpolation without replacing editor state (5.0364ms)
+✔ night remains readable in Edit mode without changing authored Play lighting (0.4476ms)
+✔ runtime source contains polling, compact-step, persistent celestial migration, and traceable-build safeguards (2.6987ms)
+✔ default project is general-purpose and contains a real 3D starter scene (15.8022ms)
+✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (4.6701ms)
+✔ all supported scene primitives receive valid transforms and properties (2.8364ms)
+✔ terrain height is deterministic and responds to world position (0.8231ms)
+✔ path defaults preserve terrain-conforming system relationships (0.771ms)
+✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.6197ms)
+✔ starter PBR materials include real texture-map files and are protected (4.2746ms)
+✔ horizontal mouse look uses the intuitive right-positive yaw convention (0.4509ms)
+✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (1.0101ms)
+✔ Windows desktop builder pins and stamps the native executable metadata (1.0158ms)
+✔ project hub and editor usability controls are wired into the authoritative editor (2.3803ms)
+✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (549.0945ms)
+✔ two runtime sessions cannot write the same active project simultaneously (680.7508ms)
+✔ starter objects are grounded against the authoritative terrain surface (3.4241ms)
+✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.4796ms)
+✔ managed workspace path cannot escape the projects root (0.4736ms)
+✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (288.3265ms)
+✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (279.4383ms)
+✔ material authoring settings clamp safely and preserve tiling transforms (0.2224ms)
+✔ material tuner exposes live tiling and PBR response controls (1.1762ms)
+✔ active source and documentation contain no legacy product assumptions (14.7233ms)
+✔ desktop clipboard and pointer-lock permissions use guarded native paths (0.7722ms)
+✔ surface recipes are stable linked assets with validation and deterministic masks (3.5479ms)
+✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.7833ms)
+✔ desktop launcher rejects stale packaged executables (0.2082ms)
+✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (15.4777ms)
+✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.3648ms)
+✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (9.0202ms)
+✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (549.4825ms)
+✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (10.2574ms)
+✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (11.1422ms)
+✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.2839ms)
+✔ provider framework normalizes independent providers, settings, and persistent job records (2.1281ms)
+✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.6745ms)
+✔ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (2972.5728ms)
+✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (5.0066ms)
+✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (738.5416ms)
+✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.8208ms)
+✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.1507ms)
+✔ v0.9 decal and atlas recipes validate stable production metadata (0.5892ms)
+✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.8769ms)
+✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (558.9115ms)
+✔ FrameResources owns physical canvas size and caps device-pixel ratio (11.775ms)
+✔ FrameResources increments revision only for a real size change (0.4064ms)
+✔ FrameResources tracks external resources and context generations (0.7335ms)
+✔ FrameResources emits immutable per-frame dimensions (1.2554ms)
+✔ render capability detection reports supported and missing optional features safely (0.516ms)
+✔ Git-aware desktop launcher rebuilds after source commits and local edits (1.871ms)
+✔ Phase 0A collapses legacy celestial duplicates into one protected Sun and one protected Moon (3.5336ms)
+✔ Phase 0A preserves a selectable persistent Moon identity across repeated repairs (0.8694ms)
+✔ Phase 0B interpolates celestial rotations through the shortest angular path (0.8981ms)
+✔ Phase 0C editor readability no longer invents a white directional Sun or forces high exposure (1.171ms)
+✔ Phase 0 source contracts persist proxies, protect selection, smooth motion, and expose diagnostics (2.6229ms)
+file:///D:/a/OmniForge/OmniForge/tests/phase1-1-world-authoring.test.mjs:5
+import { directionFromAzimuthElevation, normalizeEnvironmentState } from '../app/environment-runtime.js';
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: The requested module '../app/environment-runtime.js' does not provide an export named 'directionFromAzimuthElevation'
+    at #asyncInstantiate (node:internal/modules/esm/module_job:327:21)
+    at async ModuleJob.run (node:internal/modules/esm/module_job:431:5)
+    at async node:internal/modules/esm/loader:643:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.18.0
+✖ tests\phase1-1-world-authoring.test.mjs (97.694ms)
+✔ sky rays rotate with the camera but ignore camera translation (2.456ms)
+✔ environment state is bounded and shares the directional light authority (2.2998ms)
+✔ nested World settings drive weather, cloud wind, quality, and twilight (0.6335ms)
+✔ viewport look ignores acquisition noise and rejects implausible direction snaps (0.6642ms)
+✔ yaw remains normalized and pitch remains bounded (0.2805ms)
+✔ viewport acquisition protects camera authority before pointer lock and releases cleanly (1.8133ms)
+✔ normal rendering no longer depends on the legacy CSS atmosphere (1.7432ms)
+✔ Renderer3D submits the frame through one authoritative RenderGraph (1.7275ms)
+✔ Phase 1A pass names and dependencies exist exactly once (0.5656ms)
+✔ monolithic renderer work is separated into explicit pass methods (0.4292ms)
+✔ WebGL context loss suspends graph submission and restoration reloads authoritative state (0.3491ms)
+✔ Phase 1A preserves the Phase 0 display mapping instead of silently claiming HDR (4.1328ms)
+✔ RenderGraph and FrameResources expose the required safety contracts (0.357ms)
+✔ Moon illumination is derived from Sun–Moon geometry (7.062ms)
+✔ Moon follows an independent orbit and can be above the horizon by day or absent at night (1.2095ms)
+✔ Forced eclipse modes are deterministic authoring tools (0.3316ms)
+✔ Environment presets edit the same authoritative world sections (0.5347ms)
+✖ Phase 1B renderer source has one HDR display transform and controllable non-aurora star systems (3.7674ms)
+✔ RenderGraph compiles stable dependency order and resource contracts (6.6911ms)
+✔ RenderGraph rejects dependency cycles (1.1006ms)
+✔ RenderGraph rejects missing pass dependencies (0.307ms)
+✔ RenderGraph rejects reads before import or production (0.4766ms)
+✔ disabled passes are reported and not executed (0.4093ms)
+✔ noncritical pass failures are contained and later passes continue (1.0262ms)
+✔ critical pass failures propagate with a partial diagnostic report (0.5634ms)
+✔ RenderGraph suspend and resume preserve explicit frame status (0.2928ms)
+✔ v0.10 worker IPC drains stdout before finalizing jobs (1.7196ms)
+✔ v0.10 seeded random and foliage placement are deterministic (21.2391ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (2.5854ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (1.0579ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.7705ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (22.218ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (14.2743ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (1.0613ms)
+✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (1.302ms)
+✔ v0.10 existing Ground button and World tab synchronize through authoritative state (1.5128ms)
+✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (1038.3124ms)
+✔ Scene Block inspector enhancement has a stable marker and coalesced observer (1.5789ms)
+✔ diagnostic mode includes input, event-loop, WebGL, and long-task evidence (1.1116ms)
+✔ v0.11 renderer constructs a finite terrain mesh without missing runtime helpers (29.4853ms)
+✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (22.3345ms)
+✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (1.7971ms)
+✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (0.782ms)
+✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (1.8388ms)
+✔ path grade compilation respects configured maximum grade and bounded terrain cut/fill (13.162ms)
+✔ path material blending follows the sampled spline instead of straight control-point chords (1.2617ms)
+✔ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (3.1026ms)
+✔ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (801.7713ms)
+✔ same-scene live viewport camera remains authoritative during navigation and pending persistence (2.3603ms)
+✔ path guide edges share exact joined endpoints and follow edge terrain height (0.9936ms)
+ℹ tests 108
 ℹ suites 0
-ℹ pass 85
-ℹ fail 3
+ℹ pass 106
+ℹ fail 2
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 7344.4306
+ℹ duration_ms 7053.5002
 
 ✖ failing tests:
 
-test at tests\editor-runtime-stability.test.mjs:23:1
-✖ compact world runtime patches lighting and celestial objects without replacing editor state (3.3219ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
-  1 !== 0.05
-  
-      at TestContext.<anonymous> (file:///D:/a/OmniForge/OmniForge/tests/editor-runtime-stability.test.mjs:66:10)
-      at Test.runInAsyncScope (node:async_hooks:227:14)
-      at Test.run (node:internal/test_runner/test:1325:25)
-      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
-      at Test.postRun (node:internal/test_runner/test:1465:19)
-      at Test.run (node:internal/test_runner/test:1390:12)
-      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 1,
-    expected: 0.05,
-    operator: 'strictEqual',
-    diff: 'simple'
-  }
+test at tests\phase1-1-world-authoring.test.mjs:1:1
+✖ tests\phase1-1-world-authoring.test.mjs (97.694ms)
+  'test failed'
 
-test at tests\editor-runtime-stability.test.mjs:71:1
-✖ night remains readable in Edit mode without changing authored Play lighting (50.5372ms)
-  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+test at tests\phase1b-lunar-hdr.test.mjs:72:1
+✖ Phase 1B renderer source has one HDR display transform and controllable non-aurora star systems (3.7674ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /HDRPipeline/. Input:
   
-    assert.ok(edit.ambientIntensity >= 0.42)
+  'import {\r\n' +
+    '  DEG, add, sub, scale, dot, cross, length, normalize, clamp,\r\n' +
+    '  mat4Identity, mat4Multiply, mat4Perspective, mat4Ortho, mat4LookAt, mat4Invert,\r\n' +
+    '  transformPoint, modelMatrix, normalMatrix3, hexToRgb, cameraForward\r\n' +
+    "} from './math.js';\r\n" +
+    "import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, samplePathSpline, normalizeTerrainProperties, normalizePathProperties, terrainBounds } from './worldgen.js';\r\n" +
+    "import { buildPathGuideSegments } from './path-visuals.js';\r\n" +
+    "import { resolveViewportLighting } from './world-runtime.js';\r\n" +
+    "import { normalizeEnvironmentState } from './environment-runtime.js';\r\n" +
+    "import { SkyPass } from './sky-pass.js';\r\n" +
+    "import { RenderGraph } from './render-graph.js';\r\n" +
+    "import { FrameResources, detectRenderCapabilities } from './frame-resources.js';\r\n" +
+    '\r\n' +
+    'function compile(gl,type,source){\r\n' +
+    '  const shader=gl.createShader(type); gl.shaderSource(shader,source); gl.compileShader(shader);\r\n' +
+    '  if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));\r\n' +
+    '  return shader;\r\n' +
+    '}\r\n' +
+    'function program(gl,vs,fs){\r\n' +
+    '  const p=gl.createProgram(); gl.attachShader(p,compile(gl,gl.VERTEX_SHADER,vs)); gl.attachShader(p,compile(gl,gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p);\r\n' +
+    '  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));\r\n' +
+    '  return p;\r\n' +
+    '}\r\n' +
+    'function smoothstep(a,b,x){const t=clamp((x-a)/(b-a||1),0,1);return t*t*(3-2*t);}\r\n' +
+    'function lerp(a,b,t){return a+(b-a)*t;}\r\n' +
+    '\r\n' +
+    'const meshVS=`#version 300 es\r\n' +
+    'precision highp float;\r\n' +
+    'layout(location=0) in vec3 aPosition;\r\n' +
+    'layout(location=1) in vec3 aNormal;\r\n' +
+    'layout(location=2) in vec2 aUV;\r\n' +
+    'layout(location=3) in float aBlend;\r\n' +
+    'layout(location=4) in vec4 aInstance0;\r\n' +
+    'layout(location=5) in vec4 aInstance1;\r\n' +
+    'layout(location=6) in vec4 aInstance2;\r\n' +
+    'layout(location=7) in vec4 aInstance3;\r\n' +
+    'uniform mat4 uModel;\r\n' +
+    'uniform float uInstanced;\r\n' +
+    'uniform float uTime;\r\n' +
+    'uniform float uFoliageWind;\r\n' +
+    'uniform float uFoliageWindStrength;\r\n' +
+    'uniform float uFoliageWindFrequency;\r\n' +
+    'uniform float uFoliageBaseY;\r\n' +
+    'uniform float uFoliageHeight;\r\n' +
+    'uniform vec3 uFoliageWindDirection;\r\n' +
+    'uniform mat4 uViewProj;\r\n' +
+    'uniform mat4 uLightViewProj;\r\n' +
+    'uniform mat3 uNormalMat;\r\n' +
+    'out vec3 vNormal;\r\n' +
+    'out vec3 vWorld;\r\n' +
+    'out vec2 vUV;\r\n' +
+    'out float vBlend;\r\n' +
+    'out vec4 vShadowCoord;\r\n' +
+    'void main(){\r\n' +
+    '  mat4 instanceModel=mat4(aInstance0,aInstance1,aInstance2,aInstance3);\r\n' +
+    '  mat4 model=uInstanced>.5?instanceModel:uModel;\r\n' +
+    '  vec3 localPosition=aPosition;\r\n' +
+    '  if(uFoliageWind>.5){\r\n' +
+    '    float height=max(uFoliageHeight,.001);\r\n' +
+    '    float bend=clamp((aPosition.y-uFoliageBaseY)/height,0.0,1.0);\r\n' +
+    '    float phase=dot(model[3].xz,vec2(.173,.119));\r\n' +
+    '    float sway=sin(uTime*uFoliageWindFrequency+phase)*uFoliageWindStrength*bend*bend;\r\n' +
+    '    localPosition.xz+=normalize(uFoliageWindDirection.xz+vec2(.0001))*sway;\r\n' +
+    '  }\r\n' +
+    '  vec4 world=model*vec4(localPosition,1.0);\r\n' +
+    '  vWorld=world.xyz;\r\n' +
+    '  vNormal=normalize(uInstanced>.5?mat3(model)*aNormal:uNormalMat*aNormal);\r\n' +
+    '  vUV=aUV;\r\n' +
+    '  vBlend=aBlend;\r\n' +
+    '  vShadowCoord=uLightViewProj*world;\r\n' +
+    '  gl_Position=uViewProj*world;\r\n' +
+    '}`;\r\n' +
+    'const meshFS=`#version 300 es\r\n' +
+    'precision highp float;\r\n' +
+    'in vec3 vNormal;\r\n' +
+    'in vec3 vWorld;\r\n' +
+    'in vec2 vUV;\r\n' +
+    'in float vBlend;\r\n' +
+    'in vec4 vShadowCoord;\r\n' +
+    'out vec4 outColor;\r\n' +
+    'uniform vec3 uBaseColor;\r\n' +
+    'uniform vec3 uPathColor;\r\n' +
+    'uniform vec3 uAmbientColor;\r\n' +
+    'uniform float uAmbientIntensity;\r\n' +
+    'uniform float uEditorFill;\r\n' +
+    'uniform vec3 uLightDir;\r\n' +
+    'uniform vec3 uLightColor;\r\n' +
+    'uniform float uLightIntensity;\r\n' +
+    'uniform vec3 uMoonDir;\r\n' +
+    'uniform vec3 uMoonColor;\r\n' +
+    'uniform float uMoonIntensity;\r\n' +
+    'uniform int uPointCount;\r\n' +
+    'uniform vec3 uPointPos[4];\r\n' +
+    'uniform vec3 uPointColor[4];\r\n' +
+    'uniform vec2 uPointData[4];\r\n' +
+    'uniform float uSelected;\r\n' +
+    'uniform vec3 uCameraPos;\r\n' +
+    'uniform float uRoughness;\r\n' +
+    'uniform float uMetallic;\r\n' +
+    'uniform float uIsTerrain;\r\n' +
+    'uniform float uUseBaseTexture;\r\n' +
+    'uniform float uUsePathTexture;\r\n' +
+    'uniform float uUseBaseNormal;\r\n' +
+    'uniform float uUsePathNormal;\r\n' +
+    'uniform float uUseBaseRoughness;\r\n' +
+    'uniform float uUsePathRoughness;\r\n' +
+    'uniform float uUseBaseAO;\r\n' +
+    'uniform float uUsePathAO;\r\n' +
+    'uniform float uBaseNormalStrength;\r\n' +
+    'uniform float uPathNormalStrength;\r\n' +
+    'uniform float uBaseTextureScale;\r\n' +
+    'uniform float uPathTextureScale;\r\n' +
+    'uniform float uBaseTextureRotation;\r\n' +
+    'uniform float uPathTextureRotation;\r\n' +
+    'uniform vec2 uBaseTextureOffset;\r\n' +
+    'uniform vec2 uPathTextureOffset;\r\n' +
+    'uniform float uBaseRoughnessMultiplier;\r\n' +
+    'uniform float uPathRoughnessMultiplier;\r\n' +
+    'uniform float uBaseAOStrength;\r\n' +
+    'uniform float uPathAOStrength;\r\n' +
+    'uniform float uBaseHeightStrength;\r\n' +
+    'uniform float uPathHeightStrength;\r\n' +
+    'uniform float uUseBaseHeight;\r\n' +
+    'uniform float uUsePathHeight;\r\n' +
+    'uniform sampler2D uBaseTexture;\r\n' +
+    'uniform sampler2D uPathTexture;\r\n' +
+    'uniform sampler2D uBaseNormalTexture;\r\n' +
+    'uniform sampler2D uPathNormalTexture;\r\n' +
+    'uniform sampler2D uBaseRoughnessTexture;\r\n' +
+    'uniform sampler2D uPathRoughnessTexture;\r\n' +
+    'uniform sampler2D uBaseAOTexture;\r\n' +
+    'uniform sampler2D uPathAOTexture;\r\n' +
+    'uniform sampler2D uBaseHeightTexture;\r\n' +
+    'uniform sampler2D uPathHeightTexture;\r\n' +
+    'uniform sampler2D uShadowMap;\r\n' +
+    'uniform float uShadowEnabled;\r\n' +
+    'uniform vec3 uFogColor;\r\n' +
+    'uniform float uFogNear;\r\n' +
+    'uniform float uFogFar;\r\n' +
+    'uniform float uExposure;\r\n' +
+    'uniform vec4 uBaseSurfaceLayers;\r\n' +
+    'uniform vec4 uPathSurfaceLayers;\r\n' +
+    'uniform vec4 uBaseSurfaceExtra;\r\n' +
+    'uniform vec4 uPathSurfaceExtra;\r\n' +
+    'uniform vec4 uBaseSurfaceMasks;\r\n' +
+    'uniform vec4 uPathSurfaceMasks;\r\n' +
+    'uniform vec4 uBaseSurfaceMasks2;\r\n' +
+    'uniform vec4 uPathSurfaceMasks2;\r\n' +
+    'uniform vec4 uBaseSurfaceMasks3;\r\n' +
+    'uniform vec4 uPathSurfaceMasks3;\r\n' +
+    'uniform vec4 uBaseWeatherResponse;\r\n' +
+    'uniform vec4 uPathWeatherResponse;\r\n' +
+    'uniform vec4 uBaseAdvanced;\r\n' +
+    'uniform vec4 uPathAdvanced;\r\n' +
+    'uniform vec3 uBaseDirtColor;\r\n' +
+    'uniform vec3 uBaseMossColor;\r\n' +
+    'uniform vec3 uBaseSnowColor;\r\n' +
+    'uniform vec3 uBaseDamageColor;\r\n' +
+    'uniform vec3 uPathDirtColor;\r\n' +
+    'uniform vec3 uPathMossColor;\r\n' +
+    'uniform vec3 uPathSnowColor;\r\n' +
+    'uniform vec3 uPathDamageColor;\r\n' +
+    'uniform vec4 uEnvironmentState;\r\n' +
+    'uniform vec3 uWindDirection;\r\n' +
+    'uniform int uStructureCount;\r\n' +
+    'uniform vec3 uStructurePos[4];\r\n' +
+    'uniform float uOpacity;\r\n' +
+    '\r\n' +
+    'float hash21(vec2 p){\r\n' +
+    '  p=fract(p*vec2(123.34,456.21));\r\n' +
+    '  p+=dot(p,p+45.32);\r\n' +
+    '  return fract(p.x*p.y);\r\n' +
+    '}\r\n' +
+    'float noise2(vec2 p){\r\n' +
+    '  vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);\r\n' +
+    '  return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x),mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x),f.y);\r\n' +
+    '}\r\n' +
+    'float shadowFactor(){\r\n' +
+    '  if(uShadowEnabled<0.5)return 1.0;\r\n' +
+    '  vec3 proj=vShadowCoord.xyz/max(vShadowCoord.w,0.0001);\r\n' +
+    '  proj=proj*0.5+0.5;\r\n' +
+    '  if(proj.z<=0.0||proj.z>=1.0||proj.x<=0.0||proj.x>=1.0||proj.y<=0.0||proj.y>=1.0)return 1.0;\r\n' +
+    '  vec2 texel=1.0/vec2(textureSize(uShadowMap,0));\r\n' +
+    '  float current=proj.z-max(.0007,.0024*(1.0-max(dot(normalize(vNormal),normalize(-uLightDir)),0.0)));\r\n' +
+    '  float sum=0.0;\r\n' +
+    '  for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++){\r\n' +
+    '    float closest=texture(uShadowMap,proj.xy+vec2(x,y)*texel).r;\r\n' +
+    '    sum+=current<=closest?1.0:0.0;\r\n' +
+    '  }\r\n' +
+    '  return mix(0.32,1.0,sum/9.0);\r\n' +
+    '}\r\n' +
+    'vec3 applyWorldNormal(vec3 geometricNormal, vec3 sampledNormal, float strength){\r\n' +
+    '  vec3 n=normalize(geometricNormal);\r\n' +
+    '  vec3 tangent=normalize(vec3(1.0,0.0,0.0)-n*dot(n,vec3(1.0,0.0,0.0)));\r\n' +
+    '  if(length(tangent)<.05)tangent=normalize(vec3(0.0,0.0,1.0)-n*dot(n,vec3(0.0,0.0,1.0)));\r\n' +
+    '  vec3 bitangent=normalize(cross(n,tangent));\r\n' +
+    '  sampledNormal.xy*=strength;\r\n' +
+    '  return normalize(tangent*sampledNormal.x+bitangent*sampledNormal.y+n*max(.05,sampledNormal.z));\r\n' +
+    '}\r\n' +
+    'float nearestStructureMask(){\r\n' +
+    '  float nearest=9999.0;\r\n' +
+    '  for(int i=0;i<4;i++){if(i>=uStructureCount)break;nearest=min(nearest,length(vWorld.xz-uStructurePos[i].xz));}\r\n' +
+    '  return 1.0-smoothstep(0.0,12.0,nearest);\r\n' +
+    '}\r\n' +
+    'vec3 applySurfaceRecipe(vec3 color, vec4 layers, vec4 extra, vec4 masks, vec4 masks2, vec4 masks3, vec4 weatherResponse, vec4 advanced, vec3 dirtColor, vec3 mossColor, vec3 snowColor, vec3 damageColor, vec3 n, vec2 uv, float lightAmount){\r\n' +
+    '  float rawUp=smoothstep(.12,.92,n.y),upward=rawUp*masks.x;\r\n' +
+    '  float downward=smoothstep(.12,.92,-n.y)*masks2.x;\r\n' +
+    '  float slope=(1.0-rawUp)*masks.y;\r\n' +
+    '  float macroScale=max(.1,advanced.x),detailScale=max(.05,advanced.y);\r\n' +
+    '  float cavity=(1.0-noise2(uv*1.9+.17))*masks.z;\r\n' +
+    '  float convex=noise2(uv*detailScale*1.73+.41)*masks3.w;\r\n' +
+    '  float ground=(1.0-smoothstep(0.0,8.0,abs(vWorld.y)))*masks.w;\r\n' +
+    '  float water=(1.0-smoothstep(0.0,2.0,abs(vWorld.y-uEnvironmentState.x)))*masks2.y;\r\n' +
+    '  float sun=lightAmount*masks2.z,shade=(1.0-lightAmount)*masks2.w;\r\n' +
+    '  float windFacing=(dot(normalize(n),normalize(uWindDirection))*.5+.5)*masks3.x*uEnvironmentState.w;\r\n' +
+    '  float pathNear=vBlend*masks3.y;\r\n' +
+    '  float structureNear=nearestStructureMask()*masks3.z;\r\n' +
+    '  float weatherWet=clamp(uEnvironmentState.y*weatherResponse.x,0.0,1.0);\r\n' +
+    '  float weatherSnow=clamp(uEnvironmentState.z*weatherResponse.y,0.0,1.0);\r\n' +
+    '  float dirtMask=clamp(layers.x*(.12+cavity*.48+ground*.36+slope*.22+structureNear*.22+pathNear*.30+downward*.12),0.0,1.0);\r\n' +
+    '  float mossMask=clamp(layers.y*(cavity*.42+ground*.24+shade*.58+water*.65)*(1.0-slope*.22),0.0,1.0);\r\n' +
+    '  float wetMask=clamp(layers.z*(.35+cavity*.31+ground*.18+water*.72)+weatherWet,0.0,1.0);\r\n' +
+    '  float snowMask=clamp((layers.w+weatherSnow)*upward*(.48+shade*.22)*(1.0-water*.65),0.0,1.0);\r\n' +
+    '  float damageMask=clamp(extra.x*(noise2(uv*detailScale)+slope*.28+convex*.24+windFacing*.10),0.0,1.0);\r\n' +
+    '  color=mix(color,dirtColor,dirtMask*.74);\r\n' +
+    '  color=mix(color,mossColor,mossMask*.70);\r\n' +
+    '  color*=1.0-wetMask*.30;\r\n' +
+    '  color=mix(color,snowColor,snowMask*.90);\r\n' +
+    '  color=mix(color,damageColor,damageMask*.46);\r\n' +
+    '  float macro=(noise2(vWorld.xz/macroScale)-.5)*extra.y;\r\n' +
+    '  return max(vec3(.001),color*(1.0+macro));\r\n' +
+    '}\r\n' +
+    'void main(){\r\n' +
+    '  vec3 viewDir=normalize(uCameraPos-vWorld);\r\n' +
+    '  vec2 baseUV=uIsTerrain>.5?vWorld.xz/max(uBaseTextureScale,0.05):vUV;\r\n' +
+    '  vec2 pathUV=vWorld.xz/max(uPathTextureScale,0.05);\r\n' +
+    '  float baseC=cos(uBaseTextureRotation),baseS=sin(uBaseTextureRotation);\r\n' +
+    '  float pathC=cos(uPathTextureRotation),pathS=sin(uPathTextureRotation);\r\n' +
+    '  baseUV=mat2(baseC,-baseS,baseS,baseC)*baseUV+uBaseTextureOffset;\r\n' +
+    '  pathUV=mat2(pathC,-pathS,pathS,pathC)*pathUV+uPathTextureOffset;\r'... 53941 more characters
   
-      at TestContext.<anonymous> (file:///D:/a/OmniForge/OmniForge/tests/editor-runtime-stability.test.mjs:74:10)
+      at TestContext.<anonymous> (file:///D:/a/OmniForge/OmniForge/tests/phase1b-lunar-hdr.test.mjs:77:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1325:25)
       at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
@@ -151,268 +403,8 @@ test at tests\editor-runtime-stability.test.mjs:71:1
       at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
     generatedMessage: true,
     code: 'ERR_ASSERTION',
-    actual: false,
-    expected: true,
-    operator: '==',
-    diff: 'simple'
-  }
-
-test at tests\phase0-celestial-stabilization.test.mjs:94:1
-✖ Phase 0 source contracts persist proxies, protect selection, smooth motion, and expose diagnostics (5.1217ms)
-  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /world-read-migration/. Input:
-  
-  "import fs from 'node:fs';\r\n" +
-    "import path from 'node:path';\r\n" +
-    'import {\r\n' +
-    '  readState,\r\n' +
-    '  mutateState,\r\n' +
-    '  addActivity,\r\n' +
-    '  activeScene,\r\n' +
-    '  findObject,\r\n' +
-    '  createSceneObject,\r\n' +
-    '  ASSET_ROOT\r\n' +
-    "} from './state-store.mjs';\r\n" +
-    'import {\r\n' +
-    '  defaultWorldSettings,\r\n' +
-    '  applyWorldToScene,\r\n' +
-    '  fitGroundContact,\r\n' +
-    '  generateFoliagePlacements\r\n' +
-    "} from './v010-systems.mjs';\r\n" +
-    '\r\n' +
-    'const now = () => new Date().toISOString();\r\n' +
-    '\r\n' +
-    'function json(res, status, payload) {\r\n' +
-    '  const responseBody = JSON.stringify(payload, null, 2);\r\n' +
-    '  res.writeHead(status, {\r\n' +
-    "    'content-type': 'application/json; charset=utf-8',\r\n" +
-    "    'content-length': Buffer.byteLength(responseBody),\r\n" +
-    "    'cache-control': 'no-store'\r\n" +
-    '  });\r\n' +
-    '  res.end(responseBody);\r\n' +
-    '}\r\n' +
-    '\r\n' +
-    '\r\n' +
-    'function compactWorldRuntime(state) {\r\n' +
-    '  const scene = activeScene(state);\r\n' +
-    '  return {\r\n' +
-    '    engineRevision: Number(state.engine?.revision || 0),\r\n' +
-    '    sceneId: scene.id,\r\n' +
-    '    settings: structuredClone(scene.settings || {}),\r\n' +
-    '    celestialObjects: scene.objects\r\n' +
-    "      .filter(object => object.type === 'directionalLight' || object.properties?.celestialRole)\r\n" +
-    '      .map(object => ({\r\n' +
-    '        id: object.id,\r\n' +
-    '        type: object.type,\r\n' +
-    '        visible: object.visible !== false,\r\n' +
-    '        transform: structuredClone(object.transform),\r\n' +
-    '        properties: structuredClone(object.properties || {})\r\n' +
-    '      }))\r\n' +
-    '  };\r\n' +
-    '}\r\n' +
-    '\r\n' +
-    'async function readJsonBody(req) {\r\n' +
-    '  const chunks = [];\r\n' +
-    '  let size = 0;\r\n' +
-    '  for await (const chunk of req) {\r\n' +
-    '    size += chunk.length;\r\n' +
-    "    if (size > 20_000_000) throw new Error('The v0.10 request body exceeds the 20 MB safety limit.');\r\n" +
-    '    chunks.push(chunk);\r\n' +
-    '  }\r\n' +
-    "  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};\r\n" +
-    '}\r\n' +
-    '\r\n' +
-    'function ensureWorld(state) {\r\n' +
-    '  state.worldV010 = defaultWorldSettings(state.worldV010 || {});\r\n' +
-    '  applyWorldToScene(activeScene(state), state.worldV010);\r\n' +
-    '  return state.worldV010;\r\n' +
-    '}\r\n' +
-    '\r\n' +
-    'function findModelAsset(state, assetId) {\r\n' +
-    "  const asset = (state.assets || []).find(item => item.id === assetId && item.type === 'model');\r\n" +
-    "  if (!asset) throw new Error('Model asset not found.');\r\n" +
-    '  return asset;\r\n' +
-    '}\r\n' +
-    '\r\n' +
-    'function assetUsages(state, assetId) {\r\n' +
-    '  const sceneUsages = [];\r\n' +
-    '  for (const scene of state.scenes || []) {\r\n' +
-    '    for (const object of scene.objects || []) {\r\n' +
-    '      if (object.properties?.assetId === assetId) {\r\n' +
-    '        sceneUsages.push({ sceneId: scene.id, sceneName: scene.name, objectId: object.id, objectName: object.name });\r\n' +
-    '      }\r\n' +
-    '    }\r\n' +
-    '  }\r\n' +
-    '  const dependencies = (state.assets || [])\r\n' +
-    '    .filter(item => item.id !== assetId && (\r\n' +
-    '      item.sourceAssetId === assetId\r\n' +
-    '      || item.canonicalAssetId === assetId\r\n' +
-    '      || item.baseAssetId === assetId\r\n' +
-    '      || item.sourceModelAssetId === assetId\r\n' +
-    '      || item.sourceAssetIds?.includes?.(assetId)\r\n' +
-    '    ))\r\n' +
-    '    .map(item => ({ id: item.id, type: item.type, name: item.name }));\r\n' +
-    '  return { sceneUsages, dependencies };\r\n' +
-    '}\r\n' +
-    '\r\n' +
-    'function moveManagedAssetToTrash(assetId) {\r\n' +
-    "  const modelsRoot = path.resolve(ASSET_ROOT, 'models');\r\n" +
-    '  const source = path.resolve(modelsRoot, assetId);\r\n' +
-    "  if (!source.startsWith(`${modelsRoot}${path.sep}`)) throw new Error('Refusing to delete outside the managed model directory.');\r\n" +
-    '  if (!fs.existsSync(source)) return null;\r\n' +
-    "  const trashRoot = path.resolve(ASSET_ROOT, '.trash');\r\n" +
-    '  fs.mkdirSync(trashRoot, { recursive: true });\r\n' +
-    '  const target = path.join(trashRoot, `${assetId}-${Date.now().toString(36)}`);\r\n' +
-    '  fs.renameSync(source, target);\r\n' +
-    '  return target;\r\n' +
-    '}\r\n' +
-    '\r\n' +
-    'function routeId(pathname, pattern) {\r\n' +
-    '  const match = pattern.exec(pathname);\r\n' +
-    '  return match ? decodeURIComponent(match[1]) : null;\r\n' +
-    '}\r\n' +
-    '\r\n' +
-    'async function handleLegacyGround(req, res, url) {\r\n' +
-    "  if (req.method !== 'POST' || url.pathname !== '/api/object/ground') return false;\r\n" +
-    '  const input = await readJsonBody(req);\r\n' +
-    '  const result = mutateState(state => {\r\n' +
-    '    const object = findObject(state, input.objectId);\r\n' +
-    "    if (!object) throw new Error('Object not found.');\r\n" +
-    "    if (object.locked) throw new Error('Object is locked.');\r\n" +
-    "    const terrain = activeScene(state).objects.find(item => item.type === 'terrain');\r\n" +
-    "    if (!terrain) throw new Error('No authoritative terrain exists in the active scene.');\r\n" +
-    '    const asset = object.properties?.assetId\r\n' +
-    "      ? state.assets.find(item => item.id === object.properties.assetId && item.type === 'model')\r\n" +
-    '      : null;\r\n' +
-    '    const diagnostics = fitGroundContact({ object, asset, terrain, maxTilt: Number(input.maxTilt || 35) });\r\n' +
-    "    addActivity(state, 'placement', `Grounded ${object.name} using ${diagnostics.mode}.`, { objectId: object.id, diagnostics });\r\n" +
-    '    return { object, diagnostics };\r\n' +
-    '  });\r\n' +
-    '  json(res, 200, { ...result.result, state: result.state });\r\n' +
-    '  return true;\r\n' +
-    '}\r\n' +
-    '\r\n' +
-    'export async function handleV010Request(req, res) {\r\n' +
-    "  const url = new URL(req.url, 'http://127.0.0.1');\r\n" +
-    '  try {\r\n' +
-    '    if (await handleLegacyGround(req, res, url)) return true;\r\n' +
-    "    if (!url.pathname.startsWith('/api/v010/')) return false;\r\n" +
-    '\r\n' +
-    "    if (req.method === 'GET' && url.pathname === '/api/v010/world') {\r\n" +
-    '      const state = readState();\r\n' +
-    '      const world = ensureWorld(state);\r\n' +
-    '      json(res, 200, {\r\n' +
-    '        world,\r\n' +
-    '        scene: activeScene(state),\r\n' +
-    "        assets: (state.assets || []).filter(item => ['model', 'foliageSpecies', 'foliageFamily', 'biomeRecipe', 'windProfile'].includes(item.type)),\r\n" +
-    '        transactions: state.foliageTransactions || [],\r\n' +
-    '        runtimeDiagnostics: state.runtimeDiagnostics || {},\r\n' +
-    '        state\r\n' +
-    '      });\r\n' +
-    '      return true;\r\n' +
-    '    }\r\n' +
-    '\r\n' +
-    "    if (req.method === 'PATCH' && url.pathname === '/api/v010/world') {\r\n" +
-    '      const input = await readJsonBody(req);\r\n' +
-    '      const result = mutateState(state => {\r\n' +
-    '        const current = defaultWorldSettings(state.worldV010 || {});\r\n' +
-    '        state.worldV010 = defaultWorldSettings({\r\n' +
-    '          ...current,\r\n' +
-    '          ...input,\r\n' +
-    '          time: { ...current.time, ...(input.time || {}) },\r\n' +
-    '          lighting: { ...current.lighting, ...(input.lighting || {}) },\r\n' +
-    '          atmosphere: { ...current.atmosphere, ...(input.atmosphere || {}) },\r\n' +
-    '          sky: { ...current.sky, ...(input.sky || {}) },\r\n' +
-    '          clouds: { ...current.clouds, ...(input.clouds || {}) },\r\n' +
-    '          weather: { ...current.weather, ...(input.weather || {}) },\r\n' +
-    '          updatedAt: now()\r\n' +
-    '        });\r\n' +
-    '        const derived = applyWorldToScene(activeScene(state), state.worldV010);\r\n' +
-    "        addActivity(state, 'world', 'Updated connected time, lighting, atmosphere, sky, clouds, or weather.', { derived });\r\n" +
-    '        return { world: state.worldV010, derived };\r\n' +
-    '      });\r\n' +
-    '      json(res, 200, { ...result.result, state: result.state });\r\n' +
-    '      return true;\r\n' +
-    '    }\r\n' +
-    '\r\n' +
-    "    if (req.method === 'POST' && url.pathname === '/api/v010/world/step') {\r\n" +
-    '      const input = await readJsonBody(req);\r\n' +
-    '      const result = mutateState(state => {\r\n' +
-    '        const world = ensureWorld(state);\r\n' +
-    '        const seconds = Math.max(0, Math.min(60, Number(input.seconds || 1)));\r\n' +
-    '        if (world.time.enabled !== false) {\r\n' +
-    '          world.time.hours = ((Number(world.time.hours || 0) + seconds * Number(world.time.timeScale || 0) / 3600) % 24 + 24) % 24;\r\n' +
-    '        }\r\n' +
-    '        world.updatedAt = now();\r\n' +
-    '        const derived = applyWorldToScene(activeScene(state), world);\r\n' +
-    '        return { world, derived };\r\n' +
-    '      });\r\n' +
-    "      const includeFullState = url.searchParams.get('full') === '1';\r\n" +
-    '      json(res, 200, {\r\n' +
-    '        ...result.result,\r\n' +
-    '        runtime: compactWorldRuntime(result.state),\r\n' +
-    '        ...(includeFullState ? { state: result.state } : {})\r\n' +
-    '      });\r\n' +
-    '      return true;\r\n' +
-    '    }\r\n' +
-    '\r\n' +
-    "    if (req.method === 'POST' && url.pathname === '/api/v010/foliage/species') {\r\n" +
-    '      const input = await readJsonBody(req);\r\n' +
-    '      const result = mutateState(state => {\r\n' +
-    '        const source = findModelAsset(state, input.sourceAssetId);\r\n' +
-    "        const id = input.id || `foliage-species-${source.id.replace(/^asset-/, '')}-${Date.now().toString(36)}`;\r\n" +
-    "        const existing = state.assets.find(item => item.id === id && item.type === 'foliageSpecies');\r\n" +
-    '        const species = {\r\n' +
-    '          ...(existing || {}),\r\n' +
-    '          id,\r\n' +
-    "          type: 'foliageSpecies',\r\n" +
-    '          name: String(input.name || `${source.name} Species`).slice(0, 120),\r\n' +
-    '          sourceAssetId: source.id,\r\n' +
-    '          variants: Array.isArray(input.variants) ? input.variants : [],\r\n' +
-    '          scaleMin: Number(input.scaleMin ?? 0.85),\r\n' +
-    '          scaleMax: Number(input.scaleMax ?? 1.2),\r\n' +
-    '          spacing: Number(input.spacing ?? 2.5),\r\n' +
-    '          maxSlope: Number(input.maxSlope ?? 42),\r\n' +
-    '          rootBurial: Number(input.rootBurial ?? 0.08),\r\n' +
-    '          pathExclusion: Number(input.pathExclusion ?? 2.5),\r\n' +
-    '          structureExclusion: Number(input.structureExclusion ?? 2),\r\n' +
-    '          wind: { strength: Number(input.windStrength ?? 0.35), frequency: Number(input.windFrequency ?? 1) },\r\n' +
-    '          lod: {\r\n' +
-    '            near: Number(input.lodNear ?? 35),\r\n' +
-    '            far: Number(input.lodFar ?? 100),\r\n' +
-    '            impostor: Number(input.impostorDistance ?? 160)\r\n' +
-    '          },\r\n' +
-    '          collision: Boolean(input.collision),\r\n' +
-    '          navigationBlocker: Boolean(input.navigationBlocker),\r\n' +
-    '          seasonal: true,\r\n' +
-    "          validation: { state: 'valid', warnings: [] },\r\n" +
-    '          createdAt: existing?.createdAt || now(),\r\n' +
-    '          updatedAt: now()\r\n' +
-    '        };\r\n' +
-    '        if (existing) Object.assign(existing, species); else state.assets.unshift(species);\r\n' +
-    "        addActivity(state, 'foliage', `Created foliage species: ${species.name}`, { speciesId: id, sourceAssetId: source.id });\r\n" +
-    '        return species;\r\n' +
-    '      });\r\n' +
-    '      json(res, 201, { species: result.result, state: result.state });\r\n' +
-    '      return true;\r\n' +
-    '    }\r\n' +
-    '\r\n' +
-    "    if (req.method === 'POST' && url.pathname === '/api/v010/foliage/family') {\r\n" +
-    '      const input = await readJsonBody(req);\r\n' +
-    '      const result = mutateState(state => {\r\n' +
-    "        const speciesIds = (input.speciesIds || []).filter(id => state.assets.some(item => item.id === id && item.type === 'foliageSpecies'));\r\n" +
-    "        if (!speciesIds.length) throw new Error('A foli"... 10589 more characters
-  
-      at TestContext.<anonymous> (file:///D:/a/OmniForge/OmniForge/tests/phase0-celestial-stabilization.test.mjs:99:10)
-      at Test.runInAsyncScope (node:async_hooks:227:14)
-      at Test.run (node:internal/test_runner/test:1325:25)
-      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
-      at Test.postRun (node:internal/test_runner/test:1465:19)
-      at Test.run (node:internal/test_runner/test:1390:12)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: "import fs from 'node:fs';\r\nimport path from 'node:path';\r\nimport {\r\n  readState,\r\n  mutateState,\r\n  addActivity,\r\n  activeScene,\r\n  findObject,\r\n  createSceneObject,\r\n  ASSET_ROOT\r\n} from './state-store.mjs';\r\nimport {\r\n  defaultWorldSettings,\r\n  applyWorldToScene,\r\n  fitGroundContact,\r\n  generateFoliagePlacements\r\n} from './v010-systems.mjs';\r\n\r\nconst now = () => new Date().toISOString();\r\n\r\nfunction json(res, status, payload) {\r\n  const responseBody = JSON.stringify(payload, null, 2);\r\n  res.writeHead(status, {\r\n    'content-type': 'application/json; charset=utf-8',\r\n    'content-length': Buffer.byteLength(responseBody),\r\n    'cache-control': 'no-store'\r\n  });\r\n  res.end(responseBody);\r\n}\r\n\r\n\r\nfunction compactWorldRuntime(state) {\r\n  const scene = activeScene(state);\r\n  return {\r\n    engineRevision: Number(state.engine?.revision || 0),\r\n    sceneId: scene.id,\r\n    settings: structuredClone(scene.settings || {}),\r\n    celestialObjects: scene.objects\r\n      .filter(object => object.type === 'directionalLight' || object.properties?.celestialRole)\r\n      .map(object => ({\r\n        id: object.id,\r\n        type: object.type,\r\n        visible: object.visible !== false,\r\n        transform: structuredClone(object.transform),\r\n        properties: structuredClone(object.properties || {})\r\n      }))\r\n  };\r\n}\r\n\r\nasync function readJsonBody(req) {\r\n  const chunks = [];\r\n  let size = 0;\r\n  for await (const chunk of req) {\r\n    size += chunk.length;\r\n    if (size > 20_000_000) throw new Error('The v0.10 request body exceeds the 20 MB safety limit.');\r\n    chunks.push(chunk);\r\n  }\r\n  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};\r\n}\r\n\r\nfunction ensureWorld(state) {\r\n  state.worldV010 = defaultWorldSettings(state.worldV010 || {});\r\n  applyWorldToScene(activeScene(state), state.worldV010);\r\n  return state.worldV010;\r\n}\r\n\r\nfunction findModelAsset(state, assetId) {\r\n  const asset = (state.assets || []).find(item => item.id === assetId && item.type === 'model');\r\n  if (!asset) throw new Error('Model asset not found.');\r\n  return asset;\r\n}\r\n\r\nfunction assetUsages(state, assetId) {\r\n  const sceneUsages = [];\r\n  for (const scene of state.scenes || []) {\r\n    for (const object of scene.objects || []) {\r\n      if (object.properties?.assetId === assetId) {\r\n        sceneUsages.push({ sceneId: scene.id, sceneName: scene.name, objectId: object.id, objectName: object.name });\r\n      }\r\n    }\r\n  }\r\n  const dependencies = (state.assets || [])\r\n    .filter(item => item.id !== assetId && (\r\n      item.sourceAssetId === assetId\r\n      || item.canonicalAssetId === assetId\r\n      || item.baseAssetId === assetId\r\n      || item.sourceModelAssetId === assetId\r\n      || item.sourceAssetIds?.includes?.(assetId)\r\n    ))\r\n    .map(item => ({ id: item.id, type: item.type, name: item.name }));\r\n  return { sceneUsages, dependencies };\r\n}\r\n\r\nfunction moveManagedAssetToTrash(assetId) {\r\n  const modelsRoot = path.resolve(ASSET_ROOT, 'models');\r\n  const source = path.resolve(modelsRoot, assetId);\r\n  if (!source.startsWith(`${modelsRoot}${path.sep}`)) throw new Error('Refusing to delete outside the managed model directory.');\r\n  if (!fs.existsSync(source)) return null;\r\n  const trashRoot = path.resolve(ASSET_ROOT, '.trash');\r\n  fs.mkdirSync(trashRoot, { recursive: true });\r\n  const target = path.join(trashRoot, `${assetId}-${Date.now().toString(36)}`);\r\n  fs.renameSync(source, target);\r\n  return target;\r\n}\r\n\r\nfunction routeId(pathname, pattern) {\r\n  const match = pattern.exec(pathname);\r\n  return match ? decodeURIComponent(match[1]) : null;\r\n}\r\n\r\nasync function handleLegacyGround(req, res, url) {\r\n  if (req.method !== 'POST' || url.pathname !== '/api/object/ground') return false;\r\n  const input = await readJsonBody(req);\r\n  const result = mutateState(state => {\r\n    const object = findObject(state, input.objectId);\r\n    if (!object) throw new Error('Object not found.');\r\n    if (object.locked) throw new Error('Object is locked.');\r\n    const terrain = activeScene(state).objects.find(item => item.type === 'terrain');\r\n    if (!terrain) throw new Error('No authoritative terrain exists in the active scene.');\r\n    const asset = object.properties?.assetId\r\n      ? state.assets.find(item => item.id === object.properties.assetId && item.type === 'model')\r\n      : null;\r\n    const diagnostics = fitGroundContact({ object, asset, terrain, maxTilt: Number(input.maxTilt || 35) });\r\n    addActivity(state, 'placement', `Grounded ${object.name} using ${diagnostics.mode}.`, { objectId: object.id, diagnostics });\r\n    return { object, diagnostics };\r\n  });\r\n  json(res, 200, { ...result.result, state: result.state });\r\n  return true;\r\n}\r\n\r\nexport async function handleV010Request(req, res) {\r\n  const url = new URL(req.url, 'http://127.0.0.1');\r\n  try {\r\n    if (await handleLegacyGround(req, res, url)) return true;\r\n    if (!url.pathname.startsWith('/api/v010/')) return false;\r\n\r\n    if (req.method === 'GET' && url.pathname === '/api/v010/world') {\r\n      const state = readState();\r\n      const world = ensureWorld(state);\r\n      json(res, 200, {\r\n        world,\r\n        scene: activeScene(state),\r\n        assets: (state.assets || []).filter(item => ['model', 'foliageSpecies', 'foliageFamily', 'biomeRecipe', 'windProfile'].includes(item.type)),\r\n        transactions: state.foliageTransactions || [],\r\n        runtimeDiagnostics: state.runtimeDiagnostics || {},\r\n        state\r\n      });\r\n      return true;\r\n    }\r\n\r\n    if (req.method === 'PATCH' && url.pathname === '/api/v010/world') {\r\n      const input = await readJsonBody(req);\r\n      const result = mutateState(state => {\r\n        const current = defaultWorldSettings(state.worldV010 || {});\r\n        state.worldV010 = defaultWorldSettings({\r\n          ...current,\r\n          ...input,\r\n          time: { ...current.time, ...(input.time || {}) },\r\n          lighting: { ...current.lighting, ...(input.lighting || {}) },\r\n          atmosphere: { ...current.atmosphere, ...(input.atmosphere || {}) },\r\n          sky: { ...current.sky, ...(input.sky || {}) },\r\n          clouds: { ...current.clouds, ...(input.clouds || {}) },\r\n          weather: { ...current.weather, ...(input.weather || {}) },\r\n          updatedAt: now()\r\n        });\r\n        const derived = applyWorldToScene(activeScene(state), state.worldV010);\r\n        addActivity(state, 'world', 'Updated connected time, lighting, atmosphere, sky, clouds, or weather.', { derived });\r\n        return { world: state.worldV010, derived };\r\n      });\r\n      json(res, 200, { ...result.result, state: result.state });\r\n      return true;\r\n    }\r\n\r\n    if (req.method === 'POST' && url.pathname === '/api/v010/world/step') {\r\n      const input = await readJsonBody(req);\r\n      const result = mutateState(state => {\r\n        const world = ensureWorld(state);\r\n        const seconds = Math.max(0, Math.min(60, Number(input.seconds || 1)));\r\n        if (world.time.enabled !== false) {\r\n          world.time.hours = ((Number(world.time.hours || 0) + seconds * Number(world.time.timeScale || 0) / 3600) % 24 + 24) % 24;\r\n        }\r\n        world.updatedAt = now();\r\n        const derived = applyWorldToScene(activeScene(state), world);\r\n        return { world, derived };\r\n      });\r\n      const includeFullState = url.searchParams.get('full') === '1';\r\n      json(res, 200, {\r\n        ...result.result,\r\n        runtime: compactWorldRuntime(result.state),\r\n        ...(includeFullState ? { state: result.state } : {})\r\n      });\r\n      return true;\r\n    }\r\n\r\n    if (req.method === 'POST' && url.pathname === '/api/v010/foliage/species') {\r\n      const input = await readJsonBody(req);\r\n      const result = mutateState(state => {\r\n        const source = findModelAsset(state, input.sourceAssetId);\r\n        const id = input.id || `foliage-species-${source.id.replace(/^asset-/, '')}-${Date.now().toString(36)}`;\r\n        const existing = state.assets.find(item => item.id === id && item.type === 'foliageSpecies');\r\n        const species = {\r\n          ...(existing || {}),\r\n          id,\r\n          type: 'foliageSpecies',\r\n          name: String(input.name || `${source.name} Species`).slice(0, 120),\r\n          sourceAssetId: source.id,\r\n          variants: Array.isArray(input.variants) ? input.variants : [],\r\n          scaleMin: Number(input.scaleMin ?? 0.85),\r\n          scaleMax: Number(input.scaleMax ?? 1.2),\r\n          spacing: Number(input.spacing ?? 2.5),\r\n          maxSlope: Number(input.maxSlope ?? 42),\r\n          rootBurial: Number(input.rootBurial ?? 0.08),\r\n          pathExclusion: Number(input.pathExclusion ?? 2.5),\r\n          structureExclusion: Number(input.structureExclusion ?? 2),\r\n          wind: { strength: Number(input.windStrength ?? 0.35), frequency: Number(input.windFrequency ?? 1) },\r\n          lod: {\r\n            near: Number(input.lodNear ?? 35),\r\n            far: Number(input.lodFar ?? 100),\r\n            impostor: Number(input.impostorDistance ?? 160)\r\n          },\r\n          collision: Boolean(input.collision),\r\n          navigationBlocker: Boolean(input.navigationBlocker),\r\n          seasonal: true,\r\n          validation: { state: 'valid', warnings: [] },\r\n          createdAt: existing?.createdAt || now(),\r\n          updatedAt: now()\r\n        };\r\n        if (existing) Object.assign(existing, species); else state.assets.unshift(species);\r\n        addActivity(state, 'foliage', `Created foliage species: ${species.name}`, { speciesId: id, sourceAssetId: source.id });\r\n        return species;\r\n      });\r\n      json(res, 201, { species: result.result, state: result.state });\r\n      return true;\r\n    }\r\n\r\n    if (req.method === 'POST' && url.pathname === '/api/v010/foliage/family') {\r\n      const input = await readJsonBody(req);\r\n      const result = mutateState(state => {\r\n        const speciesIds = (input.speciesIds || []).filter(id => state.assets.some(item => item.id === id && item.type === 'foliageSpecies'));\r\n        if (!speciesIds.length) throw new Error('A foli"... 10589 more characters,
-    expected: /world-read-migration/,
+    actual: "import {\r\n  DEG, add, sub, scale, dot, cross, length, normalize, clamp,\r\n  mat4Identity, mat4Multiply, mat4Perspective, mat4Ortho, mat4LookAt, mat4Invert,\r\n  transformPoint, modelMatrix, normalMatrix3, hexToRgb, cameraForward\r\n} from './math.js';\r\nimport { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, samplePathSpline, normalizeTerrainProperties, normalizePathProperties, terrainBounds } from './worldgen.js';\r\nimport { buildPathGuideSegments } from './path-visuals.js';\r\nimport { resolveViewportLighting } from './world-runtime.js';\r\nimport { normalizeEnvironmentState } from './environment-runtime.js';\r\nimport { SkyPass } from './sky-pass.js';\r\nimport { RenderGraph } from './render-graph.js';\r\nimport { FrameResources, detectRenderCapabilities } from './frame-resources.js';\r\n\r\nfunction compile(gl,type,source){\r\n  const shader=gl.createShader(type); gl.shaderSource(shader,source); gl.compileShader(shader);\r\n  if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));\r\n  return shader;\r\n}\r\nfunction program(gl,vs,fs){\r\n  const p=gl.createProgram(); gl.attachShader(p,compile(gl,gl.VERTEX_SHADER,vs)); gl.attachShader(p,compile(gl,gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p);\r\n  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));\r\n  return p;\r\n}\r\nfunction smoothstep(a,b,x){const t=clamp((x-a)/(b-a||1),0,1);return t*t*(3-2*t);}\r\nfunction lerp(a,b,t){return a+(b-a)*t;}\r\n\r\nconst meshVS=`#version 300 es\r\nprecision highp float;\r\nlayout(location=0) in vec3 aPosition;\r\nlayout(location=1) in vec3 aNormal;\r\nlayout(location=2) in vec2 aUV;\r\nlayout(location=3) in float aBlend;\r\nlayout(location=4) in vec4 aInstance0;\r\nlayout(location=5) in vec4 aInstance1;\r\nlayout(location=6) in vec4 aInstance2;\r\nlayout(location=7) in vec4 aInstance3;\r\nuniform mat4 uModel;\r\nuniform float uInstanced;\r\nuniform float uTime;\r\nuniform float uFoliageWind;\r\nuniform float uFoliageWindStrength;\r\nuniform float uFoliageWindFrequency;\r\nuniform float uFoliageBaseY;\r\nuniform float uFoliageHeight;\r\nuniform vec3 uFoliageWindDirection;\r\nuniform mat4 uViewProj;\r\nuniform mat4 uLightViewProj;\r\nuniform mat3 uNormalMat;\r\nout vec3 vNormal;\r\nout vec3 vWorld;\r\nout vec2 vUV;\r\nout float vBlend;\r\nout vec4 vShadowCoord;\r\nvoid main(){\r\n  mat4 instanceModel=mat4(aInstance0,aInstance1,aInstance2,aInstance3);\r\n  mat4 model=uInstanced>.5?instanceModel:uModel;\r\n  vec3 localPosition=aPosition;\r\n  if(uFoliageWind>.5){\r\n    float height=max(uFoliageHeight,.001);\r\n    float bend=clamp((aPosition.y-uFoliageBaseY)/height,0.0,1.0);\r\n    float phase=dot(model[3].xz,vec2(.173,.119));\r\n    float sway=sin(uTime*uFoliageWindFrequency+phase)*uFoliageWindStrength*bend*bend;\r\n    localPosition.xz+=normalize(uFoliageWindDirection.xz+vec2(.0001))*sway;\r\n  }\r\n  vec4 world=model*vec4(localPosition,1.0);\r\n  vWorld=world.xyz;\r\n  vNormal=normalize(uInstanced>.5?mat3(model)*aNormal:uNormalMat*aNormal);\r\n  vUV=aUV;\r\n  vBlend=aBlend;\r\n  vShadowCoord=uLightViewProj*world;\r\n  gl_Position=uViewProj*world;\r\n}`;\r\nconst meshFS=`#version 300 es\r\nprecision highp float;\r\nin vec3 vNormal;\r\nin vec3 vWorld;\r\nin vec2 vUV;\r\nin float vBlend;\r\nin vec4 vShadowCoord;\r\nout vec4 outColor;\r\nuniform vec3 uBaseColor;\r\nuniform vec3 uPathColor;\r\nuniform vec3 uAmbientColor;\r\nuniform float uAmbientIntensity;\r\nuniform float uEditorFill;\r\nuniform vec3 uLightDir;\r\nuniform vec3 uLightColor;\r\nuniform float uLightIntensity;\r\nuniform vec3 uMoonDir;\r\nuniform vec3 uMoonColor;\r\nuniform float uMoonIntensity;\r\nuniform int uPointCount;\r\nuniform vec3 uPointPos[4];\r\nuniform vec3 uPointColor[4];\r\nuniform vec2 uPointData[4];\r\nuniform float uSelected;\r\nuniform vec3 uCameraPos;\r\nuniform float uRoughness;\r\nuniform float uMetallic;\r\nuniform float uIsTerrain;\r\nuniform float uUseBaseTexture;\r\nuniform float uUsePathTexture;\r\nuniform float uUseBaseNormal;\r\nuniform float uUsePathNormal;\r\nuniform float uUseBaseRoughness;\r\nuniform float uUsePathRoughness;\r\nuniform float uUseBaseAO;\r\nuniform float uUsePathAO;\r\nuniform float uBaseNormalStrength;\r\nuniform float uPathNormalStrength;\r\nuniform float uBaseTextureScale;\r\nuniform float uPathTextureScale;\r\nuniform float uBaseTextureRotation;\r\nuniform float uPathTextureRotation;\r\nuniform vec2 uBaseTextureOffset;\r\nuniform vec2 uPathTextureOffset;\r\nuniform float uBaseRoughnessMultiplier;\r\nuniform float uPathRoughnessMultiplier;\r\nuniform float uBaseAOStrength;\r\nuniform float uPathAOStrength;\r\nuniform float uBaseHeightStrength;\r\nuniform float uPathHeightStrength;\r\nuniform float uUseBaseHeight;\r\nuniform float uUsePathHeight;\r\nuniform sampler2D uBaseTexture;\r\nuniform sampler2D uPathTexture;\r\nuniform sampler2D uBaseNormalTexture;\r\nuniform sampler2D uPathNormalTexture;\r\nuniform sampler2D uBaseRoughnessTexture;\r\nuniform sampler2D uPathRoughnessTexture;\r\nuniform sampler2D uBaseAOTexture;\r\nuniform sampler2D uPathAOTexture;\r\nuniform sampler2D uBaseHeightTexture;\r\nuniform sampler2D uPathHeightTexture;\r\nuniform sampler2D uShadowMap;\r\nuniform float uShadowEnabled;\r\nuniform vec3 uFogColor;\r\nuniform float uFogNear;\r\nuniform float uFogFar;\r\nuniform float uExposure;\r\nuniform vec4 uBaseSurfaceLayers;\r\nuniform vec4 uPathSurfaceLayers;\r\nuniform vec4 uBaseSurfaceExtra;\r\nuniform vec4 uPathSurfaceExtra;\r\nuniform vec4 uBaseSurfaceMasks;\r\nuniform vec4 uPathSurfaceMasks;\r\nuniform vec4 uBaseSurfaceMasks2;\r\nuniform vec4 uPathSurfaceMasks2;\r\nuniform vec4 uBaseSurfaceMasks3;\r\nuniform vec4 uPathSurfaceMasks3;\r\nuniform vec4 uBaseWeatherResponse;\r\nuniform vec4 uPathWeatherResponse;\r\nuniform vec4 uBaseAdvanced;\r\nuniform vec4 uPathAdvanced;\r\nuniform vec3 uBaseDirtColor;\r\nuniform vec3 uBaseMossColor;\r\nuniform vec3 uBaseSnowColor;\r\nuniform vec3 uBaseDamageColor;\r\nuniform vec3 uPathDirtColor;\r\nuniform vec3 uPathMossColor;\r\nuniform vec3 uPathSnowColor;\r\nuniform vec3 uPathDamageColor;\r\nuniform vec4 uEnvironmentState;\r\nuniform vec3 uWindDirection;\r\nuniform int uStructureCount;\r\nuniform vec3 uStructurePos[4];\r\nuniform float uOpacity;\r\n\r\nfloat hash21(vec2 p){\r\n  p=fract(p*vec2(123.34,456.21));\r\n  p+=dot(p,p+45.32);\r\n  return fract(p.x*p.y);\r\n}\r\nfloat noise2(vec2 p){\r\n  vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);\r\n  return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x),mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x),f.y);\r\n}\r\nfloat shadowFactor(){\r\n  if(uShadowEnabled<0.5)return 1.0;\r\n  vec3 proj=vShadowCoord.xyz/max(vShadowCoord.w,0.0001);\r\n  proj=proj*0.5+0.5;\r\n  if(proj.z<=0.0||proj.z>=1.0||proj.x<=0.0||proj.x>=1.0||proj.y<=0.0||proj.y>=1.0)return 1.0;\r\n  vec2 texel=1.0/vec2(textureSize(uShadowMap,0));\r\n  float current=proj.z-max(.0007,.0024*(1.0-max(dot(normalize(vNormal),normalize(-uLightDir)),0.0)));\r\n  float sum=0.0;\r\n  for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++){\r\n    float closest=texture(uShadowMap,proj.xy+vec2(x,y)*texel).r;\r\n    sum+=current<=closest?1.0:0.0;\r\n  }\r\n  return mix(0.32,1.0,sum/9.0);\r\n}\r\nvec3 applyWorldNormal(vec3 geometricNormal, vec3 sampledNormal, float strength){\r\n  vec3 n=normalize(geometricNormal);\r\n  vec3 tangent=normalize(vec3(1.0,0.0,0.0)-n*dot(n,vec3(1.0,0.0,0.0)));\r\n  if(length(tangent)<.05)tangent=normalize(vec3(0.0,0.0,1.0)-n*dot(n,vec3(0.0,0.0,1.0)));\r\n  vec3 bitangent=normalize(cross(n,tangent));\r\n  sampledNormal.xy*=strength;\r\n  return normalize(tangent*sampledNormal.x+bitangent*sampledNormal.y+n*max(.05,sampledNormal.z));\r\n}\r\nfloat nearestStructureMask(){\r\n  float nearest=9999.0;\r\n  for(int i=0;i<4;i++){if(i>=uStructureCount)break;nearest=min(nearest,length(vWorld.xz-uStructurePos[i].xz));}\r\n  return 1.0-smoothstep(0.0,12.0,nearest);\r\n}\r\nvec3 applySurfaceRecipe(vec3 color, vec4 layers, vec4 extra, vec4 masks, vec4 masks2, vec4 masks3, vec4 weatherResponse, vec4 advanced, vec3 dirtColor, vec3 mossColor, vec3 snowColor, vec3 damageColor, vec3 n, vec2 uv, float lightAmount){\r\n  float rawUp=smoothstep(.12,.92,n.y),upward=rawUp*masks.x;\r\n  float downward=smoothstep(.12,.92,-n.y)*masks2.x;\r\n  float slope=(1.0-rawUp)*masks.y;\r\n  float macroScale=max(.1,advanced.x),detailScale=max(.05,advanced.y);\r\n  float cavity=(1.0-noise2(uv*1.9+.17))*masks.z;\r\n  float convex=noise2(uv*detailScale*1.73+.41)*masks3.w;\r\n  float ground=(1.0-smoothstep(0.0,8.0,abs(vWorld.y)))*masks.w;\r\n  float water=(1.0-smoothstep(0.0,2.0,abs(vWorld.y-uEnvironmentState.x)))*masks2.y;\r\n  float sun=lightAmount*masks2.z,shade=(1.0-lightAmount)*masks2.w;\r\n  float windFacing=(dot(normalize(n),normalize(uWindDirection))*.5+.5)*masks3.x*uEnvironmentState.w;\r\n  float pathNear=vBlend*masks3.y;\r\n  float structureNear=nearestStructureMask()*masks3.z;\r\n  float weatherWet=clamp(uEnvironmentState.y*weatherResponse.x,0.0,1.0);\r\n  float weatherSnow=clamp(uEnvironmentState.z*weatherResponse.y,0.0,1.0);\r\n  float dirtMask=clamp(layers.x*(.12+cavity*.48+ground*.36+slope*.22+structureNear*.22+pathNear*.30+downward*.12),0.0,1.0);\r\n  float mossMask=clamp(layers.y*(cavity*.42+ground*.24+shade*.58+water*.65)*(1.0-slope*.22),0.0,1.0);\r\n  float wetMask=clamp(layers.z*(.35+cavity*.31+ground*.18+water*.72)+weatherWet,0.0,1.0);\r\n  float snowMask=clamp((layers.w+weatherSnow)*upward*(.48+shade*.22)*(1.0-water*.65),0.0,1.0);\r\n  float damageMask=clamp(extra.x*(noise2(uv*detailScale)+slope*.28+convex*.24+windFacing*.10),0.0,1.0);\r\n  color=mix(color,dirtColor,dirtMask*.74);\r\n  color=mix(color,mossColor,mossMask*.70);\r\n  color*=1.0-wetMask*.30;\r\n  color=mix(color,snowColor,snowMask*.90);\r\n  color=mix(color,damageColor,damageMask*.46);\r\n  float macro=(noise2(vWorld.xz/macroScale)-.5)*extra.y;\r\n  return max(vec3(.001),color*(1.0+macro));\r\n}\r\nvoid main(){\r\n  vec3 viewDir=normalize(uCameraPos-vWorld);\r\n  vec2 baseUV=uIsTerrain>.5?vWorld.xz/max(uBaseTextureScale,0.05):vUV;\r\n  vec2 pathUV=vWorld.xz/max(uPathTextureScale,0.05);\r\n  float baseC=cos(uBaseTextureRotation),baseS=sin(uBaseTextureRotation);\r\n  float pathC=cos(uPathTextureRotation),pathS=sin(uPathTextureRotation);\r\n  baseUV=mat2(baseC,-baseS,baseS,baseC)*baseUV+uBaseTextureOffset;\r\n  pathUV=mat2(pathC,-pathS,pathS,pathC)*pathUV+uPathTextureOffset;\r"... 53941 more characters,
+    expected: /HDRPipeline/,
     operator: 'match',
     diff: 'simple'
   }
