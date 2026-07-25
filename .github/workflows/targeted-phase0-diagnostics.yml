@@ -1,59 +1,10 @@
-name: Targeted Phase 0 diagnostics
+name: Archived Phase 0 source diagnostics
 
 on:
-  pull_request:
-    branches:
-      - milestone-12-1/celestial-path-terrain-corrections
-    types: [opened, synchronize, reopened]
-
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
-  diagnose:
-    if: github.actor != 'github-actions[bot]' && github.head_ref == 'phase0/celestial-authority-stabilization'
+  archived:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: phase0/celestial-authority-stabilization
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
-      - name: Run migration and tests while preserving exact output
-        id: diagnostics
-        shell: bash
-        run: |
-          set +e
-          {
-            python3 scripts/apply-phase0-celestial-stabilization.py
-            python3 scripts/apply-phase0-authority-followup.py
-            node --check server/celestial-authority.mjs
-            node --check server/v010-systems.mjs
-            node --check server/v010-api.mjs
-            node --check server/server.mjs
-            node --check app/world-runtime.js
-            node --check app/v010.js
-            node --check app/app.js
-            npm test
-          } > PHASE0_DIAGNOSTIC_OUTPUT.txt 2>&1
-          status=$?
-          cat PHASE0_DIAGNOSTIC_OUTPUT.txt
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
-      - name: Commit failure evidence
-        if: steps.diagnostics.outputs.status != '0'
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add PHASE0_DIAGNOSTIC_OUTPUT.txt
-          git commit -m "Record Phase 0 test failure"
-          git push origin HEAD:phase0/celestial-authority-stabilization
-      - name: Fail after evidence capture
-        if: steps.diagnostics.outputs.status != '0'
-        run: exit 1
+      - run: echo "Superseded by targeted-phase0-final-gate.yml."
