@@ -95,10 +95,12 @@ test('normal rendering no longer depends on the legacy CSS atmosphere', () => {
   const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
   const world = fs.readFileSync(new URL('../app/v010.js', import.meta.url), 'utf8');
   const css = fs.readFileSync(new URL('../app/v010.css', import.meta.url), 'utf8');
+  const initializationPattern = /this\.skyPass=null;try\{this\.skyPass=new SkyPass\(gl\)/g;
+  const renderGuardPattern = /if\(this\.skyPass\)\{try\{this\.skyPass\.render/g;
   assert.match(renderer, /new SkyPass\(gl\)/);
   assert.match(renderer, /alpha:false/);
-  assert.match(renderer, /this\.skyPass=null;try\{this\.skyPass=new SkyPass\(gl\)/);
-  assert.match(renderer, /if\(this\.skyPass\)\{try\{this\.skyPass\.render/);
+  assert.equal((renderer.match(initializationPattern) || []).length, 1);
+  assert.equal((renderer.match(renderGuardPattern) || []).length, 1);
   assert.match(renderer, /opaque environment fallback/);
   assert.doesNotMatch(renderer, /gl\.clearColor\(0,0,0,0\)/);
   assert.doesNotMatch(app, /viewportWrap\.style\.background\s*=\s*`linear-gradient/);
