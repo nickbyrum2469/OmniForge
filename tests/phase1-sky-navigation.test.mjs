@@ -47,7 +47,7 @@ test('nested World settings drive weather, cloud wind, quality, and twilight', (
   assert.equal(state.cloudCoverage, 0.72);
   assert.equal(state.cloudDensity, 0.81);
   assert.equal(state.twilightFactor, 0.65);
-  assert.equal(state.dayFactor, 0.2);
+  assert.ok(Math.abs(state.dayFactor - 0.2) < 1e-12);
   assert.ok(Math.abs(Math.hypot(...state.cloudWindDirection) - 1) < 1e-12);
 });
 
