@@ -9,3 +9,6 @@ workspace/projects/*
 Thumbs.db
 
 logs/
+.desktop-cache/
+dist/
+output/

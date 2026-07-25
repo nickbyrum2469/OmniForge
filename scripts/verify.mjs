@@ -1,6 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 
+const testFiles=fs.readdirSync('tests')
+  .filter(file=>file.endsWith('.test.mjs'))
+  .sort()
+  .map(file=>`tests/${file}`);
+
 const checks=[
   ['Syntax: server', [process.execPath,'--check','server/server.mjs']],
   ['Syntax: provider framework', [process.execPath,'--check','server/provider-framework.mjs']],
@@ -9,14 +14,15 @@ const checks=[
   ['Syntax: local worker', [process.execPath,'--check','workers/local-worker.mjs']],
   ['Syntax: MCP bridge', [process.execPath,'--check','bridge/mcp-server.mjs']],
   ['Syntax: editor', [process.execPath,'--check','app/app.js']],
+  ['Syntax: runtime diagnostics', [process.execPath,'--check','app/runtime-diagnostics.js']],
   ['Syntax: renderer', [process.execPath,'--check','app/renderer.js']],
   ['Syntax: desktop shell', [process.execPath,'--check','desktop/main.cjs']],
-  ['Automated tests', [process.execPath,'--test','tests/*.test.mjs']]
+  ['Automated tests', [process.execPath,'--test',...testFiles]]
 ];
 
 for(const [label,command] of checks){
   const [exe,...args]=command;
-  const result=spawnSync(exe,args,{stdio:'inherit',shell:label==='Automated tests'});
+  const result=spawnSync(exe,args,{stdio:'inherit',shell:false});
   if(result.status!==0){
     console.error(`${label} failed.`);
     process.exit(result.status||1);
