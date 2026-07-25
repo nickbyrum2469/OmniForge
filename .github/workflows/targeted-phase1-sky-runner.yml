@@ -32,7 +32,15 @@ jobs:
         run: node scripts/run-phase1-integration.mjs
 
       - name: Run complete automated tests
-        run: npm test
+        id: phase1_tests
+        shell: bash
+        run: |
+          set +e
+          npm test > PHASE1_TEST_OUTPUT.txt 2>&1
+          code=$?
+          cat PHASE1_TEST_OUTPUT.txt
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit $code
 
       - name: Run repository verification
         run: npm run verify
@@ -48,4 +56,14 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add app/app.js app/renderer.js app/v010.js app/v010.css app/environment-runtime.js app/sky-pass.js app/viewport-navigation.js tests/phase1-sky-navigation.test.mjs docs/PHASE_1_RENDERER_OWNED_SKY_PLAN.md
           git commit -m "Add renderer-owned sky and stable viewport look controls"
+          git push origin HEAD:${{ github.head_ref }}
+
+      - name: Record failed Phase 1 test output
+        if: failure() && steps.phase1_tests.outputs.exit_code != '0'
+        shell: bash
+        run: |
+          git config user.name "OmniForge CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add -f PHASE1_TEST_OUTPUT.txt
+          git commit -m "Record Phase 1 integration test failure"
           git push origin HEAD:${{ github.head_ref }}
