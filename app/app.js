@@ -1291,8 +1291,10 @@ function bindEvents() {
     scene.editorCamera=cloneCamera(camera);noteCameraMutation();
   });
   const releaseViewportInput=()=>{
+    const wasNavigating=viewportDragLook||document.pointerLockElement===ui.viewport||Date.now()<viewportNavigationIntentUntil;
     if(viewportDragLook){viewportDragLook=false;viewportDragLast=null;ui.viewportWrap.classList.remove('drag-look');}
     viewportNavigationIntentUntil=0;endLookInputSession(lookInputState);keys.clear();
+    if(wasNavigating&&cameraDirty)persistCameraSoon();
   };
   window.addEventListener('blur',releaseViewportInput);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseViewportInput();});
