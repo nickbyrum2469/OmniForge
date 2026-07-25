@@ -28,7 +28,7 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Apply deterministic source integration
-        run: node scripts/apply-phase1-sky-navigation.mjs
+        run: node scripts/run-phase1-integration.mjs
 
       - name: Run complete automated tests
         run: npm test
