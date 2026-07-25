@@ -132,7 +132,7 @@ export function resolveViewportLighting(settings = {}, editorMode = 'edit', auth
   const editorFill = 0.055 + night * 0.105;
   return {
     ambientIntensity: Math.max(ambient, 0.18 + night * 0.08),
-    exposure: Math.max(exposure, 0.82 + night * 0.08),
+    exposure: Math.max(exposure, 0.88 + night * 0.04),
     sunIntensity: sun,
     editorFill,
     authoringAssist: true
