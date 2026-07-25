@@ -1,0 +1,115 @@
+
+> omniforge-3d-engine@0.11.0 test
+> node --test tests/*.test.mjs
+
+✔ automatic world time cannot replace the editor workspace while authoring (1.584982ms)
+✔ compact world runtime patches lighting and celestial objects without replacing editor state (2.014193ms)
+✔ night remains readable in Edit mode without changing authored Play lighting (1.384557ms)
+✔ runtime source contains polling, compact-step, read-only GET, and traceable-build safeguards (3.085816ms)
+✔ default project is general-purpose and contains a real 3D starter scene (20.938495ms)
+✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (6.060434ms)
+✔ all supported scene primitives receive valid transforms and properties (3.487837ms)
+✔ terrain height is deterministic and responds to world position (1.581274ms)
+✔ path defaults preserve terrain-conforming system relationships (0.3853ms)
+✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.927563ms)
+✔ starter PBR materials include real texture-map files and are protected (7.784756ms)
+✔ horizontal mouse look uses the intuitive right-positive yaw convention (0.437828ms)
+✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (0.935518ms)
+✔ Windows desktop builder pins and stamps the native executable metadata (0.958721ms)
+✔ project hub and editor usability controls are wired into the authoritative editor (3.913533ms)
+✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (230.375507ms)
+✔ two runtime sessions cannot write the same active project simultaneously (426.556623ms)
+✔ starter objects are grounded against the authoritative terrain surface (6.740665ms)
+✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.952779ms)
+✔ managed workspace path cannot escape the projects root (0.470729ms)
+✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (165.761769ms)
+✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (128.431433ms)
+✔ material authoring settings clamp safely and preserve tiling transforms (0.223898ms)
+✔ material tuner exposes live tiling and PBR response controls (1.207085ms)
+✔ active source and documentation contain no legacy product assumptions (5.412703ms)
+✔ desktop clipboard and pointer-lock permissions use guarded native paths (0.740002ms)
+✔ surface recipes are stable linked assets with validation and deterministic masks (3.059237ms)
+✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.763176ms)
+✔ desktop launcher rejects stale packaged executables (0.124993ms)
+✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (5.303951ms)
+✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.248813ms)
+✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (1.762183ms)
+✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (280.333986ms)
+✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (2.138185ms)
+✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (3.068824ms)
+✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.232303ms)
+✔ provider framework normalizes independent providers, settings, and persistent job records (1.973267ms)
+✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.543614ms)
+✔ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (1842.443865ms)
+✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (4.716383ms)
+✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (347.930215ms)
+✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.698405ms)
+✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.009456ms)
+✔ v0.9 decal and atlas recipes validate stable production metadata (0.530491ms)
+✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.761791ms)
+✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (251.534301ms)
+✔ Git-aware desktop launcher rebuilds after source commits and local edits (1.533886ms)
+✔ sky rays rotate with the camera but ignore camera translation (3.98698ms)
+✔ environment state is bounded and shares the directional light authority (1.041767ms)
+✖ nested World settings drive weather, cloud wind, quality, and twilight (1.791588ms)
+✔ viewport look ignores acquisition noise and rejects implausible direction snaps (0.695159ms)
+✔ yaw remains normalized and pitch remains bounded (0.279502ms)
+✔ viewport acquisition protects camera authority before pointer lock and releases cleanly (2.357235ms)
+✔ normal rendering no longer depends on the legacy CSS atmosphere (2.034181ms)
+✔ v0.10 worker IPC drains stdout before finalizing jobs (1.461ms)
+✔ v0.10 seeded random and foliage placement are deterministic (30.90638ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (1.4609ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.948122ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.807178ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (4.756788ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (4.574788ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.855779ms)
+✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (0.820072ms)
+✔ v0.10 existing Ground button and World tab synchronize through authoritative state (1.497919ms)
+✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (579.550224ms)
+✔ Scene Block inspector enhancement has a stable marker and coalesced observer (1.531561ms)
+✔ diagnostic mode includes input, event-loop, WebGL, and long-task evidence (0.461813ms)
+✔ v0.11 renderer constructs a finite terrain mesh without missing runtime helpers (27.740243ms)
+✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (12.434016ms)
+✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (0.899862ms)
+✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (0.641859ms)
+✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (1.372184ms)
+✔ path grade compilation respects configured maximum grade and bounded terrain cut/fill (14.617323ms)
+✔ path material blending follows the sampled spline instead of straight control-point chords (1.072214ms)
+✔ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (2.157211ms)
+✔ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (505.505265ms)
+✔ same-scene live viewport camera remains authoritative during navigation and pending persistence (1.676302ms)
+✔ path guide edges share exact joined endpoints and follow edge terrain height (0.777894ms)
+ℹ tests 78
+ℹ suites 0
+ℹ pass 77
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3928.091031
+
+✖ failing tests:
+
+test at tests/phase1-sky-navigation.test.mjs:29:1
+✖ nested World settings drive weather, cloud wind, quality, and twilight (1.791588ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 0.19999999999999996
+  - 0.2
+  
+      at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/phase1-sky-navigation.test.mjs:50:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0.19999999999999996,
+    expected: 0.2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
