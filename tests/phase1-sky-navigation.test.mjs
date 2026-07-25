@@ -26,6 +26,31 @@ test('environment state is bounded and shares the directional light authority', 
   assert.equal(state.timeSeconds, 12);
 });
 
+test('nested World settings drive weather, cloud wind, quality, and twilight', () => {
+  const state = normalizeEnvironmentState({
+    settings: {
+      environmentV010: {
+        nightFactor: 0.8,
+        twilightFactor: 0.65,
+        clouds: { coverage: 0.72, density: 0.81, windSpeed: 27, quality: 'layered', seed: 904 },
+        weather: { preset: 'storm', windDirection: [-2, 0, 1] },
+        sky: { starIntensity: 1.4, starDensity: 0.88 },
+        atmosphere: { exposure: 1.3, quality: 'balanced' }
+      }
+    }
+  }, { dir: [0.3, -0.8, 0.1], color: [1, 0.9, 0.8] }, 40);
+  assert.equal(state.weather, 'storm');
+  assert.equal(state.weatherDarkening, 0.46);
+  assert.equal(state.cloudWindSpeed, 27);
+  assert.equal(state.cloudQuality, 'layered');
+  assert.equal(state.cloudSeed, 904);
+  assert.equal(state.cloudCoverage, 0.72);
+  assert.equal(state.cloudDensity, 0.81);
+  assert.equal(state.twilightFactor, 0.65);
+  assert.equal(state.dayFactor, 0.2);
+  assert.ok(Math.abs(Math.hypot(...state.cloudWindDirection) - 1) < 1e-12);
+});
+
 test('viewport look ignores acquisition noise and rejects implausible direction snaps', () => {
   const look = createLookInputState();
   const next = { ...camera };
