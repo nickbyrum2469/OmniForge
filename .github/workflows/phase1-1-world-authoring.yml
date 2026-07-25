@@ -30,6 +30,8 @@ jobs:
 
       - name: Apply Phase 1.1 corrections
         run: |
+          node scripts/repair-phase1-1-migration-source.mjs
+          node --check scripts/apply-phase1-1-world-authoring.mjs
           node scripts/apply-phase1-1-world-authoring.mjs
           node scripts/apply-phase1-1-followup.mjs
 
@@ -42,14 +44,15 @@ jobs:
       - name: Commit verified corrective source
         shell: bash
         run: |
+          rm -f PHASE1_1_OUTPUT.txt
           if git diff --quiet; then
             echo "Phase 1.1 source is already integrated."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app server
+          git add app server scripts/apply-phase1-1-world-authoring.mjs
           git commit -m "Add celestial controls, volumetric clouds, path tools, and local terrain sculpting"
           git push origin HEAD:milestone-12-1/celestial-path-terrain-corrections
 
-# Triggered after failure capture was added to the default-branch runner.
+# Triggered after the raw embedded source templates were repaired.
