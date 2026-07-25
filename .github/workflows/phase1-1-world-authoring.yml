@@ -51,4 +51,4 @@ jobs:
           git commit -m "Add celestial controls, volumetric clouds, path tools, and local terrain sculpting"
           git push origin HEAD:milestone-12-1/celestial-path-terrain-corrections
 
-# User-authored validation trigger after the verified source integration commit.
+# Final user-authored validation trigger after all source and sculpt routes landed.
