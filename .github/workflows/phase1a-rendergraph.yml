@@ -1,0 +1,191 @@
+name: Phase 1A RenderGraph and Frame Resources
+
+on:
+  push:
+    branches:
+      - phase1/linear-hdr-rendergraph-lighting-core
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase1a-rendergraph-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integrate-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    outputs:
+      commit_sha: ${{ steps.finalize.outputs.commit_sha }}
+    steps:
+      - name: Check out exact Phase 1A branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase1/linear-hdr-rendergraph-lighting-core
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+
+      - name: Apply deterministic RenderGraph integration
+        run: python3 scripts/apply-phase1a-rendergraph.py
+
+      - name: Check Phase 1A source syntax
+        run: |
+          node --check app/render-graph.js
+          node --check app/frame-resources.js
+          node --check app/renderer.js
+
+      - name: Run complete automated suite
+        run: npm test
+
+      - name: Run repository verification
+        run: npm run verify
+
+      - name: Prove migration idempotency
+        run: |
+          git diff -- app/renderer.js > /tmp/phase1a-before.diff
+          python3 scripts/apply-phase1a-rendergraph.py
+          git diff -- app/renderer.js > /tmp/phase1a-after.diff
+          diff -u /tmp/phase1a-before.diff /tmp/phase1a-after.diff
+
+      - name: Commit only verified Phase 1A renderer source
+        id: finalize
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add app/renderer.js
+            git commit -m "Route the renderer through the authoritative Phase 1A RenderGraph"
+            git push origin HEAD:phase1/linear-hdr-rendergraph-lighting-core
+          fi
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Verified Phase 1A source commit: $(git rev-parse HEAD)"
+
+  package-windows:
+    needs: integrate-and-verify
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - name: Check out exact verified Phase 1A commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.integrate-and-verify.outputs.commit_sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          if (Test-Path package-lock.json) { npm ci } else { npm install --no-audit --no-fund }
+
+      - name: Re-run tests and verification on Windows
+        shell: pwsh
+        run: |
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw 'Phase 1A Windows tests failed.' }
+          npm run verify
+          if ($LASTEXITCODE -ne 0) { throw 'Phase 1A Windows repository verification failed.' }
+
+      - name: Build native Windows desktop package
+        shell: pwsh
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\BUILD_DESKTOP_WINDOWS.ps1
+
+      - name: Audit packaged Phase 1A authority
+        shell: pwsh
+        run: |
+          $output=Join-Path $PWD 'dist\OmniForge-win32-x64'
+          $required=@(
+            'OmniForge.exe',
+            'version',
+            'source-commit',
+            'resources\app\app\renderer.js',
+            'resources\app\app\render-graph.js',
+            'resources\app\app\frame-resources.js',
+            'resources\app\docs\PHASE_1A_RENDERGRAPH_FRAME_RESOURCES.md'
+          )
+          foreach($relative in $required){
+            if(-not(Test-Path (Join-Path $output $relative) -PathType Leaf)){throw "Packaged Phase 1A file is missing: $relative"}
+          }
+          $sourceCommit=(Get-Content (Join-Path $output 'source-commit') -Raw).Trim()
+          $checkedOutCommit=(git rev-parse HEAD).Trim()
+          if($sourceCommit -ne $checkedOutCommit){throw "Packaged source commit $sourceCommit does not match $checkedOutCommit."}
+          if($checkedOutCommit -ne '${{ needs.integrate-and-verify.outputs.commit_sha }}'){throw 'Windows checkout is not the verified Phase 1A source commit.'}
+
+      - name: Smoke-test packaged editor startup and authoritative state
+        shell: pwsh
+        run: |
+          $output=Join-Path $PWD 'dist\OmniForge-win32-x64'
+          $runtime=Join-Path $env:TEMP "omniforge-phase1a-$env:GITHUB_RUN_ID"
+          New-Item -ItemType Directory -Force -Path $runtime | Out-Null
+          $port=43141
+          $env:OMNIFORGE_DATA_ROOT=$runtime
+          $env:OMNIFORGE_PORT="$port"
+          $process=$null
+          try {
+            $process=Start-Process -FilePath (Join-Path $output 'OmniForge.exe') -PassThru
+            $deadline=(Get-Date).AddSeconds(40)
+            $healthy=$false
+            while((Get-Date)-lt $deadline){
+              Start-Sleep -Milliseconds 400
+              try { Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2 | Out-Null; $healthy=$true; break } catch {}
+            }
+            if(-not $healthy){throw 'Packaged Phase 1A editor did not become healthy.'}
+            $state=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 8
+            $scene=$state.scenes | Where-Object {$_.id -eq $state.activeSceneId} | Select-Object -First 1
+            if(-not $scene){throw 'Packaged Phase 1A active scene was missing.'}
+            $suns=@($scene.objects | Where-Object {$_.properties.celestialRole -eq 'sun'})
+            $moons=@($scene.objects | Where-Object {$_.properties.celestialRole -eq 'moon'})
+            if($suns.Count -ne 1 -or $moons.Count -ne 1){throw "Phase 0 celestial authority regressed: Sun=$($suns.Count), Moon=$($moons.Count)."}
+            Start-Sleep -Seconds 3
+            if($process.HasExited){throw 'Packaged Phase 1A editor exited during renderer initialization.'}
+            Write-Host 'Packaged Phase 1A startup, renderer initialization window, and celestial authority passed.'
+          } finally {
+            if($process -and -not $process.HasExited){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue}
+            Get-Process OmniForge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:OMNIFORGE_DATA_ROOT -ErrorAction SilentlyContinue
+            Remove-Item Env:OMNIFORGE_PORT -ErrorAction SilentlyContinue
+            Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Create portable archive and checksum
+        shell: pwsh
+        run: |
+          $archive=Join-Path $PWD 'OmniForge-Phase1A-RenderGraph-Windows-x64.zip'
+          if(Test-Path $archive){Remove-Item $archive -Force}
+          Compress-Archive -Path '.\dist\OmniForge-win32-x64\*' -DestinationPath $archive -CompressionLevel Optimal
+          $hash=(Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  OmniForge-Phase1A-RenderGraph-Windows-x64.zip" | Set-Content '.\OmniForge-Phase1A-RenderGraph-Windows-x64.sha256' -Encoding ascii
+          @(
+            "Phase 1A RenderGraph Windows evidence",
+            "Source commit: ${{ needs.integrate-and-verify.outputs.commit_sha }}",
+            "Archive SHA-256: $hash",
+            "Tests: passed",
+            "Repository verification: passed",
+            "Package audit: passed",
+            "Startup smoke: passed"
+          ) | Set-Content '.\PHASE1A_WINDOWS_EVIDENCE.txt' -Encoding utf8
+
+      - name: Upload verified Phase 1A Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniForge-Phase1A-RenderGraph-${{ github.run_id }}
+          path: |
+            OmniForge-Phase1A-RenderGraph-Windows-x64.zip
+            OmniForge-Phase1A-RenderGraph-Windows-x64.sha256
+            PHASE1A_WINDOWS_EVIDENCE.txt
+          if-no-files-found: error
+          retention-days: 30
