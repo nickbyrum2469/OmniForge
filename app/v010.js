@@ -147,7 +147,32 @@ function installWorldPanel() {
         <label>Stars<input id="v010Stars" type="range" min="0" max="3" step="0.05"></label>
         <label>Star density<input id="v010StarDensity" type="range" min="0.08" max="2" step="0.02"></label>
         <label>Daylight star extinction<input id="v010StarExtinction" type="range" min="0.1" max="4" step="0.05"></label>
-        <label>Milky Way<input id="v010MilkyWay" type="range" min="0" max="3" step="0.05"></label>
+        <label>Smallest star<input id="v010StarSizeMin" type="range" min="0.1" max="6" step="0.05"></label>
+        <label>Largest star<input id="v010StarSizeMax" type="range" min="0.1" max="8" step="0.05"></label>
+        <label>Brightness variety<input id="v010StarBrightnessVariation" type="range" min="0" max="1" step="0.01"></label>
+        <label>Color variety<input id="v010StarColorVariation" type="range" min="0" max="1" step="0.01"></label>
+        <label>Twinkle amount<input id="v010StarTwinkleAmount" type="range" min="0" max="1" step="0.01"></label>
+        <label>Twinkle speed<input id="v010StarTwinkleSpeed" type="range" min="0" max="8" step="0.05"></label>
+        <label>Star seed<input id="v010StarSeed" type="number" min="-999999" max="999999" step="1"></label>
+        <label>Star-field rotation<input id="v010StarRotation" type="number" min="-720" max="720" step="1"></label>
+        <label>Horizon fade<input id="v010StarHorizonFade" type="range" min="0.01" max="0.8" step="0.01"></label>
+        <label>Warm star color<input id="v010StarWarmColor" type="color"></label>
+        <label>Cool star color<input id="v010StarCoolColor" type="color"></label>
+        <label>Milky Way brightness<input id="v010MilkyWay" type="range" min="0" max="3" step="0.05"></label>
+        <label>Milky Way width<input id="v010MilkyWayWidth" type="range" min="2" max="45" step="0.25"></label>
+        <label>Milky Way detail<input id="v010MilkyWayDetail" type="range" min="0.2" max="4" step="0.05"></label>
+        <label>Dark dust lanes<input id="v010MilkyWayDust" type="range" min="0" max="1" step="0.01"></label>
+        <label>Galactic core<input id="v010MilkyWayCore" type="range" min="0" max="2" step="0.02"></label>
+        <label>Galaxy azimuth<input id="v010MilkyWayAzimuth" type="number" min="-720" max="720" step="1"></label>
+        <label>Galaxy elevation<input id="v010MilkyWayElevation" type="number" min="-90" max="90" step="1"></label>
+        <label>Galaxy roll<input id="v010MilkyWayRotation" type="number" min="-720" max="720" step="1"></label>
+        <label>Galaxy outer color<input id="v010MilkyWayColor" type="color"></label>
+        <label>Galaxy core color<input id="v010MilkyWayCoreColor" type="color"></label>
+        <label>Aurora intensity<input id="v010AuroraIntensity" type="range" min="0" max="3" step="0.02"></label>
+        <label>Aurora primary<input id="v010AuroraColor" type="color"></label>
+        <label>Aurora secondary<input id="v010AuroraSecondaryColor" type="color"></label>
+        <label>Aurora speed<input id="v010AuroraSpeed" type="range" min="0" max="4" step="0.02"></label>
+        <label>Aurora scale<input id="v010AuroraScale" type="range" min="0.2" max="4" step="0.02"></label>
         <label>Cloud mode<select id="v010CloudQuality"><option value="layered">Optimized layered</option><option value="balanced">Volumetric balanced</option><option value="quality">Volumetric quality</option><option value="reference">Volumetric reference</option></select></label>
         <label>Cloud cover<input id="v010Clouds" type="range" min="0" max="1" step="0.01"></label>
         <label>Cloud density<input id="v010CloudDensity" type="range" min="0" max="1" step="0.01"></label>
@@ -245,7 +270,32 @@ function populate(options = {}) {
   field('v010Stars').value = world.sky.starIntensity;
   field('v010StarDensity').value = world.sky.starDensity ?? 0.72;
   field('v010StarExtinction').value = world.sky.starDaylightExtinction ?? 1.35;
+  field('v010StarSizeMin').value = world.sky.starSizeMin ?? 0.55;
+  field('v010StarSizeMax').value = world.sky.starSizeMax ?? 2.4;
+  field('v010StarBrightnessVariation').value = world.sky.starBrightnessVariation ?? 0.62;
+  field('v010StarColorVariation').value = world.sky.starColorVariation ?? 0.38;
+  field('v010StarTwinkleAmount').value = world.sky.starTwinkleAmount ?? 0.48;
+  field('v010StarTwinkleSpeed').value = world.sky.starTwinkleSpeed ?? 1;
+  field('v010StarSeed').value = world.sky.starSeed ?? 1337;
+  field('v010StarRotation').value = world.sky.starRotation ?? 0;
+  field('v010StarHorizonFade').value = world.sky.starHorizonFade ?? 0.18;
+  field('v010StarWarmColor').value = world.sky.starWarmColor ?? '#ffd8aa';
+  field('v010StarCoolColor').value = world.sky.starCoolColor ?? '#a9c9ff';
   field('v010MilkyWay').value = world.sky.milkyWayIntensity ?? 0.35;
+  field('v010MilkyWayWidth').value = world.sky.milkyWayWidth ?? 16;
+  field('v010MilkyWayDetail').value = world.sky.milkyWayDetail ?? 1.25;
+  field('v010MilkyWayDust').value = world.sky.milkyWayDust ?? 0.68;
+  field('v010MilkyWayCore').value = world.sky.milkyWayCore ?? 0.78;
+  field('v010MilkyWayAzimuth').value = world.sky.milkyWayAzimuth ?? 18;
+  field('v010MilkyWayElevation').value = world.sky.milkyWayElevation ?? 62;
+  field('v010MilkyWayRotation').value = world.sky.milkyWayRotation ?? 27;
+  field('v010MilkyWayColor').value = world.sky.milkyWayColor ?? '#7187bd';
+  field('v010MilkyWayCoreColor').value = world.sky.milkyWayCoreColor ?? '#e2c9a5';
+  field('v010AuroraIntensity').value = world.sky.auroraIntensity ?? 0;
+  field('v010AuroraColor').value = world.sky.auroraColor ?? '#58e7c1';
+  field('v010AuroraSecondaryColor').value = world.sky.auroraSecondaryColor ?? '#7668ff';
+  field('v010AuroraSpeed').value = world.sky.auroraSpeed ?? 0.35;
+  field('v010AuroraScale').value = world.sky.auroraScale ?? 1;
   field('v010CloudQuality').value = world.clouds.quality || 'layered';
   field('v010Clouds').value = world.clouds.coverage;
   field('v010CloudDensity').value = world.clouds.density ?? 0.45;
@@ -305,7 +355,18 @@ async function applyWorld(extra = {}) {
       planetEnabled: Boolean(field('v010PlanetEnabled').checked), planetSize: numeric('v010PlanetSize', 4.5),
       planetAzimuth: numeric('v010PlanetAzimuth', 215), planetElevation: numeric('v010PlanetElevation', 28), planetRings: numeric('v010PlanetRings', 0.65),
       starIntensity: numeric('v010Stars', 1), starDensity: numeric('v010StarDensity', 0.72),
-      starDaylightExtinction: numeric('v010StarExtinction', 1.35), milkyWayIntensity: numeric('v010MilkyWay', 0.35)
+      starDaylightExtinction: numeric('v010StarExtinction', 1.35),
+      starSizeMin: numeric('v010StarSizeMin', 0.55), starSizeMax: numeric('v010StarSizeMax', 2.4),
+      starBrightnessVariation: numeric('v010StarBrightnessVariation', 0.62), starColorVariation: numeric('v010StarColorVariation', 0.38),
+      starTwinkleAmount: numeric('v010StarTwinkleAmount', 0.48), starTwinkleSpeed: numeric('v010StarTwinkleSpeed', 1),
+      starSeed: numeric('v010StarSeed', 1337), starRotation: numeric('v010StarRotation', 0), starHorizonFade: numeric('v010StarHorizonFade', 0.18),
+      starWarmColor: field('v010StarWarmColor').value, starCoolColor: field('v010StarCoolColor').value,
+      milkyWayIntensity: numeric('v010MilkyWay', 0.35), milkyWayWidth: numeric('v010MilkyWayWidth', 16),
+      milkyWayDetail: numeric('v010MilkyWayDetail', 1.25), milkyWayDust: numeric('v010MilkyWayDust', 0.68), milkyWayCore: numeric('v010MilkyWayCore', 0.78),
+      milkyWayAzimuth: numeric('v010MilkyWayAzimuth', 18), milkyWayElevation: numeric('v010MilkyWayElevation', 62), milkyWayRotation: numeric('v010MilkyWayRotation', 27),
+      milkyWayColor: field('v010MilkyWayColor').value, milkyWayCoreColor: field('v010MilkyWayCoreColor').value,
+      auroraIntensity: numeric('v010AuroraIntensity', 0), auroraColor: field('v010AuroraColor').value,
+      auroraSecondaryColor: field('v010AuroraSecondaryColor').value, auroraSpeed: numeric('v010AuroraSpeed', 0.35), auroraScale: numeric('v010AuroraScale', 1)
     },
     clouds: {
       quality: field('v010CloudQuality').value,

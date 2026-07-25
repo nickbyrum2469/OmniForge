@@ -19,6 +19,20 @@ function horizontalWind(value) {
   return [x / magnitude, z / magnitude];
 }
 
+function galacticBasis(azimuthDegrees = 18, elevationDegrees = 62, rotationDegrees = 27) {
+  const normal = directionFromAzimuthElevation(azimuthDegrees, elevationDegrees);
+  const reference = Math.abs(normal[1]) > 0.94 ? [1, 0, 0] : [0, 1, 0];
+  const right = normalize(cross(reference, normal));
+  const up = normalize(cross(normal, right));
+  const angle = Number(rotationDegrees || 0) * DEG;
+  const axis = normalize([
+    right[0] * Math.cos(angle) + up[0] * Math.sin(angle),
+    right[1] * Math.cos(angle) + up[1] * Math.sin(angle),
+    right[2] * Math.cos(angle) + up[2] * Math.sin(angle)
+  ]);
+  return { normal, axis };
+}
+
 export function directionFromAzimuthElevation(azimuthDegrees = 0, elevationDegrees = 0) {
   const azimuth = Number(azimuthDegrees || 0) * DEG;
   const elevation = Number(elevationDegrees || 0) * DEG;
@@ -93,6 +107,13 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
   const sunSize = clamp(worldSky.sunSize ?? worldSky.suns?.[0]?.size ?? 1, 0.1, 12);
   const moonSize = clamp(worldSky.moonSize ?? worldSky.moons?.[0]?.size ?? 1.45, 0.1, 16);
   const moonBrightness = clamp(worldSky.moonBrightness ?? worldSky.moons?.[0]?.radiance ?? 1, 0, 8);
+  const starSizeMin = clamp(worldSky.starSizeMin ?? 0.55, 0.1, 6);
+  const starSizeMax = Math.max(starSizeMin, clamp(worldSky.starSizeMax ?? 2.4, 0.1, 8));
+  const milkyWayBasis = galacticBasis(
+    worldSky.milkyWayAzimuth ?? 18,
+    worldSky.milkyWayElevation ?? 62,
+    worldSky.milkyWayRotation ?? 27
+  );
 
   return {
     sunDirection,
@@ -109,7 +130,31 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
     starVisibility: clamp01(nightFactor * starIntensity * daylightSuppression),
     starDensity,
     starDaylightExtinction: starExtinction,
+    starSizeMin,
+    starSizeMax,
+    starBrightnessVariation: clamp01(worldSky.starBrightnessVariation ?? 0.62),
+    starColorVariation: clamp01(worldSky.starColorVariation ?? 0.38),
+    starTwinkleAmount: clamp01(worldSky.starTwinkleAmount ?? 0.48),
+    starTwinkleSpeed: clamp(worldSky.starTwinkleSpeed ?? 1, 0, 8),
+    starSeed: Number(worldSky.starSeed ?? 1337),
+    starRotation: clamp(worldSky.starRotation ?? 0, -720, 720),
+    starHorizonFade: clamp(worldSky.starHorizonFade ?? 0.18, 0.01, 0.8),
+    starWarmColor: color(worldSky.starWarmColor, '#ffd8aa'),
+    starCoolColor: color(worldSky.starCoolColor, '#a9c9ff'),
     milkyWayIntensity: Math.max(0, Number(worldSky.milkyWayIntensity ?? 0.35)) * nightFactor * daylightSuppression,
+    milkyWayWidth: clamp(worldSky.milkyWayWidth ?? 16, 2, 45),
+    milkyWayDetail: clamp(worldSky.milkyWayDetail ?? 1.25, 0.2, 4),
+    milkyWayDust: clamp01(worldSky.milkyWayDust ?? 0.68),
+    milkyWayCore: clamp(worldSky.milkyWayCore ?? 0.78, 0, 2),
+    milkyWayNormal: milkyWayBasis.normal,
+    milkyWayAxis: milkyWayBasis.axis,
+    milkyWayColor: color(worldSky.milkyWayColor, '#7187bd'),
+    milkyWayCoreColor: color(worldSky.milkyWayCoreColor, '#e2c9a5'),
+    auroraIntensity: Math.max(0, Number(worldSky.auroraIntensity ?? 0)) * nightFactor * daylightSuppression,
+    auroraColor: color(worldSky.auroraColor, '#58e7c1'),
+    auroraSecondaryColor: color(worldSky.auroraSecondaryColor, '#7668ff'),
+    auroraSpeed: clamp(worldSky.auroraSpeed ?? 0.35, 0, 4),
+    auroraScale: clamp(worldSky.auroraScale ?? 1, 0.2, 4),
     sunAngularRadius: 0.2666 * sunSize,
     sunGlow: clamp(worldSky.sunGlow ?? 1, 0, 5),
     moonAngularRadius: 0.259 * moonSize,
