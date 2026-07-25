@@ -1,4 +1,5 @@
 import { applyCompactWorldRuntime, clearCelestialRuntimeInterpolation, shouldAdvanceWorldTime, updateCelestialRuntimeInterpolation } from './world-runtime.js';
+import { applyEnvironmentPreset, environmentPresetOptions } from './environment-presets.js';
 
 const $ = selector => document.querySelector(selector);
 
@@ -104,9 +105,10 @@ function installWorldPanel() {
         <label>Time scale<input id="v010TimeScale" type="number" min="-86400" max="86400" step="10"></label>
         <label>Sun intensity<input id="v010SunIntensity" type="number" min="0" max="20" step="0.1"></label>
         <label>Lighting profile<select id="v010LightingProfile"><option value="compatibility">GTX 1650 compatibility</option><option value="balanced">Balanced</option><option value="quality">Quality</option><option value="reference">Reference capture</option></select></label>
+        <label>Look preset<select id="v010LookPreset">${environmentPresetOptions().map(item => `<option value="${item.id}">${item.label}</option>`).join('')}</select></label>
         <label>Preview time while editing<input id="v010PreviewTime" type="checkbox"></label>
       </div>
-      <div class="v010-actions"><button id="v010ApplyWorld" class="button primary" type="button">Apply world</button><button id="v010ToggleTime" class="button subtle" type="button">Pause time</button></div>
+      <div class="v010-actions"><button id="v010ApplyWorld" class="button primary" type="button">Apply world</button><button id="v010ApplyPreset" class="button subtle" type="button">Apply look preset</button><button id="v010ToggleTime" class="button subtle" type="button">Pause time</button></div>
       <p class="v010-section-note">Automatic time advances in Play mode. Editor preview is opt-in so lighting updates cannot interrupt viewport input or rebuild the entire workspace while authoring.</p>
     </div>
 
@@ -119,7 +121,13 @@ function installWorldPanel() {
         <label>Sun azimuth<input id="v010SunAzimuth" type="number" min="-720" max="720" step="1"></label>
         <label>Sun elevation<input id="v010SunElevation" type="number" min="-90" max="90" step="1"></label>
         <label>Moon size<input id="v010MoonSize" type="range" min="0.1" max="12" step="0.05"></label>
-        <label>Moon phase<input id="v010MoonPhase" type="range" min="0" max="1" step="0.005"></label>
+        <label>Phase authority<select id="v010MoonPhaseMode"><option value="sun-relative">Computed from Sun–Moon geometry</option><option value="manual">Manual artistic phase</option></select></label>
+        <label>Moon age (days)<input id="v010MoonAge" type="range" min="0" max="29.530588" step="0.02"></label>
+        <label>Manual phase<input id="v010MoonPhase" type="range" min="0" max="1" step="0.005"></label>
+        <label>Orbit period (days)<input id="v010MoonOrbitPeriod" type="number" min="1" max="2000" step="0.001"></label>
+        <label>Orbit inclination<input id="v010MoonInclination" type="number" min="0" max="45" step="0.01"></label>
+        <label>Earthshine<input id="v010MoonEarthshine" type="range" min="0" max="0.5" step="0.005"></label>
+        <label>Lunar events<select id="v010EclipseMode"><option value="automatic">Automatic eclipses</option><option value="off">Disabled</option><option value="force-solar">Force solar eclipse</option><option value="force-lunar">Force lunar eclipse</option></select></label>
         <label>Moon brightness<input id="v010MoonBrightness" type="range" min="0" max="5" step="0.05"></label>
         <label>Moon glow<input id="v010MoonGlow" type="range" min="0" max="5" step="0.05"></label>
         <label>Moon detail<input id="v010MoonDetail" type="range" min="0" max="3" step="0.05"></label>
@@ -145,9 +153,20 @@ function installWorldPanel() {
         <label>Humidity<input id="v010Humidity" type="range" min="0" max="1" step="0.01"></label>
         <label>Exposure<input id="v010Exposure" type="range" min="0.2" max="3" step="0.02"></label>
         <label>Stars<input id="v010Stars" type="range" min="0" max="3" step="0.05"></label>
-        <label>Star density<input id="v010StarDensity" type="range" min="0.08" max="2" step="0.02"></label>
-        <label>Daylight star extinction<input id="v010StarExtinction" type="range" min="0.1" max="4" step="0.05"></label>
-        <label>Milky Way<input id="v010MilkyWay" type="range" min="0" max="3" step="0.05"></label>
+        <label>Star density<input id="v010StarDensity" type="range" min="0.02" max="2" step="0.02"></label>
+        <label>Star brightness<input id="v010StarBrightness" type="range" min="0" max="8" step="0.05"></label>
+        <label>Twinkle amount<input id="v010StarTwinkle" type="range" min="0" max="1" step="0.01"></label>
+        <label>Twinkle speed<input id="v010StarTwinkleSpeed" type="range" min="0" max="12" step="0.05"></label>
+        <label>Minimum star size<input id="v010StarSizeMin" type="range" min="0.05" max="4" step="0.05"></label>
+        <label>Maximum star size<input id="v010StarSizeMax" type="range" min="0.05" max="8" step="0.05"></label>
+        <label>Star color variation<input id="v010StarColorVariation" type="range" min="0" max="1" step="0.01"></label>
+        <label>Star seed<input id="v010StarSeed" type="number" step="1"></label>
+        <label>Daylight star extinction<input id="v010StarExtinction" type="range" min="0.1" max="8" step="0.05"></label>
+        <label>Milky Way brightness<input id="v010MilkyWay" type="range" min="0" max="3" step="0.05"></label>
+        <label>Milky Way width<input id="v010MilkyWayWidth" type="range" min="0.02" max="0.8" step="0.01"></label>
+        <label>Milky Way detail<input id="v010MilkyWayDetail" type="range" min="0" max="3" step="0.05"></label>
+        <label>Milky Way orientation<input id="v010MilkyWayOrientation" type="range" min="-180" max="180" step="1"></label>
+        <label>Milky Way dust lanes<input id="v010MilkyWayDust" type="range" min="0" max="1" step="0.01"></label>
         <label>Cloud mode<select id="v010CloudQuality"><option value="layered">Optimized layered</option><option value="balanced">Volumetric balanced</option><option value="quality">Volumetric quality</option><option value="reference">Volumetric reference</option></select></label>
         <label>Cloud cover<input id="v010Clouds" type="range" min="0" max="1" step="0.01"></label>
         <label>Cloud density<input id="v010CloudDensity" type="range" min="0" max="1" step="0.01"></label>
@@ -219,6 +238,7 @@ function populate(options = {}) {
   field('v010TimeScale').value = world.time.timeScale;
   field('v010SunIntensity').value = world.lighting.sunIntensity;
   field('v010LightingProfile').value = world.lighting.profile;
+  field('v010LookPreset').value = world.lookPreset || 'natural-balanced';
   field('v010AtmosphereQuality').value = world.atmosphere.quality;
   field('v010Visibility').value = world.atmosphere.visibilityKm;
   field('v010Rayleigh').value = world.atmosphere.rayleigh;
@@ -231,8 +251,15 @@ function populate(options = {}) {
   field('v010SunAzimuth').value = world.sky.sunAzimuth ?? -90;
   field('v010SunElevation').value = world.sky.sunElevation ?? 45;
   field('v010MoonSize').value = world.sky.moonSize ?? 1.45;
+  field('v010MoonPhaseMode').value = world.sky.moonPhaseMode || 'sun-relative';
+  const celestialState = snapshot.scene?.settings?.environmentV010?.celestial || {};
+  field('v010MoonAge').value = celestialState.moon?.ageDays ?? 14.765;
   field('v010MoonPhase').value = world.sky.moonPhase ?? 0.72;
-  field('v010MoonBrightness').value = world.sky.moonBrightness ?? 1;
+  field('v010MoonOrbitPeriod').value = world.sky.moonOrbitPeriodDays ?? 29.530588;
+  field('v010MoonInclination').value = world.sky.moonOrbitInclination ?? 5.145;
+  field('v010MoonEarthshine').value = world.sky.moonEarthshine ?? 0.08;
+  field('v010EclipseMode').value = world.sky.eclipseMode || 'automatic';
+  field('v010MoonBrightness').value = world.sky.moonBrightness ?? 1.05;
   field('v010MoonGlow').value = world.sky.moonGlow ?? 0.7;
   field('v010MoonDetail').value = world.sky.moonDetail ?? 1;
   field('v010MoonAzimuth').value = world.sky.moonAzimuth ?? 90;
@@ -244,8 +271,19 @@ function populate(options = {}) {
   field('v010PlanetRings').value = world.sky.planetRings ?? 0.65;
   field('v010Stars').value = world.sky.starIntensity;
   field('v010StarDensity').value = world.sky.starDensity ?? 0.72;
+  field('v010StarBrightness').value = world.sky.starBrightness ?? 1;
+  field('v010StarTwinkle').value = world.sky.starTwinkleAmount ?? 0.32;
+  field('v010StarTwinkleSpeed').value = world.sky.starTwinkleSpeed ?? 1;
+  field('v010StarSizeMin').value = world.sky.starSizeMin ?? 0.35;
+  field('v010StarSizeMax').value = world.sky.starSizeMax ?? 1.8;
+  field('v010StarColorVariation').value = world.sky.starColorVariation ?? 0.65;
+  field('v010StarSeed').value = world.sky.starSeed ?? 1337;
   field('v010StarExtinction').value = world.sky.starDaylightExtinction ?? 1.35;
-  field('v010MilkyWay').value = world.sky.milkyWayIntensity ?? 0.35;
+  field('v010MilkyWay').value = world.sky.milkyWayIntensity ?? 0.32;
+  field('v010MilkyWayWidth').value = world.sky.milkyWayWidth ?? 0.16;
+  field('v010MilkyWayDetail').value = world.sky.milkyWayDetail ?? 0.72;
+  field('v010MilkyWayOrientation').value = world.sky.milkyWayOrientation ?? 22;
+  field('v010MilkyWayDust').value = world.sky.milkyWayDust ?? 0.58;
   field('v010CloudQuality').value = world.clouds.quality || 'layered';
   field('v010Clouds').value = world.clouds.coverage;
   field('v010CloudDensity').value = world.clouds.density ?? 0.45;
@@ -254,7 +292,8 @@ function populate(options = {}) {
   field('v010CloudWindSpeed').value = world.clouds.windSpeed ?? 12;
   field('v010Fog').value = world.weather.fog;
   field('v010Weather').value = world.weather.preset;
-  field('v010CelestialReadout').textContent = (world.sky.celestialMode === 'manual' ? 'MANUAL' : formatTime(world.time.hours)) + ' · MOON ' + (Number(world.sky.moonPhase ?? 0.72) * 100).toFixed(0) + '%';
+  const celestialReadout = snapshot.scene?.settings?.environmentV010?.celestial;
+  field('v010CelestialReadout').textContent = (world.sky.celestialMode === 'manual' ? 'MANUAL' : formatTime(world.time.hours)) + ' · ' + (celestialReadout?.moon?.phaseName || 'Moon') + ' ' + (Number(celestialReadout?.moon?.illumination ?? world.sky.moonPhase ?? 0.72) * 100).toFixed(0) + '%' + (celestialReadout?.event?.type && celestialReadout.event.type !== 'none' ? ' · ' + celestialReadout.event.type.replace('-', ' ').toUpperCase() : '');
   const environment = snapshot.scene?.settings?.environmentV010 || snapshot.state?.scenes?.find(item => item.id === snapshot.state?.activeSceneId)?.settings?.environmentV010 || {};
   const diagnostics = field('v010EnvironmentDiagnostics');
   if (diagnostics) diagnostics.textContent = `Authority: 1 Sun + 1 Moon · Day ${Number(environment.sunDayFactor || 0).toFixed(2)} · Twilight ${Number(environment.twilightFactor || 0).toFixed(2)} · Night ${Number(environment.nightFactor || 0).toFixed(2)} · Exposure ${Number(snapshot.scene?.settings?.exposure ?? 1).toFixed(2)} · ${previewTimeInEditor ? 'smooth editor preview' : 'authoritative edit pause'}`;
@@ -299,13 +338,19 @@ async function applyWorld(extra = {}) {
       celestialMode: field('v010CelestialMode').value,
       sunSize: numeric('v010SunSize', 1), sunGlow: numeric('v010SunGlow', 1),
       sunAzimuth: numeric('v010SunAzimuth', -90), sunElevation: numeric('v010SunElevation', 45),
-      moonSize: numeric('v010MoonSize', 1.45), moonPhase: numeric('v010MoonPhase', 0.72),
-      moonBrightness: numeric('v010MoonBrightness', 1), moonGlow: numeric('v010MoonGlow', 0.7), moonDetail: numeric('v010MoonDetail', 1),
+      moonSize: numeric('v010MoonSize', 1.45), moonPhase: numeric('v010MoonPhase', 0.72), moonPhaseMode: field('v010MoonPhaseMode').value,
+      lunarEpochDay: Number(snapshot?.world?.time?.absoluteDay ?? snapshot?.world?.time?.dayOfYear ?? 172) + numeric('v010Hours', 12) / 24 - numeric('v010MoonAge', 14.765),
+      moonOrbitPeriodDays: numeric('v010MoonOrbitPeriod', 29.530588), moonOrbitInclination: numeric('v010MoonInclination', 5.145),
+      moonEarthshine: numeric('v010MoonEarthshine', 0.08), eclipseMode: field('v010EclipseMode').value,
+      moonBrightness: numeric('v010MoonBrightness', 1.05), moonGlow: numeric('v010MoonGlow', 0.48), moonDetail: numeric('v010MoonDetail', 1),
       moonAzimuth: numeric('v010MoonAzimuth', 90), moonElevation: numeric('v010MoonElevation', 32),
       planetEnabled: Boolean(field('v010PlanetEnabled').checked), planetSize: numeric('v010PlanetSize', 4.5),
       planetAzimuth: numeric('v010PlanetAzimuth', 215), planetElevation: numeric('v010PlanetElevation', 28), planetRings: numeric('v010PlanetRings', 0.65),
-      starIntensity: numeric('v010Stars', 1), starDensity: numeric('v010StarDensity', 0.72),
-      starDaylightExtinction: numeric('v010StarExtinction', 1.35), milkyWayIntensity: numeric('v010MilkyWay', 0.35)
+      starIntensity: numeric('v010Stars', 1), starDensity: numeric('v010StarDensity', 0.72), starBrightness: numeric('v010StarBrightness', 1),
+      starTwinkleAmount: numeric('v010StarTwinkle', 0.32), starTwinkleSpeed: numeric('v010StarTwinkleSpeed', 1),
+      starSizeMin: numeric('v010StarSizeMin', 0.35), starSizeMax: numeric('v010StarSizeMax', 1.8), starColorVariation: numeric('v010StarColorVariation', 0.65), starSeed: numeric('v010StarSeed', 1337),
+      starDaylightExtinction: numeric('v010StarExtinction', 1.35), milkyWayIntensity: numeric('v010MilkyWay', 0.32),
+      milkyWayWidth: numeric('v010MilkyWayWidth', 0.16), milkyWayDetail: numeric('v010MilkyWayDetail', 0.72), milkyWayOrientation: numeric('v010MilkyWayOrientation', 22), milkyWayDust: numeric('v010MilkyWayDust', 0.58)
     },
     clouds: {
       quality: field('v010CloudQuality').value,
@@ -324,6 +369,20 @@ function bindControls() {
     try {
       await applyWorld();
       setStatus('World settings were applied to the authoritative scene and renderer inputs.');
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  });
+
+
+  field('v010ApplyPreset').addEventListener('click', async () => {
+    try {
+      const presetId = field('v010LookPreset').value;
+      const nextWorld = applyEnvironmentPreset(snapshot?.world || {}, presetId);
+      snapshot = await api('/api/v010/world', { method: 'PATCH', body: JSON.stringify(nextWorld) });
+      synchronizeAuthoritativeEditor();
+      populate();
+      setStatus(`Applied ${field('v010LookPreset').selectedOptions[0]?.textContent || presetId}. The preset edits the same authoritative world controls shown below.`);
     } catch (error) {
       setStatus(error.message, true);
     }

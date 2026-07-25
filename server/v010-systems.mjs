@@ -1,6 +1,8 @@
 import { terrainHeightAt as sharedTerrainHeightAt, terrainNormalAt as sharedTerrainNormalAt, distanceToPaths as sharedDistanceToPaths } from '../app/worldgen.js';
+import { evaluateCelestialSystem } from '../app/celestial-mechanics.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
+const smoothstep = (edge0, edge1, value) => { const t = clamp((Number(value) - edge0) / ((edge1 - edge0) || 1), 0, 1); return t * t * (3 - 2 * t); };
 const now = () => new Date().toISOString();
 
 export function seededRandom(seed = 1) {
@@ -18,8 +20,13 @@ export function terrainNormalAt(terrain, x, z, paths = [], step = 0.35) { return
 export function distanceToPaths(paths, x, z) { return sharedDistanceToPaths(paths, x, z); }
 
 export function defaultWorldSettings(existing = {}) {
+  const existingTime = existing.time || {};
+  const absoluteDay = Number.isFinite(Number(existingTime.absoluteDay))
+    ? Number(existingTime.absoluteDay)
+    : Number(existingTime.dayOfYear ?? 172);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    lookPreset: existing.lookPreset || 'natural-balanced',
     time: {
       enabled: true,
       hours: 12,
@@ -27,14 +34,15 @@ export function defaultWorldSettings(existing = {}) {
       dayLengthSeconds: 1440,
       latitude: 37.3,
       dayOfYear: 172,
-      ...existing.time
+      absoluteDay,
+      ...existingTime
     },
     lighting: {
       profile: 'balanced',
-      sunIntensity: 3.2,
-      moonIntensity: 0.12,
+      sunIntensity: 3.05,
+      moonIntensity: 0.18,
       shadowQuality: 'balanced',
-      indirectStrength: 0.42,
+      indirectStrength: 0.5,
       reflectionQuality: 'balanced',
       contactShadows: true,
       dynamicResolution: true,
@@ -49,12 +57,16 @@ export function defaultWorldSettings(existing = {}) {
       mie: 0.16,
       mieAnisotropy: 0.78,
       ozone: 1,
-      haze: 0.08,
-      humidity: 0.22,
+      haze: 0.045,
+      humidity: 0.18,
       dust: 0.02,
-      visibilityKm: 120,
+      visibilityKm: 145,
       aerialPerspective: 1,
-      exposure: 1,
+      exposure: 0.92,
+      saturation: 1.04,
+      contrast: 1.03,
+      vibrance: 0.08,
+      toneMapper: 'aces',
       ...existing.atmosphere
     },
     sky: {
@@ -62,19 +74,41 @@ export function defaultWorldSettings(existing = {}) {
       sunAzimuth: -90,
       sunElevation: 45,
       sunSize: 1,
-      sunGlow: 1,
-      starIntensity: 1,
-      starDensity: 0.72,
-      starDaylightExtinction: 1.35,
-      milkyWayIntensity: 0.35,
+      sunGlow: 0.72,
       moonAzimuth: 90,
       moonElevation: 32,
       moonSize: 1.45,
       moonPhase: 0.72,
-      moonBrightness: 1,
-      moonGlow: 0.7,
+      moonPhaseMode: 'sun-relative',
+      moonOrbitPeriodDays: 29.530588,
+      moonNodePeriodDays: 27.212221,
+      lunarEpochDay: 157.234706,
+      moonNodeEpochDay: 151.1,
+      moonOrbitOffset: 0,
+      moonOrbitInclination: 5.145,
+      moonAscendingNode: 0,
+      moonEarthshine: 0.08,
+      eclipseMode: 'automatic',
+      moonBrightness: 1.05,
+      moonGlow: 0.48,
       moonDetail: 1,
       moonColor: '#a9c5eb',
+      starIntensity: 1.05,
+      starDensity: 0.72,
+      starBrightness: 1,
+      starTwinkleAmount: 0.32,
+      starTwinkleSpeed: 1,
+      starSizeMin: 0.35,
+      starSizeMax: 1.8,
+      starColorVariation: 0.65,
+      starSeed: 1337,
+      starDaylightExtinction: 1.35,
+      milkyWayIntensity: 0.32,
+      milkyWayWidth: 0.16,
+      milkyWayDetail: 0.72,
+      milkyWayOrientation: 22,
+      milkyWayDust: 0.58,
+      milkyWayColor: '#8fa7d8',
       planetEnabled: false,
       planetAzimuth: 215,
       planetElevation: 28,
@@ -90,18 +124,18 @@ export function defaultWorldSettings(existing = {}) {
     },
     clouds: {
       quality: 'layered',
-      coverage: 0.25,
-      density: 0.45,
+      coverage: 0.2,
+      density: 0.42,
       altitude: 2200,
       thickness: 1800,
       windSpeed: 12,
-      shadowStrength: 0.28,
+      shadowStrength: 0.24,
       ...existing.clouds
     },
     weather: {
       preset: 'clear',
       precipitation: 0,
-      fog: 0.04,
+      fog: 0.018,
       wetness: 0,
       snow: 0,
       windDirection: [1, 0, 0.25],
@@ -111,7 +145,6 @@ export function defaultWorldSettings(existing = {}) {
     updatedAt: existing.updatedAt || now()
   };
 }
-
 function mix(a, b, t) {
   return a.map((value, index) => Math.round(value + (b[index] - value) * t));
 }
@@ -121,27 +154,22 @@ function hex(rgb) {
 }
 
 export function applyWorldToScene(scene, world) {
-  const hour = ((Number(world.time.hours) || 0) % 24 + 24) % 24;
-  const angle = ((hour - 6) / 24) * Math.PI * 2;
-  const elevation = Math.sin(angle);
-  const astronomicalElevationDegrees = Math.asin(clamp(elevation, -1, 1)) * 180 / Math.PI;
-  const celestialMode = String(world.sky.celestialMode || 'astronomical');
-  const automaticSunAzimuth = (hour / 24) * 360 - 90;
-  const sunAzimuth = celestialMode === 'manual' ? Number(world.sky.sunAzimuth ?? automaticSunAzimuth) : automaticSunAzimuth;
-  const sunElevationDegrees = celestialMode === 'manual' ? Number(world.sky.sunElevation ?? astronomicalElevationDegrees) : astronomicalElevationDegrees;
-  const moonAzimuth = celestialMode === 'manual' ? Number(world.sky.moonAzimuth ?? sunAzimuth + 180) : sunAzimuth + 180;
-  const moonElevationDegrees = celestialMode === 'manual' ? Number(world.sky.moonElevation ?? -sunElevationDegrees) : -sunElevationDegrees * 0.92 + 5;
-  const day = clamp((elevation + 0.08) / 0.32, 0, 1);
-  const twilight = clamp(1 - Math.abs(elevation) / 0.22, 0, 1) * (1 - day * 0.55);
+  const celestial = evaluateCelestialSystem(world);
+  const sunAzimuth = celestial.sun.azimuth;
+  const sunElevationDegrees = celestial.sun.elevation;
+  const moonAzimuth = celestial.moon.azimuth;
+  const moonElevationDegrees = celestial.moon.elevation;
+  const day = smoothstep(-6, 8, sunElevationDegrees);
+  const twilight = (1 - smoothstep(2, 18, Math.abs(sunElevationDegrees))) * (1 - day * 0.42);
   const night = 1 - day;
-  const sunrise = [238, 108, 63];
-  const dayTop = [70, 139, 210];
-  const dayBottom = [174, 211, 237];
-  const nightTop = [3, 8, 24];
-  const nightBottom = [12, 22, 45];
+  const sunrise = [244, 112, 68];
+  const dayTop = [48, 115, 196];
+  const dayBottom = [155, 199, 229];
+  const nightTop = [2, 5, 18];
+  const nightBottom = [8, 16, 36];
   const top = mix(nightTop, dayTop, day);
   const bottom = mix(nightBottom, dayBottom, day);
-  for (let i = 0; i < 3; i += 1) bottom[i] = Math.round(bottom[i] * (1 - twilight * 0.35) + sunrise[i] * twilight * 0.35);
+  for (let i = 0; i < 3; i += 1) bottom[i] = Math.round(bottom[i] * (1 - twilight * 0.42) + sunrise[i] * twilight * 0.42);
 
   const weatherPreset = String(world.weather.preset || 'clear');
   const presetPrecipitation = { rain: 0.65, storm: 1, snow: 0.55 }[weatherPreset] || 0;
@@ -151,17 +179,32 @@ export function applyWorldToScene(scene, world) {
   const cloudCoverage = clamp(Number(world.clouds.coverage || 0), 0, 1);
   const cloudDensity = clamp(Number(world.clouds.density || 0), 0, 1);
   const cloudAttenuation = 1 - clamp(cloudCoverage * cloudDensity * Number(world.clouds.shadowStrength || 0.28), 0, 0.82);
-  const atmosphericHaze = clamp(Number(world.atmosphere.haze || 0) + Number(world.atmosphere.mie || 0) * 0.45 + Number(world.atmosphere.humidity || 0) * 0.18, 0, 0.9);
-  const fogMultiplier = Math.max(0.04, (1 - weatherFog * 0.88) * (1 - atmosphericHaze * 0.55));
+  const atmosphericHaze = clamp(Number(world.atmosphere.haze || 0) + Number(world.atmosphere.mie || 0) * 0.35 + Number(world.atmosphere.humidity || 0) * 0.12, 0, 0.9);
+  const fogMultiplier = Math.max(0.04, (1 - weatherFog * 0.88) * (1 - atmosphericHaze * 0.5));
+  const solarEclipse = celestial.moon.solarEclipse;
+  const lunarEclipse = celestial.moon.lunarEclipse;
+  const eclipseDaylight = 1 - solarEclipse * 0.82;
+  const ambientDay = mix([12, 20, 48], [108, 145, 196], day);
+  const ambientTwilight = mix(ambientDay, [92, 55, 73], twilight * 0.5);
+  const exposure = clamp(Number(world.atmosphere.exposure || 1), 0.1, 4);
+  world.sky.moonPhase = celestial.moon.illumination;
+
   scene.settings = {
     ...(scene.settings || {}),
     skyTop: hex(top),
     skyBottom: hex(bottom),
-    ambientColor: hex(mix([24, 36, 70], [142, 172, 211], day)),
-    ambientIntensity: (0.055 + day * 0.28 + Number(world.lighting.indirectStrength || 0.4) * 0.09) * (0.78 + cloudAttenuation * 0.22),
-    fogNear: Math.max(12, Number(world.atmosphere.visibilityKm || 120) * 1.1 * fogMultiplier),
-    fogFar: Math.max(48, Number(world.atmosphere.visibilityKm || 120) * 4.8 * fogMultiplier),
-    exposure: clamp(Number(world.atmosphere.exposure || 1) * (0.92 + day * 0.08) * (0.96 + cloudAttenuation * 0.04), 0.2, 2.2),
+    skyGround: hex(mix([4, 7, 14], [31, 43, 50], day)),
+    ambientColor: hex(ambientTwilight),
+    ambientIntensity: (0.028 + day * 0.15 + Number(world.lighting.indirectStrength || 0.5) * 0.18) * (0.7 + cloudAttenuation * 0.3) * eclipseDaylight,
+    fogNear: Math.max(18, Number(world.atmosphere.visibilityKm || 120) * 1.35 * fogMultiplier),
+    fogFar: Math.max(70, Number(world.atmosphere.visibilityKm || 120) * 6.2 * fogMultiplier),
+    exposure,
+    displayExposureEV: Math.log2(Math.max(0.05, exposure)),
+    colorSaturation: clamp(Number(world.atmosphere.saturation || 1), 0, 3),
+    colorContrast: clamp(Number(world.atmosphere.contrast || 1), 0.2, 3),
+    colorVibrance: clamp(Number(world.atmosphere.vibrance || 0), -1, 1),
+    toneMapper: String(world.atmosphere.toneMapper || 'aces'),
+    weatherPreset,
     weatherWetness: clamp(Math.max(Number(world.weather.wetness || 0), precipitation * (weatherPreset === 'snow' ? 0.2 : 0.85)), 0, 1),
     weatherSnow: clamp(Math.max(Number(world.weather.snow || 0), weatherPreset === 'snow' ? precipitation : 0), 0, 1),
     windDirection: Array.isArray(world.weather.windDirection) ? world.weather.windDirection.slice(0, 3) : [1, 0, 0.25],
@@ -170,16 +213,17 @@ export function applyWorldToScene(scene, world) {
     cloudDensity,
     cloudAttenuation,
     starIntensity: clamp(Number(world.sky.starIntensity || 0) * night * (1 - cloudCoverage * 0.8), 0, 3),
-    starDensity: clamp(Number(world.sky.starDensity || 0.72), 0, 1),
+    starDensity: clamp(Number(world.sky.starDensity || 0.72), 0, 2),
     milkyWayIntensity: clamp(Number(world.sky.milkyWayIntensity || 0) * night * (1 - cloudCoverage * 0.7), 0, 3),
     auroraIntensity: clamp(Number(world.sky.auroraIntensity || 0) * night * (1 - cloudCoverage * 0.5), 0, 3),
     atmosphereQuality: world.atmosphere.quality || 'balanced',
     environmentV010: {
       ...world,
-      sunElevation: elevation,
+      sunElevation: Math.sin(sunElevationDegrees * Math.PI / 180),
       sunDayFactor: day,
       nightFactor: night,
-      twilightFactor: twilight
+      twilightFactor: twilight,
+      celestial
     }
   };
 
@@ -187,15 +231,8 @@ export function applyWorldToScene(scene, world) {
     || scene.objects.find(object => object.type === 'directionalLight' && String(object.name || '').trim().toLowerCase() === 'sun');
   if (!sun) {
     sun = {
-      id: 'directionalLight-v010-sun',
-      type: 'directionalLight',
-      name: 'Sun',
-      visible: true,
-      locked: false,
-      parentId: null,
-      transform: { position: [0, 20, 0], rotation: [45, -35, 0], scale: [1, 1, 1] },
-      properties: {},
-      components: []
+      id: 'directionalLight-v010-sun', type: 'directionalLight', name: 'Sun', visible: true, locked: false, parentId: null,
+      transform: { position: [0, 20, 0], rotation: [45, -35, 0], scale: [1, 1, 1] }, properties: {}, components: []
     };
     scene.objects.push(sun);
   }
@@ -204,12 +241,13 @@ export function applyWorldToScene(scene, world) {
   sun.properties = {
     ...(sun.properties || {}),
     celestialRole: 'sun',
-    color: hex(mix([255, 123, 79], [255, 244, 214], day)),
-    intensity: Number(world.lighting.sunIntensity || 3.2) * Math.max(0.015, day) * cloudAttenuation,
+    color: hex(mix([255, 113, 66], [255, 244, 216], smoothstep(-4, 28, sunElevationDegrees))),
+    intensity: Number(world.lighting.sunIntensity || 3.05) * Math.max(0.002, day) * cloudAttenuation * eclipseDaylight,
     azimuth: sunAzimuth,
     elevation: sunElevationDegrees,
     angularSize: Number(world.sky.sunSize ?? 1),
-    glow: Number(world.sky.sunGlow ?? 1),
+    glow: Number(world.sky.sunGlow ?? 0.72),
+    solarEclipse,
     castsShadows: true,
     shadowQuality: world.lighting.shadowQuality,
     hybridLightingProfile: world.lighting.profile
@@ -218,37 +256,51 @@ export function applyWorldToScene(scene, world) {
   let moon = scene.objects.find(object => object.properties?.celestialRole === 'moon');
   if (!moon) {
     moon = {
-      id: 'celestial-v010-moon',
-      type: 'empty',
-      name: 'Moon',
-      visible: true,
-      locked: false,
-      parentId: null,
-      transform: { position: [0, 0, 0], rotation: [32, 90, 0], scale: [1, 1, 1] },
-      properties: {},
-      components: []
+      id: 'celestial-v010-moon', type: 'empty', name: 'Moon', visible: true, locked: false, parentId: null,
+      transform: { position: [0, 0, 0], rotation: [32, 90, 0], scale: [1, 1, 1] }, properties: {}, components: []
     };
     scene.objects.push(moon);
   }
   moon.name = 'Moon';
   moon.transform.rotation = [moonElevationDegrees, moonAzimuth, 0];
+  const moonLight = Number(world.lighting.moonIntensity || 0.18)
+    * Math.pow(celestial.moon.illumination, 0.72)
+    * celestial.moon.horizonVisibility
+    * (1 - day * 0.86)
+    * (1 - lunarEclipse * 0.82);
   moon.properties = {
     ...(moon.properties || {}),
     celestialRole: 'moon',
     color: world.sky.moonColor || '#a9c5eb',
-    intensity: Number(world.lighting.moonIntensity || 0.12) * night * Number(world.sky.moonBrightness || 1),
-    phase: Number(world.sky.moonPhase ?? 0.72),
+    intensity: moonLight,
+    phase: celestial.moon.illumination,
+    illumination: celestial.moon.illumination,
+    waxing: celestial.moon.waxing,
+    phaseName: celestial.moon.phaseName,
+    ageDays: celestial.moon.ageDays,
     angularSize: Number(world.sky.moonSize ?? 1.45),
     azimuth: moonAzimuth,
     elevation: moonElevationDegrees,
-    brightness: Number(world.sky.moonBrightness ?? 1),
-    glow: Number(world.sky.moonGlow ?? 0.7),
+    brightness: Number(world.sky.moonBrightness ?? 1.05),
+    glow: Number(world.sky.moonGlow ?? 0.48),
     detail: Number(world.sky.moonDetail ?? 1),
+    earthshine: Number(world.sky.moonEarthshine ?? 0.08),
+    skyVisibility: celestial.moon.visibility,
+    solarEclipse,
+    lunarEclipse,
+    eventType: celestial.event.type,
+    separationDegrees: celestial.moon.separationDegrees,
+    orbitInclination: Number(world.sky.moonOrbitInclination ?? 5.145),
     castsShadows: false
   };
-  return { hour, day, night, twilight, elevation, sunId: sun.id, moonId: moon.id, sunAzimuth, sunElevationDegrees, moonAzimuth, moonElevationDegrees };
+  return {
+    hour: Number(world.time.hours || 0), day, night, twilight,
+    elevation: Math.sin(sunElevationDegrees * Math.PI / 180),
+    sunId: sun.id, moonId: moon.id, sunAzimuth, sunElevationDegrees, moonAzimuth, moonElevationDegrees,
+    moonIllumination: celestial.moon.illumination, moonAgeDays: celestial.moon.ageDays,
+    celestialEvent: celestial.event.type, solarEclipse, lunarEclipse
+  };
 }
-
 function categoryGroundingMode(category) {
   if (category === 'foliage') return 'root-socket';
   if (category === 'vehicle') return 'wheel-contact';
