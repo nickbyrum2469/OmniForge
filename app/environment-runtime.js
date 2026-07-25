@@ -33,9 +33,13 @@ export function directionFromAzimuthElevation(azimuthDegrees = 0, elevationDegre
 function celestialObjectDirection(scene, role, fallback) {
   const object = scene?.objects?.find(item => item.properties?.celestialRole === role);
   if (!object) return fallback;
+  const azimuth = Number(object.properties?.azimuth);
+  const elevation = Number(object.properties?.elevation);
+  if (Number.isFinite(azimuth) && Number.isFinite(elevation)) {
+    return directionFromAzimuthElevation(azimuth, elevation);
+  }
   const rotation = object.transform?.rotation || [0, 0, 0];
-  const rayDirection = directionFromAzimuthElevation(Number(rotation[1] || 0), 90 - Number(rotation[0] || 0));
-  return normalize(scale(rayDirection, -1));
+  return directionFromAzimuthElevation(Number(rotation[1] || 0), Number(rotation[0] || 0));
 }
 
 export function cameraSkyBasis(camera = {}) {
