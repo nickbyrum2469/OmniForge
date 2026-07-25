@@ -11,133 +11,112 @@ Applied Phase 0 authority follow-up: preserve unrelated lights and repair projec
 > omniforge-3d-engine@0.11.0 test
 > node --test tests/*.test.mjs
 
-✔ automatic world time cannot replace the editor workspace while authoring (1.471893ms)
-✖ compact world runtime patches lighting and celestial objects without replacing editor state (4.416029ms)
-✖ night remains readable in Edit mode without changing authored Play lighting (10.066246ms)
-✖ runtime source contains polling, compact-step, read-only GET, and traceable-build safeguards (5.069351ms)
-✔ default project is general-purpose and contains a real 3D starter scene (24.79903ms)
-✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (6.339065ms)
-✔ all supported scene primitives receive valid transforms and properties (4.02077ms)
-✔ terrain height is deterministic and responds to world position (2.236002ms)
-✔ path defaults preserve terrain-conforming system relationships (0.409305ms)
-✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.937163ms)
-✔ starter PBR materials include real texture-map files and are protected (10.305333ms)
-✔ horizontal mouse look uses the intuitive right-positive yaw convention (0.951689ms)
-✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (1.109956ms)
-✔ Windows desktop builder pins and stamps the native executable metadata (1.876309ms)
-✔ project hub and editor usability controls are wired into the authoritative editor (3.372477ms)
-✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (237.195403ms)
-✔ two runtime sessions cannot write the same active project simultaneously (468.845013ms)
-✔ starter objects are grounded against the authoritative terrain surface (7.588242ms)
-✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.880146ms)
-✔ managed workspace path cannot escape the projects root (0.57763ms)
-✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (158.2795ms)
-✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (139.739063ms)
-✔ material authoring settings clamp safely and preserve tiling transforms (0.264435ms)
-✔ material tuner exposes live tiling and PBR response controls (1.405399ms)
-✔ active source and documentation contain no legacy product assumptions (6.355507ms)
-✔ desktop clipboard and pointer-lock permissions use guarded native paths (1.60394ms)
-✔ surface recipes are stable linked assets with validation and deterministic masks (2.658382ms)
-✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.89323ms)
-✔ desktop launcher rejects stale packaged executables (0.135593ms)
-✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (5.656919ms)
-✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.36397ms)
-✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (1.913418ms)
-✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (293.229616ms)
-✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (2.348683ms)
-✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (3.589693ms)
-✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.301564ms)
-✔ provider framework normalizes independent providers, settings, and persistent job records (2.173255ms)
-✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (2.402383ms)
-✔ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (1623.457691ms)
-✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (4.061976ms)
-✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (359.275072ms)
-✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.687466ms)
-✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.048731ms)
-✔ v0.9 decal and atlas recipes validate stable production metadata (0.564375ms)
-✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.756755ms)
-✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (267.666172ms)
-✔ Git-aware desktop launcher rebuilds after source commits and local edits (1.779579ms)
-✔ Phase 0A collapses legacy celestial duplicates into one protected Sun and one protected Moon (3.947914ms)
-✔ Phase 0A preserves a selectable persistent Moon identity across repeated repairs (1.081693ms)
-✔ Phase 0B interpolates celestial rotations through the shortest angular path (1.458408ms)
-✔ Phase 0C editor readability no longer invents a white directional Sun or forces high exposure (1.941391ms)
-✔ Phase 0 source contracts persist proxies, protect selection, smooth motion, and expose diagnostics (2.506939ms)
-✔ Celestial Studio settings normalize and create authoritative Sun and Moon entities (4.647823ms)
-✔ renderer environment exposes adjustable discs, detailed moon, planet, moonlight, and volumetric cloud inputs (0.900524ms)
-✔ terrain expansion preserves physical vertex density until the single-mesh safety ceiling (1.182602ms)
-✔ local terrain sculpt stamps are reversible and do not alter distant samples (2.543036ms)
-✔ World, path, terrain, renderer, and API source expose the corrective authoring contracts (3.301765ms)
-✔ sky rays rotate with the camera but ignore camera translation (4.253205ms)
-✔ environment state is bounded and shares the directional light authority (1.688148ms)
-✔ nested World settings drive weather, cloud wind, quality, and twilight (0.578832ms)
-✔ viewport look ignores acquisition noise and rejects implausible direction snaps (0.957911ms)
-✔ yaw remains normalized and pitch remains bounded (0.329737ms)
-✔ viewport acquisition protects camera authority before pointer lock and releases cleanly (4.326431ms)
-✔ normal rendering no longer depends on the legacy CSS atmosphere (2.403886ms)
-✔ v0.10 worker IPC drains stdout before finalizing jobs (2.402544ms)
-✔ v0.10 seeded random and foliage placement are deterministic (26.946036ms)
-✔ v0.10 world system drives the authoritative scene sun and renderer settings (1.800307ms)
-✔ v0.10 support-plane grounding conforms a box to terrain at four corners (1.212839ms)
-✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.745253ms)
-✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (5.06337ms)
-✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (5.09541ms)
-✔ v0.10 desktop package, UI, and MCP share the connected authorities (0.853266ms)
-✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (0.938696ms)
-✔ v0.10 existing Ground button and World tab synchronize through authoritative state (1.905013ms)
-✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (557.638956ms)
-✔ Scene Block inspector enhancement has a stable marker and coalesced observer (1.912126ms)
-✔ diagnostic mode includes input, event-loop, WebGL, and long-task evidence (0.527156ms)
-✔ v0.11 renderer constructs a finite terrain mesh without missing runtime helpers (35.515292ms)
-✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (16.743194ms)
-✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (1.005631ms)
-✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (1.148959ms)
-✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (2.169477ms)
-✔ path grade compilation respects configured maximum grade and bounded terrain cut/fill (15.103395ms)
-✔ path material blending follows the sampled spline instead of straight control-point chords (2.199914ms)
-✔ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (2.342771ms)
-✔ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (480.252635ms)
-✔ same-scene live viewport camera remains authoritative during navigation and pending persistence (1.906625ms)
-✔ path guide edges share exact joined endpoints and follow edge terrain height (0.747808ms)
+✔ automatic world time cannot replace the editor workspace while authoring (1.635165ms)
+✔ compact world runtime queues smooth celestial interpolation without replacing editor state (2.476308ms)
+✖ night remains readable in Edit mode without changing authored Play lighting (8.061314ms)
+✔ runtime source contains polling, compact-step, persistent celestial migration, and traceable-build safeguards (4.100062ms)
+✔ default project is general-purpose and contains a real 3D starter scene (12.255995ms)
+✔ editor defaults include persistent layouts, shortcuts, recovery state, and camera preferences (3.74623ms)
+✔ all supported scene primitives receive valid transforms and properties (2.055642ms)
+✔ terrain height is deterministic and responds to world position (0.75438ms)
+✔ path defaults preserve terrain-conforming system relationships (0.337491ms)
+✔ terrain path mask produces a soft shoulder instead of a hard ribbon (0.591846ms)
+✔ starter PBR materials include real texture-map files and are protected (4.317849ms)
+✔ horizontal mouse look uses the intuitive right-positive yaw convention (0.363659ms)
+✔ desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership (0.633584ms)
+✔ Windows desktop builder pins and stamps the native executable metadata (0.502629ms)
+✔ project hub and editor usability controls are wired into the authoritative editor (2.635605ms)
+✔ project store supports create, open, duplicate, archive, import, migration, and moved-project recovery (223.037077ms)
+✔ two runtime sessions cannot write the same active project simultaneously (509.43834ms)
+✔ starter objects are grounded against the authoritative terrain surface (3.527021ms)
+✔ browser automation bridge exposes read-only snapshots and controlled editor actions (1.961616ms)
+✔ managed workspace path cannot escape the projects root (0.441034ms)
+✔ Codex MCP initializes and exposes scene, material, prefab, and project lifecycle tools (159.344749ms)
+✔ Codex can import and rebuild a hierarchy-aware model through guarded MCP tools (191.177954ms)
+✔ material authoring settings clamp safely and preserve tiling transforms (0.277248ms)
+✔ material tuner exposes live tiling and PBR response controls (1.370281ms)
+✔ active source and documentation contain no legacy product assumptions (6.820735ms)
+✔ desktop clipboard and pointer-lock permissions use guarded native paths (0.851081ms)
+✔ surface recipes are stable linked assets with validation and deterministic masks (2.432255ms)
+✔ Surface Studio preview, commit, revert, and recipe rendering are wired (0.927733ms)
+✔ desktop launcher rejects stale packaged executables (0.141434ms)
+✔ canonical GLB pipeline preserves source and produces health, render, collision, LOD, and repair derivatives (5.535734ms)
+✔ asset workspace exposes real import, health, reversible processing, preview, and commit flows (1.442024ms)
+✔ asset recipes remain synchronized with canonical models, collision, LODs, provenance, and usages (1.793101ms)
+✔ real asset API imports, recipes, processes, previews, commits, and persists a GLB through the authoritative server (280.56263ms)
+✔ canonical importer applies nested glTF node transforms and preserves primitive material groups (2.010967ms)
+✔ canonical rebuild repairs legacy imports from preserved source and retains rollback history (3.073583ms)
+✔ asset workspace reflows into focused subviews and protects the viewport from panel overlap (1.192138ms)
+✔ provider framework normalizes independent providers, settings, and persistent job records (2.640624ms)
+✔ Integrations workspace and Job Center are connected to guarded provider and worker routes (1.325367ms)
+✔ real provider health, project validation, cancellation, retry, and restart-safe jobs run through isolated workers (1585.340377ms)
+✔ v0.8 marketplace workspace, providers, staged downloads, and guarded import are wired into the authoritative editor (3.562602ms)
+✔ mocked Poly Haven search completes a real staged download job and imports a canonical model (341.044205ms)
+✔ ambientCG provider migrates existing v2 settings to the supported v3 asset API (0.762781ms)
+✔ v0.9 Surface Recipe v2 normalizes advanced masks, graph data, colors, and deterministic compilation (1.104985ms)
+✔ v0.9 decal and atlas recipes validate stable production metadata (0.606114ms)
+✔ v0.9 Production Surface Studio exposes map processing, advanced graph, decals, atlases, and guarded tools (1.742689ms)
+✔ v0.9 real API creates processed material derivatives, compiles recipes, creates decals, and persists atlas layouts (269.140429ms)
+✔ Git-aware desktop launcher rebuilds after source commits and local edits (1.727147ms)
+✔ Phase 0A collapses legacy celestial duplicates into one protected Sun and one protected Moon (3.863269ms)
+✔ Phase 0A preserves a selectable persistent Moon identity across repeated repairs (1.09122ms)
+✔ Phase 0B interpolates celestial rotations through the shortest angular path (1.272418ms)
+✔ Phase 0C editor readability no longer invents a white directional Sun or forces high exposure (1.231181ms)
+✔ Phase 0 source contracts persist proxies, protect selection, smooth motion, and expose diagnostics (2.489452ms)
+✔ Celestial Studio settings normalize and create authoritative Sun and Moon entities (3.853751ms)
+✔ renderer environment exposes adjustable discs, detailed moon, planet, moonlight, and volumetric cloud inputs (0.571177ms)
+✔ terrain expansion preserves physical vertex density until the single-mesh safety ceiling (1.211383ms)
+✔ local terrain sculpt stamps are reversible and do not alter distant samples (2.330535ms)
+✔ World, path, terrain, renderer, and API source expose the corrective authoring contracts (2.400806ms)
+✔ sky rays rotate with the camera but ignore camera translation (6.767365ms)
+✔ environment state is bounded and shares the directional light authority (1.83553ms)
+✔ nested World settings drive weather, cloud wind, quality, and twilight (0.551991ms)
+✔ viewport look ignores acquisition noise and rejects implausible direction snaps (0.719765ms)
+✔ yaw remains normalized and pitch remains bounded (0.294861ms)
+✔ viewport acquisition protects camera authority before pointer lock and releases cleanly (2.255415ms)
+✔ normal rendering no longer depends on the legacy CSS atmosphere (2.203558ms)
+✔ v0.10 worker IPC drains stdout before finalizing jobs (1.749178ms)
+✔ v0.10 seeded random and foliage placement are deterministic (32.626287ms)
+✔ v0.10 world system drives the authoritative scene sun and renderer settings (3.792677ms)
+✔ v0.10 support-plane grounding conforms a box to terrain at four corners (0.997694ms)
+✔ v0.10 foliage uses root-socket grounding and vehicles remain upright (0.638143ms)
+✔ v0.10 cyclic glTF hierarchy fails safely without recursive stack overflow (10.831961ms)
+✔ v0.10 embedded glTF texture is extracted and linked to authored UV material (11.809858ms)
+✔ v0.10 desktop package, UI, and MCP share the connected authorities (5.05166ms)
+✔ v0.10 atmosphere controls affect lighting weather surfaces and optimized foliage rendering (0.983839ms)
+✔ v0.10 existing Ground button and World tab synchronize through authoritative state (1.758687ms)
+✔ v0.10 bootstrap serves world systems and upgrades the existing Ground command (733.691873ms)
+✔ Scene Block inspector enhancement has a stable marker and coalesced observer (1.636067ms)
+✔ diagnostic mode includes input, event-loop, WebGL, and long-task evidence (0.494735ms)
+✔ v0.11 renderer constructs a finite terrain mesh without missing runtime helpers (40.266672ms)
+✔ v0.11 terrain generation is deterministic, seeded, and offers requested landform presets (16.870906ms)
+✔ v0.11 migration converts transform scaling into explicit bounds and world-space path nodes (0.647429ms)
+✔ expanding terrain bounds preserves old terrain samples and path coordinates exactly (0.683718ms)
+✔ spline sampling, insertion, and splitting preserve a smooth connected world-space path (1.312713ms)
+✔ path grade compilation respects configured maximum grade and bounded terrain cut/fill (13.27723ms)
+✔ path material blending follows the sampled spline instead of straight control-point chords (1.076041ms)
+✔ v0.11 editor, renderer, runtime, desktop, and MCP expose the connected world foundation (2.457051ms)
+✔ v0.11 bootstrap persists terrain expansion and spline node editing through real APIs (598.082332ms)
+✔ same-scene live viewport camera remains authoritative during navigation and pending persistence (1.974576ms)
+✔ path guide edges share exact joined endpoints and follow edge terrain height (0.662089ms)
 ℹ tests 88
 ℹ suites 0
-ℹ pass 85
-ℹ fail 3
+ℹ pass 87
+ℹ fail 1
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 3966.322513
+ℹ duration_ms 4151.600462
 
 ✖ failing tests:
 
-test at tests/editor-runtime-stability.test.mjs:23:1
-✖ compact world runtime patches lighting and celestial objects without replacing editor state (4.416029ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
-  1 !== 0.05
-  
-      at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/editor-runtime-stability.test.mjs:66:10)
-      at Test.runInAsyncScope (node:async_hooks:227:14)
-      at Test.run (node:internal/test_runner/test:1325:25)
-      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
-      at Test.postRun (node:internal/test_runner/test:1465:19)
-      at Test.run (node:internal/test_runner/test:1390:12)
-      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 1,
-    expected: 0.05,
-    operator: 'strictEqual',
-    diff: 'simple'
-  }
-
-test at tests/editor-runtime-stability.test.mjs:71:1
-✖ night remains readable in Edit mode without changing authored Play lighting (10.066246ms)
+test at tests/editor-runtime-stability.test.mjs:80:1
+✖ night remains readable in Edit mode without changing authored Play lighting (8.061314ms)
   AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
   
-    assert.ok(edit.ambientIntensity >= 0.42)
+    assert.ok(edit.exposure >= 0.9 && edit.exposure < 1.08)
   
-      at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/editor-runtime-stability.test.mjs:74:10)
+      at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/editor-runtime-stability.test.mjs:84:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1325:25)
       at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
@@ -149,266 +128,5 @@ test at tests/editor-runtime-stability.test.mjs:71:1
     actual: false,
     expected: true,
     operator: '==',
-    diff: 'simple'
-  }
-
-test at tests/editor-runtime-stability.test.mjs:82:1
-✖ runtime source contains polling, compact-step, read-only GET, and traceable-build safeguards (5.069351ms)
-  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /const state = readState\(\);\s*const world = ensureWorld\(state\);/. Input:
-  
-  "import fs from 'node:fs';\n" +
-    "import path from 'node:path';\n" +
-    'import {\n' +
-    '  readState,\n' +
-    '  mutateState,\n' +
-    '  addActivity,\n' +
-    '  activeScene,\n' +
-    '  findObject,\n' +
-    '  createSceneObject,\n' +
-    '  ASSET_ROOT\n' +
-    "} from './state-store.mjs';\n" +
-    'import {\n' +
-    '  defaultWorldSettings,\n' +
-    '  applyWorldToScene,\n' +
-    '  fitGroundContact,\n' +
-    '  generateFoliagePlacements\n' +
-    "} from './v010-systems.mjs';\n" +
-    "import { celestialAuthorityNeedsRepair, repairCelestialAuthority } from './celestial-authority.mjs';\n" +
-    '\n' +
-    'const now = () => new Date().toISOString();\n' +
-    '\n' +
-    'function json(res, status, payload) {\n' +
-    '  const responseBody = JSON.stringify(payload, null, 2);\n' +
-    '  res.writeHead(status, {\n' +
-    "    'content-type': 'application/json; charset=utf-8',\n" +
-    "    'content-length': Buffer.byteLength(responseBody),\n" +
-    "    'cache-control': 'no-store'\n" +
-    '  });\n' +
-    '  res.end(responseBody);\n' +
-    '}\n' +
-    '\n' +
-    '\n' +
-    'function compactWorldRuntime(state) {\n' +
-    '  const scene = activeScene(state);\n' +
-    '  return {\n' +
-    '    engineRevision: Number(state.engine?.revision || 0),\n' +
-    '    sceneId: scene.id,\n' +
-    '    sampledAt: Date.now(),\n' +
-    '    visualDurationMs: 2050,\n' +
-    '    settings: structuredClone(scene.settings || {}),\n' +
-    '    celestialObjects: scene.objects\n' +
-    "      .filter(object => object.type === 'directionalLight' || object.properties?.celestialRole)\n" +
-    '      .map(object => ({\n' +
-    '        id: object.id,\n' +
-    '        type: object.type,\n' +
-    '        visible: object.visible !== false,\n' +
-    '        transform: structuredClone(object.transform),\n' +
-    '        properties: structuredClone(object.properties || {})\n' +
-    '      }))\n' +
-    '  };\n' +
-    '}\n' +
-    '\n' +
-    'async function readJsonBody(req) {\n' +
-    '  const chunks = [];\n' +
-    '  let size = 0;\n' +
-    '  for await (const chunk of req) {\n' +
-    '    size += chunk.length;\n' +
-    "    if (size > 20_000_000) throw new Error('The v0.10 request body exceeds the 20 MB safety limit.');\n" +
-    '    chunks.push(chunk);\n' +
-    '  }\n' +
-    "  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};\n" +
-    '}\n' +
-    '\n' +
-    "function ensureWorld(state, reason = 'world-update') {\n" +
-    '  return repairCelestialAuthority(state, { activeScene, defaultWorldSettings, applyWorldToScene, addActivity, reason }).world;\n' +
-    '}\n' +
-    '\n' +
-    'function findModelAsset(state, assetId) {\n' +
-    "  const asset = (state.assets || []).find(item => item.id === assetId && item.type === 'model');\n" +
-    "  if (!asset) throw new Error('Model asset not found.');\n" +
-    '  return asset;\n' +
-    '}\n' +
-    '\n' +
-    'function assetUsages(state, assetId) {\n' +
-    '  const sceneUsages = [];\n' +
-    '  for (const scene of state.scenes || []) {\n' +
-    '    for (const object of scene.objects || []) {\n' +
-    '      if (object.properties?.assetId === assetId) {\n' +
-    '        sceneUsages.push({ sceneId: scene.id, sceneName: scene.name, objectId: object.id, objectName: object.name });\n' +
-    '      }\n' +
-    '    }\n' +
-    '  }\n' +
-    '  const dependencies = (state.assets || [])\n' +
-    '    .filter(item => item.id !== assetId && (\n' +
-    '      item.sourceAssetId === assetId\n' +
-    '      || item.canonicalAssetId === assetId\n' +
-    '      || item.baseAssetId === assetId\n' +
-    '      || item.sourceModelAssetId === assetId\n' +
-    '      || item.sourceAssetIds?.includes?.(assetId)\n' +
-    '    ))\n' +
-    '    .map(item => ({ id: item.id, type: item.type, name: item.name }));\n' +
-    '  return { sceneUsages, dependencies };\n' +
-    '}\n' +
-    '\n' +
-    'function moveManagedAssetToTrash(assetId) {\n' +
-    "  const modelsRoot = path.resolve(ASSET_ROOT, 'models');\n" +
-    '  const source = path.resolve(modelsRoot, assetId);\n' +
-    "  if (!source.startsWith(`${modelsRoot}${path.sep}`)) throw new Error('Refusing to delete outside the managed model directory.');\n" +
-    '  if (!fs.existsSync(source)) return null;\n' +
-    "  const trashRoot = path.resolve(ASSET_ROOT, '.trash');\n" +
-    '  fs.mkdirSync(trashRoot, { recursive: true });\n' +
-    '  const target = path.join(trashRoot, `${assetId}-${Date.now().toString(36)}`);\n' +
-    '  fs.renameSync(source, target);\n' +
-    '  return target;\n' +
-    '}\n' +
-    '\n' +
-    'function routeId(pathname, pattern) {\n' +
-    '  const match = pattern.exec(pathname);\n' +
-    '  return match ? decodeURIComponent(match[1]) : null;\n' +
-    '}\n' +
-    '\n' +
-    'async function handleLegacyGround(req, res, url) {\n' +
-    "  if (req.method !== 'POST' || url.pathname !== '/api/object/ground') return false;\n" +
-    '  const input = await readJsonBody(req);\n' +
-    '  const result = mutateState(state => {\n' +
-    '    const object = findObject(state, input.objectId);\n' +
-    "    if (!object) throw new Error('Object not found.');\n" +
-    "    if (object.locked) throw new Error('Object is locked.');\n" +
-    "    const terrain = activeScene(state).objects.find(item => item.type === 'terrain');\n" +
-    "    if (!terrain) throw new Error('No authoritative terrain exists in the active scene.');\n" +
-    '    const asset = object.properties?.assetId\n' +
-    "      ? state.assets.find(item => item.id === object.properties.assetId && item.type === 'model')\n" +
-    '      : null;\n' +
-    '    const diagnostics = fitGroundContact({ object, asset, terrain, maxTilt: Number(input.maxTilt || 35) });\n' +
-    "    addActivity(state, 'placement', `Grounded ${object.name} using ${diagnostics.mode}.`, { objectId: object.id, diagnostics });\n" +
-    '    return { object, diagnostics };\n' +
-    '  });\n' +
-    '  json(res, 200, { ...result.result, state: result.state });\n' +
-    '  return true;\n' +
-    '}\n' +
-    '\n' +
-    'export async function handleV010Request(req, res) {\n' +
-    "  const url = new URL(req.url, 'http://127.0.0.1');\n" +
-    '  try {\n' +
-    '    if (await handleLegacyGround(req, res, url)) return true;\n' +
-    "    if (!url.pathname.startsWith('/api/v010/')) return false;\n" +
-    '\n' +
-    "    if (req.method === 'GET' && url.pathname === '/api/v010/world') {\n" +
-    '      let state = readState();\n' +
-    '      if (celestialAuthorityNeedsRepair(state, activeScene)) {\n' +
-    "        state = mutateState(current => repairCelestialAuthority(current, { activeScene, defaultWorldSettings, applyWorldToScene, addActivity, reason: 'world-read-migration' })).state;\n" +
-    '      }\n' +
-    '      const world = defaultWorldSettings(state.worldV010 || {});\n' +
-    '      json(res, 200, {\n' +
-    '        world,\n' +
-    '        scene: activeScene(state),\n' +
-    "        assets: (state.assets || []).filter(item => ['model', 'foliageSpecies', 'foliageFamily', 'biomeRecipe', 'windProfile'].includes(item.type)),\n" +
-    '        transactions: state.foliageTransactions || [],\n' +
-    '        runtimeDiagnostics: state.runtimeDiagnostics || {},\n' +
-    '        state\n' +
-    '      });\n' +
-    '      return true;\n' +
-    '    }\n' +
-    '\n' +
-    "    if (req.method === 'PATCH' && url.pathname === '/api/v010/world') {\n" +
-    '      const input = await readJsonBody(req);\n' +
-    '      const result = mutateState(state => {\n' +
-    '        const current = defaultWorldSettings(state.worldV010 || {});\n' +
-    '        state.worldV010 = defaultWorldSettings({\n' +
-    '          ...current,\n' +
-    '          ...input,\n' +
-    '          time: { ...current.time, ...(input.time || {}) },\n' +
-    '          lighting: { ...current.lighting, ...(input.lighting || {}) },\n' +
-    '          atmosphere: { ...current.atmosphere, ...(input.atmosphere || {}) },\n' +
-    '          sky: { ...current.sky, ...(input.sky || {}) },\n' +
-    '          clouds: { ...current.clouds, ...(input.clouds || {}) },\n' +
-    '          weather: { ...current.weather, ...(input.weather || {}) },\n' +
-    '          updatedAt: now()\n' +
-    '        });\n' +
-    "        const repaired = repairCelestialAuthority(state, { activeScene, defaultWorldSettings, applyWorldToScene, addActivity, reason: 'world-patch' });\n" +
-    '        const derived = repaired.derived;\n' +
-    "        addActivity(state, 'world', 'Updated connected time, lighting, atmosphere, sky, clouds, or weather.', { derived, celestial: repaired.diagnostics });\n" +
-    '        return { world: state.worldV010, derived };\n' +
-    '      });\n' +
-    '      json(res, 200, { ...result.result, state: result.state });\n' +
-    '      return true;\n' +
-    '    }\n' +
-    '\n' +
-    "    if (req.method === 'POST' && url.pathname === '/api/v010/world/step') {\n" +
-    '      const input = await readJsonBody(req);\n' +
-    '      const result = mutateState(state => {\n' +
-    '        const world = ensureWorld(state);\n' +
-    '        const seconds = Math.max(0, Math.min(60, Number(input.seconds || 1)));\n' +
-    '        if (world.time.enabled !== false) {\n' +
-    '          world.time.hours = ((Number(world.time.hours || 0) + seconds * Number(world.time.timeScale || 0) / 3600) % 24 + 24) % 24;\n' +
-    '        }\n' +
-    '        world.updatedAt = now();\n' +
-    '        const derived = applyWorldToScene(activeScene(state), world);\n' +
-    '        return { world, derived };\n' +
-    '      });\n' +
-    "      const includeFullState = url.searchParams.get('full') === '1';\n" +
-    '      json(res, 200, {\n' +
-    '        ...result.result,\n' +
-    '        runtime: compactWorldRuntime(result.state),\n' +
-    '        ...(includeFullState ? { state: result.state } : {})\n' +
-    '      });\n' +
-    '      return true;\n' +
-    '    }\n' +
-    '\n' +
-    "    if (req.method === 'POST' && url.pathname === '/api/v010/foliage/species') {\n" +
-    '      const input = await readJsonBody(req);\n' +
-    '      const result = mutateState(state => {\n' +
-    '        const source = findModelAsset(state, input.sourceAssetId);\n' +
-    "        const id = input.id || `foliage-species-${source.id.replace(/^asset-/, '')}-${Date.now().toString(36)}`;\n" +
-    "        const existing = state.assets.find(item => item.id === id && item.type === 'foliageSpecies');\n" +
-    '        const species = {\n' +
-    '          ...(existing || {}),\n' +
-    '          id,\n' +
-    "          type: 'foliageSpecies',\n" +
-    '          name: String(input.name || `${source.name} Species`).slice(0, 120),\n' +
-    '          sourceAssetId: source.id,\n' +
-    '          variants: Array.isArray(input.variants) ? input.variants : [],\n' +
-    '          scaleMin: Number(input.scaleMin ?? 0.85),\n' +
-    '          scaleMax: Number(input.scaleMax ?? 1.2),\n' +
-    '          spacing: Number(input.spacing ?? 2.5),\n' +
-    '          maxSlope: Number(input.maxSlope ?? 42),\n' +
-    '          rootBurial: Number(input.rootBurial ?? 0.08),\n' +
-    '          pathExclusion: Number(input.pathExclusion ?? 2.5),\n' +
-    '          structureExclusion: Number(input.structureExclusion ?? 2),\n' +
-    '          wind: { strength: Number(input.windStrength ?? 0.35), frequency: Number(input.windFrequency ?? 1) },\n' +
-    '          lod: {\n' +
-    '            near: Number(input.lodNear ?? 35),\n' +
-    '            far: Number(input.lodFar ?? 100),\n' +
-    '            impostor: Number(input.impostorDistance ?? 160)\n' +
-    '          },\n' +
-    '          collision: Boolean(input.collision),\n' +
-    '          navigationBlocker: Boolean(input.navigationBlocker),\n' +
-    '          seasonal: true,\n' +
-    "          validation: { state: 'valid', warnings: [] },\n" +
-    '          createdAt: existing?.createdAt || now(),\n' +
-    '          updatedAt: now()\n' +
-    '        };\n' +
-    '        if (existing) Object.assign(existing, species); else state.assets.unshift(species);\n' +
-    "        addActivity(state, 'foliage', `Created foliage species: ${species.name}`, { speciesId: id, sourceAssetId: source.id });\n" +
-    '        return species;\n' +
-    '      });\n' +
-    '      json(res, 201, { species: result.result, state: result.state });\n' +
-    '      return true;\n' +
-    '    }\n' +
-    '\n' +
-    '    if (req.method ==='... 10718 more characters
-  
-      at TestContext.<anonymous> (file:///home/runner/work/OmniForge/OmniForge/tests/editor-runtime-stability.test.mjs:109:10)
-      at Test.runInAsyncScope (node:async_hooks:227:14)
-      at Test.run (node:internal/test_runner/test:1325:25)
-      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
-      at Test.postRun (node:internal/test_runner/test:1465:19)
-      at Test.run (node:internal/test_runner/test:1390:12)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: "import fs from 'node:fs';\nimport path from 'node:path';\nimport {\n  readState,\n  mutateState,\n  addActivity,\n  activeScene,\n  findObject,\n  createSceneObject,\n  ASSET_ROOT\n} from './state-store.mjs';\nimport {\n  defaultWorldSettings,\n  applyWorldToScene,\n  fitGroundContact,\n  generateFoliagePlacements\n} from './v010-systems.mjs';\nimport { celestialAuthorityNeedsRepair, repairCelestialAuthority } from './celestial-authority.mjs';\n\nconst now = () => new Date().toISOString();\n\nfunction json(res, status, payload) {\n  const responseBody = JSON.stringify(payload, null, 2);\n  res.writeHead(status, {\n    'content-type': 'application/json; charset=utf-8',\n    'content-length': Buffer.byteLength(responseBody),\n    'cache-control': 'no-store'\n  });\n  res.end(responseBody);\n}\n\n\nfunction compactWorldRuntime(state) {\n  const scene = activeScene(state);\n  return {\n    engineRevision: Number(state.engine?.revision || 0),\n    sceneId: scene.id,\n    sampledAt: Date.now(),\n    visualDurationMs: 2050,\n    settings: structuredClone(scene.settings || {}),\n    celestialObjects: scene.objects\n      .filter(object => object.type === 'directionalLight' || object.properties?.celestialRole)\n      .map(object => ({\n        id: object.id,\n        type: object.type,\n        visible: object.visible !== false,\n        transform: structuredClone(object.transform),\n        properties: structuredClone(object.properties || {})\n      }))\n  };\n}\n\nasync function readJsonBody(req) {\n  const chunks = [];\n  let size = 0;\n  for await (const chunk of req) {\n    size += chunk.length;\n    if (size > 20_000_000) throw new Error('The v0.10 request body exceeds the 20 MB safety limit.');\n    chunks.push(chunk);\n  }\n  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};\n}\n\nfunction ensureWorld(state, reason = 'world-update') {\n  return repairCelestialAuthority(state, { activeScene, defaultWorldSettings, applyWorldToScene, addActivity, reason }).world;\n}\n\nfunction findModelAsset(state, assetId) {\n  const asset = (state.assets || []).find(item => item.id === assetId && item.type === 'model');\n  if (!asset) throw new Error('Model asset not found.');\n  return asset;\n}\n\nfunction assetUsages(state, assetId) {\n  const sceneUsages = [];\n  for (const scene of state.scenes || []) {\n    for (const object of scene.objects || []) {\n      if (object.properties?.assetId === assetId) {\n        sceneUsages.push({ sceneId: scene.id, sceneName: scene.name, objectId: object.id, objectName: object.name });\n      }\n    }\n  }\n  const dependencies = (state.assets || [])\n    .filter(item => item.id !== assetId && (\n      item.sourceAssetId === assetId\n      || item.canonicalAssetId === assetId\n      || item.baseAssetId === assetId\n      || item.sourceModelAssetId === assetId\n      || item.sourceAssetIds?.includes?.(assetId)\n    ))\n    .map(item => ({ id: item.id, type: item.type, name: item.name }));\n  return { sceneUsages, dependencies };\n}\n\nfunction moveManagedAssetToTrash(assetId) {\n  const modelsRoot = path.resolve(ASSET_ROOT, 'models');\n  const source = path.resolve(modelsRoot, assetId);\n  if (!source.startsWith(`${modelsRoot}${path.sep}`)) throw new Error('Refusing to delete outside the managed model directory.');\n  if (!fs.existsSync(source)) return null;\n  const trashRoot = path.resolve(ASSET_ROOT, '.trash');\n  fs.mkdirSync(trashRoot, { recursive: true });\n  const target = path.join(trashRoot, `${assetId}-${Date.now().toString(36)}`);\n  fs.renameSync(source, target);\n  return target;\n}\n\nfunction routeId(pathname, pattern) {\n  const match = pattern.exec(pathname);\n  return match ? decodeURIComponent(match[1]) : null;\n}\n\nasync function handleLegacyGround(req, res, url) {\n  if (req.method !== 'POST' || url.pathname !== '/api/object/ground') return false;\n  const input = await readJsonBody(req);\n  const result = mutateState(state => {\n    const object = findObject(state, input.objectId);\n    if (!object) throw new Error('Object not found.');\n    if (object.locked) throw new Error('Object is locked.');\n    const terrain = activeScene(state).objects.find(item => item.type === 'terrain');\n    if (!terrain) throw new Error('No authoritative terrain exists in the active scene.');\n    const asset = object.properties?.assetId\n      ? state.assets.find(item => item.id === object.properties.assetId && item.type === 'model')\n      : null;\n    const diagnostics = fitGroundContact({ object, asset, terrain, maxTilt: Number(input.maxTilt || 35) });\n    addActivity(state, 'placement', `Grounded ${object.name} using ${diagnostics.mode}.`, { objectId: object.id, diagnostics });\n    return { object, diagnostics };\n  });\n  json(res, 200, { ...result.result, state: result.state });\n  return true;\n}\n\nexport async function handleV010Request(req, res) {\n  const url = new URL(req.url, 'http://127.0.0.1');\n  try {\n    if (await handleLegacyGround(req, res, url)) return true;\n    if (!url.pathname.startsWith('/api/v010/')) return false;\n\n    if (req.method === 'GET' && url.pathname === '/api/v010/world') {\n      let state = readState();\n      if (celestialAuthorityNeedsRepair(state, activeScene)) {\n        state = mutateState(current => repairCelestialAuthority(current, { activeScene, defaultWorldSettings, applyWorldToScene, addActivity, reason: 'world-read-migration' })).state;\n      }\n      const world = defaultWorldSettings(state.worldV010 || {});\n      json(res, 200, {\n        world,\n        scene: activeScene(state),\n        assets: (state.assets || []).filter(item => ['model', 'foliageSpecies', 'foliageFamily', 'biomeRecipe', 'windProfile'].includes(item.type)),\n        transactions: state.foliageTransactions || [],\n        runtimeDiagnostics: state.runtimeDiagnostics || {},\n        state\n      });\n      return true;\n    }\n\n    if (req.method === 'PATCH' && url.pathname === '/api/v010/world') {\n      const input = await readJsonBody(req);\n      const result = mutateState(state => {\n        const current = defaultWorldSettings(state.worldV010 || {});\n        state.worldV010 = defaultWorldSettings({\n          ...current,\n          ...input,\n          time: { ...current.time, ...(input.time || {}) },\n          lighting: { ...current.lighting, ...(input.lighting || {}) },\n          atmosphere: { ...current.atmosphere, ...(input.atmosphere || {}) },\n          sky: { ...current.sky, ...(input.sky || {}) },\n          clouds: { ...current.clouds, ...(input.clouds || {}) },\n          weather: { ...current.weather, ...(input.weather || {}) },\n          updatedAt: now()\n        });\n        const repaired = repairCelestialAuthority(state, { activeScene, defaultWorldSettings, applyWorldToScene, addActivity, reason: 'world-patch' });\n        const derived = repaired.derived;\n        addActivity(state, 'world', 'Updated connected time, lighting, atmosphere, sky, clouds, or weather.', { derived, celestial: repaired.diagnostics });\n        return { world: state.worldV010, derived };\n      });\n      json(res, 200, { ...result.result, state: result.state });\n      return true;\n    }\n\n    if (req.method === 'POST' && url.pathname === '/api/v010/world/step') {\n      const input = await readJsonBody(req);\n      const result = mutateState(state => {\n        const world = ensureWorld(state);\n        const seconds = Math.max(0, Math.min(60, Number(input.seconds || 1)));\n        if (world.time.enabled !== false) {\n          world.time.hours = ((Number(world.time.hours || 0) + seconds * Number(world.time.timeScale || 0) / 3600) % 24 + 24) % 24;\n        }\n        world.updatedAt = now();\n        const derived = applyWorldToScene(activeScene(state), world);\n        return { world, derived };\n      });\n      const includeFullState = url.searchParams.get('full') === '1';\n      json(res, 200, {\n        ...result.result,\n        runtime: compactWorldRuntime(result.state),\n        ...(includeFullState ? { state: result.state } : {})\n      });\n      return true;\n    }\n\n    if (req.method === 'POST' && url.pathname === '/api/v010/foliage/species') {\n      const input = await readJsonBody(req);\n      const result = mutateState(state => {\n        const source = findModelAsset(state, input.sourceAssetId);\n        const id = input.id || `foliage-species-${source.id.replace(/^asset-/, '')}-${Date.now().toString(36)}`;\n        const existing = state.assets.find(item => item.id === id && item.type === 'foliageSpecies');\n        const species = {\n          ...(existing || {}),\n          id,\n          type: 'foliageSpecies',\n          name: String(input.name || `${source.name} Species`).slice(0, 120),\n          sourceAssetId: source.id,\n          variants: Array.isArray(input.variants) ? input.variants : [],\n          scaleMin: Number(input.scaleMin ?? 0.85),\n          scaleMax: Number(input.scaleMax ?? 1.2),\n          spacing: Number(input.spacing ?? 2.5),\n          maxSlope: Number(input.maxSlope ?? 42),\n          rootBurial: Number(input.rootBurial ?? 0.08),\n          pathExclusion: Number(input.pathExclusion ?? 2.5),\n          structureExclusion: Number(input.structureExclusion ?? 2),\n          wind: { strength: Number(input.windStrength ?? 0.35), frequency: Number(input.windFrequency ?? 1) },\n          lod: {\n            near: Number(input.lodNear ?? 35),\n            far: Number(input.lodFar ?? 100),\n            impostor: Number(input.impostorDistance ?? 160)\n          },\n          collision: Boolean(input.collision),\n          navigationBlocker: Boolean(input.navigationBlocker),\n          seasonal: true,\n          validation: { state: 'valid', warnings: [] },\n          createdAt: existing?.createdAt || now(),\n          updatedAt: now()\n        };\n        if (existing) Object.assign(existing, species); else state.assets.unshift(species);\n        addActivity(state, 'foliage', `Created foliage species: ${species.name}`, { speciesId: id, sourceAssetId: source.id });\n        return species;\n      });\n      json(res, 201, { species: result.result, state: result.state });\n      return true;\n    }\n\n    if (req.method ==="... 10718 more characters,
-    expected: /const state = readState\(\);\s*const world = ensureWorld\(state\);/,
-    operator: 'match',
     diff: 'simple'
   }
