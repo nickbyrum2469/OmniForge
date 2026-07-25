@@ -1,0 +1,19 @@
+updated server/v010-systems.mjs
+updated server/v010-api.mjs
+updated server/server.mjs
+updated app/v010.js
+updated app/app.js
+Applied Phase 0A-D celestial authority, interpolation, readability, and inspector stabilization.
+updated server/v010-systems.mjs
+Traceback (most recent call last):
+  File "/home/runner/work/OmniForge/OmniForge/scripts/apply-phase0-authority-followup.py", line 73, in <module>
+    edit('server/server.mjs', patch_server)
+  File "/home/runner/work/OmniForge/OmniForge/scripts/apply-phase0-authority-followup.py", line 7, in edit
+    result = transform(source)
+             ^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/OmniForge/OmniForge/scripts/apply-phase0-authority-followup.py", line 69, in patch_server
+    source = replace_once(source, before, after, 'server/server.mjs', marker)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/OmniForge/OmniForge/scripts/apply-phase0-authority-followup.py", line 17, in replace_once
+    raise RuntimeError(f'Expected Phase 0 follow-up block not found in {path}: {before[:160]!r}')
+RuntimeError: Expected Phase 0 follow-up block not found in server/server.mjs: '      const body=await readBody(req);releaseActiveProjectLock();const state=createProject({name:body.name,template:body.template,id:body.id});acquireActiveProje'
