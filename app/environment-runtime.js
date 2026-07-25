@@ -37,20 +37,29 @@ export function skyRayFromNdc(camera = {}, ndcX = 0, ndcY = 0, aspect = 1) {
 
 export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds = 0) {
   const settings = scene.settings || {};
+  const world = settings.environmentV010 || {};
+  const worldClouds = world.clouds || {};
+  const worldWeather = world.weather || {};
+  const worldSky = world.sky || {};
+  const worldAtmosphere = world.atmosphere || {};
   const lightDirection = Array.isArray(lights.dir) ? lights.dir : [0.45, -0.8, 0.25];
   const sunDirection = normalize(scale(lightDirection, -1));
   const moonDirection = normalize([-sunDirection[0] * 0.94, -sunDirection[1], -sunDirection[2] * 0.94 + 0.18]);
   const geometricDay = smoothstep(-0.08, 0.14, sunDirection[1]);
-  const authoredNight = Number(settings.environmentV010?.nightFactor);
+  const authoredNight = Number(world.nightFactor);
   const dayFactor = Number.isFinite(authoredNight) ? 1 - clamp01(authoredNight) : geometricDay;
   const nightFactor = 1 - dayFactor;
-  const twilightFactor = clamp01(1 - smoothstep(0.08, 0.52, Math.abs(sunDirection[1])));
-  const cloudCoverage = clamp01(settings.cloudCoverage ?? settings.environmentV010?.cloudCoverage ?? 0.32);
-  const cloudDensity = clamp01(settings.cloudDensity ?? 0.52);
-  const starIntensity = Math.max(0, Number(settings.starIntensity ?? settings.environmentV010?.starIntensity ?? 1));
-  const starDensity = Math.max(0.08, Math.min(2, Number(settings.starDensity ?? 0.72)));
-  const weather = String(settings.weatherPreset || settings.environmentV010?.weatherPreset || 'clear');
+  const authoredTwilight = Number(world.twilightFactor);
+  const twilightFactor = Number.isFinite(authoredTwilight)
+    ? clamp01(authoredTwilight)
+    : clamp01(1 - smoothstep(0.08, 0.52, Math.abs(sunDirection[1])));
+  const cloudCoverage = clamp01(settings.cloudCoverage ?? worldClouds.coverage ?? 0.32);
+  const cloudDensity = clamp01(settings.cloudDensity ?? worldClouds.density ?? 0.52);
+  const starIntensity = Math.max(0, Number(settings.starIntensity ?? worldSky.starIntensity ?? 1));
+  const starDensity = Math.max(0.08, Math.min(2, Number(settings.starDensity ?? worldSky.starDensity ?? 0.72)));
+  const weather = String(settings.weatherPreset || worldWeather.preset || 'clear');
   const weatherDarkening = ({ overcast: 0.24, rain: 0.3, storm: 0.46, snow: 0.12, fog: 0.18 })[weather] || 0;
+  const windDirection = settings.windDirection ?? worldWeather.windDirection;
 
   return {
     sunDirection,
@@ -68,13 +77,13 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
     starDensity,
     cloudCoverage,
     cloudDensity,
-    cloudWindDirection: horizontalWind(settings.windDirection),
-    cloudWindSpeed: Math.max(0, Number(settings.cloudWindSpeed ?? settings.windSpeed ?? 12)),
-    cloudSeed: Number(settings.cloudSeed ?? 1337),
-    cloudQuality: String(settings.cloudQuality || settings.atmosphereQuality || 'compatibility'),
+    cloudWindDirection: horizontalWind(windDirection),
+    cloudWindSpeed: Math.max(0, Number(settings.cloudWindSpeed ?? worldClouds.windSpeed ?? 12)),
+    cloudSeed: Number(settings.cloudSeed ?? worldClouds.seed ?? 1337),
+    cloudQuality: String(settings.cloudQuality || worldClouds.quality || settings.atmosphereQuality || worldAtmosphere.quality || 'compatibility'),
     weather,
     weatherDarkening,
-    exposure: Math.max(0.05, Number(lights.exposure ?? settings.exposure ?? 1)),
+    exposure: Math.max(0.05, Number(lights.exposure ?? settings.exposure ?? worldAtmosphere.exposure ?? 1)),
     timeSeconds: Number(timeSeconds) || 0
   };
 }
