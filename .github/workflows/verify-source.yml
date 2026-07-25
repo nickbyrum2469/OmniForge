@@ -38,6 +38,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Primary Phase 1B migration failed.' }
           python scripts/apply-phase1b-followup.py
           if ($LASTEXITCODE -ne 0) { throw 'HDR display follow-up failed.' }
+          python scripts/apply-phase1b-test-contracts.py
+          if ($LASTEXITCODE -ne 0) { throw 'Phase 1B test-contract migration failed.' }
       - name: Syntax, tests, and repository verification
         shell: pwsh
         run: |
@@ -55,6 +57,7 @@ jobs:
           git diff | Set-Content phase1b-before.diff
           python scripts/apply-phase1b-lunar-hdr.py
           python scripts/apply-phase1b-followup.py
+          python scripts/apply-phase1b-test-contracts.py
           git diff | Set-Content phase1b-after.diff
           if((Get-Content phase1b-before.diff -Raw) -ne (Get-Content phase1b-after.diff -Raw)){throw 'Phase 1B migrations are not idempotent.'}
           Remove-Item phase1b-before.diff,phase1b-after.diff -Force
@@ -65,7 +68,7 @@ jobs:
           Remove-Item PHASE1B_TEST_OUTPUT.txt,PHASE1B_VERIFY_OUTPUT.txt,WINDOWS_VERIFY_ERROR.txt -Force -ErrorAction SilentlyContinue
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app server
+          git add app server tests
           git add -u PHASE1B_TEST_OUTPUT.txt PHASE1B_VERIFY_OUTPUT.txt WINDOWS_VERIFY_ERROR.txt 2>$null
           if(git status --porcelain){
             git commit -m "Add independent lunar cycles, HDR display, starfields, and lighting presets"
