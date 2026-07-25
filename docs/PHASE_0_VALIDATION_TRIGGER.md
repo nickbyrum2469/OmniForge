@@ -1,5 +1,5 @@
-# Phase 0 Validation Trigger
+# Phase 0 Final Validation Trigger
 
-This user-authored marker starts the controlled Phase 0A-D integration, complete test suite, repository verification, native Windows package build, packaged-authority audit, and restart-persistence smoke test.
+This user-authored marker runs the final Phase 0A-D source, repository, native Windows package, persistent celestial authority, legacy-Sun deduplication, Moon selection, process-restart, and evidence gates from the fully integrated source commit.
 
-The migration is now format-tolerant. This run captures the exact failing test before any source claim is accepted.
+The gate must prove one protected Sun and one protected Moon, stable identities across restart, smooth rendered interpolation, restrained Edit-mode assistance, and no regression to viewport navigation or the Inspector freeze repair.
