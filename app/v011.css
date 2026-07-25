@@ -33,3 +33,9 @@
 .spline-node-handle:active { cursor:grabbing; background:#d070ff; }
 [data-number-path^="scale."]:disabled { opacity:.45; cursor:not-allowed; }
 @media (max-width: 1300px) { .v011-grid { grid-template-columns:1fr; } }
+
+.v011-terrain-sculpting #viewport { cursor:cell; }
+.v011-sculpt-controls, .v011-node-editor { margin-top:12px; padding-top:10px; border-top:1px solid rgba(123,143,175,.18); }
+.spline-node-handle { width:30px; height:30px; margin:-15px 0 0 -15px; font-size:10px; }
+.spline-node-handle.selected { background:#f0a8ff; border-color:#ffffff; box-shadow:0 0 0 5px rgba(156,82,230,.42),0 5px 18px rgba(0,0,0,.58); }
+.v011-readout code { max-width:65%; overflow-wrap:anywhere; }

@@ -1,4 +1,4 @@
-import { applyCompactWorldRuntime, shouldAdvanceWorldTime } from './world-runtime.js';
+import { applyCompactWorldRuntime, clearCelestialRuntimeInterpolation, shouldAdvanceWorldTime, updateCelestialRuntimeInterpolation } from './world-runtime.js';
 
 const $ = selector => document.querySelector(selector);
 
@@ -25,10 +25,13 @@ const numeric = (id, fallback = 0) => {
 let snapshot = null;
 let lastFoliageTransaction = null;
 let timeTimer = null;
+let celestialAnimationFrame = null;
 let timeStepInFlight = false;
 let previewTimeInEditor = sessionStorage.getItem('omniforge.previewTimeInEditor') === '1';
 
 function synchronizeAuthoritativeEditor() {
+  const target = window.__omniforgeV011Bridge?.snapshot?.();
+  if (target?.scene?.id) clearCelestialRuntimeInterpolation(target.scene.id);
   if (snapshot?.state) window.dispatchEvent(new CustomEvent('omniforge:apply-state', { detail: { state: snapshot.state } }));
 }
 
@@ -36,11 +39,18 @@ function synchronizeRuntimeOnly() {
   const target = window.__omniforgeV011Bridge?.snapshot?.();
   if (!target || !applyCompactWorldRuntime(target, snapshot?.runtime)) return false;
   const wrap = document.getElementById('viewportWrap');
-  if (wrap && snapshot.runtime?.settings) {
-    const settings = snapshot.runtime.settings;
-    wrap.style.background = `linear-gradient(${settings.skyTop} 0%, ${settings.skyBottom} 72%, #26343c 100%)`;
-  }
+  if (wrap) wrap.dataset.environmentRenderer = 'webgl';
   return true;
+}
+
+function animateCelestialRuntime(now) {
+  const target = window.__omniforgeV011Bridge?.snapshot?.();
+  if (target) updateCelestialRuntimeInterpolation(target, now);
+  celestialAnimationFrame = window.requestAnimationFrame(animateCelestialRuntime);
+}
+
+function ensureCelestialAnimation() {
+  if (celestialAnimationFrame === null) celestialAnimationFrame = window.requestAnimationFrame(animateCelestialRuntime);
 }
 
 function setStatus(message, error = false) {
@@ -101,6 +111,31 @@ function installWorldPanel() {
     </div>
 
     <div class="v010-card">
+      <header><b>Celestial Studio</b><span id="v010CelestialReadout" class="v010-chip">SUN + MOON</span></header>
+      <div class="v010-grid">
+        <label>Positioning<select id="v010CelestialMode"><option value="astronomical">Time-driven orbit</option><option value="manual">Manual azimuth/elevation</option></select></label>
+        <label>Sun size<input id="v010SunSize" type="range" min="0.1" max="8" step="0.05"></label>
+        <label>Sun glow<input id="v010SunGlow" type="range" min="0" max="5" step="0.05"></label>
+        <label>Sun azimuth<input id="v010SunAzimuth" type="number" min="-720" max="720" step="1"></label>
+        <label>Sun elevation<input id="v010SunElevation" type="number" min="-90" max="90" step="1"></label>
+        <label>Moon size<input id="v010MoonSize" type="range" min="0.1" max="12" step="0.05"></label>
+        <label>Moon phase<input id="v010MoonPhase" type="range" min="0" max="1" step="0.005"></label>
+        <label>Moon brightness<input id="v010MoonBrightness" type="range" min="0" max="5" step="0.05"></label>
+        <label>Moon glow<input id="v010MoonGlow" type="range" min="0" max="5" step="0.05"></label>
+        <label>Moon detail<input id="v010MoonDetail" type="range" min="0" max="3" step="0.05"></label>
+        <label>Moon azimuth<input id="v010MoonAzimuth" type="number" min="-720" max="720" step="1"></label>
+        <label>Moon elevation<input id="v010MoonElevation" type="number" min="-90" max="90" step="1"></label>
+        <label>Show planet<input id="v010PlanetEnabled" type="checkbox"></label>
+        <label>Planet size<input id="v010PlanetSize" type="range" min="0.1" max="18" step="0.1"></label>
+        <label>Planet azimuth<input id="v010PlanetAzimuth" type="number" min="-720" max="720" step="1"></label>
+        <label>Planet elevation<input id="v010PlanetElevation" type="number" min="-90" max="90" step="1"></label>
+        <label>Planet rings<input id="v010PlanetRings" type="range" min="0" max="1" step="0.01"></label>
+      </div>
+      <p class="v010-section-note">Time-driven mode follows world time. Manual mode preserves the exact Sun, Moon, and planet positions entered here.</p>
+      <div id="v010EnvironmentDiagnostics" class="v010-status">Celestial authority loading…</div>
+    </div>
+
+    <div class="v010-card">
       <header><b>Atmosphere Studio</b><span class="v010-chip">SCATTERING + AERIAL PERSPECTIVE</span></header>
       <div class="v010-grid">
         <label>Quality<select id="v010AtmosphereQuality"><option value="compatibility">Compatibility LUT</option><option value="balanced">Balanced LUT</option><option value="quality">Quality volumetrics</option><option value="reference">Reference</option></select></label>
@@ -108,8 +143,42 @@ function installWorldPanel() {
         <label>Rayleigh<input id="v010Rayleigh" type="range" min="0" max="3" step="0.01"></label>
         <label>Mie haze<input id="v010Mie" type="range" min="0" max="1" step="0.01"></label>
         <label>Humidity<input id="v010Humidity" type="range" min="0" max="1" step="0.01"></label>
+        <label>Exposure<input id="v010Exposure" type="range" min="0.2" max="3" step="0.02"></label>
         <label>Stars<input id="v010Stars" type="range" min="0" max="3" step="0.05"></label>
+        <label>Star density<input id="v010StarDensity" type="range" min="0.08" max="2" step="0.02"></label>
+        <label>Daylight star extinction<input id="v010StarExtinction" type="range" min="0.1" max="4" step="0.05"></label>
+        <label>Smallest star<input id="v010StarSizeMin" type="range" min="0.1" max="6" step="0.05"></label>
+        <label>Largest star<input id="v010StarSizeMax" type="range" min="0.1" max="8" step="0.05"></label>
+        <label>Brightness variety<input id="v010StarBrightnessVariation" type="range" min="0" max="1" step="0.01"></label>
+        <label>Color variety<input id="v010StarColorVariation" type="range" min="0" max="1" step="0.01"></label>
+        <label>Twinkle amount<input id="v010StarTwinkleAmount" type="range" min="0" max="1" step="0.01"></label>
+        <label>Twinkle speed<input id="v010StarTwinkleSpeed" type="range" min="0" max="8" step="0.05"></label>
+        <label>Star seed<input id="v010StarSeed" type="number" min="-999999" max="999999" step="1"></label>
+        <label>Star-field rotation<input id="v010StarRotation" type="number" min="-720" max="720" step="1"></label>
+        <label>Horizon fade<input id="v010StarHorizonFade" type="range" min="0.01" max="0.8" step="0.01"></label>
+        <label>Warm star color<input id="v010StarWarmColor" type="color"></label>
+        <label>Cool star color<input id="v010StarCoolColor" type="color"></label>
+        <label>Milky Way brightness<input id="v010MilkyWay" type="range" min="0" max="3" step="0.05"></label>
+        <label>Milky Way width<input id="v010MilkyWayWidth" type="range" min="2" max="45" step="0.25"></label>
+        <label>Milky Way detail<input id="v010MilkyWayDetail" type="range" min="0.2" max="4" step="0.05"></label>
+        <label>Dark dust lanes<input id="v010MilkyWayDust" type="range" min="0" max="1" step="0.01"></label>
+        <label>Galactic core<input id="v010MilkyWayCore" type="range" min="0" max="2" step="0.02"></label>
+        <label>Galaxy azimuth<input id="v010MilkyWayAzimuth" type="number" min="-720" max="720" step="1"></label>
+        <label>Galaxy elevation<input id="v010MilkyWayElevation" type="number" min="-90" max="90" step="1"></label>
+        <label>Galaxy roll<input id="v010MilkyWayRotation" type="number" min="-720" max="720" step="1"></label>
+        <label>Galaxy outer color<input id="v010MilkyWayColor" type="color"></label>
+        <label>Galaxy core color<input id="v010MilkyWayCoreColor" type="color"></label>
+        <label>Aurora intensity<input id="v010AuroraIntensity" type="range" min="0" max="3" step="0.02"></label>
+        <label>Aurora primary<input id="v010AuroraColor" type="color"></label>
+        <label>Aurora secondary<input id="v010AuroraSecondaryColor" type="color"></label>
+        <label>Aurora speed<input id="v010AuroraSpeed" type="range" min="0" max="4" step="0.02"></label>
+        <label>Aurora scale<input id="v010AuroraScale" type="range" min="0.2" max="4" step="0.02"></label>
+        <label>Cloud mode<select id="v010CloudQuality"><option value="layered">Optimized layered</option><option value="balanced">Volumetric balanced</option><option value="quality">Volumetric quality</option><option value="reference">Volumetric reference</option></select></label>
         <label>Cloud cover<input id="v010Clouds" type="range" min="0" max="1" step="0.01"></label>
+        <label>Cloud density<input id="v010CloudDensity" type="range" min="0" max="1" step="0.01"></label>
+        <label>Cloud altitude<input id="v010CloudAltitude" type="number" min="50" max="20000" step="50"></label>
+        <label>Cloud thickness<input id="v010CloudThickness" type="number" min="50" max="20000" step="50"></label>
+        <label>Cloud wind speed<input id="v010CloudWindSpeed" type="number" min="0" max="300" step="1"></label>
         <label>Fog<input id="v010Fog" type="range" min="0" max="1" step="0.01"></label>
         <label>Weather<select id="v010Weather"><option value="clear">Clear</option><option value="partly-cloudy">Partly cloudy</option><option value="overcast">Overcast</option><option value="rain">Rain</option><option value="storm">Storm</option><option value="snow">Snow</option><option value="fog">Fog</option></select></label>
       </div>
@@ -159,14 +228,8 @@ function installWorldPanel() {
 
 function applyViewportEnvironment() {
   const wrap = document.getElementById('viewportWrap');
-  const settings = snapshot?.scene?.settings || snapshot?.state?.scenes?.find(item => item.id === snapshot?.state?.activeSceneId)?.settings || {};
   if (!wrap) return;
-  wrap.style.setProperty('--v010-stars', String(Math.max(0, Math.min(1, Number(settings.starIntensity || 0) / 1.5))));
-  wrap.style.setProperty('--v010-star-density', String(Math.max(0.12, Math.min(1, Number(settings.starDensity || 0.72)))));
-  wrap.style.setProperty('--v010-milky-way', String(Math.max(0, Math.min(1, Number(settings.milkyWayIntensity || 0) / 1.5))));
-  wrap.style.setProperty('--v010-aurora', String(Math.max(0, Math.min(1, Number(settings.auroraIntensity || 0) / 1.5))));
-  wrap.style.setProperty('--v010-clouds', String(Math.max(0, Math.min(0.95, Number(settings.cloudCoverage || 0) * (0.45 + Number(settings.cloudDensity || 0) * 0.55)))));
-  wrap.style.setProperty('--v010-cloud-speed', `${Math.max(18, 130 - Number(snapshot?.world?.clouds?.windSpeed || 12) * 4)}s`);
+  wrap.dataset.environmentRenderer = 'webgl';
   wrap.dataset.weather = String(snapshot?.world?.weather?.preset || 'clear');
 }
 
@@ -186,13 +249,69 @@ function populate(options = {}) {
   field('v010Rayleigh').value = world.atmosphere.rayleigh;
   field('v010Mie').value = world.atmosphere.mie;
   field('v010Humidity').value = world.atmosphere.humidity;
+  field('v010Exposure').value = world.atmosphere.exposure;
+  field('v010CelestialMode').value = world.sky.celestialMode || 'astronomical';
+  field('v010SunSize').value = world.sky.sunSize ?? 1;
+  field('v010SunGlow').value = world.sky.sunGlow ?? 1;
+  field('v010SunAzimuth').value = world.sky.sunAzimuth ?? -90;
+  field('v010SunElevation').value = world.sky.sunElevation ?? 45;
+  field('v010MoonSize').value = world.sky.moonSize ?? 1.45;
+  field('v010MoonPhase').value = world.sky.moonPhase ?? 0.72;
+  field('v010MoonBrightness').value = world.sky.moonBrightness ?? 1;
+  field('v010MoonGlow').value = world.sky.moonGlow ?? 0.7;
+  field('v010MoonDetail').value = world.sky.moonDetail ?? 1;
+  field('v010MoonAzimuth').value = world.sky.moonAzimuth ?? 90;
+  field('v010MoonElevation').value = world.sky.moonElevation ?? 32;
+  field('v010PlanetEnabled').checked = Boolean(world.sky.planetEnabled);
+  field('v010PlanetSize').value = world.sky.planetSize ?? 4.5;
+  field('v010PlanetAzimuth').value = world.sky.planetAzimuth ?? 215;
+  field('v010PlanetElevation').value = world.sky.planetElevation ?? 28;
+  field('v010PlanetRings').value = world.sky.planetRings ?? 0.65;
   field('v010Stars').value = world.sky.starIntensity;
+  field('v010StarDensity').value = world.sky.starDensity ?? 0.72;
+  field('v010StarExtinction').value = world.sky.starDaylightExtinction ?? 1.35;
+  field('v010StarSizeMin').value = world.sky.starSizeMin ?? 0.55;
+  field('v010StarSizeMax').value = world.sky.starSizeMax ?? 2.4;
+  field('v010StarBrightnessVariation').value = world.sky.starBrightnessVariation ?? 0.62;
+  field('v010StarColorVariation').value = world.sky.starColorVariation ?? 0.38;
+  field('v010StarTwinkleAmount').value = world.sky.starTwinkleAmount ?? 0.48;
+  field('v010StarTwinkleSpeed').value = world.sky.starTwinkleSpeed ?? 1;
+  field('v010StarSeed').value = world.sky.starSeed ?? 1337;
+  field('v010StarRotation').value = world.sky.starRotation ?? 0;
+  field('v010StarHorizonFade').value = world.sky.starHorizonFade ?? 0.18;
+  field('v010StarWarmColor').value = world.sky.starWarmColor ?? '#ffd8aa';
+  field('v010StarCoolColor').value = world.sky.starCoolColor ?? '#a9c9ff';
+  field('v010MilkyWay').value = world.sky.milkyWayIntensity ?? 0.35;
+  field('v010MilkyWayWidth').value = world.sky.milkyWayWidth ?? 16;
+  field('v010MilkyWayDetail').value = world.sky.milkyWayDetail ?? 1.25;
+  field('v010MilkyWayDust').value = world.sky.milkyWayDust ?? 0.68;
+  field('v010MilkyWayCore').value = world.sky.milkyWayCore ?? 0.78;
+  field('v010MilkyWayAzimuth').value = world.sky.milkyWayAzimuth ?? 18;
+  field('v010MilkyWayElevation').value = world.sky.milkyWayElevation ?? 62;
+  field('v010MilkyWayRotation').value = world.sky.milkyWayRotation ?? 27;
+  field('v010MilkyWayColor').value = world.sky.milkyWayColor ?? '#7187bd';
+  field('v010MilkyWayCoreColor').value = world.sky.milkyWayCoreColor ?? '#e2c9a5';
+  field('v010AuroraIntensity').value = world.sky.auroraIntensity ?? 0;
+  field('v010AuroraColor').value = world.sky.auroraColor ?? '#58e7c1';
+  field('v010AuroraSecondaryColor').value = world.sky.auroraSecondaryColor ?? '#7668ff';
+  field('v010AuroraSpeed').value = world.sky.auroraSpeed ?? 0.35;
+  field('v010AuroraScale').value = world.sky.auroraScale ?? 1;
+  field('v010CloudQuality').value = world.clouds.quality || 'layered';
   field('v010Clouds').value = world.clouds.coverage;
+  field('v010CloudDensity').value = world.clouds.density ?? 0.45;
+  field('v010CloudAltitude').value = world.clouds.altitude ?? 2200;
+  field('v010CloudThickness').value = world.clouds.thickness ?? 1800;
+  field('v010CloudWindSpeed').value = world.clouds.windSpeed ?? 12;
   field('v010Fog').value = world.weather.fog;
   field('v010Weather').value = world.weather.preset;
+  field('v010CelestialReadout').textContent = (world.sky.celestialMode === 'manual' ? 'MANUAL' : formatTime(world.time.hours)) + ' · MOON ' + (Number(world.sky.moonPhase ?? 0.72) * 100).toFixed(0) + '%';
+  const environment = snapshot.scene?.settings?.environmentV010 || snapshot.state?.scenes?.find(item => item.id === snapshot.state?.activeSceneId)?.settings?.environmentV010 || {};
+  const diagnostics = field('v010EnvironmentDiagnostics');
+  if (diagnostics) diagnostics.textContent = `Authority: 1 Sun + 1 Moon · Day ${Number(environment.sunDayFactor || 0).toFixed(2)} · Twilight ${Number(environment.twilightFactor || 0).toFixed(2)} · Night ${Number(environment.nightFactor || 0).toFixed(2)} · Exposure ${Number(snapshot.scene?.settings?.exposure ?? 1).toFixed(2)} · ${previewTimeInEditor ? 'smooth editor preview' : 'authoritative edit pause'}`;
 
-  const models = snapshot.assets.filter(item => item.type === 'model' && !item.archived);
-  const species = snapshot.assets.filter(item => item.type === 'foliageSpecies');
+  const assets = Array.isArray(snapshot.assets) ? snapshot.assets : Array.isArray(snapshot.state?.assets) ? snapshot.state.assets : [];
+  const models = assets.filter(item => item.type === 'model' && !item.archived);
+  const species = assets.filter(item => item.type === 'foliageSpecies');
   field('v010FoliageAsset').innerHTML = models.map(item => `<option value="${item.id}">${item.name} · ${item.category}</option>`).join('');
   field('v010Species').innerHTML = species.map(item => `<option value="${item.id}">${item.name}</option>`).join('');
   field('v010FoliageCount').textContent = `${species.length} species`;
@@ -223,10 +342,37 @@ async function applyWorld(extra = {}) {
       visibilityKm: numeric('v010Visibility', 120),
       rayleigh: numeric('v010Rayleigh', 1),
       mie: numeric('v010Mie', 0.16),
-      humidity: numeric('v010Humidity', 0.22)
+      humidity: numeric('v010Humidity', 0.22),
+      exposure: numeric('v010Exposure', 1)
     },
-    sky: { starIntensity: numeric('v010Stars', 1) },
-    clouds: { coverage: numeric('v010Clouds', 0.25) },
+    sky: {
+      celestialMode: field('v010CelestialMode').value,
+      sunSize: numeric('v010SunSize', 1), sunGlow: numeric('v010SunGlow', 1),
+      sunAzimuth: numeric('v010SunAzimuth', -90), sunElevation: numeric('v010SunElevation', 45),
+      moonSize: numeric('v010MoonSize', 1.45), moonPhase: numeric('v010MoonPhase', 0.72),
+      moonBrightness: numeric('v010MoonBrightness', 1), moonGlow: numeric('v010MoonGlow', 0.7), moonDetail: numeric('v010MoonDetail', 1),
+      moonAzimuth: numeric('v010MoonAzimuth', 90), moonElevation: numeric('v010MoonElevation', 32),
+      planetEnabled: Boolean(field('v010PlanetEnabled').checked), planetSize: numeric('v010PlanetSize', 4.5),
+      planetAzimuth: numeric('v010PlanetAzimuth', 215), planetElevation: numeric('v010PlanetElevation', 28), planetRings: numeric('v010PlanetRings', 0.65),
+      starIntensity: numeric('v010Stars', 1), starDensity: numeric('v010StarDensity', 0.72),
+      starDaylightExtinction: numeric('v010StarExtinction', 1.35),
+      starSizeMin: numeric('v010StarSizeMin', 0.55), starSizeMax: numeric('v010StarSizeMax', 2.4),
+      starBrightnessVariation: numeric('v010StarBrightnessVariation', 0.62), starColorVariation: numeric('v010StarColorVariation', 0.38),
+      starTwinkleAmount: numeric('v010StarTwinkleAmount', 0.48), starTwinkleSpeed: numeric('v010StarTwinkleSpeed', 1),
+      starSeed: numeric('v010StarSeed', 1337), starRotation: numeric('v010StarRotation', 0), starHorizonFade: numeric('v010StarHorizonFade', 0.18),
+      starWarmColor: field('v010StarWarmColor').value, starCoolColor: field('v010StarCoolColor').value,
+      milkyWayIntensity: numeric('v010MilkyWay', 0.35), milkyWayWidth: numeric('v010MilkyWayWidth', 16),
+      milkyWayDetail: numeric('v010MilkyWayDetail', 1.25), milkyWayDust: numeric('v010MilkyWayDust', 0.68), milkyWayCore: numeric('v010MilkyWayCore', 0.78),
+      milkyWayAzimuth: numeric('v010MilkyWayAzimuth', 18), milkyWayElevation: numeric('v010MilkyWayElevation', 62), milkyWayRotation: numeric('v010MilkyWayRotation', 27),
+      milkyWayColor: field('v010MilkyWayColor').value, milkyWayCoreColor: field('v010MilkyWayCoreColor').value,
+      auroraIntensity: numeric('v010AuroraIntensity', 0), auroraColor: field('v010AuroraColor').value,
+      auroraSecondaryColor: field('v010AuroraSecondaryColor').value, auroraSpeed: numeric('v010AuroraSpeed', 0.35), auroraScale: numeric('v010AuroraScale', 1)
+    },
+    clouds: {
+      quality: field('v010CloudQuality').value,
+      coverage: numeric('v010Clouds', 0.25), density: numeric('v010CloudDensity', 0.45),
+      altitude: numeric('v010CloudAltitude', 2200), thickness: numeric('v010CloudThickness', 1800), windSpeed: numeric('v010CloudWindSpeed', 12)
+    },
     weather: { preset: field('v010Weather').value, fog: numeric('v010Fog', 0.04) }
   };
   snapshot = await api('/api/v010/world', { method: 'PATCH', body: JSON.stringify(payload) });
@@ -412,7 +558,8 @@ function bindControls() {
 
 window.addEventListener('beforeunload', () => {
   if (timeTimer) window.clearInterval(timeTimer);
+  if (celestialAnimationFrame !== null) window.cancelAnimationFrame(celestialAnimationFrame);
 });
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installWorldPanel);
-else installWorldPanel();
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { installWorldPanel(); ensureCelestialAnimation(); });
+else { installWorldPanel(); ensureCelestialAnimation(); }

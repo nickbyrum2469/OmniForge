@@ -1,0 +1,2 @@
+Phase 1 branch is ready for targeted integration, source tests, repository verification, Windows packaging, and direct target-machine validation.
+Retry: line-ending-safe integration, updated legacy regressions, residual CSS sky removal, and failure capture enabled.

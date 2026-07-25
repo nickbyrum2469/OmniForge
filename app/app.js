@@ -1,6 +1,7 @@
 import { Renderer3D, terrainHeight } from './renderer.js';
 import { add, sub, scale, length, normalize, clamp, cameraForward, cameraRight } from './math.js';
 import { cloneCamera, shouldPreserveViewportCamera } from './viewport-state.js';
+import { createLookInputState, beginLookInputSession, endLookInputSession, applyLookDelta } from './viewport-navigation.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -85,6 +86,8 @@ let viewportDragLast = null;
 let pointerLockSupported = 'pointerLockElement' in document;
 let interactionActiveUntil = 0;
 let remotePollInFlight = false;
+let viewportNavigationIntentUntil = 0;
+const lookInputState = createLookInputState();
 
 async function api(path, options={}) {
   const method=String(options.method||'GET').toUpperCase(),mutating=!['GET','HEAD'].includes(method);
@@ -184,7 +187,8 @@ function applyState(nextState, options={}) {
   ui.connectionBadge.classList.toggle('available', !codexRecent);
   ui.connectionBadge.querySelector('span:last-child').textContent = codexRecent ? 'Codex connected' : 'MCP available';
   $$('[data-transform-mode]').forEach(button=>button.classList.toggle('active',button.dataset.transformMode===(state.editor.transformMode||'move')));
-  ui.viewportWrap.style.background = `linear-gradient(${scene.settings.skyTop} 0%, ${scene.settings.skyBottom} 72%, #26343c 100%)`;
+  ui.viewportWrap.style.background = '#0b1018';
+  ui.viewportWrap.dataset.environmentRenderer = 'webgl';
   renderer?.setAssets(state.assets);
   renderSceneOptions();
   renderHierarchy();
@@ -436,6 +440,7 @@ function objectPropertiesHtml(object) {
   if (object.type==='terrain') return materialSelect(p.materialId)+propColor('Fallback color','color',p.color)+propNumber('Mesh resolution','resolution',p.resolution||128,'1',8,256)+propCheck('Receive shadows','receivesShadows',p.receivesShadows!==false)+propCheck('Collision','collider',p.collider!==false)+`<div class="surface-blend-callout"><strong>Stable world bounds</strong><p>Terrain scale is locked. Use the v0.11 Terrain Generator below to change landforms or expand north, south, east, west, or all directions without stretching paths.</p></div>`;
   if (object.type==='path') return materialSelect(p.materialId)+propColor('Fallback color','color',p.color)+propNumber('Path width','width',p.width||3,'0.1',.2,50)+propNumber('Blend shoulder','blendDistance',p.blendDistance??2.5,'0.1',.1,30)+propNumber('Edge irregularity','edgeNoise',p.edgeNoise??.5,'0.05',0,4)+propCheck('Conform to terrain','conformToTerrain',p.conformToTerrain!==false)+propCheck('Collision','collider',p.collider!==false)+propCheck('Navigation','navigation',p.navigation!==false)+propNumber('Nature clearance','vegetationExclusion',p.vegetationExclusion||0,'0.1',0,20)+`<div class="surface-blend-callout">The terrain remains authoritative. This path paints a soft, noise-broken material mask into the terrain instead of floating a hard-edged mesh above it.</div>`;
   if (object.type==='decal') return materialSelect(p.materialId)+propColor('Tint','color',p.color)+propNumber('Opacity','opacity',p.opacity??.85,'0.05',0,1)+propNumber('Projection depth','projectionDepth',p.projectionDepth??.25,'0.05',.001,20)+propNumber('Sort order','sortOrder',p.sortOrder||0,'1',-1000,1000)+`<div class="surface-blend-callout">This is an authored surface decal. Keep projection depth narrow and inspect nearby geometry before approval.</div>`;
+  if (p.celestialProxy) { const role=String(p.celestialRole||'celestial'); return `<div class="surface-blend-callout celestial-proxy-callout"><strong>Authoritative ${escapeHtml(role === 'sun' ? 'Sun' : 'Moon')} proxy</strong><p>This hierarchy entry is a protected view of the shared Celestial Studio authority. It cannot be duplicated or deleted, and it survives save/reload with a stable identity.</p><div class="property-row"><label>Azimuth</label><span>${Number(p.azimuth ?? 0).toFixed(2)}°</span></div><div class="property-row"><label>Elevation</label><span>${Number(p.elevation ?? 0).toFixed(2)}°</span></div><div class="property-row"><label>Angular size</label><span>${Number(p.angularSize ?? 1).toFixed(2)}×</span></div><button id="openCelestialStudioButton" class="button primary" type="button">Open Celestial Studio</button></div>`; }
   if (object.type==='directionalLight') return propColor('Light color','color',p.color)+propNumber('Intensity','intensity',p.intensity||1,'0.05',0,12)+propCheck('Cast shadows','castsShadows',p.castsShadows!==false);
   if (object.type==='pointLight') return propColor('Light color','color',p.color)+propNumber('Intensity','intensity',p.intensity||1,'0.1',0,50)+propNumber('Range','range',p.range||10,'0.5',.5,100);
   if (object.type==='model') {const asset=(state.assets||[]).find(item=>item.type==='model'&&item.id===p.assetId);return `<div class="model-object-reference"><div class="property-row"><label>Asset</label><span>${escapeHtml(asset?.name||p.assetId||'Missing')}</span></div><div class="property-row"><label>Asset ID</label><code>${escapeHtml(p.assetId||'')}</code></div>${propColor('Fallback color','color',p.color)}${propCheck('Collision','collider',Boolean(p.collider))}${propCheck('Cast shadows','castsShadows',p.castsShadows!==false)}${propCheck('Receive shadows','receivesShadows',p.receivesShadows!==false)}</div>`;}
@@ -444,9 +449,10 @@ function objectPropertiesHtml(object) {
 
 function renderInspector() {
   const object = selectedObject();
-  ui.duplicateButton.disabled = !object;
-  ui.prefabButton.disabled = !object;
-  ui.deleteButton.disabled = !object || object.locked;
+  const celestialProxy = Boolean(object?.properties?.celestialProxy);
+  ui.duplicateButton.disabled = !object || celestialProxy;
+  ui.prefabButton.disabled = !object || celestialProxy;
+  ui.deleteButton.disabled = !object || object.locked || celestialProxy;
   if (!object) {
     ui.inspectorTitle.textContent='Nothing selected';
     ui.inspectorContent.innerHTML='<div class="inspector-empty"><div><strong>Select a 3D object</strong><p>Click an object in the viewport or choose it from the hierarchy to edit its live scene data.</p></div></div>';
@@ -463,14 +469,10 @@ function renderInspector() {
   }).join('');
   const pathPoints=object.type==='path'?section('Spline control points',`<div class="path-points">${(object.properties.points||[]).map((point,index)=>`<div class="path-point"><span>${index+1}</span><input data-path-point="${index}.0" type="number" step=".5" value="${point[0]}"><input data-path-point="${index}.1" type="number" step=".5" value="${point[1]}"><button data-remove-point="${index}" type="button">×</button></div>`).join('')}<button id="addPathPoint" class="path-add" type="button">Add control point</button></div>`,`${object.properties.points?.length||0} points`):'';
   ui.inspectorContent.innerHTML=`
-    <div class="object-summary"><div class="object-type-icon">${objectIcon(object.type)}</div><div><input id="objectNameInput" value="${escapeHtml(object.name)}"><div class="object-meta">${escapeHtml(typeLabel(object.type))} · ${escapeHtml(object.id)}</div></div></div>
+    <div class="object-summary"><div class="object-type-icon">${objectIcon(object.type)}</div><div><input id="objectNameInput" value="${escapeHtml(object.name)}" ${celestialProxy?'readonly':''}><div class="object-meta">${escapeHtml(celestialProxy?'Celestial Authority Proxy':typeLabel(object.type))} · ${escapeHtml(object.id)}</div></div></div>
     ${object.properties?.prefabId?`<div class="prefab-pill"><span>Prefab instance</span><span>${escapeHtml(object.properties.prefabId)}</span></div>`:''}
     ${object.type==='model'&&object.properties?.previewOnly?`<div class="surface-blend-callout"><strong>Placement preview</strong><p>This model is temporary. Inspect grounding, scale, orientation, collision clearance, and composition before committing.</p><div class="material-tuner-actions"><button id="commitAssetPreviewButton" class="button primary" type="button">Commit placement</button><button id="cancelAssetPreviewButton" class="button subtle" type="button">Cancel preview</button></div></div>`:''}
-    ${section('Transform',vectorField('Position',object.transform.position,'position')+vectorField('Rotation',object.transform.rotation,'rotation')+vectorField('Scale',object.transform.scale,'scale'),'WORLD')}
-    ${section('Properties',objectPropertiesHtml(object),object.type.toUpperCase())}
-    ${pathPoints}
-    ${section('Components',`${components || '<p class="panel-hint">No extra behavior components.</p>'}<div class="component-add-row"><button id="addRigidbody" class="add-component" type="button">+ Rigidbody</button><button id="addCollider" class="add-component" type="button">+ Collider</button><button id="addRotator" class="add-component" type="button">+ Rotator</button></div>`,`${object.components?.length||0}`)}
-    ${section('Entity flags',propCheck('Visible','__visible',object.visible)+propCheck('Locked','__locked',object.locked),'SCENE')}
+    ${celestialProxy ? section('Celestial authority',objectPropertiesHtml(object),'WORLD AUTHORITY') : section('Transform',vectorField('Position',object.transform.position,'position')+vectorField('Rotation',object.transform.rotation,'rotation')+vectorField('Scale',object.transform.scale,'scale'),'WORLD') + section('Properties',objectPropertiesHtml(object),object.type.toUpperCase()) + pathPoints + section('Components',`${components || '<p class="panel-hint">No extra behavior components.</p>'}<div class="component-add-row"><button id="addRigidbody" class="add-component" type="button">+ Rigidbody</button><button id="addCollider" class="add-component" type="button">+ Collider</button><button id="addRotator" class="add-component" type="button">+ Rotator</button></div>`,`${object.components?.length||0}`) + section('Entity flags',propCheck('Visible','__visible',object.visible)+propCheck('Locked','__locked',object.locked),'SCENE')}
   `;
   bindInspector(object);
   $('#commitAssetPreviewButton')?.addEventListener('click',()=>commitAssetPreview(object.id));
@@ -479,6 +481,7 @@ function renderInspector() {
 
 function setNested(arrayRoot,index,value){ arrayRoot[Number(index)] = Number(value); }
 function bindInspector(object) {
+  if(object.properties?.celestialProxy)return;
   $('#objectNameInput')?.addEventListener('change',event=>patchObject(object.id,{name:event.target.value.trim()||object.name}));
   $$('[data-number-path]').forEach(input=>input.addEventListener('change',event=>{
     const [root,index]=input.dataset.numberPath.split('.');
@@ -957,7 +960,8 @@ function renderWorldSettings() {
   $$(`#worldSettings [data-property-key]`).forEach(input=>input.addEventListener('change',()=>{
     const key=input.dataset.propertyKey;scene.settings[key]=input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value;
     if(key==='gridVisible')ui.gridToggle.checked=scene.settings.gridVisible;
-    ui.viewportWrap.style.background=`linear-gradient(${scene.settings.skyTop} 0%, ${scene.settings.skyBottom} 72%, #26343c 100%)`;
+  ui.viewportWrap.style.background = '#0b1018';
+  ui.viewportWrap.dataset.environmentRenderer = 'webgl';
     saveScene('World settings updated');
   }));
   seasonSelect?.addEventListener('change',()=>{scene.settings.season=seasonSelect.value;saveScene('Season updated');});
@@ -1117,7 +1121,7 @@ function behaviorStep(dt){
   }
 }
 
-function viewportNavigationActive(){return document.pointerLockElement===ui.viewport||viewportDragLook;}
+function viewportNavigationActive(){return document.pointerLockElement===ui.viewport||viewportDragLook||Date.now()<viewportNavigationIntentUntil;}
 
 function updateCamera(dt) {
   if(!viewportNavigationActive())return;
@@ -1252,6 +1256,8 @@ function bindEvents() {
   $$('[data-transform-mode]').forEach(button=>button.addEventListener('click',()=>{$$('[data-transform-mode]').forEach(b=>b.classList.toggle('active',b===button));state.editor.transformMode=button.dataset.transformMode;api('/api/editor',{method:'POST',body:{transformMode:state.editor.transformMode}}).then(next=>state.engine.revision=next.engine.revision);}));
 
   async function enterViewportNavigation(event){
+    viewportNavigationIntentUntil=Date.now()+1600;
+    noteUserInteraction(1800);
     ui.viewport.focus({preventScroll:true});
     if(event){const pick=renderer.pick(scene,camera,event.clientX,event.clientY);selectObject(pick?.id||null,true);}
     if(document.pointerLockElement===ui.viewport)return;
@@ -1259,25 +1265,38 @@ function bindEvents() {
       const result=ui.viewport.requestPointerLock?.();
       if(result&&typeof result.then==='function')await result;
     }catch(error){
+      viewportNavigationIntentUntil=0;
+      endLookInputSession(lookInputState);
       pointerLockSupported=false;
       showToast('Pointer lock was blocked. Hold right mouse and use WASD as a fallback.','error');
     }
   }
   ui.viewport.addEventListener('mousedown',event=>{
     if(event.button===0){enterViewportNavigation(event);return;}
-    if(event.button===2){event.preventDefault();ui.viewport.focus({preventScroll:true});viewportDragLook=true;viewportDragLast=[event.clientX,event.clientY];ui.viewportWrap.classList.add('drag-look');}
+    if(event.button===2){event.preventDefault();viewportNavigationIntentUntil=Date.now()+800;ui.viewport.focus({preventScroll:true});viewportDragLook=true;viewportDragLast=[event.clientX,event.clientY];beginLookInputSession(lookInputState,'right-drag');ui.viewportWrap.classList.add('drag-look');}
   });
   ui.viewport.addEventListener('contextmenu',event=>event.preventDefault());
-  window.addEventListener('mouseup',event=>{if(event.button===2&&viewportDragLook){viewportDragLook=false;viewportDragLast=null;ui.viewportWrap.classList.remove('drag-look');keys.clear();persistCameraSoon();}});
-  document.addEventListener('pointerlockchange',()=>{const locked=document.pointerLockElement===ui.viewport;ui.viewportWrap.classList.toggle('pointer-locked',locked);if(locked){pointerLockSupported=true;showToast('Viewport navigation active','success');}else if(!viewportDragLook){keys.clear();persistCameraSoon();}});
-  document.addEventListener('pointerlockerror',()=>{pointerLockSupported=false;showToast('Pointer lock was denied. Hold right mouse and use WASD.','error');});
+  window.addEventListener('mouseup',event=>{if(event.button===2&&viewportDragLook){viewportDragLook=false;viewportDragLast=null;viewportNavigationIntentUntil=0;endLookInputSession(lookInputState);ui.viewportWrap.classList.remove('drag-look');keys.clear();persistCameraSoon();}});
+  document.addEventListener('pointerlockchange',()=>{const locked=document.pointerLockElement===ui.viewport;ui.viewportWrap.classList.toggle('pointer-locked',locked);if(locked){viewportNavigationIntentUntil=Date.now()+500;beginLookInputSession(lookInputState,'pointer-lock');pointerLockSupported=true;showToast('Viewport navigation active','success');}else if(!viewportDragLook){viewportNavigationIntentUntil=0;endLookInputSession(lookInputState);keys.clear();persistCameraSoon();}});
+  document.addEventListener('pointerlockerror',()=>{viewportNavigationIntentUntil=0;endLookInputSession(lookInputState);pointerLockSupported=false;showToast('Pointer lock was denied. Hold right mouse and use WASD.','error');});
   document.addEventListener('mousemove',event=>{
-    let dx=0,dy=0;
+    let dx=0,dy=0,source='pointer-lock';
     if(document.pointerLockElement===ui.viewport){dx=event.movementX;dy=event.movementY;}
-    else if(viewportDragLook&&viewportDragLast){dx=event.clientX-viewportDragLast[0];dy=event.clientY-viewportDragLast[1];viewportDragLast=[event.clientX,event.clientY];}
+    else if(viewportDragLook&&viewportDragLast){source='right-drag';dx=event.clientX-viewportDragLast[0];dy=event.clientY-viewportDragLast[1];viewportDragLast=[event.clientX,event.clientY];}
     else return;
-    const sensitivity=Number(camera.lookSensitivity||.0023);camera.yaw+=dx*sensitivity*(camera.invertHorizontal?-1:1);camera.pitch=clamp(camera.pitch+dy*sensitivity*(camera.invertVertical?1:-1),-Math.PI/2+.02,Math.PI/2-.02);scene.editorCamera=cloneCamera(camera);noteCameraMutation();
+    const result=applyLookDelta(camera,lookInputState,{dx,dy,source,now:event.timeStamp||performance.now()});
+    if(result.reason==='delta-spike')window.__omniforgeDiagnostics?.warn?.('viewport-look-delta-rejected',{source,dx,dy,rejectedSpikes:lookInputState.rejectedSpikes});
+    if(!result.changed)return;
+    scene.editorCamera=cloneCamera(camera);noteCameraMutation();
   });
+  const releaseViewportInput=()=>{
+    const wasNavigating=viewportDragLook||document.pointerLockElement===ui.viewport||Date.now()<viewportNavigationIntentUntil;
+    if(viewportDragLook){viewportDragLook=false;viewportDragLast=null;ui.viewportWrap.classList.remove('drag-look');}
+    viewportNavigationIntentUntil=0;endLookInputSession(lookInputState);keys.clear();
+    if(wasNavigating&&cameraDirty)persistCameraSoon();
+  };
+  window.addEventListener('blur',releaseViewportInput);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseViewportInput();});
   document.addEventListener('keydown',event=>{
     keys.add(event.code);
     if(viewportNavigationActive()){if(['Space','ControlLeft','ControlRight'].includes(event.code))event.preventDefault();return;}

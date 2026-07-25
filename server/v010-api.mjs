@@ -15,6 +15,7 @@ import {
   fitGroundContact,
   generateFoliagePlacements
 } from './v010-systems.mjs';
+import { celestialAuthorityNeedsRepair, repairCelestialAuthority } from './celestial-authority.mjs';
 
 const now = () => new Date().toISOString();
 
@@ -34,6 +35,8 @@ function compactWorldRuntime(state) {
   return {
     engineRevision: Number(state.engine?.revision || 0),
     sceneId: scene.id,
+    sampledAt: Date.now(),
+    visualDurationMs: 2050,
     settings: structuredClone(scene.settings || {}),
     celestialObjects: scene.objects
       .filter(object => object.type === 'directionalLight' || object.properties?.celestialRole)
@@ -58,10 +61,8 @@ async function readJsonBody(req) {
   return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
 }
 
-function ensureWorld(state) {
-  state.worldV010 = defaultWorldSettings(state.worldV010 || {});
-  applyWorldToScene(activeScene(state), state.worldV010);
-  return state.worldV010;
+function ensureWorld(state, reason = 'world-update') {
+  return repairCelestialAuthority(state, { activeScene, defaultWorldSettings, applyWorldToScene, addActivity, reason }).world;
 }
 
 function findModelAsset(state, assetId) {
@@ -135,12 +136,15 @@ export async function handleV010Request(req, res) {
     if (!url.pathname.startsWith('/api/v010/')) return false;
 
     if (req.method === 'GET' && url.pathname === '/api/v010/world') {
-      const state = readState();
-      const world = ensureWorld(state);
+      let state = readState();
+      if (celestialAuthorityNeedsRepair(state, activeScene)) {
+        state = mutateState(current => repairCelestialAuthority(current, { activeScene, defaultWorldSettings, applyWorldToScene, addActivity, reason: 'world-read-migration' })).state;
+      }
+      const world = defaultWorldSettings(state.worldV010 || {});
       json(res, 200, {
         world,
         scene: activeScene(state),
-        assets: state.assets.filter(item => ['model', 'foliageSpecies', 'foliageFamily', 'biomeRecipe', 'windProfile'].includes(item.type)),
+        assets: (state.assets || []).filter(item => ['model', 'foliageSpecies', 'foliageFamily', 'biomeRecipe', 'windProfile'].includes(item.type)),
         transactions: state.foliageTransactions || [],
         runtimeDiagnostics: state.runtimeDiagnostics || {},
         state
@@ -163,8 +167,9 @@ export async function handleV010Request(req, res) {
           weather: { ...current.weather, ...(input.weather || {}) },
           updatedAt: now()
         });
-        const derived = applyWorldToScene(activeScene(state), state.worldV010);
-        addActivity(state, 'world', 'Updated connected time, lighting, atmosphere, sky, clouds, or weather.', { derived });
+        const repaired = repairCelestialAuthority(state, { activeScene, defaultWorldSettings, applyWorldToScene, addActivity, reason: 'world-patch' });
+        const derived = repaired.derived;
+        addActivity(state, 'world', 'Updated connected time, lighting, atmosphere, sky, clouds, or weather.', { derived, celestial: repaired.diagnostics });
         return { world: state.worldV010, derived };
       });
       json(res, 200, { ...result.result, state: result.state });

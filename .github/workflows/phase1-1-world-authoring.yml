@@ -1,0 +1,38 @@
+name: Phase 1.1 World Authoring Corrections
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out corrective branch
+        uses: actions/checkout@v4
+        with:
+          ref: milestone-12-1/celestial-path-terrain-corrections
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Apply Phase 1.1 corrections
+        run: |
+          python3 scripts/apply-phase1-1-world-authoring.py
+          python3 scripts/cleanup-phase1-1-sculpt-routes.py
+
+      - name: Run complete automated tests
+        run: npm test
+
+      - name: Run repository verification
+        run: npm run verify
+
+# Final package-validation trigger after the complete canonical sculpt route group landed.
