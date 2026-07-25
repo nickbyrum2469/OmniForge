@@ -214,12 +214,22 @@ jobs:
             }
             Log 'Sun and Moon selection persistence accepted without Object not found.'
 
-            foreach($route in @('/api/object/duplicate','/api/object/delete')){
-              $rejected=$false
-              try{Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port$route" -ContentType 'application/json' -Body (@{objectId=$moonId}|ConvertTo-Json) -TimeoutSec 8 | Out-Null}catch{$rejected=$true}
-              if(-not $rejected){throw "Protected Moon operation unexpectedly succeeded: $route"}
+            $duplicateRejected=$false
+            try {
+              Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/object/duplicate" -ContentType 'application/json' -Body (@{objectId=$moonId}|ConvertTo-Json) -TimeoutSec 8 | Out-Null
+            } catch {
+              $duplicateRejected=$true
             }
-            Log 'Protected celestial duplication and deletion were rejected.'
+            if(-not $duplicateRejected){throw 'Protected Moon duplication unexpectedly succeeded.'}
+
+            $deleteRejected=$false
+            try {
+              Invoke-RestMethod -Method Delete -Uri "http://127.0.0.1:$port/api/object/$([uri]::EscapeDataString($moonId))" -TimeoutSec 8 | Out-Null
+            } catch {
+              $deleteRejected=$true
+            }
+            if(-not $deleteRejected){throw 'Protected Moon deletion unexpectedly succeeded.'}
+            Log 'Protected celestial duplication and the real DELETE endpoint were rejected.'
 
             Close-Cleanly $process
             $process=$null
