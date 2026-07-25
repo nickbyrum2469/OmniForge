@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 def edit(path, transform):
@@ -10,18 +11,19 @@ def edit(path, transform):
         print(f'updated {path}')
 
 
-def replace_once(source, before, after, path, marker=None):
-    if marker and marker in source:
+def replace_regex_once(source, pattern, replacement, path, marker):
+    if marker in source:
         return source
-    if before not in source:
-        raise RuntimeError(f'Expected Phase 0 follow-up block not found in {path}: {before[:160]!r}')
-    return source.replace(before, after, 1)
+    result, count = re.subn(pattern, replacement, source, count=1, flags=re.MULTILINE)
+    if count != 1:
+        raise RuntimeError(f'Expected Phase 0 follow-up pattern not found in {path}: {pattern[:180]!r}')
+    return result
 
 
 def patch_world_system(source):
-    return replace_once(
+    return replace_regex_once(
         source,
-        "  let sun = scene.objects.find(object => object.type === 'directionalLight' && object.properties?.celestialRole === 'sun')\n    || scene.objects.find(object => object.type === 'directionalLight' && String(object.name || '').trim().toLowerCase() === 'sun')\n    || scene.objects.find(object => object.type === 'directionalLight');",
+        r"  let sun = scene\.objects\.find\(object => object\.type === 'directionalLight' && object\.properties\?\.celestialRole === 'sun'\)\s*\|\| scene\.objects\.find\(object => object\.type === 'directionalLight' && String\(object\.name \|\| ''\)\.trim\(\)\.toLowerCase\(\) === 'sun'\)\s*\|\| scene\.objects\.find\(object => object\.type === 'directionalLight'\);",
         "  let sun = scene.objects.find(object => object.type === 'directionalLight' && object.properties?.celestialRole === 'sun')\n    || scene.objects.find(object => object.type === 'directionalLight' && String(object.name || '').trim().toLowerCase() === 'sun');",
         'server/v010-systems.mjs',
         "trim().toLowerCase() === 'sun');\n  if (!sun)"
@@ -31,42 +33,54 @@ def patch_world_system(source):
 edit('server/v010-systems.mjs', patch_world_system)
 
 
+def insert_after_call(source, call_pattern, insertion, marker, path='server/server.mjs'):
+    if marker in source:
+        return source
+    pattern = rf"(?P<prefix>{call_pattern})(?P<suffix>\s*;?)"
+    replacement = rf"\g<prefix>;{insertion}\g<suffix>"
+    result, count = re.subn(pattern, replacement, source, count=1)
+    if count != 1:
+        raise RuntimeError(f'Could not patch {marker} in {path}.')
+    return result
+
+
 def patch_server(source):
-    replacements = [
-        (
-            "      const body=await readBody(req);releaseActiveProjectLock();const state=createProject({name:body.name,template:body.template,id:body.id});acquireActiveProjectLock(state);\n      addActivity(state,'project',`Created project: ${state.project.name}`);writeState(state);",
-            "      const body=await readBody(req);releaseActiveProjectLock();const state=createProject({name:body.name,template:body.template,id:body.id});ensureCelestialState(state, 'project-create');acquireActiveProjectLock(state);\n      addActivity(state,'project',`Created project: ${state.project.name}`);writeState(state);",
-            "ensureCelestialState(state, 'project-create')"
-        ),
-        (
-            "      const body=await readBody(req);await assertProjectUnlocked(body.projectId);releaseActiveProjectLock();const state=openProject(body.projectId);acquireActiveProjectLock(state);",
-            "      const body=await readBody(req);await assertProjectUnlocked(body.projectId);releaseActiveProjectLock();const state=openProject(body.projectId);ensureCelestialState(state, 'project-open');writeState(state);acquireActiveProjectLock(state);",
-            "ensureCelestialState(state, 'project-open')"
-        ),
-        (
-            "      const body=await readBody(req);const state=duplicateProject(body.projectId,body.name);releaseActiveProjectLock();acquireActiveProjectLock(state);",
-            "      const body=await readBody(req);const state=duplicateProject(body.projectId,body.name);ensureCelestialState(state, 'project-duplicate');writeState(state);releaseActiveProjectLock();acquireActiveProjectLock(state);",
-            "ensureCelestialState(state, 'project-duplicate')"
-        ),
-        (
-            "      const body=await readBody(req);const state=importProject(body.sourcePath,{name:body.name});releaseActiveProjectLock();acquireActiveProjectLock(state);",
-            "      const body=await readBody(req);const state=importProject(body.sourcePath,{name:body.name});ensureCelestialState(state, 'project-import');writeState(state);releaseActiveProjectLock();acquireActiveProjectLock(state);",
-            "ensureCelestialState(state, 'project-import')"
-        ),
-        (
-            "      const body=await readBody(req);const state=locateProject(body.projectId,body.sourcePath);releaseActiveProjectLock();acquireActiveProjectLock(state);",
-            "      const body=await readBody(req);const state=locateProject(body.projectId,body.sourcePath);ensureCelestialState(state, 'project-locate');writeState(state);releaseActiveProjectLock();acquireActiveProjectLock(state);",
-            "ensureCelestialState(state, 'project-locate')"
-        ),
-        (
-            "      const body = await readBody(req);\n      const incoming = sanitizeScene(body.scene);",
-            "      const body = await readBody(req);\n      const incoming = sanitizeScene(body.scene);",
-            None
-        )
-    ]
-    for before, after, marker in replacements:
-        if marker:
-            source = replace_once(source, before, after, 'server/server.mjs', marker)
+    source = insert_after_call(
+        source,
+        r"const state=createProject\(\{name:body\.name,template:body\.template,id:body\.id\}\)",
+        "ensureCelestialState(state, 'project-create')",
+        "ensureCelestialState(state, 'project-create')"
+    )
+    source = insert_after_call(
+        source,
+        r"const state=openProject\(body\.projectId\)",
+        "ensureCelestialState(state, 'project-open');writeState(state)",
+        "ensureCelestialState(state, 'project-open')"
+    )
+    source = insert_after_call(
+        source,
+        r"const state=duplicateProject\(body\.projectId,body\.name\)",
+        "ensureCelestialState(state, 'project-duplicate');writeState(state)",
+        "ensureCelestialState(state, 'project-duplicate')"
+    )
+    source = insert_after_call(
+        source,
+        r"const state=importProject\(body\.sourcePath,\{name:body\.name\}\)",
+        "ensureCelestialState(state, 'project-import');writeState(state)",
+        "ensureCelestialState(state, 'project-import')"
+    )
+    source = insert_after_call(
+        source,
+        r"const state=locateProject\(body\.projectId,body\.sourcePath\)",
+        "ensureCelestialState(state, 'project-locate');writeState(state)",
+        "ensureCelestialState(state, 'project-locate')"
+    )
+    source = insert_after_call(
+        source,
+        r"const state=createProject\(\{name:body\.name,template:body\.template,id:body\.id\}\)",
+        "ensureCelestialState(state, 'legacy-project-create');writeState(state)",
+        "ensureCelestialState(state, 'legacy-project-create')"
+    )
     return source
 
 
