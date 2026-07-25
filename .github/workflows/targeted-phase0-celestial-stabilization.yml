@@ -203,8 +203,6 @@ jobs:
             $selection=@{objectId=$persisted.Moon.id}|ConvertTo-Json
             Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/selection" -ContentType 'application/json' -Body $selection -TimeoutSec 8 | Out-Null
             Write-Host 'Packaged celestial authority, legacy deduplication, selection, clean close, and restart persistence passed.'
-            Close-Cleanly $process
-            $process=$null
           }finally{
             Force-Cleanup
             Remove-Item Env:OMNIFORGE_DATA_ROOT -ErrorAction SilentlyContinue
