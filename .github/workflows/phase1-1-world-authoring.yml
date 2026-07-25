@@ -1,9 +1,6 @@
 name: Phase 1.1 World Authoring Corrections
 
 on:
-  push:
-    branches:
-      - milestone-12-1/celestial-path-terrain-corrections
   workflow_dispatch:
 
 permissions:
@@ -11,7 +8,6 @@ permissions:
 
 jobs:
   apply-and-verify:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Check out corrective branch
@@ -29,7 +25,9 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Apply Phase 1.1 corrections
-        run: python3 scripts/apply-phase1-1-world-authoring.py
+        run: |
+          python3 scripts/apply-phase1-1-world-authoring.py
+          python3 scripts/cleanup-phase1-1-sculpt-routes.py
 
       - name: Run complete automated tests
         run: npm test
@@ -37,18 +35,4 @@ jobs:
       - name: Run repository verification
         run: npm run verify
 
-      - name: Commit verified corrective source
-        shell: bash
-        run: |
-          rm -f PHASE1_1_OUTPUT.txt
-          if git diff --quiet; then
-            echo "Phase 1.1 source is already integrated."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app server
-          git commit -m "Add celestial controls, volumetric clouds, path tools, and local terrain sculpting"
-          git push origin HEAD:milestone-12-1/celestial-path-terrain-corrections
-
-# Final user-authored validation trigger after all source and sculpt routes landed.
+# Manual fallback only. The default-branch targeted PR runner is the sole automatic source writer.
