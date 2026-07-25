@@ -87,6 +87,7 @@ test('viewport acquisition protects camera authority before pointer lock and rel
   assert.match(app, /window\.addEventListener\('blur',releaseViewportInput\)/);
   assert.match(app, /visibilitychange.*releaseViewportInput/);
   assert.match(app, /viewportNavigationActive\(\).*viewportNavigationIntentUntil/s);
+  assert.match(app, /wasNavigating&&cameraDirty\)persistCameraSoon\(\)/);
 });
 
 test('normal rendering no longer depends on the legacy CSS atmosphere', () => {
@@ -96,6 +97,9 @@ test('normal rendering no longer depends on the legacy CSS atmosphere', () => {
   const css = fs.readFileSync(new URL('../app/v010.css', import.meta.url), 'utf8');
   assert.match(renderer, /new SkyPass\(gl\)/);
   assert.match(renderer, /alpha:false/);
+  assert.match(renderer, /this\.skyPass=null;try\{this\.skyPass=new SkyPass\(gl\)/);
+  assert.match(renderer, /if\(this\.skyPass\)\{try\{this\.skyPass\.render/);
+  assert.match(renderer, /opaque environment fallback/);
   assert.doesNotMatch(renderer, /gl\.clearColor\(0,0,0,0\)/);
   assert.doesNotMatch(app, /viewportWrap\.style\.background\s*=\s*`linear-gradient/);
   assert.doesNotMatch(world, /--v010-clouds/);
