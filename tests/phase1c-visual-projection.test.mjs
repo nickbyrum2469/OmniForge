@@ -14,6 +14,8 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /angularDistance=sqrt\(max\(0\.0,2\.0\*\(1\.0-cosine\)\)\)/);
   assert.match(sky, /float radius=max\(aa\*1\.45/);
   assert.match(sky, /float psf=exp\(-0\.5\*pow\(angularDistance\/sigma,2\.0\)\)/);
+  assert.match(sky, /float disc=psf\*0\.94/);
+  assert.doesNotMatch(sky, /float disc=max\(core,psf/);
   assert.match(sky, /uStarDensity\*0\.13/);
   assert.doesNotMatch(sky, /microStarLayer/);
   assert.match(sky, /vec2 coronaDirection=vec2\(cos\(eclipseAngle\),sin\(eclipseAngle\)\)/);
@@ -25,6 +27,7 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /float annularRing=innerRim\*annularity/);
   assert.match(sky, /float diamondCore=/);
   assert.match(sky, /float diamondFlare=/);
+  assert.match(sky, /eclipseStarVisibility=smoothstep\(0\.975,1\.0,uSolarEclipse\)\*uDayFactor\*0\.09/);
   assert.match(sky, /horizonTwinkle/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
   assert.doesNotMatch(sky, /projected\.xy\*scale/);

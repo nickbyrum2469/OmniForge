@@ -205,8 +205,7 @@ vec3 starLayer(vec3 ray,float scale,float seed){
     float sigma=max(aa*1.05,radius*0.58);
     float psf=exp(-0.5*pow(angularDistance/sigma,2.0));
     psf*=1.0-smoothstep(radius*2.2,radius*3.15,angularDistance);
-    float core=1.0-smoothstep(max(0.0,radius-aa),radius+aa,angularDistance);
-    float disc=max(core,psf*0.88);
+    float disc=psf*0.94;
     vec3 reference=abs(starDirection.y)>.94?vec3(1,0,0):vec3(0,1,0);
     vec3 right=normalize(cross(reference,starDirection));
     vec3 up=normalize(cross(starDirection,right));
@@ -543,7 +542,7 @@ void main(){
 
   float starHorizon=smoothstep(0.015,0.16,ray.y);
   vec3 stars=starLayer(ray,180.0,uStarSeed)+starLayer(ray,360.0,uStarSeed+101.0);
-  float eclipseStarVisibility=pow(uSolarEclipse,7.0)*uDayFactor*0.34;
+  float eclipseStarVisibility=smoothstep(0.975,1.0,uSolarEclipse)*uDayFactor*0.09;
   sky+=stars*max(uStarVisibility,eclipseStarVisibility)*starHorizon*(1.0-eclipseSilhouette);
   sky+=milkyWay(ray,starHorizon);
 

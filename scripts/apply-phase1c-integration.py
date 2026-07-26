@@ -72,6 +72,8 @@ REQUIRED = {
         'sunLinear*horizon*uTwilightFactor*(0.025+twilightSunward*0.34)',
         'float eclipseAngularRatio=eclipseRadius/max(0.0001,uSunAngularRadius)',
         'float diamondCore=exp(-dot(diamondDelta,diamondDelta)/0.00055)*diamondWindow',
+        'float disc=psf*0.94',
+        'eclipseStarVisibility=smoothstep(0.975,1.0,uSolarEclipse)*uDayFactor*0.09',
         'vec2 sunCoronaUv=celestialUv(ray,uSunDirection,uSunAngularRadius)',
         'float eclipseActive=step(0.001,uSolarEclipse)',
         'float eclipseSilhouette=eclipseDisc*eclipseActive*uDayFactor',

@@ -125,6 +125,8 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /float radius=max\(aa\*1\.45/);
   assert.match(sky, /rayLength=radius\*mix\(2\.0,4\.2/);
   assert.match(sky, /float psf=exp\(-0\.5\*pow\(angularDistance\/sigma,2\.0\)\)/);
+  assert.match(sky, /float disc=psf\*0\.94/);
+  assert.doesNotMatch(sky, /float disc=max\(core,psf/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
   assert.match(sky, /vec2 craterField/);
   assert.match(sky, /float lunarEllipse/);

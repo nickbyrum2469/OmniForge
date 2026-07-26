@@ -73,3 +73,5 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Focused lunar/celestial/projection tests: 19/19 passed.
 - PowerShell visual-harness parser: passed.
 - Next: run full verification, package the exact committed head, and manually inspect frames 09, 12, 13, and 15 before accepting this gate.
+- Exact packaged `34aa554` evidence passed the four bounded fixes: corrected world Moon scale, distinct annularity, asymmetric diamond ring, and restored landscape corona.
+- Manual review still rejected hard-edged one-pixel stars and excessive daytime eclipse stars. The follow-up removes the hard disc maximum so all star cores use the antialiased Gaussian PSF, and gates sparse eclipse stars to near-totality only.
