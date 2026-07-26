@@ -113,8 +113,11 @@ try{
   }
   $clearDayCamera=@{position=@(20,15,30);yaw=-.55;pitch=.18;fov=62}
   $revision=Patch-World $port $clearDay
-  Request-Capture $captureDir 'clear-day' $clearDayCamera $revision|Out-Null
-  $captureRecords+=[ordered]@{id='clear-day';file='clear-day.png';preset='clear-day';camera=$clearDayCamera;time=12;seed=1337;worldStateHash=Get-StateHash $clearDay;revision=$revision}
+  Request-Capture $captureDir '01-clear-midday-wide' $clearDayCamera $revision|Out-Null
+  $captureRecords+=[ordered]@{id='01-clear-midday-wide';file='01-clear-midday-wide.png';preset='clear-day';camera=$clearDayCamera;time=12;seed=1337;worldStateHash=Get-StateHash $clearDay;revision=$revision}
+  $clearPlayerCamera=@{position=@(0,6,20);yaw=0;pitch=.08;fov=68}
+  Request-Capture $captureDir '02-clear-midday-player' $clearPlayerCamera $revision|Out-Null
+  $captureRecords+=[ordered]@{id='02-clear-midday-player';file='02-clear-midday-player.png';preset='clear-day';camera=$clearPlayerCamera;time=12;seed=1337;worldStateHash=Get-StateHash $clearDay;revision=$revision}
 
   $nightSky=@{
     lookPreset='custom';time=@{hours=0};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
@@ -124,14 +127,31 @@ try{
   }
   $nightCamera=@{position=@(0,20,0);yaw=-.65;pitch=.92;fov=78}
   $revision=Patch-World $port $nightSky
-  Request-Capture $captureDir 'night-sky' $nightCamera $revision|Out-Null
-  $captureRecords+=[ordered]@{id='night-sky';file='night-sky.png';preset='realistic-night';camera=$nightCamera;time=0;seed=1337;worldStateHash=Get-StateHash $nightSky;revision=$revision}
+  Request-Capture $captureDir '05-night-realistic-wide' $nightCamera $revision|Out-Null
+  $captureRecords+=[ordered]@{id='05-night-realistic-wide';file='05-night-realistic-wide.png';preset='realistic-night';camera=$nightCamera;time=0;seed=1337;worldStateHash=Get-StateHash $nightSky;revision=$revision}
+
+  $faintMilkyWay=@{sky=@{starIntensity=.34;starDensity=.62;starBrightness=.7;milkyWayIntensity=.18;milkyWayWidth=.2;milkyWayDetail=.82;milkyWayOrientation=32;milkyWayDust=.74;milkyWayWarp=.3;milkyWayClumping=.54;milkyWayCoreStrength=.42;milkyWayWidthVariation=.4;milkyWayColor='#91a4cf'}}
+  $faintMilkyWayCamera=@{position=@(0,20,0);yaw=-.72;pitch=.92;fov=72}
+  $revision=Patch-World $port $faintMilkyWay
+  Request-Capture $captureDir '06-night-faint-milkyway' $faintMilkyWayCamera $revision|Out-Null
+  $captureRecords+=[ordered]@{id='06-night-faint-milkyway';file='06-night-faint-milkyway.png';preset='faint-natural';camera=$faintMilkyWayCamera;time=0;seed=1337;worldStateHash=Get-StateHash $faintMilkyWay;revision=$revision}
 
   $milkyWay=@{sky=@{starIntensity=.24;starDensity=.72;starBrightness=.68;milkyWayIntensity=.72;milkyWayWidth=.18;milkyWayDetail=1.2;milkyWayOrientation=32;milkyWayDust=.86;milkyWayWarp=.5;milkyWayClumping=.88;milkyWayCoreStrength=1.08;milkyWayWidthVariation=.66}}
   $milkyWayCamera=@{position=@(0,20,0);yaw=-.75;pitch=1.02;fov=68}
   $revision=Patch-World $port $milkyWay
-  Request-Capture $captureDir 'milky-way' $milkyWayCamera $revision|Out-Null
-  $captureRecords+=[ordered]@{id='milky-way';file='milky-way.png';preset='dramatic-core';camera=$milkyWayCamera;time=0;seed=1337;worldStateHash=Get-StateHash $milkyWay;revision=$revision}
+  Request-Capture $captureDir '07-night-core-close' $milkyWayCamera $revision|Out-Null
+  $captureRecords+=[ordered]@{id='07-night-core-close';file='07-night-core-close.png';preset='dramatic-core';camera=$milkyWayCamera;time=0;seed=1337;worldStateHash=Get-StateHash $milkyWay;revision=$revision}
+
+  $fantasySky=@{
+    lookPreset='fantasy-sky';time=@{hours=22};weather=@{preset='clear';fog=0};clouds=@{quality='quality';coverage=.04;density=.14;shadowStrength=.08};
+    lighting=@{profile='quality';moonIntensity=.22;indirectStrength=.58};
+    atmosphere=@{haze=.012;mie=.04;humidity=.03;dayFogMultiplier=.03;nightFogMultiplier=.1;exposure=.82;saturation=1.22;contrast=1.07;vibrance=.28};
+    sky=@{celestialMode='manual';sunAzimuth=180;sunElevation=-32;moonAzimuth=145;moonElevation=-15;planetEnabled=$false;eclipseMode='auto';starIntensity=1.2;starDensity=.82;starBrightness=.92;starTwinkleAmount=.45;starSizeMin=.38;starSizeMax=1.45;starRayStrength=.1;starHeroFraction=.012;milkyWayIntensity=.82;milkyWayWidth=.21;milkyWayDetail=1.25;milkyWayOrientation=32;milkyWayDust=.82;milkyWayWarp=.72;milkyWayClumping=.96;milkyWayCoreStrength=1.08;milkyWayWidthVariation=.72;milkyWayColor='#b984ff'}
+  }
+  $fantasyCamera=@{position=@(0,20,0);yaw=-.75;pitch=1.02;fov=68}
+  $revision=Patch-World $port $fantasySky
+  Request-Capture $captureDir '08-fantasy-violet-galaxy' $fantasyCamera $revision|Out-Null
+  $captureRecords+=[ordered]@{id='08-fantasy-violet-galaxy';file='08-fantasy-violet-galaxy.png';preset='fantasy-violet';camera=$fantasyCamera;time=22;seed=1337;worldStateHash=Get-StateHash $fantasySky;revision=$revision}
 
   $moonClose=@{
     lookPreset='custom';time=@{hours=1};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
@@ -140,8 +160,11 @@ try{
   }
   $moonCamera=@{position=@(0,20,0);yaw=0;pitch=.610865;fov=12}
   $revision=Patch-World $port $moonClose
-  Request-Capture $captureDir 'moon-close' $moonCamera $revision|Out-Null
-  $captureRecords+=[ordered]@{id='moon-close';file='moon-close.png';preset='realistic-moon';camera=$moonCamera;time=1;seed=2718;worldStateHash=Get-StateHash $moonClose;revision=$revision}
+  $moonWorldCamera=@{position=@(0,20,0);yaw=0;pitch=.610865;fov=46}
+  Request-Capture $captureDir '09-moon-world-scale' $moonWorldCamera $revision|Out-Null
+  $captureRecords+=[ordered]@{id='09-moon-world-scale';file='09-moon-world-scale.png';preset='realistic-moon';camera=$moonWorldCamera;time=1;seed=2718;worldStateHash=Get-StateHash $moonClose;revision=$revision}
+  Request-Capture $captureDir '10-moon-close' $moonCamera $revision|Out-Null
+  $captureRecords+=[ordered]@{id='10-moon-close';file='10-moon-close.png';preset='realistic-moon';camera=$moonCamera;time=1;seed=2718;worldStateHash=Get-StateHash $moonClose;revision=$revision}
 
   $solarEclipse=@{
     lookPreset='custom';time=@{hours=12};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
@@ -150,8 +173,8 @@ try{
   }
   $eclipseCamera=@{position=@(0,20,0);yaw=0;pitch=.523599;fov=10}
   $revision=Patch-World $port $solarEclipse
-  Request-Capture $captureDir 'solar-eclipse' $eclipseCamera $revision|Out-Null
-  $captureRecords+=[ordered]@{id='solar-eclipse';file='solar-eclipse.png';preset='total-eclipse';camera=$eclipseCamera;time=12;seed=1337;worldStateHash=Get-StateHash $solarEclipse;revision=$revision}
+  Request-Capture $captureDir '14-total-eclipse' $eclipseCamera $revision|Out-Null
+  $captureRecords+=[ordered]@{id='14-total-eclipse';file='14-total-eclipse.png';preset='total-eclipse';camera=$eclipseCamera;time=12;seed=1337;worldStateHash=Get-StateHash $solarEclipse;revision=$revision}
 
   $goldenHour=@{
     lookPreset='golden-hour';time=@{hours=18.15};weather=@{preset='partly-cloudy';fog=.008};clouds=@{quality='quality';coverage=.22;density=.38;shadowStrength=.24};
@@ -162,8 +185,8 @@ try{
   $landscapeCamera=@{position=@(20,15,30);yaw=-.55;pitch=.14;fov=62}
   $goldenCamera=@{position=@(20,15,30);yaw=.42;pitch=.12;fov=62}
   $revision=Patch-World $port $goldenHour
-  Request-Capture $captureDir 'golden-hour' $goldenCamera $revision 1100|Out-Null
-  $captureRecords+=[ordered]@{id='golden-hour';file='golden-hour.png';preset='golden-hour';camera=$goldenCamera;time=18.15;seed=1337;worldStateHash=Get-StateHash $goldenHour;revision=$revision}
+  Request-Capture $captureDir '03-golden-hour-coast' $goldenCamera $revision 1100|Out-Null
+  $captureRecords+=[ordered]@{id='03-golden-hour-coast';file='03-golden-hour-coast.png';preset='golden-hour';camera=$goldenCamera;time=18.15;seed=1337;worldStateHash=Get-StateHash $goldenHour;revision=$revision}
 
   $twilight=@{
     lookPreset='clean-twilight';time=@{hours=19.45};weather=@{preset='clear';fog=.002};clouds=@{quality='quality';coverage=.1;density=.24;shadowStrength=.15};
@@ -173,8 +196,8 @@ try{
   }
   $twilightCamera=@{position=@(0,20,0);yaw=0;pitch=.2;fov=72}
   $revision=Patch-World $port $twilight
-  Request-Capture $captureDir 'twilight-stars' $twilightCamera $revision 1100|Out-Null
-  $captureRecords+=[ordered]@{id='twilight-stars';file='twilight-stars.png';preset='clean-twilight';camera=$twilightCamera;time=19.45;seed=1337;worldStateHash=Get-StateHash $twilight;revision=$revision}
+  Request-Capture $captureDir '04-twilight-stars' $twilightCamera $revision 1100|Out-Null
+  $captureRecords+=[ordered]@{id='04-twilight-stars';file='04-twilight-stars.png';preset='clean-twilight';camera=$twilightCamera;time=19.45;seed=1337;worldStateHash=Get-StateHash $twilight;revision=$revision}
 
   $partialEclipse=@{
     lookPreset='custom';time=@{hours=12};weather=@{preset='clear';fog=0};clouds=@{coverage=.08;density=.2;shadowStrength=.12};
@@ -183,8 +206,8 @@ try{
     sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=30;sunSize=9;moonAzimuth=.72;moonElevation=30;moonSize=9;solarEclipseCoverage=1;eclipseMode='automatic';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
   }
   $revision=Patch-World $port $partialEclipse
-  Request-Capture $captureDir 'partial-eclipse' $eclipseCamera $revision 900|Out-Null
-  $captureRecords+=[ordered]@{id='partial-eclipse';file='partial-eclipse.png';preset='partial-eclipse';camera=$eclipseCamera;time=12;seed=1337;worldStateHash=Get-StateHash $partialEclipse;revision=$revision}
+  Request-Capture $captureDir '11-partial-eclipse' $eclipseCamera $revision 900|Out-Null
+  $captureRecords+=[ordered]@{id='11-partial-eclipse';file='11-partial-eclipse.png';preset='partial-eclipse';camera=$eclipseCamera;time=12;seed=1337;worldStateHash=Get-StateHash $partialEclipse;revision=$revision}
 
   $annularEclipse=@{
     lookPreset='custom';time=@{hours=17.4};weather=@{preset='partly-cloudy';fog=.006};clouds=@{coverage=.18;density=.32;shadowStrength=.2};
@@ -194,8 +217,8 @@ try{
   }
   $annularCamera=@{position=@(0,20,0);yaw=0;pitch=.279253;fov=10}
   $revision=Patch-World $port $annularEclipse
-  Request-Capture $captureDir 'annular-eclipse' $annularCamera $revision 1100|Out-Null
-  $captureRecords+=[ordered]@{id='annular-eclipse';file='annular-eclipse.png';preset='annular-eclipse-warm';camera=$annularCamera;time=17.4;seed=1337;worldStateHash=Get-StateHash $annularEclipse;revision=$revision}
+  Request-Capture $captureDir '12-annular-eclipse' $annularCamera $revision 1100|Out-Null
+  $captureRecords+=[ordered]@{id='12-annular-eclipse';file='12-annular-eclipse.png';preset='annular-eclipse-warm';camera=$annularCamera;time=17.4;seed=1337;worldStateHash=Get-StateHash $annularEclipse;revision=$revision}
 
   $overcast=@{
     lookPreset='overcast-soft';time=@{hours=13};weather=@{preset='overcast';fog=.018};clouds=@{quality='quality';coverage=.88;density=.68;shadowStrength=.42};
@@ -204,11 +227,74 @@ try{
     sky=@{celestialMode='manual';sunAzimuth=30;sunElevation=38;moonAzimuth=210;moonElevation=-20;planetEnabled=$false;eclipseMode='auto';sunGlow=.15;starIntensity=0;milkyWayIntensity=0}
   }
   $revision=Patch-World $port $overcast
-  Request-Capture $captureDir 'overcast' $landscapeCamera $revision 1300|Out-Null
-  $captureRecords+=[ordered]@{id='overcast';file='overcast.png';preset='overcast-soft';camera=$landscapeCamera;time=13;seed=1337;worldStateHash=Get-StateHash $overcast;revision=$revision}
+  Request-Capture $captureDir '18-overcast' $landscapeCamera $revision 1300|Out-Null
+  $captureRecords+=[ordered]@{id='18-overcast';file='18-overcast.png';preset='overcast-soft';camera=$landscapeCamera;time=13;seed=1337;worldStateHash=Get-StateHash $overcast;revision=$revision}
+
+  $diamondRing=@{
+    lookPreset='custom';time=@{hours=12};weather=@{preset='clear';fog=0};clouds=@{quality='quality';coverage=.03;density=.14;shadowStrength=.08};
+    lighting=@{profile='quality'};
+    atmosphere=@{haze=.012;mie=.04;humidity=.04;exposure=.78;saturation=1.04;contrast=1.05};
+    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=30;sunSize=9;moonAzimuth=0;moonElevation=30;moonSize=9;solarEclipseCoverage=1;eclipseMode='force-solar';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
+  }
+  $revision=Patch-World $port $diamondRing
+  Request-Capture $captureDir '13-diamond-ring' $eclipseCamera $revision 1000|Out-Null
+  $captureRecords+=[ordered]@{id='13-diamond-ring';file='13-diamond-ring.png';preset='diamond-ring';camera=$eclipseCamera;time=12;seed=1337;worldStateHash=Get-StateHash $diamondRing;revision=$revision}
+
+  $eclipseLandscape=@{
+    lookPreset='custom';time=@{hours=12};weather=@{preset='partly-cloudy';fog=.004};clouds=@{quality='quality';coverage=.16;density=.3;shadowStrength=.18};
+    lighting=@{profile='quality'};
+    atmosphere=@{haze=.035;mie=.075;humidity=.12;exposure=.82;saturation=1.05;contrast=1.06};
+    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=8;sunSize=9;moonAzimuth=0;moonElevation=8;moonSize=9.5;solarEclipseCoverage=1;eclipseMode='force-solar';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
+  }
+  $eclipseLandscapeCamera=@{position=@(0,11,24);yaw=0;pitch=.139626;fov=62}
+  $revision=Patch-World $port $eclipseLandscape
+  Request-Capture $captureDir '15-eclipse-landscape' $eclipseLandscapeCamera $revision 1200|Out-Null
+  $captureRecords+=[ordered]@{id='15-eclipse-landscape';file='15-eclipse-landscape.png';preset='total-eclipse-landscape';camera=$eclipseLandscapeCamera;time=12;seed=1337;worldStateHash=Get-StateHash $eclipseLandscape;revision=$revision}
+
+  $forestMorning=@{
+    lookPreset='custom';time=@{hours=7};weather=@{preset='fog';fog=.18};clouds=@{quality='quality';coverage=.12;density=.28;shadowStrength=.14};
+    lighting=@{profile='quality';sunIntensity=2.8;indirectStrength=.72};
+    atmosphere=@{haze=.075;mie=.14;humidity=.72;dayFogMultiplier=.26;nightFogMultiplier=.3;exposure=.86;saturation=1.05;contrast=1.06;vibrance=.08};
+    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=9;moonAzimuth=180;moonElevation=-20;planetEnabled=$false;eclipseMode='auto';sunGlow=.82;starIntensity=0;milkyWayIntensity=0}
+  }
+  $morningCamera=@{position=@(0,7,22);yaw=0;pitch=.12;fov=68}
+  $revision=Patch-World $port $forestMorning
+  Request-Capture $captureDir '16-forest-morning-shafts' $morningCamera $revision 1300|Out-Null
+  $captureRecords+=[ordered]@{id='16-forest-morning-shafts';file='16-forest-morning-shafts.png';preset='forest-morning';camera=$morningCamera;time=7;seed=1337;worldStateHash=Get-StateHash $forestMorning;revision=$revision}
+
+  $coastalBacklight=@{
+    lookPreset='custom';time=@{hours=18};weather=@{preset='clear';fog=.006};clouds=@{quality='quality';coverage=.08;density=.22;shadowStrength=.1};
+    lighting=@{profile='quality';sunIntensity=3;indirectStrength=.7};
+    atmosphere=@{haze=.055;mie=.12;humidity=.68;dayFogMultiplier=.12;nightFogMultiplier=.2;exposure=.86;saturation=1.08;contrast=1.07;vibrance=.12};
+    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=5;moonAzimuth=180;moonElevation=-18;planetEnabled=$false;eclipseMode='auto';sunGlow=1.05;starIntensity=0;milkyWayIntensity=0}
+  }
+  $revision=Patch-World $port $coastalBacklight
+  Request-Capture $captureDir '17-coastal-backlight' $morningCamera $revision 1200|Out-Null
+  $captureRecords+=[ordered]@{id='17-coastal-backlight';file='17-coastal-backlight.png';preset='coastal-backlight';camera=$morningCamera;time=18;seed=1337;worldStateHash=Get-StateHash $coastalBacklight;revision=$revision}
+
+  $storm=@{
+    lookPreset='storm-drama';time=@{hours=14};weather=@{preset='storm';fog=.12;precipitation=.82;wetness=.72;windStrength=.9};clouds=@{quality='quality';coverage=.96;density=.88;shadowStrength=.68};
+    lighting=@{profile='quality';sunIntensity=1.5;indirectStrength=.58};
+    atmosphere=@{haze=.14;mie=.19;humidity=.9;dayFogMultiplier=.34;nightFogMultiplier=.4;exposure=.8;saturation=1.04;contrast=1.08;vibrance=.1};
+    sky=@{celestialMode='manual';sunAzimuth=24;sunElevation=24;moonAzimuth=205;moonElevation=-18;planetEnabled=$false;eclipseMode='auto';sunGlow=.18;starIntensity=0;milkyWayIntensity=0}
+  }
+  $revision=Patch-World $port $storm
+  Request-Capture $captureDir '19-storm' $landscapeCamera $revision 1500|Out-Null
+  $captureRecords+=[ordered]@{id='19-storm';file='19-storm.png';preset='storm-drama';camera=$landscapeCamera;time=14;seed=1337;worldStateHash=Get-StateHash $storm;revision=$revision}
+
+  $revision=Patch-World $port $clearDay
+  Request-Capture $captureDir '20-path-terrain-regression' $clearDayCamera $revision|Out-Null
+  $captureRecords+=[ordered]@{id='20-path-terrain-regression';file='20-path-terrain-regression.png';preset='clear-day';camera=$clearDayCamera;time=12;seed=1337;worldStateHash=Get-StateHash $clearDay;revision=$revision}
 
   $metrics=[ordered]@{}
-  foreach($id in @('clear-day','night-sky','milky-way','moon-close','solar-eclipse','golden-hour','twilight-stars','partial-eclipse','annular-eclipse','overcast')){$metrics[$id]=Get-ImageMetrics(Join-Path $captureDir "$id.png")}
+  $captureIds=@(
+    '01-clear-midday-wide','02-clear-midday-player','03-golden-hour-coast','04-twilight-stars',
+    '05-night-realistic-wide','06-night-faint-milkyway','07-night-core-close','08-fantasy-violet-galaxy',
+    '09-moon-world-scale','10-moon-close','11-partial-eclipse','12-annular-eclipse','13-diamond-ring',
+    '14-total-eclipse','15-eclipse-landscape','16-forest-morning-shafts','17-coastal-backlight',
+    '18-overcast','19-storm','20-path-terrain-regression'
+  )
+  foreach($id in $captureIds){$metrics[$id]=Get-ImageMetrics(Join-Path $captureDir "$id.png")}
   $metrics|ConvertTo-Json -Depth 8|Set-Content $metricsFile -Encoding utf8
 
   $sourceCommit=(Get-Content -LiteralPath(Join-Path $output 'source-commit')-Raw).Trim()
@@ -219,27 +305,29 @@ try{
     buildIdentity=$sourceCommit
     platform=[Environment]::OSVersion.VersionString
     gpu=if($gpuNames.Count){$gpuNames}else{@('Not reported by Win32_VideoController')}
-    resolution="$($metrics['clear-day'].width)x$($metrics['clear-day'].height)"
+    resolution="$($metrics['01-clear-midday-wide'].width)x$($metrics['01-clear-midday-wide'].height)"
     qualityTier='quality'
     generatedAt=(Get-Date).ToUniversalTime().ToString('o')
     files=$captureRecords
   }
   $manifest|ConvertTo-Json -Depth 12|Set-Content $manifestFile -Encoding utf8
 
-  if($metrics['night-sky'].brightFraction-gt.1){throw "Night sky is overdrawn: bright fraction $($metrics['night-sky'].brightFraction)."}
-  if($metrics['night-sky'].maximumLuma-lt.42 -or $metrics['night-sky'].lumaStdDev-lt.012){throw 'Night sky does not contain a readable varied star field.'}
-  if($metrics['night-sky'].maximumSingleRowSpike-gt.18){throw "Night sky contains a severe horizontal seam: $($metrics['night-sky'].maximumSingleRowSpike)."}
-  if($metrics['milky-way'].maximumLuma-lt.34 -or $metrics['milky-way'].lumaStdDev-lt.014){throw 'Milky Way is absent or lacks visible internal structure.'}
-  if($metrics['milky-way'].maximumSingleRowSpike-gt.18){throw "Milky Way contains a severe row seam: $($metrics['milky-way'].maximumSingleRowSpike)."}
-  if($metrics['moon-close'].maximumLuma-lt.42 -or $metrics['moon-close'].lumaStdDev-lt.018){throw 'Moon close-up is too small or lacks readable surface contrast.'}
-  if($metrics['solar-eclipse'].darkFraction-lt.001){throw 'Solar eclipse does not contain a clearly readable dark occluder.'}
-  if($metrics['partial-eclipse'].darkFraction-lt.001){throw 'Partial eclipse does not contain a readable lunar occluder.'}
-  if($metrics['annular-eclipse'].darkFraction-lt.001-or$metrics['annular-eclipse'].maximumLuma-lt.35){throw 'Annular eclipse does not contain both a dark occluder and a readable solar ring.'}
-  if($metrics['golden-hour'].averageLuma-lt.035){throw 'Golden-hour landscape is unreadably dark.'}
-  if($metrics['twilight-stars'].maximumLuma-lt.3){throw 'Twilight capture lacks readable celestial or horizon highlights.'}
-  if($metrics['overcast'].averageLuma-lt.035){throw 'Overcast landscape is unreadably dark.'}
-  if($metrics['clear-day'].averageBlue-lt$metrics['clear-day'].averageRed){throw 'Clear-day capture is not blue-dominant.'}
-  if($metrics['clear-day'].brightFraction-gt.72){throw 'Clear-day capture is still excessively blown out.'}
+  if($metrics['05-night-realistic-wide'].brightFraction-gt.1){throw "Night sky is overdrawn: bright fraction $($metrics['05-night-realistic-wide'].brightFraction)."}
+  if($metrics['05-night-realistic-wide'].maximumLuma-lt.42 -or $metrics['05-night-realistic-wide'].lumaStdDev-lt.012){throw 'Night sky does not contain a readable varied star field.'}
+  if($metrics['05-night-realistic-wide'].maximumSingleRowSpike-gt.18){throw "Night sky contains a severe horizontal seam: $($metrics['05-night-realistic-wide'].maximumSingleRowSpike)."}
+  if($metrics['07-night-core-close'].maximumLuma-lt.34 -or $metrics['07-night-core-close'].lumaStdDev-lt.014){throw 'Milky Way is absent or lacks visible internal structure.'}
+  if($metrics['07-night-core-close'].maximumSingleRowSpike-gt.18){throw "Milky Way contains a severe row seam: $($metrics['07-night-core-close'].maximumSingleRowSpike)."}
+  if($metrics['10-moon-close'].maximumLuma-lt.42 -or $metrics['10-moon-close'].lumaStdDev-lt.018){throw 'Moon close-up is too small or lacks readable surface contrast.'}
+  if($metrics['14-total-eclipse'].darkFraction-lt.001){throw 'Solar eclipse does not contain a clearly readable dark occluder.'}
+  if($metrics['11-partial-eclipse'].darkFraction-lt.001){throw 'Partial eclipse does not contain a readable lunar occluder.'}
+  if($metrics['12-annular-eclipse'].darkFraction-lt.001-or$metrics['12-annular-eclipse'].maximumLuma-lt.35){throw 'Annular eclipse does not contain both a dark occluder and a readable solar ring.'}
+  if($metrics['13-diamond-ring'].darkFraction-lt.001-or$metrics['13-diamond-ring'].maximumLuma-lt.35){throw 'Diamond-ring capture lacks a dark occluder or bright edge event.'}
+  if($metrics['03-golden-hour-coast'].averageLuma-lt.035){throw 'Golden-hour landscape is unreadably dark.'}
+  if($metrics['04-twilight-stars'].maximumLuma-lt.3){throw 'Twilight capture lacks readable celestial or horizon highlights.'}
+  if($metrics['18-overcast'].averageLuma-lt.035){throw 'Overcast landscape is unreadably dark.'}
+  if($metrics['19-storm'].averageLuma-lt.02){throw 'Storm landscape is unreadably dark.'}
+  if($metrics['01-clear-midday-wide'].averageBlue-lt$metrics['01-clear-midday-wide'].averageRed){throw 'Clear-day capture is not blue-dominant.'}
+  if($metrics['01-clear-midday-wide'].brightFraction-gt.72){throw 'Clear-day capture is still excessively blown out.'}
   if($process.HasExited){throw 'Packaged editor exited during visual evidence capture.'}
 }finally{
   if($process-and-not$process.HasExited){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue}

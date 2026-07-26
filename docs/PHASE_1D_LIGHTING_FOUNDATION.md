@@ -80,6 +80,8 @@ Golden-hour, twilight, and overcast evidence exposed two shared presentation pro
 
 The first corrected twilight frame showed that the legacy full-horizon Sun tint and the `Clean Twilight` preset's stylized saturation still overpowered that directional scattering. The full-horizon tint is replaced by a narrow Sun-relative glow, and `Clean Twilight` now uses restrained saturation, vibrance, stars, and galactic intensity. The separate fantasy profile remains the intentional high-saturation option.
 
+The packaged evidence harness now produces the full twenty-file visual matrix requested by the Phase 1C brief. Every file records exact build identity, GPU, resolution, authored camera, preset, time, seed, project revision, and a deterministic world-state hash. Forest and coastal captures deliberately use the authoritative current scene; they cannot count as biome approval until that scene contains licensed production vegetation and water rather than fabricated proof content.
+
 ## Protected behavior
 
 - The continuous terrain-conforming path remains authoritative.

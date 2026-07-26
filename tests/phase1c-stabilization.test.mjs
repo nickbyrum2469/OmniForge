@@ -166,6 +166,7 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(visualCapture, /starIntensity=\.24;starDensity=\.72;starBrightness=\.68;milkyWayIntensity=\.72/);
   assert.match(visualCapture, /starHeroFraction=\.004/);
   assert.match(visualCapture, /capture-manifest\.json/);
-  assert.match(visualCapture, /partial-eclipse/);
-  assert.match(visualCapture, /annular-eclipse/);
+  assert.match(visualCapture, /11-partial-eclipse/);
+  assert.match(visualCapture, /12-annular-eclipse/);
+  assert.match(visualCapture, /20-path-terrain-regression/);
 });

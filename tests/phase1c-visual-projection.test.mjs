@@ -67,8 +67,14 @@ test('packaged visual QA can request actual canvas PNG evidence', () => {
   assert.match(captureScript, /\$response\.state\.engine\.revision/);
   assert.match(captureScript, /starIntensity=\.24;starDensity=\.72/);
   assert.match(captureScript, /yaw=-\.75;pitch=1\.02;fov=68/);
-  for (const id of ['golden-hour', 'twilight-stars', 'partial-eclipse', 'annular-eclipse', 'overcast']) {
-    assert.match(captureScript, new RegExp(`'${id}'`));
+  for (const id of [
+    '01-clear-midday-wide', '02-clear-midday-player', '03-golden-hour-coast', '04-twilight-stars',
+    '05-night-realistic-wide', '06-night-faint-milkyway', '07-night-core-close', '08-fantasy-violet-galaxy',
+    '09-moon-world-scale', '10-moon-close', '11-partial-eclipse', '12-annular-eclipse', '13-diamond-ring',
+    '14-total-eclipse', '15-eclipse-landscape', '16-forest-morning-shafts', '17-coastal-backlight',
+    '18-overcast', '19-storm', '20-path-terrain-regression'
+  ]) {
+    assert.match(captureScript, new RegExp(`'${id}'`), id);
   }
   assert.match(captureScript, /capture-manifest\.json/);
   assert.match(captureScript, /worldStateHash=Get-StateHash/);

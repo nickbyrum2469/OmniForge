@@ -47,6 +47,7 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Manual review of the first annular capture rejected its totality-dark world response. Automatic eclipse strength now derives from analytic Sun/Moon angular-disc intersection area instead of a center-alignment heuristic, so an undersized centered Moon retains the correct uncovered solar energy.
 - Manual review of golden hour, twilight, and overcast rejected uniform gray cloud lighting and the full-horizon magenta wash. Both cloud paths now include edge-aware Sun tint and forward scattering, twilight scattering is localized relative to the Sun, and golden/twilight evidence uses the quality cloud path with a camera that actually includes the low Sun.
 - The next packaged twilight frame proved that the legacy full-horizon Sun tint and saturated `Clean Twilight` preset still overwhelmed the new directional scattering. The Sun tint is now localized to the Sun-facing horizon and realistic twilight is restrained; saturated violet treatment remains isolated to the fantasy profile.
+- The visual harness now requests the complete twenty named Phase 1C states and records exact per-frame camera, time, seed, revision, and world-state hashes. Forest and coastal mood frames remain evidence of the current authoritative scene only; they are expected to fail biome-content criteria until licensed production foliage and water exist.
 
 ## Remaining visual work
 
