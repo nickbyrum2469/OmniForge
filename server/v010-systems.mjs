@@ -214,7 +214,7 @@ export function applyWorldToScene(scene, world) {
     skyBottom: hex(bottom),
     skyGround: hex(mix([4, 7, 14], [31, 43, 50], day)),
     ambientColor: hex(ambientTwilight),
-    ambientIntensity: (0.07 + day * 0.20 + Number(world.lighting.indirectStrength || 0.72) * 0.26) * (0.72 + cloudAttenuation * 0.28) * eclipseDaylight,
+    ambientIntensity: (0.09 + day * 0.22 + Number(world.lighting.indirectStrength || 0.72) * 0.29) * (0.74 + cloudAttenuation * 0.26) * eclipseDaylight,
     fogNear: Math.max(80, Number(world.atmosphere.visibilityKm || 320) * 2.8 * fogMultiplier),
     fogFar: Math.max(420, Number(world.atmosphere.visibilityKm || 320) * 18 * fogMultiplier),
     exposure,

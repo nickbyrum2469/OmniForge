@@ -179,7 +179,7 @@ vec3 starLayer(vec3 ray,float scale,float seed){
   vec2 uv=hemisphereOctEncode(ray);
   vec2 baseCell=floor(uv*scale);
   vec3 accumulated=vec3(0.0);
-  float probability=clamp(uStarDensity*0.0065,0.00018,0.018);
+  float probability=clamp(uStarDensity*0.014,0.00035,0.035);
   for(int oy=-1;oy<=1;oy++)for(int ox=-1;ox<=1;ox++){
     vec2 cell=baseCell+vec2(float(ox),float(oy));
     float identity=hash21(cell+seed*0.017);
@@ -201,12 +201,12 @@ vec3 starLayer(vec3 ray,float scale,float seed){
     vec3 right=normalize(cross(reference,starDirection));
     vec3 up=normalize(cross(starDirection,right));
     vec2 local=vec2(dot(ray,right),dot(ray,up));
-    float rayLength=radius*mix(3.5,9.0,clamp((uStarRayLength-0.1)/3.9,0.0,1.0));
+    float rayLength=radius*mix(2.0,4.5,clamp((uStarRayLength-0.1)/3.9,0.0,1.0));
     float thin=max(radius*0.12,0.000035);
     float horizontal=exp(-abs(local.y)/thin)*exp(-abs(local.x)/max(rayLength,0.0001));
     float vertical=exp(-abs(local.x)/thin)*exp(-abs(local.y)/max(rayLength,0.0001));
     float diagonal=exp(-abs(local.x+local.y)/(thin*1.5))*exp(-abs(local.x-local.y)/max(rayLength*0.65,0.0001));
-    float rays=(horizontal+vertical+diagonal*0.18)*hero*uStarRayStrength*0.085;
+    float rays=(horizontal+vertical+diagonal*0.12)*hero*uStarRayStrength*0.026;
     float phase=hash21(cell+seed+43.2)*TAU;
     float speed=mix(0.35,2.1,hash21(cell+seed+9.3))*uStarTwinkleSpeed;
     float pulse=0.5+0.5*sin(uTime*speed+phase);
@@ -226,7 +226,7 @@ float wrappedDistance(float a,float b){return abs(atan(sin(a-b),cos(a-b)));}
 
 vec3 milkyWay(vec3 ray,float horizonMask){
   float orientation=radians(uMilkyWayOrientation);
-  vec3 galacticNormal=normalize(vec3(0.31*sin(orientation)+0.18,0.74,0.31*cos(orientation)-0.51));
+  vec3 galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78));
   vec3 reference=abs(galacticNormal.y)>.94?vec3(1,0,0):vec3(0,1,0);
   vec3 tangent=normalize(cross(reference,galacticNormal));
   vec3 bitangent=normalize(cross(galacticNormal,tangent));
@@ -243,18 +243,19 @@ vec3 milkyWay(vec3 ray,float horizonMask){
   float localWidth=max(0.009,uMilkyWayWidth*max(0.38,widthVariation));
   float signedDistance=latitude-warp;
   float coreBand=exp(-pow(abs(signedDistance)/localWidth,2.0)*1.55);
-  float broadHalo=exp(-pow(abs(signedDistance)/max(0.016,localWidth*3.4),2.0)*1.05)*0.22;
-  float upperWisp=exp(-pow(abs(signedDistance-localWidth*0.72)/max(0.006,localWidth*0.42),2.0)*1.7)*0.28;
-  float lowerWisp=exp(-pow(abs(signedDistance+localWidth*0.9)/max(0.006,localWidth*0.52),2.0)*1.8)*0.19;
+  float broadHalo=exp(-pow(abs(signedDistance)/max(0.016,localWidth*3.1),2.0)*1.15)*0.09;
+  float upperWisp=exp(-pow(abs(signedDistance-localWidth*0.72)/max(0.006,localWidth*0.38),2.0)*1.9)*0.14;
+  float lowerWisp=exp(-pow(abs(signedDistance+localWidth*0.9)/max(0.006,localWidth*0.46),2.0)*2.0)*0.1;
   float galacticCore=exp(-pow(wrappedDistance(longitude,-0.62)/0.58,2.0))*uMilkyWayCoreStrength;
   float clumpMask=mix(1.0,smoothstep(0.28,0.72,coarse*0.62+medium*0.38),clamp(uMilkyWayClumping,0.0,1.0));
   float brokenEdges=mix(0.62,1.18,smoothstep(0.2,0.84,medium+fine*0.18));
-  float stellarKnots=pow(max(0.0,fine-0.5),2.6)*2.6*uMilkyWayDetail;
+  float stellarKnots=pow(max(0.0,fine-0.46),2.2)*4.2*uMilkyWayDetail;
+  float microStructure=pow(smoothstep(0.52,0.88,noise3(periodic*vec3(28.0,28.0,52.0)+uStarSeed*0.0017)),3.2)*2.4*uMilkyWayDetail;
   float centralDust=exp(-pow(abs(signedDistance)/max(0.004,localWidth*0.22),2.0)*2.2);
   centralDust*=smoothstep(0.3,0.78,medium*0.58+fine*0.42)*uMilkyWayDust;
   float sideDust=exp(-pow(abs(signedDistance-localWidth*0.36)/max(0.004,localWidth*0.17),2.0)*2.0);
   sideDust*=smoothstep(0.48,0.84,fine)*uMilkyWayDust*0.36;
-  float structure=(coreBand+broadHalo+upperWisp+lowerWisp)*(0.38+coarse*0.46+galacticCore*0.72+stellarKnots);
+  float structure=(coreBand+broadHalo+upperWisp+lowerWisp)*(0.24+coarse*0.34+galacticCore*0.72+stellarKnots+microStructure);
   float luminance=max(0.0,structure*clumpMask*brokenEdges*(1.0-centralDust*0.88-sideDust));
   vec3 warmCore=vec3(0.96,0.76,0.57);
   vec3 color=mix(uMilkyWayColor,warmCore,clamp(galacticCore*0.28,0.0,0.36));
@@ -379,10 +380,11 @@ void main(){
   float sunGlow=pow(sunDot,mix(11.0,36.0,clamp(uSunGlow/3.0,0.0,1.0)))*(0.07+uSunGlow*0.15+uTwilightFactor*0.38);
   sky+=uSunColor*(sunGlow*(1.0-uSolarEclipse*0.93)+visibleSunDisc*(3.15+uSunGlow*1.15));
   sky+=uSunColor*horizon*uTwilightFactor*0.18;
-  float coronaInner=pow(sunDot,520.0),coronaOuter=pow(sunDot,120.0);
+  float coronaInner=pow(sunDot,1500.0),coronaOuter=pow(sunDot,420.0);
   float eclipseSilhouette=eclipseDisc*uSolarEclipse*uDayFactor;
   sky=mix(sky,vec3(0.0015,0.002,0.003),eclipseSilhouette*0.985);
-  sky+=vec3(1.0,0.88,0.64)*(coronaInner*2.8+coronaOuter*0.38)*uSolarEclipse*(1.0-eclipseDisc*0.92);
+  sky+=vec3(1.0,0.88,0.64)*(coronaInner*2.2+coronaOuter*0.24)*uSolarEclipse*(1.0-eclipseDisc);
+  sky=mix(sky,vec3(0.00001),eclipseSilhouette);
 
   float moonDot=max(dot(ray,uMoonDirection),0.0);
   vec2 moonUv=celestialUv(ray,uMoonDirection,uMoonAngularRadius);

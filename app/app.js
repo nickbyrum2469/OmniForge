@@ -146,6 +146,7 @@ async function captureVisualTestFrame(options={}) {
   const originalCamera=cloneCamera(camera);
   const originalGrid=scene.settings.gridVisible;
   const originalSplines=scene.settings.splinesVisible;
+  const originalSelectedId=selectedId;
   try{
     if(options.camera){
       const next=cloneCamera(camera);
@@ -153,7 +154,7 @@ async function captureVisualTestFrame(options={}) {
       for(const key of ['yaw','pitch','fov'])if(Number.isFinite(Number(options.camera[key])))next[key]=Number(options.camera[key]);
       camera=sanitizeCameraState(next,originalCamera);
     }
-    if(options.hideGuides!==false){scene.settings.gridVisible=false;scene.settings.splinesVisible=false;}
+    if(options.hideGuides!==false){scene.settings.gridVisible=false;scene.settings.splinesVisible=false;selectedId=null;}
     const waitMs=Math.max(80,Math.min(3000,Number(options.waitMs||500)));
     await sleep(waitMs);
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
@@ -162,6 +163,7 @@ async function captureVisualTestFrame(options={}) {
     camera=originalCamera;
     scene.settings.gridVisible=originalGrid;
     scene.settings.splinesVisible=originalSplines;
+    selectedId=originalSelectedId;
   }
 }
 window.__omniforgeVisualTestCapture=captureVisualTestFrame;

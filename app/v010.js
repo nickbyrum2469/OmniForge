@@ -120,7 +120,7 @@ function installWorldPanel() {
         <label>Sun glow<input id="v010SunGlow" type="range" min="0" max="5" step="0.05"></label>
         <label>Sun azimuth<input id="v010SunAzimuth" type="number" min="-720" max="720" step="1"></label>
         <label>Sun elevation<input id="v010SunElevation" type="number" min="-90" max="90" step="1"></label>
-        <label>Moon size<input id="v010MoonSize" type="range" min="0.1" max="12" step="0.05"></label>
+        <label>Moon size<input id="v010MoonSize" type="range" min="0.1" max="32" step="0.05"></label>
         <label>Phase authority<select id="v010MoonPhaseMode"><option value="sun-relative">Computed from Sun–Moon geometry</option><option value="manual">Manual artistic phase</option></select></label>
         <label>Moon age (days)<input id="v010MoonAge" type="range" min="0" max="29.530588" step="0.02"></label>
         <label>Manual phase<input id="v010MoonPhase" type="range" min="0" max="1" step="0.005"></label>

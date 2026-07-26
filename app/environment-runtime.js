@@ -88,7 +88,7 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
   const planetEnabled = Boolean(worldSky.planetEnabled);
   const planetDirection = normalize(directionFromAzimuthElevation(worldSky.planetAzimuth ?? 215, worldSky.planetElevation ?? 28));
   const sunSize = clamp(worldSky.sunSize ?? worldSky.suns?.[0]?.size ?? 1, 0.1, 12);
-  const moonSize = clamp(worldSky.moonSize ?? worldSky.moons?.[0]?.size ?? 1.25, 0.1, 16);
+  const moonSize = clamp(worldSky.moonSize ?? worldSky.moons?.[0]?.size ?? 1.25, 0.1, 32);
   const moonBrightness = clamp(worldSky.moonBrightness ?? worldSky.moons?.[0]?.radiance ?? 0.92, 0, 8);
   const moonIllumination = clamp01(moonObject?.properties?.illumination ?? moonObject?.properties?.phase ?? worldSky.moonPhase ?? 0.72);
   const moonVisibility = clamp01(moonObject?.properties?.skyVisibility ?? 1);
