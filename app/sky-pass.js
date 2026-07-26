@@ -346,7 +346,9 @@ vec3 lunarSurface(vec2 moonUv,vec3 surfaceNormal,float phaseLighting){
   float rotation=radians(uMoonPatternRotation);
   mat2 r=mat2(cos(rotation),-sin(rotation),sin(rotation),cos(rotation));
   vec2 rotated=r*moonUv;
-  vec3 rotatedNormal=normalize(vec3(r*surfaceNormal.xy,surfaceNormal.z));
+  float localSphere=sqrt(max(0.0,1.0-dot(moonUv,moonUv)));
+  vec3 moonLocalNormal=normalize(vec3(moonUv,-localSphere));
+  vec3 rotatedNormal=normalize(vec3(r*moonLocalNormal.xy,moonLocalNormal.z));
   vec2 lunarMapUv=vec2(
     fract(atan(rotatedNormal.x,-rotatedNormal.z)/TAU+0.5),
     asin(clamp(rotatedNormal.y,-1.0,1.0))/PI+0.5

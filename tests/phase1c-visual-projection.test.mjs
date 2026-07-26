@@ -63,6 +63,7 @@ test('procedural Moon uses sparse hierarchical craters and irregular authored ma
 
 test('Moon uses the attributed LRO mosaic with a deterministic procedural fallback', () => {
   assert.match(sky, /uniform sampler2D uMoonAlbedoMap/);
+  assert.match(sky, /moonLocalNormal=normalize\(vec3\(moonUv,-localSphere\)\)/);
   assert.match(sky, /atan\(rotatedNormal\.x,-rotatedNormal\.z\)\/TAU\+0\.5/);
   assert.match(sky, /mappedAlbedo=srgbToLinear\(texture\(uMoonAlbedoMap,lunarMapUv\)\.rgb\)/);
   assert.match(sky, /new URL\('\.\/sky-assets\/lroc_color_2k\.jpg', import\.meta\.url\)\.href/);
@@ -106,7 +107,7 @@ test('packaged visual QA can request actual canvas PNG evidence', () => {
   assert.match(captureScript, /starIntensity=\.24;starDensity=\.72/);
   assert.match(captureScript, /yaw=-\.75;pitch=1\.02;fov=68/);
   assert.match(captureScript, /\$moonWorld=@\{sky=@\{moonSize=4\}\}/);
-  assert.match(captureScript, /Patch-World \$port @\{sky=@\{moonSize=22\}\}/);
+  assert.match(captureScript, /Patch-World \$port @\{sky=@\{moonSize=38\}\}/);
   assert.match(captureScript, /\$moonCamera=@\{position=@\(0,20,0\);yaw=0;pitch=\.610865;fov=7\}/);
   for (const id of [
     '01-clear-midday-wide', '02-clear-midday-player', '03-golden-hour-coast', '04-twilight-stars',

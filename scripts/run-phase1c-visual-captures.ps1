@@ -156,7 +156,7 @@ try{
   $moonClose=@{
     lookPreset='custom';time=@{hours=1};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
     lighting=@{profile='quality'};
-    sky=@{celestialMode='manual';sunAzimuth=155;sunElevation=-12;moonAzimuth=0;moonElevation=35;moonSize=22;moonColor='#d8d3c8';moonBrightness=1.02;moonGlow=.1;moonPhaseMode='manual';moonPhase=.88;moonCraterStrength=1.12;moonMariaStrength=.9;moonSurfaceContrast=1.16;moonReliefStrength=.42;moonLimbDarkening=.3;planetEnabled=$false;eclipseMode='auto';starIntensity=.22;milkyWayIntensity=0}
+    sky=@{celestialMode='manual';sunAzimuth=155;sunElevation=-12;moonAzimuth=0;moonElevation=35;moonSize=38;moonColor='#d8d3c8';moonBrightness=1.02;moonGlow=.1;moonPhaseMode='manual';moonPhase=.88;moonCraterStrength=1.12;moonMariaStrength=.9;moonSurfaceContrast=1.16;moonReliefStrength=.42;moonLimbDarkening=.3;planetEnabled=$false;eclipseMode='auto';starIntensity=.22;milkyWayIntensity=0}
   }
   $moonCamera=@{position=@(0,20,0);yaw=0;pitch=.610865;fov=7}
   $moonWorld=@{sky=@{moonSize=4}}
@@ -165,7 +165,7 @@ try{
   $moonWorldCamera=@{position=@(0,20,0);yaw=0;pitch=.610865;fov=46}
   Request-Capture $captureDir '09-moon-world-scale' $moonWorldCamera $revision|Out-Null
   $captureRecords+=[ordered]@{id='09-moon-world-scale';file='09-moon-world-scale.png';preset='realistic-moon';camera=$moonWorldCamera;time=1;seed=2718;worldStateHash=Get-StateHash $moonWorld;revision=$revision}
-  $revision=Patch-World $port @{sky=@{moonSize=22}}
+  $revision=Patch-World $port @{sky=@{moonSize=38}}
   Request-Capture $captureDir '10-moon-close' $moonCamera $revision|Out-Null
   $captureRecords+=[ordered]@{id='10-moon-close';file='10-moon-close.png';preset='realistic-moon';camera=$moonCamera;time=1;seed=2718;worldStateHash=Get-StateHash $moonClose;revision=$revision}
 
