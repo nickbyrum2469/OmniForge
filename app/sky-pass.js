@@ -200,9 +200,9 @@ vec3 starLayer(vec3 ray,float scale,float seed){
     float sizeRandom=hash21(cell+seed+33.4);
     float hero=step(1.0-uStarHeroFraction,hash21(cell+seed+8.8));
     float sizeControl=mix(max(0.08,uStarSizeMin),max(uStarSizeMin,uStarSizeMax),pow(sizeRandom,2.8));
-    float aa=max(fwidth(angularDistance),0.000035);
-    float radius=max(aa*1.45,mix(0.00052,0.00172,pow(sizeRandom,2.3))*max(0.32,sizeControl)*(1.0+hero*0.66));
-    float sigma=max(aa*1.05,radius*0.58);
+    float aa=max(fwidth(angularDistance)*0.5,0.000035);
+    float radius=max(aa*0.85,mix(0.00036,0.00128,pow(sizeRandom,2.3))*max(0.28,sizeControl)*(1.0+hero*0.62));
+    float sigma=max(aa*0.62,radius*0.54);
     float psf=exp(-0.5*pow(angularDistance/sigma,2.0));
     psf*=1.0-smoothstep(radius*2.2,radius*3.15,angularDistance);
     float disc=psf*0.94;
@@ -548,7 +548,7 @@ void main(){
 
   vec4 layered=layeredCloud(ray,moonGlow,moonDisc);
   vec4 cloud=layered;
-  if(uCloudQuality>=0.5&&ray.y>=0.09){
+  if(uCloudQuality>=0.5&&uCloudCoverage>=0.35&&ray.y>=0.09){
     vec4 volume=volumetricCloud(ray);
     cloud=ray.y<0.16?mix(layered,volume,smoothstep(0.09,0.16,ray.y)):volume;
   }

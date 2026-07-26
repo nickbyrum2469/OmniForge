@@ -75,3 +75,5 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Next: run full verification, package the exact committed head, and manually inspect frames 09, 12, 13, and 15 before accepting this gate.
 - Exact packaged `34aa554` evidence passed the four bounded fixes: corrected world Moon scale, distinct annularity, asymmetric diamond ring, and restored landscape corona.
 - Manual review still rejected hard-edged one-pixel stars and excessive daytime eclipse stars. The follow-up removes the hard disc maximum so all star cores use the antialiased Gaussian PSF, and gates sparse eclipse stars to near-totality only.
+- Exact packaged `ab0c367` removed annular-daylight stars but proved the PSF footprint was still over-expanded by raw scalar `fwidth`, producing dash-like points. It also isolated a low-coverage volumetric-cloud cluster in the annular frame.
+- The next correction uses a half-pixel derivative footprint with a smaller Gaussian radius and routes sparse cloud coverage through the stable layered path; bounded volumetrics remain for overcast/storm coverage.

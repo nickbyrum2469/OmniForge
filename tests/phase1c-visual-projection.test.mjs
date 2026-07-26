@@ -12,7 +12,8 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /vec2 hemisphereOctEncode/);
   assert.match(sky, /vec3 hemisphereOctDecode/);
   assert.match(sky, /angularDistance=sqrt\(max\(0\.0,2\.0\*\(1\.0-cosine\)\)\)/);
-  assert.match(sky, /float radius=max\(aa\*1\.45/);
+  assert.match(sky, /float aa=max\(fwidth\(angularDistance\)\*0\.5,0\.000035\)/);
+  assert.match(sky, /float radius=max\(aa\*0\.85/);
   assert.match(sky, /float psf=exp\(-0\.5\*pow\(angularDistance\/sigma,2\.0\)\)/);
   assert.match(sky, /float disc=psf\*0\.94/);
   assert.doesNotMatch(sky, /float disc=max\(core,psf/);
@@ -52,7 +53,7 @@ test('cloud and twilight lighting remain Sun-directed rather than full-screen co
   assert.match(sky, /float twilightSunward=pow\(max\(dot\(horizonDirection,sunHorizonDirection\),0\.0\),2\.4\)/);
   assert.match(sky, /physicalScatter\+=twilightScatter\*\(uOzone\*uTwilightFactor\*horizon\)\*0\.13/);
   assert.match(sky, /sunLinear\*horizon\*uTwilightFactor\*\(0\.025\+twilightSunward\*0\.34\)/);
-  assert.match(sky, /uCloudQuality>=0\.5&&ray\.y>=0\.09/);
+  assert.match(sky, /uCloudQuality>=0\.5&&uCloudCoverage>=0\.35&&ray\.y>=0\.09/);
   assert.match(sky, /mix\(layered,volume,smoothstep\(0\.09,0\.16,ray\.y\)\)/);
 });
 
