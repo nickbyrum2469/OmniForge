@@ -580,10 +580,13 @@ void main(){
   }
 
   float starHorizon=smoothstep(0.015,0.16,ray.y);
+  float stellarAirMass=1.0/max(0.12,ray.y+0.09);
+  float stellarOpticalDepth=(uHaze*0.9+uMie*0.65+uHumidity*0.18+uDayFactor*0.5+uTwilightFactor*0.16)*stellarAirMass;
+  float stellarTransmission=exp(-stellarOpticalDepth);
   vec3 stars=starLayer(ray,180.0,uStarSeed)+starLayer(ray,360.0,uStarSeed+101.0);
   float eclipseStarVisibility=smoothstep(0.975,1.0,uSolarEclipse)*uDayFactor*0.09;
-  sky+=stars*max(uStarVisibility,eclipseStarVisibility)*starHorizon*(1.0-eclipseSilhouette);
-  sky+=milkyWay(ray,starHorizon);
+  sky+=stars*max(uStarVisibility,eclipseStarVisibility)*starHorizon*stellarTransmission*(1.0-eclipseSilhouette);
+  sky+=milkyWay(ray,starHorizon*stellarTransmission);
 
   vec4 layered=layeredCloud(ray,moonGlow,moonDisc);
   vec4 cloud=layered;
