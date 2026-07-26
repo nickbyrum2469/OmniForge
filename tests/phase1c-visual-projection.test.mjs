@@ -14,16 +14,19 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.doesNotMatch(sky, /projected\.xy\*scale/);
 });
 
-test('Milky Way uses periodic direction-space structure without longitude seams', () => {
+test('Milky Way uses periodic smooth direction-space dust without longitude seams or threshold blobs', () => {
   assert.match(sky, /vec3 periodic=vec3\(cos\(longitude\),sin\(longitude\),latitude\)/);
-  assert.match(sky, /upperWisp/);
-  assert.match(sky, /lowerWisp/);
+  assert.match(sky, /filamentUpper/);
+  assert.match(sky, /filamentLower/);
+  assert.match(sky, /float galacticCloudEnvelope=/);
   assert.match(sky, /centralDust/);
+  assert.doesNotMatch(sky, /microStructure=/);
   assert.doesNotMatch(sky, /ray\*5\.3\+tangent\*longitude/);
 });
 
 test('solar-eclipse silhouette is constrained to daylight and no longer blacks out a free-floating sky disc', () => {
   assert.match(sky, /eclipseSilhouette=eclipseDisc\*uSolarEclipse\*uDayFactor/);
+  assert.match(sky, /sky=mix\(sky,vec3\(0\.00001\),eclipseSilhouette\)/);
   assert.doesNotMatch(sky, /sky\*=1\.0-eclipseOcclusion/);
 });
 
