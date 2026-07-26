@@ -1,0 +1,36 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const sky = fs.readFileSync(new URL('../app/sky-pass.js', import.meta.url), 'utf8');
+const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
+const desktop = fs.readFileSync(new URL('../desktop/main.cjs', import.meta.url), 'utf8');
+
+test('stellar projection is upper-hemisphere angular space rather than cube-face UV space', () => {
+  assert.match(sky, /vec2 hemisphereOctEncode/);
+  assert.match(sky, /vec3 hemisphereOctDecode/);
+  assert.match(sky, /angularDistance=sqrt\(max\(0\.0,2\.0\*\(1\.0-cosine\)\)\)/);
+  assert.doesNotMatch(sky, /vec3 cubeProjection/);
+  assert.doesNotMatch(sky, /projected\.xy\*scale/);
+});
+
+test('Milky Way uses periodic direction-space structure without longitude seams', () => {
+  assert.match(sky, /vec3 periodic=vec3\(cos\(longitude\),sin\(longitude\),latitude\)/);
+  assert.match(sky, /upperWisp/);
+  assert.match(sky, /lowerWisp/);
+  assert.match(sky, /centralDust/);
+  assert.doesNotMatch(sky, /ray\*5\.3\+tangent\*longitude/);
+});
+
+test('solar-eclipse silhouette is constrained to daylight and no longer blacks out a free-floating sky disc', () => {
+  assert.match(sky, /eclipseSilhouette=eclipseDisc\*uSolarEclipse\*uDayFactor/);
+  assert.doesNotMatch(sky, /sky\*=1\.0-eclipseOcclusion/);
+});
+
+test('packaged visual QA can request actual canvas PNG evidence', () => {
+  assert.match(app, /window\.__omniforgeVisualTestCapture=captureVisualTestFrame/);
+  assert.match(app, /ui\.viewport\.toDataURL\('image\/png'\)/);
+  assert.match(desktop, /OMNIFORGE_CAPTURE_DIR/);
+  assert.match(desktop, /installVisualCaptureWatcher/);
+  assert.match(desktop, /capture-request\.json/);
+});
