@@ -88,8 +88,8 @@ environment_path = Path('app/environment-runtime.js')
 environment = environment_path.read_text(encoding='utf-8')
 environment = replace_required(
     environment,
-    '  const moonSize = clamp(worldSky.moonSize ?? worldSky.moons?.[0]?.size ?? 1.45, 0.1, 16);',
-    '  const moonSize = clamp(worldSky.moonSize ?? worldSky.moons?.[0]?.size ?? 1.45, 0.1, 32);',
+    '  const moonSize = clamp(worldSky.moonSize ?? worldSky.moons?.[0]?.size ?? 1.25, 0.1, 16);',
+    '  const moonSize = clamp(worldSky.moonSize ?? worldSky.moons?.[0]?.size ?? 1.25, 0.1, 32);',
     'Moon authoring size clamp',
 )
 environment_path.write_text(environment, encoding='utf-8')
