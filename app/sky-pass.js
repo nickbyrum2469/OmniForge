@@ -233,33 +233,33 @@ vec3 milkyWay(vec3 ray,float horizonMask){
   float latitude=dot(ray,galacticNormal);
   float longitude=atan(dot(ray,bitangent),dot(ray,tangent));
   vec3 periodic=vec3(cos(longitude),sin(longitude),latitude);
-  float coarse=fbm3(periodic*vec3(1.45,1.45,3.2)+vec3(3.7,11.2,5.4)+uStarSeed*0.00031);
-  float medium=fbm3(periodic*vec3(3.1,3.1,8.2)+vec3(17.4,2.8,23.1)+uStarSeed*0.00057);
-  float fine=fbm3(periodic*vec3(7.4,7.4,19.0)+vec3(31.3,8.1,4.6)+uStarSeed*0.00093);
-  float warp=(coarse-0.5)*uMilkyWayWidth*uMilkyWayWarp*0.72;
-  warp+=sin(longitude*2.0+medium*2.7)*uMilkyWayWidth*uMilkyWayWarp*0.16;
-  float widthVariation=mix(0.68,1.42,coarse);
-  widthVariation*=1.0+sin(longitude*3.0+medium*1.8)*uMilkyWayWidthVariation*0.17;
-  float localWidth=max(0.009,uMilkyWayWidth*max(0.38,widthVariation));
+  float coarse=fbm3(periodic*vec3(1.35,1.35,3.0)+vec3(3.7,11.2,5.4)+uStarSeed*0.00031);
+  float medium=fbm3(periodic*vec3(3.4,3.4,7.6)+vec3(17.4,2.8,23.1)+uStarSeed*0.00057);
+  float fine=fbm3(periodic*vec3(8.2,8.2,15.0)+vec3(31.3,8.1,4.6)+uStarSeed*0.00093);
+  float warp=(coarse-0.5)*uMilkyWayWidth*uMilkyWayWarp*0.62;
+  warp+=sin(longitude*2.0+medium*2.2)*uMilkyWayWidth*uMilkyWayWarp*0.12;
+  float widthVariation=mix(0.72,1.34,coarse);
+  widthVariation*=1.0+sin(longitude*3.0+medium*1.7)*uMilkyWayWidthVariation*0.13;
+  float localWidth=max(0.01,uMilkyWayWidth*max(0.42,widthVariation));
   float signedDistance=latitude-warp;
-  float coreBand=exp(-pow(abs(signedDistance)/localWidth,2.0)*1.55);
-  float broadHalo=exp(-pow(abs(signedDistance)/max(0.016,localWidth*3.1),2.0)*1.15)*0.09;
-  float upperWisp=exp(-pow(abs(signedDistance-localWidth*0.72)/max(0.006,localWidth*0.38),2.0)*1.9)*0.14;
-  float lowerWisp=exp(-pow(abs(signedDistance+localWidth*0.9)/max(0.006,localWidth*0.46),2.0)*2.0)*0.1;
-  float galacticCore=exp(-pow(wrappedDistance(longitude,-0.62)/0.58,2.0))*uMilkyWayCoreStrength;
-  float clumpMask=mix(1.0,smoothstep(0.28,0.72,coarse*0.62+medium*0.38),clamp(uMilkyWayClumping,0.0,1.0));
-  float brokenEdges=mix(0.62,1.18,smoothstep(0.2,0.84,medium+fine*0.18));
-  float stellarKnots=pow(max(0.0,fine-0.46),2.2)*4.2*uMilkyWayDetail;
-  float microStructure=pow(smoothstep(0.52,0.88,noise3(periodic*vec3(28.0,28.0,52.0)+uStarSeed*0.0017)),3.2)*2.4*uMilkyWayDetail;
-  float centralDust=exp(-pow(abs(signedDistance)/max(0.004,localWidth*0.22),2.0)*2.2);
-  centralDust*=smoothstep(0.3,0.78,medium*0.58+fine*0.42)*uMilkyWayDust;
-  float sideDust=exp(-pow(abs(signedDistance-localWidth*0.36)/max(0.004,localWidth*0.17),2.0)*2.0);
-  sideDust*=smoothstep(0.48,0.84,fine)*uMilkyWayDust*0.36;
-  float structure=(coreBand+broadHalo+upperWisp+lowerWisp)*(0.24+coarse*0.34+galacticCore*0.72+stellarKnots+microStructure);
-  float luminance=max(0.0,structure*clumpMask*brokenEdges*(1.0-centralDust*0.88-sideDust));
-  vec3 warmCore=vec3(0.96,0.76,0.57);
-  vec3 color=mix(uMilkyWayColor,warmCore,clamp(galacticCore*0.28,0.0,0.36));
-  return color*luminance*uMilkyWayIntensity*0.92*horizonMask;
+  float coreBand=exp(-pow(abs(signedDistance)/localWidth,2.0)*1.7);
+  float diffuseHalo=exp(-pow(abs(signedDistance)/max(0.018,localWidth*2.7),2.0)*1.25)*0.08;
+  float filamentUpper=exp(-pow(abs(signedDistance-localWidth*0.7)/max(0.007,localWidth*0.3),2.0)*2.1)*0.1;
+  float filamentLower=exp(-pow(abs(signedDistance+localWidth*0.82)/max(0.007,localWidth*0.34),2.0)*2.15)*0.07;
+  float galacticCore=exp(-pow(wrappedDistance(longitude,-0.62)/0.52,2.0))*uMilkyWayCoreStrength;
+  float longitudinalBreakup=0.38+0.62*smoothstep(0.24,0.78,coarse*0.64+medium*0.36);
+  longitudinalBreakup=mix(0.62,longitudinalBreakup,clamp(uMilkyWayClumping,0.0,1.35));
+  float cloudTexture=0.34+coarse*0.28+medium*0.28+fine*0.1;
+  float galacticCloudEnvelope=(coreBand+diffuseHalo+filamentUpper+filamentLower)*cloudTexture*longitudinalBreakup;
+  float subtleKnots=smoothstep(0.62,0.88,fine)*coreBand*uMilkyWayDetail*0.16;
+  float centralDust=exp(-pow(abs(signedDistance)/max(0.004,localWidth*0.2),2.0)*2.4);
+  centralDust*=smoothstep(0.34,0.76,medium*0.62+fine*0.38)*uMilkyWayDust;
+  float brokenDust=exp(-pow(abs(signedDistance-localWidth*0.34)/max(0.004,localWidth*0.16),2.0)*2.2);
+  brokenDust*=smoothstep(0.56,0.84,fine)*uMilkyWayDust*0.26;
+  float luminance=max(0.0,(galacticCloudEnvelope+subtleKnots+galacticCore*coreBand*0.22)*(1.0-centralDust*0.86-brokenDust));
+  vec3 warmCore=vec3(0.96,0.78,0.62);
+  vec3 color=mix(uMilkyWayColor,warmCore,clamp(galacticCore*0.24,0.0,0.3));
+  return color*luminance*uMilkyWayIntensity*0.7*horizonMask;
 }
 
 vec2 celestialUv(vec3 ray,vec3 direction,float angularRadius){
@@ -287,7 +287,7 @@ float craterField(vec2 uv,float scale,float seed){
     ring=max(ring,exp(-pow((d-radius)/max(0.012,radius*0.12),2.0)));
     basin=max(basin,(1.0-smoothstep(0.0,radius,d))*mix(0.2,0.8,hash21(id+seed+73.1)));
   }
-  return ring*0.62-basin*0.36;
+  return ring*0.28-basin*0.42;
 }
 
 vec3 lunarSurface(vec2 moonUv,vec3 surfaceNormal,float phaseLighting){
