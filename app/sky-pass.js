@@ -471,12 +471,24 @@ void main(){
   vec3 betaRayleigh=vec3(0.12,0.28,0.72)*max(0.0,uRayleigh);
   vec3 opticalDepth=(betaRayleigh*0.16+vec3(uMie*0.18+uHaze*0.08+uDust*0.1))*airMass;
   vec3 transmittance=exp(-opticalDepth);
-  vec3 physicalScatter=(betaRayleigh*rayleighPhase*2.8+vec3(1.0,0.78,0.52)*miePhase*uMie*1.4)*(vec3(1.0)-transmittance);
+  float solarAirMass=1.0/max(0.04,uSunDirection.y+0.065);
+  vec3 solarOpticalDepth=(betaRayleigh*0.14+vec3(uMie*0.2+uHaze*0.09+uDust*0.14))*solarAirMass;
+  vec3 solarTransmission=exp(-solarOpticalDepth);
+  vec3 solarChromaticity=solarTransmission/max(0.001,max(solarTransmission.r,max(solarTransmission.g,solarTransmission.b)));
+  float highSunBlend=smoothstep(0.05,0.42,uSunDirection.y);
+  vec3 transmittedSun=sunLinear*mix(solarChromaticity,vec3(1.0),highSunBlend);
+  vec3 physicalScatter=(betaRayleigh*rayleighPhase*2.8+vec3(miePhase*uMie*1.4))*transmittedSun*(vec3(1.0)-transmittance);
   vec2 horizonDirection=normalize(ray.xz+vec2(0.00001));
   vec2 sunHorizonDirection=normalize(uSunDirection.xz+vec2(0.00001));
   float twilightSunward=pow(max(dot(horizonDirection,sunHorizonDirection),0.0),3.1);
   vec3 twilightScatter=mix(vec3(0.045,0.07,0.24),vec3(0.72,0.2,0.045),twilightSunward);
-  physicalScatter+=twilightScatter*(uOzone*uTwilightFactor*horizon)*0.085;
+  physicalScatter+=twilightScatter*(uOzone*uTwilightFactor*horizon)*0.06;
+  float lowSunWindow=1.0-smoothstep(0.1,0.46,abs(uSunDirection.y));
+  float lowSunAzimuth=exp(-pow(acos(clamp(dot(horizonDirection,sunHorizonDirection),-1.0,1.0))/0.72,2.0));
+  float lowSunElevation=exp(-pow((ray.y-clamp(uSunDirection.y,-0.08,0.16)*0.42)/0.24,2.0));
+  float lowSunEnergy=lowSunWindow*(0.1+uMie*1.4+uHaze*0.82+uHumidity*0.24)*(0.48+uTwilightFactor*0.72);
+  vec3 lowSunScatter=mix(vec3(1.0,0.14,0.018),transmittedSun,0.42);
+  physicalScatter+=lowSunScatter*lowSunAzimuth*lowSunElevation*lowSunEnergy;
   float physicalWeight=clamp((uDayFactor*0.62+uTwilightFactor*0.34)*uAerialPerspective,0.0,0.72);
   sky=mix(sky,sky*transmittance+physicalScatter,physicalWeight);
   float eclipseWorldResponse=uSolarEclipse*uDayFactor;
@@ -495,10 +507,10 @@ void main(){
   float visibleSunDisc=sunDisc*(1.0-eclipseOcclusion);
   float sunGlow=pow(sunDot,mix(11.0,36.0,clamp(uSunGlow/3.0,0.0,1.0)))*(0.07+uSunGlow*0.15+uTwilightFactor*0.38);
   float solarHorizonWindow=1.0-smoothstep(0.12,0.5,abs(uSunDirection.y));
-  float aerialAureole=pow(sunDot,3.4)*horizon*solarHorizonWindow
-    *(uMie*2.1+uHaze*0.8+uHumidity*0.2)*(0.45+uTwilightFactor*0.75);
+  float aerialAureole=pow(sunDot,8.0)*horizon*solarHorizonWindow
+    *(uMie*0.9+uHaze*0.35+uHumidity*0.12)*(0.3+uTwilightFactor*0.55);
   sky+=sunLinear*(sunGlow*(1.0-uSolarEclipse*0.93)+visibleSunDisc*(3.15+uSunGlow*1.15));
-  sky+=sunLinear*(aerialAureole+horizon*uTwilightFactor*(0.012+twilightSunward*0.18));
+  sky+=transmittedSun*(aerialAureole+horizon*uTwilightFactor*(0.008+twilightSunward*0.1));
   vec2 sunCoronaUv=celestialUv(ray,uSunDirection,uSunAngularRadius);
   float eclipseRadius01=length(sunCoronaUv);
   float eclipseAngle=atan(sunCoronaUv.y,sunCoronaUv.x);

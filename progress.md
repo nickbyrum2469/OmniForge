@@ -63,6 +63,8 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 
 - Exact packaged `4f5de8f` preserved runtime evidence and exposed a real every-frame Chromium/WebGL failure: `GL_INVALID_OPERATION: glBlitFramebuffer: Invalid operation on multisampled framebuffer`. The HDR target is single-sampled while Electron's default backbuffer is multisampled, so copying the HDR depth renderbuffer into the default depth buffer is invalid.
 - The bounded root correction keeps editor overlays in the HDR render graph, where the authoritative scene depth already exists, then performs the display transform once at the end. `HDRPipeline.present()` no longer attempts a cross-sample-count depth blit. A permanent renderer-contract test locks both the pass order and the absence of `blitFramebuffer`.
+- Exact packaged `c76f04d` runs the twenty-state evidence set with `shadow > environment > opaque-world > editor-overlays > display-transform > diagnostics`; preserved runtime logs contain zero framebuffer errors, WebGL context losses, render-pass failures, or crashes. A separate guides-enabled packaged capture proves the grid and terrain-conforming spline remain visible and depth-aware in HDR.
+- Manual review still rejects the weak low-Sun mood in golden-hour, forest-morning, and coastal-backlight states. The next bounded atmosphere correction derives wavelength-dependent Sun transmission from the existing Rayleigh, Mie, haze, and dust state, then adds one localized azimuth/elevation lobe so low-Sun energy is warm and directional rather than a full-horizon color wash.
 
 ## Twenty-frame corrective gate
 

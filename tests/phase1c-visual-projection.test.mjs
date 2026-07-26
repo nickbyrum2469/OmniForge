@@ -92,10 +92,14 @@ test('cloud and twilight lighting remain Sun-directed rather than full-screen co
   assert.match(sky, /float edgeLight=1\.0-smoothstep\(threshold,threshold\+0\.38,cloudField\)/);
   assert.match(sky, /vec3 sunTint=srgbToLinear\(uSunColor\)/);
   assert.match(sky, /float twilightSunward=pow\(max\(dot\(horizonDirection,sunHorizonDirection\),0\.0\),3\.1\)/);
-  assert.match(sky, /physicalScatter\+=twilightScatter\*\(uOzone\*uTwilightFactor\*horizon\)\*0\.085/);
+  assert.match(sky, /vec3 solarOpticalDepth=/);
+  assert.match(sky, /vec3 transmittedSun=/);
+  assert.match(sky, /float lowSunAzimuth=/);
+  assert.match(sky, /float lowSunElevation=/);
+  assert.match(sky, /physicalScatter\+=lowSunScatter\*lowSunAzimuth\*lowSunElevation\*lowSunEnergy/);
   assert.match(sky, /float solarHorizonWindow=1\.0-smoothstep\(0\.12,0\.5,abs\(uSunDirection\.y\)\)/);
-  assert.match(sky, /float aerialAureole=pow\(sunDot,3\.4\)\*horizon\*solarHorizonWindow/);
-  assert.match(sky, /aerialAureole\+horizon\*uTwilightFactor\*\(0\.012\+twilightSunward\*0\.18\)/);
+  assert.match(sky, /float aerialAureole=pow\(sunDot,8\.0\)\*horizon\*solarHorizonWindow/);
+  assert.match(sky, /transmittedSun\*\(aerialAureole\+horizon\*uTwilightFactor/);
   assert.match(sky, /uCloudQuality>=0\.5&&uCloudCoverage>=0\.35&&ray\.y>=0\.09/);
   assert.match(sky, /mix\(layered,volume,smoothstep\(0\.09,0\.16,ray\.y\)\)/);
 });
