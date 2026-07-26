@@ -300,7 +300,7 @@ vec2 celestialUv(vec3 ray,vec3 direction,float angularRadius){
   return vec2(dot(ray,right),dot(ray,up))/scale;
 }
 
-vec2 craterField(vec2 uv,float scale,float seed){
+vec2 craterField(vec2 uv,float scale,float seed,float density){
   vec2 g=uv*scale;
   vec2 cell=floor(g);
   vec2 local=fract(g)-0.5;
@@ -309,18 +309,24 @@ vec2 craterField(vec2 uv,float scale,float seed){
   for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
     vec2 neighbor=vec2(float(x),float(y));
     vec2 id=cell+neighbor;
+    float identity=hash21(id+seed+3.1);
+    if(identity<1.0-clamp(density,0.0,1.0))continue;
     vec2 center=neighbor+vec2(hash21(id+seed),hash21(id+seed+41.7))-0.5;
-    float radius=mix(0.11,0.34,hash21(id+seed+17.3));
+    float radius=mix(0.08,0.36,pow(hash21(id+seed+17.3),1.7));
     vec2 delta=local-center;
     float d=length(delta);
+    float angle=atan(delta.y,delta.x);
+    float irregularity=1.0+sin(angle*mix(5.0,9.0,floor(hash21(id+seed+29.0)*3.0))+identity*TAU)*0.055;
+    float craterRadius=radius*irregularity;
     float age=mix(0.55,1.0,hash21(id+seed+73.1));
-    float bowl=(1.0-smoothstep(radius*0.08,radius,d))*age;
-    float rim=exp(-pow((d-radius)/max(0.018,radius*0.19),2.0))*age;
-    float ejecta=(1.0-smoothstep(radius*0.92,radius*2.35,d));
-    ejecta*=pow(0.5+0.5*cos(atan(delta.y,delta.x)*mix(4.0,8.0,floor(hash21(id+seed+29.0)*3.0))),3.0);
+    float bowl=(1.0-smoothstep(craterRadius*0.12,craterRadius,d))*age;
+    float rim=exp(-pow((d-craterRadius)/max(0.012,craterRadius*0.13),2.0))*age;
+    float ejecta=(1.0-smoothstep(craterRadius*1.05,craterRadius*2.45,d));
+    ejecta*=pow(0.5+0.5*cos(angle*mix(4.0,8.0,floor(hash21(id+seed+29.0)*3.0))),4.2);
+    ejecta*=step(0.72,hash21(id+seed+107.0));
     float peak=(1.0-smoothstep(0.0,radius*0.18,d))*step(0.78,hash21(id+seed+119.0));
-    albedo+=rim*0.024-bowl*0.082+ejecta*0.009;
-    height+=rim*0.09-bowl*0.22+peak*0.045;
+    albedo+=rim*0.012-bowl*0.058+ejecta*0.006;
+    height+=rim*0.065-bowl*0.2+peak*0.038;
   }
   return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24));
 }
@@ -345,20 +351,23 @@ vec3 lunarSurface(vec2 moonUv,vec3 surfaceNormal,float phaseLighting){
   )-0.5;
   vec2 mareUv=rotated+mareWarp*0.16*(1.0-smoothstep(0.7,1.0,length(rotated)));
   float mareRegions=0.0;
-  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(-0.13,0.21),vec2(0.48,0.23),-0.2));
-  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(0.23,0.07),vec2(0.22,0.36),-0.48)*0.86);
-  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(-0.09,-0.15),vec2(0.33,0.18),0.28)*0.76);
+  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(-0.31,0.08),vec2(0.24,0.44),-0.12));
+  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(-0.2,0.3),vec2(0.3,0.22),-0.22));
+  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(0.12,0.28),vec2(0.17,0.19),0.1)*0.88);
+  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(0.25,0.09),vec2(0.2,0.27),-0.42)*0.92);
+  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(0.43,0.23),vec2(0.11,0.14),0.18)*0.76);
+  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(-0.07,-0.18),vec2(0.22,0.16),0.24)*0.72);
   float mareBreakup=smoothstep(0.31,0.71,mid*0.68+low*0.32);
-  float maria=smoothstep(0.56,0.75,low*0.72+mid*0.28)*0.38;
-  maria=max(maria,mareRegions*mix(0.36,0.78,mareBreakup));
+  float maria=smoothstep(0.58,0.78,low*0.72+mid*0.28)*0.22;
+  maria=max(maria,mareRegions*mix(0.7,1.0,mareBreakup));
   maria*=smoothstep(1.0,0.72,length(rotated));
   maria=clamp(maria,0.0,1.0)*uMoonMariaStrength;
-  vec2 craters=(craterField(rotated,5.5,uMoonPatternSeed)+craterField(rotated,13.0,uMoonPatternSeed+91.0)*0.48+craterField(rotated,31.0,uMoonPatternSeed+211.0)*0.18)*uMoonCraterStrength;
+  vec2 craters=(craterField(rotated,5.5,uMoonPatternSeed,0.18)+craterField(rotated,13.0,uMoonPatternSeed+91.0,0.16)*0.5+craterField(rotated,31.0,uMoonPatternSeed+211.0,0.09)*0.2)*uMoonCraterStrength;
   float grain=(fbm3(rotatedNormal*22.0+31.0)-0.5)*0.12*uMoonDetail;
   float relief=craters.y*uMoonReliefStrength;
   vec3 bright=srgbToLinear(uMoonColor)*mix(0.78,1.1,phaseLighting);
-  vec3 dark=bright*vec3(0.52,0.55,0.61);
-  vec3 surface=mix(bright,dark,clamp(maria,0.0,0.86));
+  vec3 dark=bright*vec3(0.34,0.37,0.43);
+  vec3 surface=mix(bright,dark,clamp(maria,0.0,0.92));
   surface*=1.0+grain+craters.x+relief;
   surface=pow(max(surface,vec3(0.001)),vec3(max(0.2,uMoonSurfaceContrast)));
   return surface;

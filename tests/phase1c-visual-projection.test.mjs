@@ -49,6 +49,15 @@ test('Milky Way uses periodic smooth direction-space dust without longitude seam
   assert.doesNotMatch(sky, /ray\*5\.3\+tangent\*longitude/);
 });
 
+test('procedural Moon uses sparse hierarchical craters and irregular authored maria', () => {
+  assert.match(sky, /craterField\(vec2 uv,float scale,float seed,float density\)/);
+  assert.match(sky, /if\(identity<1\.0-clamp\(density,0\.0,1\.0\)\)continue/);
+  assert.match(sky, /float irregularity=1\.0\+sin\(/);
+  assert.match(sky, /craterField\(rotated,5\.5,uMoonPatternSeed,0\.18\)/);
+  assert.match(sky, /craterField\(rotated,31\.0,uMoonPatternSeed\+211\.0,0\.09\)/);
+  assert.match(sky, /vec3 dark=bright\*vec3\(0\.34,0\.37,0\.43\)/);
+});
+
 test('cloud and twilight lighting remain Sun-directed rather than full-screen color washes', () => {
   assert.match(sky, /float edgeLight=1\.0-smoothstep\(threshold,threshold\+0\.38,cloudField\)/);
   assert.match(sky, /vec3 sunTint=srgbToLinear\(uSunColor\)/);

@@ -131,7 +131,10 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.doesNotMatch(sky, /float disc=max\(core,psf/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
   assert.match(sky, /vec2 craterField/);
+  assert.match(sky, /craterField\(vec2 uv,float scale,float seed,float density\)/);
+  assert.match(sky, /if\(identity<1\.0-clamp\(density,0\.0,1\.0\)\)continue/);
   assert.match(sky, /float lunarEllipse/);
+  assert.match(sky, /mareRegions=max\(mareRegions,lunarEllipse/);
   assert.match(sky, /float coronaEnvelope=exp\(-coronaDistance\/max\(0\.035,coronaReach\)\)/);
   assert.match(sky, /float forwardScatter=pow\(max\(dot\(ray,uSunDirection\),0\.0\),8\.0\)/);
   assert.match(sky, /vec3 twilightScatter=mix\(vec3\(0\.08,0\.035,0\.18\),vec3\(0\.7,0\.16,0\.035\),twilightSunward\)/);
@@ -177,4 +180,5 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(visualCapture, /12-annular-eclipse/);
   assert.match(visualCapture, /20-path-terrain-regression/);
   assert.match(visualCapture, /\$moonWorld=@\{sky=@\{moonSize=4\}\}/);
+  assert.match(visualCapture, /moonColor='#d8d3c8'/);
 });

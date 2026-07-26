@@ -156,7 +156,7 @@ try{
   $moonClose=@{
     lookPreset='custom';time=@{hours=1};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
     lighting=@{profile='quality'};
-    sky=@{celestialMode='manual';sunAzimuth=155;sunElevation=-12;moonAzimuth=0;moonElevation=35;moonSize=22;moonBrightness=1.05;moonGlow=.12;moonPhaseMode='manual';moonPhase=.88;moonCraterStrength=1.15;moonMariaStrength=.9;moonSurfaceContrast=1.22;moonReliefStrength=.48;moonLimbDarkening=.34;planetEnabled=$false;eclipseMode='auto';starIntensity=.22;milkyWayIntensity=0}
+    sky=@{celestialMode='manual';sunAzimuth=155;sunElevation=-12;moonAzimuth=0;moonElevation=35;moonSize=22;moonColor='#d8d3c8';moonBrightness=1.02;moonGlow=.1;moonPhaseMode='manual';moonPhase=.88;moonCraterStrength=1.08;moonMariaStrength=1.05;moonSurfaceContrast=1.16;moonReliefStrength=.42;moonLimbDarkening=.3;planetEnabled=$false;eclipseMode='auto';starIntensity=.22;milkyWayIntensity=0}
   }
   $moonCamera=@{position=@(0,20,0);yaw=0;pitch=.610865;fov=12}
   $moonWorld=@{sky=@{moonSize=4}}
