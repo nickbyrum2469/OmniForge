@@ -12,17 +12,20 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /vec2 hemisphereOctEncode/);
   assert.match(sky, /vec3 hemisphereOctDecode/);
   assert.match(sky, /angularDistance=sqrt\(max\(0\.0,2\.0\*\(1\.0-cosine\)\)\)/);
+  assert.match(sky, /float psf=exp\(-0\.5\*pow\(angularDistance\/sigma,2\.0\)\)/);
+  assert.match(sky, /horizonTwinkle/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
   assert.doesNotMatch(sky, /projected\.xy\*scale/);
 });
 
 test('Milky Way uses periodic smooth direction-space dust without longitude seams or threshold blobs', () => {
   assert.match(sky, /vec3 periodic=vec3\(cos\(longitude\),sin\(longitude\),latitude\)/);
-  assert.match(sky, /filamentUpper/);
-  assert.match(sky, /filamentLower/);
-  assert.match(sky, /float galacticCloudEnvelope=/);
+  assert.match(sky, /float coreBulge=/);
+  assert.match(sky, /float cloudMasses=/);
+  assert.match(sky, /float branchingDust=/);
+  assert.match(sky, /float dustTransmission=/);
   assert.match(sky, /centralDust/);
-  assert.doesNotMatch(sky, /microStructure=/);
+  assert.match(sky, /float micro=/);
   assert.doesNotMatch(sky, /ray\*5\.3\+tangent\*longitude/);
 });
 

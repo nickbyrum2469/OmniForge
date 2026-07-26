@@ -78,6 +78,21 @@ test('renderer uses linear HDR PBR without legacy brightness and shadow cheats',
   assert.doesNotMatch(hdr, /1\.0\/2\.2/);
 });
 
+test('authored texture albedo is not unintentionally darkened by a fallback object color', () => {
+  assert.match(renderer, /uBaseTextureTintStrength/);
+  assert.match(renderer, /baseLinear=srgbToLinear\(max\(tex,vec3\(0\.0\)\)\)\*mix\(vec3\(1\.0\),baseFactor/);
+  assert.match(renderer, /set1\('uBaseTextureTintStrength',Number\(baseSettings\.tintStrength\?\?0\)\)/);
+  assert.match(renderer, /set1\('uBaseTextureTintStrength',1\)/);
+  assert.doesNotMatch(renderer, /baseLinear\*=srgbToLinear/);
+  assert.doesNotMatch(renderer, /pathLinear\*=srgbToLinear/);
+});
+
+test('light colors are decoded to linear space before BRDF evaluation', () => {
+  assert.match(renderer, /srgbToLinear\(uLightColor\)\*uLightIntensity\*shadow/);
+  assert.match(renderer, /srgbToLinear\(uMoonColor\)\*uMoonIntensity/);
+  assert.match(renderer, /srgbToLinear\(uPointColor\[i\]\)\*uPointData\[i\]\.x/);
+});
+
 test('starter editor references are classified and excluded from surface rules', () => {
   assert.match(stateStore, /renderClass:'editor-only'/);
   assert.match(stateStore, /affectsSurfaceRecipes:false/);

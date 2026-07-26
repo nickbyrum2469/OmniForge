@@ -4,7 +4,7 @@ import re
 sky_path = Path('app/sky-pass.js')
 sky = sky_path.read_text(encoding='utf-8')
 
-if 'float galacticCloudEnvelope=' not in sky:
+if 'float galacticCloudEnvelope=' not in sky and 'float dustTransmission=' not in sky:
     replacement = r'''vec3 milkyWay(vec3 ray,float horizonMask){
   float orientation=radians(uMilkyWayOrientation);
   vec3 galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78));
@@ -49,7 +49,7 @@ if 'float galacticCloudEnvelope=' not in sky:
 # Soften repetitive crater-ring outlines while keeping readable basin relief.
 sky = sky.replace('  return ring*0.62-basin*0.36;', '  return ring*0.28-basin*0.42;')
 
-if 'float galacticCloudEnvelope=' not in sky:
+if 'float galacticCloudEnvelope=' not in sky and 'float dustTransmission=' not in sky:
     raise RuntimeError('Refined galactic cloud envelope is missing.')
 if 'microStructure=' in sky:
     raise RuntimeError('Thresholded galactic blob noise survived refinement.')

@@ -54,15 +54,15 @@ REQUIRED = {
     'app/sky-pass.js': [
         'vec2 hemisphereOctEncode',
         'vec3 hemisphereOctDecode',
-        'float probability=clamp(uStarDensity*0.014',
-        'float radius=mix(0.00072,0.00235',
-        'float rayLength=radius*mix(2.0,4.5',
+        'float probability=clamp(uStarDensity*0.052',
+        'float radius=max(aa*1.08',
+        'float rayLength=radius*mix(2.0,4.2',
         'float craterField',
         'return ring*0.28-basin*0.42',
         'uMilkyWayClumping',
         'uStarRayStrength',
         'vec3 galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78))',
-        'float galacticCloudEnvelope=',
+        'float dustTransmission=',
         'vec3 periodic=vec3(cos(longitude),sin(longitude),latitude)',
         'float coronaInner=pow(sunDot,1500.0)',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)',
@@ -76,10 +76,10 @@ REQUIRED = {
 BASE_FINAL_VISUAL_MARKERS = {
     'app/renderer.js': ['return sum/9.0;'],
     'app/sky-pass.js': [
-        'uStarDensity*0.014',
-        'rayLength=radius*mix(2.0,4.5',
+        'uStarDensity*0.052',
+        'rayLength=radius*mix(2.0,4.2',
         'galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78))',
-        'microStructure=',
+        'float dustTransmission=',
         'coronaInner=pow(sunDot,1500.0)',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
     ],
@@ -93,9 +93,9 @@ BASE_FINAL_VISUAL_MARKERS = {
 REFINED_VISUAL_MARKERS = {
     'app/renderer.js': ['return sum/9.0;'],
     'app/sky-pass.js': [
-        'uStarDensity*0.014',
-        'rayLength=radius*mix(2.0,4.5',
-        'float galacticCloudEnvelope=',
+        'uStarDensity*0.052',
+        'rayLength=radius*mix(2.0,4.2',
+        'float dustTransmission=',
         'return ring*0.28-basin*0.42',
         'coronaInner=pow(sunDot,1500.0)',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
@@ -132,8 +132,8 @@ if missing:
         'hemisphereOctEncode', 'hemisphereOctDecode', 'vec3 periodic=', 'eclipseSilhouette',
         'VisualTestCapture', 'VISUAL_CAPTURE_DIR', 'installVisualCaptureWatcher', 'replace(/^\\uFEFF/',
         'return sum/9.0', 'starRayStrength: 0.12', 'starSizeMin: 0.36', 'milkyWayIntensity: 0.34',
-        'uStarDensity*0.014', 'mix(0.00072,0.00235', 'rayLength=radius*mix(2.0,4.5',
-        'galacticNormal=normalize', 'galacticCloudEnvelope=', 'ring*0.28', 'coronaInner=pow(sunDot,1500.0)',
+        'uStarDensity*0.014', 'uStarDensity*0.052', 'mix(0.00072,0.00235', 'float radius=max(aa*1.08', 'rayLength=radius*mix(2.0,4.5', 'rayLength=radius*mix(2.0,4.2',
+        'galacticNormal=normalize', 'galacticCloudEnvelope=', 'dustTransmission=', 'ring*0.28', 'coronaInner=pow(sunDot,1500.0)',
         'sky=mix(sky,vec3(0.00001)', 'indirectStrength: 0.9', 'ambientIntensity: (0.09',
         'max="32"', '0.1, 32', 'selectedId=null', 'selectedId=originalSelectedId'
     ])]

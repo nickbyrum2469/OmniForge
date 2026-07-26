@@ -41,6 +41,23 @@ The baseline also exposed permanent rendering defects:
 - Capture revision barrier tied to the exact world mutation revision.
 - PowerShell 5.1-compatible repository-relative path handling in the Windows evidence gate.
 
+## Packaged correction gate
+
+The first revision-synchronized package built from `878d9b29404f7714f6afaf890ae1d3fce726a94b` produced all five requested frames and correctly failed the visual gate. Manual inspection found black terrain, sparse square stars, a symmetric fog-like galactic band, synthetic crater rings, and a simple eclipse disc.
+
+The next small corrective gate:
+
+- treats procedural material textures as authoritative albedo instead of multiplying them by a dark fallback object color;
+- preserves glTF base-color factors as explicit linear texture tints;
+- decodes Sun, Moon, and point-light colors before BRDF evaluation;
+- increases deterministic stellar population density;
+- renders stars with a radial antialiased point-spread function;
+- varies twinkle by altitude, brightness, identity, and time;
+- rebuilds the Milky Way with a framed core bulge, asymmetric cloud masses, branching dust, multiple filaments, granular knots, and periodic direction-space noise;
+- updates integration contracts so repeatable migration cannot restore the older shader.
+
+Every corrective package must still be built from a clean commit, capture the exact server revision, and pass manual inspection before approval.
+
 ## Protected behavior
 
 - The continuous terrain-conforming path remains authoritative.

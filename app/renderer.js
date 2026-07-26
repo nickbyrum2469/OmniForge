@@ -105,6 +105,9 @@ uniform float uMetallic;
 uniform float uIsTerrain;
 uniform float uUseBaseTexture;
 uniform float uUsePathTexture;
+uniform float uBaseTextureTintStrength;
+uniform float uPathTextureTintStrength;
+uniform float uBaseColorIsLinear;
 uniform float uUseBaseNormal;
 uniform float uUsePathNormal;
 uniform float uUseBaseRoughness;
@@ -282,10 +285,11 @@ void main(){
   }
   float blend=uIsTerrain>.5?smoothstep(.015,.985,clamp(vBlend+(noise2(vWorld.xz*.65)-.5)*.10,0.0,1.0)):0.0;
 
-  vec3 baseLinear=srgbToLinear(max(uBaseColor,vec3(0.0)));
+  vec3 baseFactor=mix(srgbToLinear(max(uBaseColor,vec3(0.0))),max(uBaseColor,vec3(0.0)),uBaseColorIsLinear);
+  vec3 baseLinear=baseFactor;
   if(uUseBaseTexture>0.5){
     vec3 tex=texture(uBaseTexture,baseUV).rgb;
-    baseLinear*=srgbToLinear(max(tex,vec3(0.0)));
+    baseLinear=srgbToLinear(max(tex,vec3(0.0)))*mix(vec3(1.0),baseFactor,clamp(uBaseTextureTintStrength,0.0,1.0));
   }else if(uIsTerrain>0.5){
     float macro=noise2(vWorld.xz*0.035)*0.22+noise2(vWorld.xz*0.21)*0.08;
     baseLinear*=0.82+macro;
@@ -294,7 +298,7 @@ void main(){
   vec3 pathLinear=srgbToLinear(max(uPathColor,vec3(0.0)));
   if(uUsePathTexture>0.5){
     vec3 ptex=texture(uPathTexture,pathUV).rgb;
-    pathLinear*=srgbToLinear(max(ptex,vec3(0.0)));
+    pathLinear=srgbToLinear(max(ptex,vec3(0.0)))*mix(vec3(1.0),pathLinear,clamp(uPathTextureTintStrength,0.0,1.0));
   }else{
     float grit=noise2(vWorld.xz*1.8)*0.18+noise2(vWorld.xz*.3)*.12;
     pathLinear*=.78+grit;
@@ -334,8 +338,8 @@ void main(){
   vec3 editorAmbient=baseLinear*vec3(uEditorFill)*(.55+.45*hemi)*materialAO;
   float moonNdl=max(dot(n,normalize(uMoonDir)),0.0);
   vec3 color=baseLinear*ambient+editorAmbient;
-  color+=evaluateDirectBRDF(baseLinear,n,viewDir,lightDir,uLightColor*uLightIntensity*shadow,roughness,uMetallic);
-  color+=evaluateDirectBRDF(baseLinear,n,viewDir,normalize(uMoonDir),uMoonColor*uMoonIntensity,roughness,uMetallic);
+  color+=evaluateDirectBRDF(baseLinear,n,viewDir,lightDir,srgbToLinear(uLightColor)*uLightIntensity*shadow,roughness,uMetallic);
+  color+=evaluateDirectBRDF(baseLinear,n,viewDir,normalize(uMoonDir),srgbToLinear(uMoonColor)*uMoonIntensity,roughness,uMetallic);
 
   for(int i=0;i<4;i++){
     if(i>=uPointCount)break;
@@ -344,7 +348,7 @@ void main(){
     float normalizedDistance=dist/max(range,0.001);
     float rangeWindow=clamp(1.0-pow(normalizedDistance,4.0),0.0,1.0);
     float attenuation=(rangeWindow*rangeWindow)/max(dist*dist,0.25);
-    color+=evaluateDirectBRDF(baseLinear,n,viewDir,normalize(toL),uPointColor[i]*uPointData[i].x*attenuation,roughness,uMetallic);
+    color+=evaluateDirectBRDF(baseLinear,n,viewDir,normalize(toL),srgbToLinear(uPointColor[i])*uPointData[i].x*attenuation,roughness,uMetallic);
   }
 
   float rim=pow(1.0-max(dot(viewDir,n),0.0),4.0)*.028;
@@ -608,6 +612,7 @@ export class Renderer3D{
     const pp=new Float32Array(12),pc=new Float32Array(12),pd=new Float32Array(8);lights.points.forEach((l,i)=>{pp.set(l.transform.position,i*3);pc.set(hexToRgb(l.properties.color),i*3);pd.set([Number(l.properties.intensity||1),Number(l.properties.range||10)],i*2);});gl.uniform3fv(gl.getUniformLocation(p,'uPointPos[0]'),pp);gl.uniform3fv(gl.getUniformLocation(p,'uPointColor[0]'),pc);gl.uniform2fv(gl.getUniformLocation(p,'uPointData[0]'),pd);
     set1('uSelected',selected?1:0);set3('uCameraPos',camera.position);set1('uRoughness',Number(baseAsset?.settings?.roughness??object.properties.roughness??.75));set1('uMetallic',Number(baseAsset?.settings?.metallic??object.properties.metallic??0));set1('uIsTerrain',object.type==='terrain'?1:0);
     const baseSettings=baseAsset?.settings||{},pathSettings=pathAsset?.settings||{};
+    set1('uBaseColorIsLinear',0);set1('uBaseTextureTintStrength',Number(baseSettings.tintStrength??0));set1('uPathTextureTintStrength',Number(pathSettings.tintStrength??0));
     const recipeVec=(recipe,key,defaults)=>{const source=recipe?.[key]||{},nodes=recipe?.graph?.nodes||[],output=nodes.find(node=>node.type==='surface-output'),disabled=output&&output.enabled===false,nodeTypeFor={slope:'slope-mask',cavities:'cavity-mask',wetness:'weather-state',snow:'weather-state'};return new Float32Array(defaults.map(([name,value])=>{if(disabled)return Number(value);let result=Number(source[name]??value),node=nodes.find(item=>item.type===nodeTypeFor[name]);if(node){if(node.enabled===false)return 0;result*=Number(node.value??1);}return result;}));};
     gl.uniform4fv(gl.getUniformLocation(p,'uBaseSurfaceLayers'),recipeVec(baseRecipe,'layers',[['dirt',0],['moss',0],['wetness',0],['snow',0]]));
     gl.uniform4fv(gl.getUniformLocation(p,'uPathSurfaceLayers'),recipeVec(pathRecipe,'layers',[['dirt',0],['moss',0],['wetness',0],['snow',0]]));
@@ -643,7 +648,7 @@ export class Renderer3D{
         const material=group.material||mesh.sourceMaterials?.[group.materialIndex]||mesh.sourceMaterial||{};
         const color=Array.isArray(material.baseColor)?material.baseColor:[.62,.66,.72,1],importedBase=this.textureFromUrl(material.textureUrls?.baseColor,false);
         set3('uBaseColor',new Float32Array([Number(color[0]??.62),Number(color[1]??.66),Number(color[2]??.72)]));
-        bindMap(0,'uBaseTexture',importedBase);set1('uUseBaseTexture',importedBase.ready?1:0);set1('uBaseTextureScale',1);
+        set1('uBaseColorIsLinear',1);set1('uBaseTextureTintStrength',1);bindMap(0,'uBaseTexture',importedBase);set1('uUseBaseTexture',importedBase.ready?1:0);set1('uBaseTextureScale',1);
         const alpha=Number(color[3]??1);set1('uOpacity',alpha);set1('uRoughness',Number(material.roughness??.8));set1('uMetallic',Number(material.metallic??0));
         if(alpha<.999){gl.enable(gl.BLEND);gl.depthMask(false);}else{gl.disable(gl.BLEND);gl.depthMask(true);}
         if(material.doubleSided)gl.disable(gl.CULL_FACE);else gl.enable(gl.CULL_FACE);
