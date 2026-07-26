@@ -1,83 +1,129 @@
 const clone = value => structuredClone(value);
 
 export const ENVIRONMENT_PRESETS = Object.freeze({
+  'clear-day': Object.freeze({
+    label: 'Clear Day',
+    description: 'Clean blue daylight, minimal haze, long visibility, readable shadows, and restrained highlights.',
+    patch: {
+      lighting: { profile: 'balanced', sunIntensity: 2.35, moonIntensity: 0.14, indirectStrength: 0.72 },
+      atmosphere: { exposure: 0.7, haze: 0.006, mie: 0.035, humidity: 0.04, visibilityKm: 320, rayleigh: 1.08, dayFogMultiplier: 0.04, nightFogMultiplier: 0.18, saturation: 1.08, contrast: 1.03, vibrance: 0.1, toneMapper: 'neutral' },
+      sky: { sunGlow: 0.38, moonBrightness: 0.92, moonGlow: 0.22, starIntensity: 0.9, milkyWayIntensity: 0.18 },
+      clouds: { coverage: 0.03, density: 0.16, shadowStrength: 0.12 },
+      weather: { preset: 'clear', fog: 0 }
+    }
+  }),
   'natural-balanced': Object.freeze({
     label: 'Natural Balanced',
-    description: 'Neutral daylight, realistic contrast, restrained haze, and clean material color.',
+    description: 'Neutral outdoor lighting with moderate depth, clean color, and light atmospheric perspective.',
     patch: {
-      lighting: { profile: 'balanced', sunIntensity: 3.05, moonIntensity: 0.18, indirectStrength: 0.5 },
-      atmosphere: { exposure: 0.92, haze: 0.045, humidity: 0.18, visibilityKm: 145, saturation: 1.04, contrast: 1.03, vibrance: 0.08, toneMapper: 'aces' },
-      sky: { sunGlow: 0.72, moonBrightness: 1.05, moonGlow: 0.48, starIntensity: 1.05, milkyWayIntensity: 0.32 },
-      clouds: { coverage: 0.2, density: 0.42, shadowStrength: 0.24 },
-      weather: { preset: 'clear', fog: 0.018 }
+      lighting: { profile: 'balanced', sunIntensity: 2.55, moonIntensity: 0.16, indirectStrength: 0.66 },
+      atmosphere: { exposure: 0.74, haze: 0.015, mie: 0.055, humidity: 0.08, visibilityKm: 230, dayFogMultiplier: 0.08, nightFogMultiplier: 0.22, saturation: 1.06, contrast: 1.04, vibrance: 0.1, toneMapper: 'neutral' },
+      sky: { sunGlow: 0.48, moonBrightness: 0.96, moonGlow: 0.28, starIntensity: 1, milkyWayIntensity: 0.23 },
+      clouds: { coverage: 0.12, density: 0.28, shadowStrength: 0.18 },
+      weather: { preset: 'clear', fog: 0.004 }
     }
   }),
   'clear-alpine': Object.freeze({
     label: 'Clear Alpine',
-    description: 'Deep blue high-altitude sky, crisp sunlight, long visibility, and vivid terrain color.',
+    description: 'Deep blue high-altitude sky, very long visibility, crisp sunlight, and vivid terrain separation.',
     patch: {
-      lighting: { profile: 'quality', sunIntensity: 3.35, moonIntensity: 0.16, indirectStrength: 0.46 },
-      atmosphere: { exposure: 0.88, haze: 0.018, humidity: 0.08, visibilityKm: 230, rayleigh: 1.18, mie: 0.075, saturation: 1.1, contrast: 1.06, vibrance: 0.12, toneMapper: 'aces' },
-      sky: { sunGlow: 0.55, starIntensity: 1.2, milkyWayIntensity: 0.38 },
-      clouds: { coverage: 0.12, density: 0.34, shadowStrength: 0.22 },
-      weather: { preset: 'clear', fog: 0.008 }
+      lighting: { profile: 'quality', sunIntensity: 2.75, moonIntensity: 0.15, indirectStrength: 0.62 },
+      atmosphere: { exposure: 0.68, haze: 0.003, mie: 0.022, humidity: 0.025, visibilityKm: 420, rayleigh: 1.28, dayFogMultiplier: 0.01, nightFogMultiplier: 0.12, saturation: 1.13, contrast: 1.06, vibrance: 0.14, toneMapper: 'neutral' },
+      sky: { sunGlow: 0.32, starIntensity: 1.12, milkyWayIntensity: 0.28 },
+      clouds: { coverage: 0.02, density: 0.12, shadowStrength: 0.1 },
+      weather: { preset: 'clear', fog: 0 }
     }
   }),
   'golden-hour': Object.freeze({
     label: 'Golden Hour',
-    description: 'Warm low-angle sunlight with deeper blue shadows and cinematic color separation.',
+    description: 'Warm low-angle sunlight, cool open shadows, gentle haze, and cinematic separation.',
     patch: {
       time: { hours: 18.15 },
-      lighting: { profile: 'quality', sunIntensity: 3.7, indirectStrength: 0.52 },
-      atmosphere: { exposure: 0.86, haze: 0.12, humidity: 0.26, visibilityKm: 105, saturation: 1.14, contrast: 1.08, vibrance: 0.18, toneMapper: 'aces' },
-      sky: { sunGlow: 1.35, starIntensity: 0.8, milkyWayIntensity: 0.24 },
-      clouds: { coverage: 0.28, density: 0.48, shadowStrength: 0.31 },
-      weather: { preset: 'partly-cloudy', fog: 0.035 }
+      lighting: { profile: 'quality', sunIntensity: 2.9, indirectStrength: 0.68 },
+      atmosphere: { exposure: 0.66, haze: 0.055, mie: 0.11, humidity: 0.18, visibilityKm: 160, dayFogMultiplier: 0.12, nightFogMultiplier: 0.2, saturation: 1.15, contrast: 1.07, vibrance: 0.18, toneMapper: 'neutral' },
+      sky: { sunGlow: 0.95, starIntensity: 0.82, milkyWayIntensity: 0.18 },
+      clouds: { coverage: 0.22, density: 0.38, shadowStrength: 0.24 },
+      weather: { preset: 'partly-cloudy', fog: 0.008 }
     }
   }),
   'overcast-soft': Object.freeze({
     label: 'Overcast Soft',
-    description: 'Soft broad illumination, controlled highlights, and saturated surfaces without gray washout.',
+    description: 'Broad soft illumination with restrained highlights and preserved material color.',
     patch: {
-      lighting: { profile: 'balanced', sunIntensity: 1.45, moonIntensity: 0.12, indirectStrength: 0.68 },
-      atmosphere: { exposure: 0.96, haze: 0.16, humidity: 0.62, visibilityKm: 82, saturation: 1.08, contrast: 0.96, vibrance: 0.13, toneMapper: 'aces' },
-      sky: { sunGlow: 0.25, starIntensity: 0.4, milkyWayIntensity: 0.08 },
-      clouds: { coverage: 0.88, density: 0.72, shadowStrength: 0.5 },
-      weather: { preset: 'overcast', fog: 0.085 }
+      lighting: { profile: 'balanced', sunIntensity: 1.15, moonIntensity: 0.1, indirectStrength: 0.92 },
+      atmosphere: { exposure: 0.78, haze: 0.06, mie: 0.1, humidity: 0.52, visibilityKm: 135, dayFogMultiplier: 0.12, nightFogMultiplier: 0.2, saturation: 1.04, contrast: 0.94, vibrance: 0.12, toneMapper: 'neutral' },
+      sky: { sunGlow: 0.15, starIntensity: 0.3, milkyWayIntensity: 0.04 },
+      clouds: { coverage: 0.88, density: 0.68, shadowStrength: 0.42 },
+      weather: { preset: 'overcast', fog: 0.018 }
+    }
+  }),
+  'clean-twilight': Object.freeze({
+    label: 'Clean Twilight',
+    description: 'Deep blue twilight with a clean horizon, early stars, and controlled atmospheric glow.',
+    patch: {
+      time: { hours: 19.45 },
+      lighting: { profile: 'quality', sunIntensity: 2.2, moonIntensity: 0.18, indirectStrength: 0.62 },
+      atmosphere: { exposure: 0.78, haze: 0.025, mie: 0.06, humidity: 0.08, visibilityKm: 245, dayFogMultiplier: 0.06, nightFogMultiplier: 0.14, saturation: 1.14, contrast: 1.06, vibrance: 0.18, toneMapper: 'neutral' },
+      sky: { sunGlow: 0.62, moonBrightness: 1, moonGlow: 0.3, starIntensity: 1.24, milkyWayIntensity: 0.36 },
+      clouds: { coverage: 0.08, density: 0.22, shadowStrength: 0.15 },
+      weather: { preset: 'clear', fog: 0.002 }
     }
   }),
   'moonlit-night': Object.freeze({
     label: 'Moonlit Night',
-    description: 'Readable but genuinely dark moonlight with blue-silver separation and visible stars.',
+    description: 'Dark blue-silver moonlight with readable silhouettes, strong stars, and light night haze.',
     patch: {
       time: { hours: 0.4 },
-      lighting: { profile: 'quality', sunIntensity: 2.8, moonIntensity: 0.32, indirectStrength: 0.36 },
-      atmosphere: { exposure: 1.02, haze: 0.045, humidity: 0.12, visibilityKm: 170, saturation: 1.12, contrast: 1.08, vibrance: 0.16, toneMapper: 'aces' },
-      sky: { moonBrightness: 1.42, moonGlow: 0.58, moonEarthshine: 0.11, starIntensity: 1.65, starDensity: 0.95, milkyWayIntensity: 0.62 },
-      clouds: { coverage: 0.12, density: 0.3, shadowStrength: 0.24 },
-      weather: { preset: 'clear', fog: 0.012 }
+      lighting: { profile: 'quality', sunIntensity: 2.2, moonIntensity: 0.28, indirectStrength: 0.52 },
+      atmosphere: { exposure: 0.86, haze: 0.012, mie: 0.04, humidity: 0.05, visibilityKm: 280, dayFogMultiplier: 0.03, nightFogMultiplier: 0.12, saturation: 1.1, contrast: 1.07, vibrance: 0.15, toneMapper: 'neutral' },
+      sky: { moonBrightness: 1.22, moonGlow: 0.34, moonEarthshine: 0.08, starIntensity: 1.45, starDensity: 0.72, starBrightness: 0.8, milkyWayIntensity: 0.46 },
+      clouds: { coverage: 0.06, density: 0.18, shadowStrength: 0.12 },
+      weather: { preset: 'clear', fog: 0.002 }
     }
   }),
   'cinematic-vivid': Object.freeze({
     label: 'Cinematic Vivid',
-    description: 'Rich color depth, strong warm/cool separation, and controlled highlight rolloff.',
+    description: 'Rich but controlled color, warm/cool contrast, readable blacks, and soft highlight rolloff.',
     patch: {
-      lighting: { profile: 'quality', sunIntensity: 3.45, moonIntensity: 0.22, indirectStrength: 0.58 },
-      atmosphere: { exposure: 0.84, haze: 0.07, humidity: 0.2, visibilityKm: 135, saturation: 1.2, contrast: 1.13, vibrance: 0.24, toneMapper: 'aces' },
-      sky: { sunGlow: 0.9, moonBrightness: 1.18, moonGlow: 0.55, starIntensity: 1.25, milkyWayIntensity: 0.46 },
-      clouds: { coverage: 0.34, density: 0.5, shadowStrength: 0.33 },
-      weather: { preset: 'partly-cloudy', fog: 0.025 }
+      lighting: { profile: 'quality', sunIntensity: 2.7, moonIntensity: 0.2, indirectStrength: 0.7 },
+      atmosphere: { exposure: 0.67, haze: 0.024, mie: 0.065, humidity: 0.1, visibilityKm: 210, dayFogMultiplier: 0.06, nightFogMultiplier: 0.16, saturation: 1.16, contrast: 1.1, vibrance: 0.22, toneMapper: 'neutral' },
+      sky: { sunGlow: 0.58, moonBrightness: 1.06, moonGlow: 0.3, starIntensity: 1.12, milkyWayIntensity: 0.34 },
+      clouds: { coverage: 0.2, density: 0.34, shadowStrength: 0.22 },
+      weather: { preset: 'partly-cloudy', fog: 0.006 }
     }
   }),
   'storm-drama': Object.freeze({
     label: 'Storm Drama',
-    description: 'Dark cloud mass, preserved local color, strong contrast, and storm-ready atmosphere.',
+    description: 'Dense storm mass, preserved local color, darkened sky, and wet-weather atmosphere.',
     patch: {
-      lighting: { profile: 'quality', sunIntensity: 1.9, moonIntensity: 0.1, indirectStrength: 0.48 },
-      atmosphere: { exposure: 0.9, haze: 0.22, humidity: 0.88, visibilityKm: 54, saturation: 1.12, contrast: 1.12, vibrance: 0.16, toneMapper: 'aces' },
-      sky: { sunGlow: 0.3, starIntensity: 0.15, milkyWayIntensity: 0.02 },
-      clouds: { quality: 'quality', coverage: 0.95, density: 0.88, shadowStrength: 0.72 },
-      weather: { preset: 'storm', fog: 0.16, precipitation: 0.82, wetness: 0.72, windStrength: 0.9 }
+      lighting: { profile: 'quality', sunIntensity: 1.5, moonIntensity: 0.08, indirectStrength: 0.58 },
+      atmosphere: { exposure: 0.76, haze: 0.14, mie: 0.19, humidity: 0.9, visibilityKm: 70, dayFogMultiplier: 0.34, nightFogMultiplier: 0.4, saturation: 1.06, contrast: 1.08, vibrance: 0.13, toneMapper: 'neutral' },
+      sky: { sunGlow: 0.18, starIntensity: 0.1, milkyWayIntensity: 0.01 },
+      clouds: { quality: 'quality', coverage: 0.96, density: 0.88, shadowStrength: 0.68 },
+      weather: { preset: 'storm', fog: 0.12, precipitation: 0.82, wetness: 0.72, windStrength: 0.9 }
+    }
+  }),
+  'horror-fog': Object.freeze({
+    label: 'Horror Fog',
+    description: 'Intentional low-visibility ground fog and desaturated light for horror or mystery scenes.',
+    patch: {
+      lighting: { profile: 'balanced', sunIntensity: 1.3, moonIntensity: 0.13, indirectStrength: 0.42 },
+      atmosphere: { exposure: 0.72, haze: 0.32, mie: 0.28, humidity: 0.92, visibilityKm: 28, dayFogMultiplier: 0.72, nightFogMultiplier: 1.15, saturation: 0.78, contrast: 1.08, vibrance: -0.08, toneMapper: 'neutral' },
+      sky: { sunGlow: 0.1, moonBrightness: 0.78, moonGlow: 0.5, starIntensity: 0.05, milkyWayIntensity: 0 },
+      clouds: { coverage: 0.72, density: 0.68, shadowStrength: 0.56 },
+      weather: { preset: 'fog', fog: 0.82 }
+    }
+  }),
+  'fantasy-sky': Object.freeze({
+    label: 'Fantasy Sky',
+    description: 'Stylized deep color, visible galactic structure, stronger hero stars, and a luminous Moon.',
+    patch: {
+      time: { hours: 21.2 },
+      lighting: { profile: 'quality', sunIntensity: 2.3, moonIntensity: 0.24, indirectStrength: 0.62 },
+      atmosphere: { exposure: 0.8, haze: 0.018, mie: 0.045, humidity: 0.04, visibilityKm: 300, dayFogMultiplier: 0.04, nightFogMultiplier: 0.12, saturation: 1.24, contrast: 1.08, vibrance: 0.3, toneMapper: 'neutral' },
+      sky: { moonBrightness: 1.3, moonGlow: 0.52, starIntensity: 1.65, starDensity: 0.86, starBrightness: 1.05, starRayStrength: 0.44, starHeroFraction: 0.06, milkyWayIntensity: 0.72, milkyWayWarp: 0.78, milkyWayClumping: 0.95, milkyWayCoreStrength: 0.95 },
+      clouds: { coverage: 0.08, density: 0.18, shadowStrength: 0.12 },
+      weather: { preset: 'clear', fog: 0 }
     }
   })
 });
@@ -87,7 +133,9 @@ function mergeSection(target, patch) {
 }
 
 export function applyEnvironmentPreset(world = {}, presetId = 'natural-balanced') {
+  if (presetId === 'custom') return { ...clone(world), lookPreset: 'custom' };
   const preset = ENVIRONMENT_PRESETS[presetId] || ENVIRONMENT_PRESETS['natural-balanced'];
+  const resolvedId = ENVIRONMENT_PRESETS[presetId] ? presetId : 'natural-balanced';
   const patch = preset.patch;
   return {
     ...clone(world),
@@ -97,10 +145,13 @@ export function applyEnvironmentPreset(world = {}, presetId = 'natural-balanced'
     sky: mergeSection(world.sky, patch.sky),
     clouds: mergeSection(world.clouds, patch.clouds),
     weather: mergeSection(world.weather, patch.weather),
-    lookPreset: presetId
+    lookPreset: resolvedId
   };
 }
 
 export function environmentPresetOptions() {
-  return Object.entries(ENVIRONMENT_PRESETS).map(([id, preset]) => ({ id, label: preset.label, description: preset.description }));
+  return [
+    { id: 'custom', label: 'Custom', description: 'The current world contains manual environment edits.' },
+    ...Object.entries(ENVIRONMENT_PRESETS).map(([id, preset]) => ({ id, label: preset.label, description: preset.description }))
+  ];
 }
