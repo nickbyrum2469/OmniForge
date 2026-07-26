@@ -109,6 +109,16 @@ test('packaged visual QA can request actual canvas PNG evidence', () => {
   assert.match(captureScript, /\$moonWorld=@\{sky=@\{moonSize=4\}\}/);
   assert.match(captureScript, /Patch-World \$port @\{sky=@\{moonSize=38\}\}/);
   assert.match(captureScript, /\$moonCamera=@\{position=@\(0,20,0\);yaw=0;pitch=\.610865;fov=7\}/);
+  assert.match(captureScript, /\$captureSkyDefaults=@\{/);
+  assert.match(captureScript, /sunSize=1;sunGlow=\.38/);
+  assert.match(captureScript, /moonSize=1\.25;moonPhase=\.72/);
+  assert.match(captureScript, /eclipseMode='auto';solarEclipseCoverage=1\.08/);
+  assert.match(captureScript, /function Get-IsolatedSky/);
+  assert.equal(
+    captureScript.match(/sky=\(Get-IsolatedSky @\{/g)?.length,
+    15,
+    'every complete visual state must reset inherited sky and eclipse properties'
+  );
   for (const id of [
     '01-clear-midday-wide', '02-clear-midday-player', '03-golden-hour-coast', '04-twilight-stars',
     '05-night-realistic-wide', '06-night-faint-milkyway', '07-night-core-close', '08-fantasy-violet-galaxy',

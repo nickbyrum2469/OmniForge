@@ -86,6 +86,32 @@ function Get-StateHash([hashtable]$Body){
   finally{$sha.Dispose()}
 }
 
+$captureSkyDefaults=@{
+  celestialMode='manual'
+  sunAzimuth=-90;sunElevation=45;sunSize=1;sunGlow=.38
+  moonAzimuth=90;moonElevation=32;moonSize=1.25;moonPhase=.72;moonPhaseMode='sun-relative'
+  moonBrightness=.92;moonGlow=.22;moonDetail=1.45;moonColor='#c9d4e4';moonEarthshine=.08
+  moonCraterStrength=.85;moonMariaStrength=.62;moonSurfaceContrast=1.18;moonPatternRotation=-12
+  moonPatternSeed=2718;moonReliefStrength=.38;moonLimbDarkening=.28;moonStyle='earth-like'
+  eclipseMode='auto';solarEclipseCoverage=1.08
+  starIntensity=.9;starDensity=.55;starBrightness=.82;starTwinkleAmount=.32;starTwinkleSpeed=1
+  starSizeMin=.36;starSizeMax=1.55;starColorVariation=.65;starSeed=1337;starDaylightExtinction=1.35
+  starRayStrength=.12;starRayLength=1.15;starHeroFraction=.018
+  milkyWayIntensity=.34;milkyWayWidth=.22;milkyWayDetail=1.15;milkyWayOrientation=22
+  milkyWayDust=.7;milkyWayColor='#8fa7d8';milkyWayWarp=.48;milkyWayClumping=.72
+  milkyWayCoreStrength=.65;milkyWayWidthVariation=.6
+  planetEnabled=$false;planetAzimuth=215;planetElevation=28;planetSize=4.5
+  planetColor='#d49a72';planetBrightness=.8;planetRings=.65
+  auroraIntensity=0;shootingStarRate=.05
+}
+
+function Get-IsolatedSky([hashtable]$Overrides){
+  $sky=@{}
+  foreach($entry in $captureSkyDefaults.GetEnumerator()){$sky[$entry.Key]=$entry.Value}
+  foreach($entry in $Overrides.GetEnumerator()){$sky[$entry.Key]=$entry.Value}
+  return $sky
+}
+
 $root=(Get-Location).Path
 $output=Join-Path $root 'dist\OmniForge-win32-x64'
 $captureDir=Join-Path $root 'PHASE1C_VISUAL_CAPTURES'
@@ -109,7 +135,7 @@ try{
     lookPreset='clear-day';time=@{hours=12};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
     lighting=@{profile='quality'};
     atmosphere=@{haze=.004;mie=.025;humidity=.02;dayFogMultiplier=.08;nightFogMultiplier=.18;exposure=.86;saturation=1.04;contrast=1.03;vibrance=.06};
-    sky=@{celestialMode='manual';sunAzimuth=18;sunElevation=42;moonAzimuth=205;moonElevation=-22;planetEnabled=$false;eclipseMode='auto';starIntensity=0;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=18;sunElevation=42;moonAzimuth=205;moonElevation=-22;starIntensity=0;milkyWayIntensity=0})
   }
   $clearDayCamera=@{position=@(20,15,30);yaw=-.55;pitch=.18;fov=62}
   $revision=Patch-World $port $clearDay
@@ -123,7 +149,7 @@ try{
     lookPreset='custom';time=@{hours=0};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
     lighting=@{profile='quality'};
     atmosphere=@{haze=.002;mie=.018;humidity=.01;dayFogMultiplier=.05;nightFogMultiplier=.08;exposure=.82;saturation=1.05;contrast=1.05;vibrance=.08};
-    sky=@{celestialMode='manual';sunAzimuth=180;sunElevation=-35;moonAzimuth=150;moonElevation=-18;planetEnabled=$false;eclipseMode='auto';starIntensity=1;starDensity=.62;starBrightness=.86;starTwinkleAmount=.42;starTwinkleSpeed=.9;starSizeMin=.38;starSizeMax=1.4;starRayStrength=.06;starRayLength=.7;starHeroFraction=.004;milkyWayIntensity=0;milkyWayWidth=.2;milkyWayDetail=1.05;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.42;milkyWayClumping=.72;milkyWayCoreStrength=.72;milkyWayWidthVariation=.52}
+    sky=(Get-IsolatedSky @{sunAzimuth=180;sunElevation=-35;moonAzimuth=150;moonElevation=-18;starIntensity=1;starDensity=.62;starBrightness=.86;starTwinkleAmount=.42;starTwinkleSpeed=.9;starSizeMin=.38;starSizeMax=1.4;starRayStrength=.06;starRayLength=.7;starHeroFraction=.004;milkyWayIntensity=0;milkyWayWidth=.2;milkyWayDetail=1.05;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.42;milkyWayClumping=.72;milkyWayCoreStrength=.72;milkyWayWidthVariation=.52})
   }
   $nightCamera=@{position=@(0,20,0);yaw=-.65;pitch=.92;fov=78}
   $revision=Patch-World $port $nightSky
@@ -146,7 +172,7 @@ try{
     lookPreset='fantasy-sky';time=@{hours=22};weather=@{preset='clear';fog=0};clouds=@{quality='quality';coverage=.04;density=.14;shadowStrength=.08};
     lighting=@{profile='quality';moonIntensity=.22;indirectStrength=.58};
     atmosphere=@{haze=.012;mie=.04;humidity=.03;dayFogMultiplier=.03;nightFogMultiplier=.1;exposure=.82;saturation=1.22;contrast=1.07;vibrance=.28};
-    sky=@{celestialMode='manual';sunAzimuth=180;sunElevation=-32;moonAzimuth=145;moonElevation=-15;planetEnabled=$false;eclipseMode='auto';starIntensity=1.2;starDensity=.82;starBrightness=.92;starTwinkleAmount=.45;starSizeMin=.38;starSizeMax=1.45;starRayStrength=.1;starHeroFraction=.012;milkyWayIntensity=.82;milkyWayWidth=.21;milkyWayDetail=1.25;milkyWayOrientation=32;milkyWayDust=.82;milkyWayWarp=.72;milkyWayClumping=.96;milkyWayCoreStrength=1.08;milkyWayWidthVariation=.72;milkyWayColor='#b984ff'}
+    sky=(Get-IsolatedSky @{sunAzimuth=180;sunElevation=-32;moonAzimuth=145;moonElevation=-15;starIntensity=1.2;starDensity=.82;starBrightness=.92;starTwinkleAmount=.45;starSizeMin=.38;starSizeMax=1.45;starRayStrength=.1;starHeroFraction=.012;milkyWayIntensity=.82;milkyWayWidth=.21;milkyWayDetail=1.25;milkyWayOrientation=32;milkyWayDust=.82;milkyWayWarp=.72;milkyWayClumping=.96;milkyWayCoreStrength=1.08;milkyWayWidthVariation=.72;milkyWayColor='#b984ff'})
   }
   $fantasyCamera=@{position=@(0,20,0);yaw=-.75;pitch=1.02;fov=68}
   $revision=Patch-World $port $fantasySky
@@ -156,7 +182,7 @@ try{
   $moonClose=@{
     lookPreset='custom';time=@{hours=1};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
     lighting=@{profile='quality'};
-    sky=@{celestialMode='manual';sunAzimuth=155;sunElevation=-12;moonAzimuth=0;moonElevation=35;moonSize=38;moonColor='#d8d3c8';moonBrightness=1.02;moonGlow=.1;moonPhaseMode='manual';moonPhase=.88;moonCraterStrength=1.12;moonMariaStrength=.9;moonSurfaceContrast=1.16;moonReliefStrength=.42;moonLimbDarkening=.3;planetEnabled=$false;eclipseMode='auto';starIntensity=.22;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=155;sunElevation=-12;moonAzimuth=0;moonElevation=35;moonSize=38;moonColor='#d8d3c8';moonBrightness=1.02;moonGlow=.1;moonPhaseMode='manual';moonPhase=.88;moonCraterStrength=1.12;moonMariaStrength=.9;moonSurfaceContrast=1.16;moonReliefStrength=.42;moonLimbDarkening=.3;starIntensity=.22;milkyWayIntensity=0})
   }
   $moonCamera=@{position=@(0,20,0);yaw=0;pitch=.610865;fov=7}
   $moonWorld=@{sky=@{moonSize=4}}
@@ -172,7 +198,7 @@ try{
   $solarEclipse=@{
     lookPreset='custom';time=@{hours=12};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
     lighting=@{profile='quality'};
-    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=30;sunSize=9;moonAzimuth=0;moonElevation=30;moonSize=9;solarEclipseCoverage=1.12;eclipseMode='force-solar';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=0;sunElevation=30;sunSize=9;moonAzimuth=0;moonElevation=30;moonSize=9;solarEclipseCoverage=1.12;eclipseMode='force-solar';starIntensity=0;milkyWayIntensity=0})
   }
   $eclipseCamera=@{position=@(0,20,0);yaw=0;pitch=.523599;fov=10}
   $revision=Patch-World $port $solarEclipse
@@ -183,7 +209,7 @@ try{
     lookPreset='golden-hour';time=@{hours=18.15};weather=@{preset='partly-cloudy';fog=.008};clouds=@{quality='quality';coverage=.22;density=.38;shadowStrength=.24};
     lighting=@{profile='quality';sunIntensity=2.9;indirectStrength=.68};
     atmosphere=@{haze=.055;mie=.11;humidity=.18;dayFogMultiplier=.12;nightFogMultiplier=.2;exposure=.72;saturation=1.15;contrast=1.07;vibrance=.18};
-    sky=@{celestialMode='manual';sunAzimuth=24;sunElevation=6;moonAzimuth=204;moonElevation=-12;planetEnabled=$false;eclipseMode='auto';sunGlow=.95;starIntensity=.15;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=24;sunElevation=6;moonAzimuth=204;moonElevation=-12;sunGlow=.95;starIntensity=.15;milkyWayIntensity=0})
   }
   $landscapeCamera=@{position=@(20,15,30);yaw=-.55;pitch=.14;fov=62}
   $goldenCamera=@{position=@(20,15,30);yaw=.42;pitch=.12;fov=62}
@@ -195,7 +221,7 @@ try{
     lookPreset='clean-twilight';time=@{hours=19.45};weather=@{preset='clear';fog=.002};clouds=@{quality='quality';coverage=.1;density=.24;shadowStrength=.15};
     lighting=@{profile='quality';sunIntensity=2.2;moonIntensity=.18;indirectStrength=.68};
     atmosphere=@{haze=.018;mie=.05;humidity=.07;dayFogMultiplier=.05;nightFogMultiplier=.12;exposure=.82;saturation=1.03;contrast=1.03;vibrance=.08};
-    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=-4;moonAzimuth=145;moonElevation=18;planetEnabled=$false;eclipseMode='auto';sunGlow=.54;starIntensity=.82;starDensity=.58;starBrightness=.72;milkyWayIntensity=.18;milkyWayWidth=.2;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.45;milkyWayClumping=.74;milkyWayCoreStrength=.7}
+    sky=(Get-IsolatedSky @{sunAzimuth=0;sunElevation=-4;moonAzimuth=145;moonElevation=18;sunGlow=.54;starIntensity=.82;starDensity=.58;starBrightness=.72;milkyWayIntensity=.18;milkyWayWidth=.2;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.45;milkyWayClumping=.74;milkyWayCoreStrength=.7})
   }
   $twilightCamera=@{position=@(0,20,0);yaw=0;pitch=.2;fov=72}
   $revision=Patch-World $port $twilight
@@ -206,7 +232,7 @@ try{
     lookPreset='custom';time=@{hours=12};weather=@{preset='clear';fog=0};clouds=@{coverage=.08;density=.2;shadowStrength=.12};
     lighting=@{profile='quality'};
     atmosphere=@{haze=.02;mie=.055;humidity=.06;exposure=.78;saturation=1.04;contrast=1.04};
-    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=30;sunSize=9;moonAzimuth=.72;moonElevation=30;moonSize=9;solarEclipseCoverage=1;eclipseMode='automatic';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=0;sunElevation=30;sunSize=9;moonAzimuth=.72;moonElevation=30;moonSize=9;solarEclipseCoverage=1;eclipseMode='automatic';starIntensity=0;milkyWayIntensity=0})
   }
   $revision=Patch-World $port $partialEclipse
   Request-Capture $captureDir '11-partial-eclipse' $eclipseCamera $revision 900|Out-Null
@@ -216,7 +242,7 @@ try{
     lookPreset='custom';time=@{hours=17.4};weather=@{preset='partly-cloudy';fog=.006};clouds=@{coverage=.18;density=.32;shadowStrength=.2};
     lighting=@{profile='quality'};
     atmosphere=@{haze=.065;mie=.12;humidity=.2;exposure=.76;saturation=1.12;contrast=1.06};
-    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=16;sunSize=9;moonAzimuth=0;moonElevation=16;moonSize=7.5;solarEclipseCoverage=1;eclipseMode='automatic';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=0;sunElevation=16;sunSize=9;moonAzimuth=0;moonElevation=16;moonSize=7.5;solarEclipseCoverage=1;eclipseMode='automatic';starIntensity=0;milkyWayIntensity=0})
   }
   $annularCamera=@{position=@(0,20,0);yaw=0;pitch=.279253;fov=10}
   $revision=Patch-World $port $annularEclipse
@@ -227,7 +253,7 @@ try{
     lookPreset='overcast-soft';time=@{hours=13};weather=@{preset='overcast';fog=.018};clouds=@{quality='quality';coverage=.88;density=.68;shadowStrength=.42};
     lighting=@{profile='quality';sunIntensity=1.15;indirectStrength=.92};
     atmosphere=@{haze=.06;mie=.1;humidity=.52;dayFogMultiplier=.12;nightFogMultiplier=.2;exposure=.82;saturation=1.04;contrast=.94;vibrance=.12};
-    sky=@{celestialMode='manual';sunAzimuth=30;sunElevation=38;moonAzimuth=210;moonElevation=-20;planetEnabled=$false;eclipseMode='auto';sunGlow=.15;starIntensity=0;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=30;sunElevation=38;moonAzimuth=210;moonElevation=-20;sunGlow=.15;starIntensity=0;milkyWayIntensity=0})
   }
   $revision=Patch-World $port $overcast
   Request-Capture $captureDir '18-overcast' $landscapeCamera $revision 1300|Out-Null
@@ -237,7 +263,7 @@ try{
     lookPreset='custom';time=@{hours=12};weather=@{preset='clear';fog=0};clouds=@{quality='quality';coverage=.03;density=.14;shadowStrength=.08};
     lighting=@{profile='quality'};
     atmosphere=@{haze=.012;mie=.04;humidity=.04;exposure=.78;saturation=1.04;contrast=1.05};
-    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=30;sunSize=9;moonAzimuth=0;moonElevation=30;moonSize=9;solarEclipseCoverage=1;eclipseMode='force-solar';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=0;sunElevation=30;sunSize=9;moonAzimuth=0;moonElevation=30;moonSize=9;solarEclipseCoverage=1;eclipseMode='force-solar';starIntensity=0;milkyWayIntensity=0})
   }
   $revision=Patch-World $port $diamondRing
   Request-Capture $captureDir '13-diamond-ring' $eclipseCamera $revision 1000|Out-Null
@@ -247,7 +273,7 @@ try{
     lookPreset='custom';time=@{hours=12};weather=@{preset='partly-cloudy';fog=.004};clouds=@{quality='quality';coverage=.16;density=.3;shadowStrength=.18};
     lighting=@{profile='quality'};
     atmosphere=@{haze=.035;mie=.075;humidity=.12;exposure=.82;saturation=1.05;contrast=1.06};
-    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=8;sunSize=9;moonAzimuth=0;moonElevation=8;moonSize=9.5;solarEclipseCoverage=1;eclipseMode='force-solar';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=0;sunElevation=8;sunSize=9;moonAzimuth=0;moonElevation=8;moonSize=9.5;solarEclipseCoverage=1;eclipseMode='force-solar';starIntensity=0;milkyWayIntensity=0})
   }
   $eclipseLandscapeCamera=@{position=@(0,11,24);yaw=0;pitch=.139626;fov=62}
   $revision=Patch-World $port $eclipseLandscape
@@ -258,7 +284,7 @@ try{
     lookPreset='custom';time=@{hours=7};weather=@{preset='fog';fog=.18};clouds=@{quality='quality';coverage=.12;density=.28;shadowStrength=.14};
     lighting=@{profile='quality';sunIntensity=2.8;indirectStrength=.72};
     atmosphere=@{haze=.075;mie=.14;humidity=.72;dayFogMultiplier=.26;nightFogMultiplier=.3;exposure=.86;saturation=1.05;contrast=1.06;vibrance=.08};
-    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=9;moonAzimuth=180;moonElevation=-20;planetEnabled=$false;eclipseMode='auto';sunGlow=.82;starIntensity=0;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=0;sunElevation=9;moonAzimuth=180;moonElevation=-20;sunGlow=.82;starIntensity=0;milkyWayIntensity=0})
   }
   $morningCamera=@{position=@(0,7,22);yaw=0;pitch=.12;fov=68}
   $revision=Patch-World $port $forestMorning
@@ -269,7 +295,7 @@ try{
     lookPreset='custom';time=@{hours=18};weather=@{preset='clear';fog=.006};clouds=@{quality='quality';coverage=.08;density=.22;shadowStrength=.1};
     lighting=@{profile='quality';sunIntensity=3;indirectStrength=.7};
     atmosphere=@{haze=.055;mie=.12;humidity=.68;dayFogMultiplier=.12;nightFogMultiplier=.2;exposure=.86;saturation=1.08;contrast=1.07;vibrance=.12};
-    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=5;moonAzimuth=180;moonElevation=-18;planetEnabled=$false;eclipseMode='auto';sunGlow=1.05;starIntensity=0;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=0;sunElevation=5;moonAzimuth=180;moonElevation=-18;sunGlow=1.05;starIntensity=0;milkyWayIntensity=0})
   }
   $revision=Patch-World $port $coastalBacklight
   Request-Capture $captureDir '17-coastal-backlight' $morningCamera $revision 1200|Out-Null
@@ -279,7 +305,7 @@ try{
     lookPreset='storm-drama';time=@{hours=14};weather=@{preset='storm';fog=.12;precipitation=.82;wetness=.72;windStrength=.9};clouds=@{quality='quality';coverage=.96;density=.88;shadowStrength=.68};
     lighting=@{profile='quality';sunIntensity=1.5;indirectStrength=.58};
     atmosphere=@{haze=.14;mie=.19;humidity=.9;dayFogMultiplier=.34;nightFogMultiplier=.4;exposure=.8;saturation=1.04;contrast=1.08;vibrance=.1};
-    sky=@{celestialMode='manual';sunAzimuth=24;sunElevation=24;moonAzimuth=205;moonElevation=-18;planetEnabled=$false;eclipseMode='auto';sunGlow=.18;starIntensity=0;milkyWayIntensity=0}
+    sky=(Get-IsolatedSky @{sunAzimuth=24;sunElevation=24;moonAzimuth=205;moonElevation=-18;sunGlow=.18;starIntensity=0;milkyWayIntensity=0})
   }
   $revision=Patch-World $port $storm
   Request-Capture $captureDir '19-storm' $landscapeCamera $revision 1500|Out-Null
