@@ -125,10 +125,13 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.doesNotMatch(sky, /microStarLayer/);
   assert.match(sky, /vec2 ndcPixel=max\(fwidth\(vNdc\),vec2\(0\.000001\)\)/);
   assert.match(sky, /vec2 pixelDelta=\(vNdc-starNdc\)\/ndcPixel/);
-  assert.match(sky, /float radiusPixels=mix\(max\(0\.4,uStarSizeMin\*0\.52\)/);
+  assert.match(sky, /float microRadius=mix\(clamp\(authoredMin\*0\.36,0\.12,0\.32\)/);
+  assert.match(sky, /float heroRadius=clamp\(microRadius\*\(1\.45\+sizeRandom\*0\.65\),0\.72,2\.05\)/);
   assert.match(sky, /rayLength=radiusPixels\*mix\(2\.0,4\.2/);
   assert.match(sky, /float psf=exp\(-0\.5\*pow\(pixelDistance\/sigmaPixels,2\.0\)\)/);
-  assert.match(sky, /float disc=psf\*0\.94/);
+  assert.match(sky, /float core=psf\*mix\(0\.76,0\.94,hero\)/);
+  assert.match(sky, /float halo=exp\(-0\.5\*pow\(pixelDistance\/haloSigma,2\.0\)\)\*hero\*0\.16/);
+  assert.match(sky, /hero\*uStarRayStrength\*0\.045/);
   assert.doesNotMatch(sky, /float disc=max\(core,psf/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
   assert.match(sky, /vec2 craterField/);
@@ -150,7 +153,8 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /float eclipseCentered=1\.0-smoothstep\(0\.08,0\.32,eclipseSeparationRatio\)/);
   assert.match(sky, /vec2 sunCoronaUv=celestialUv\(ray,uSunDirection,uSunAngularRadius\)/);
   assert.match(sky, /float eclipseActive=step\(0\.001,uSolarEclipse\)/);
-  assert.match(sky, /eclipseSilhouette=eclipseDisc\*eclipseActive\*uDayFactor/);
+  assert.match(sky, /float eclipsePresentationVisibility=uSunVisibility\*celestialHorizonMask/);
+  assert.match(sky, /eclipseSilhouette=eclipseDisc\*eclipseActive\*eclipsePresentationVisibility/);
   assert.match(sky, /independentMoonVisibility=uMoonVisibility\*\(1\.0-eclipseActive\)/);
   assert.match(sky, /float diamondRing=/);
   assert.match(sky, /float diamondCore=/);

@@ -122,3 +122,11 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Exact packaged `5955f61` contains the expanded controls and profile definitions at the same source identity and retains all twenty visual states. The next bounded physical-atmosphere gate gives stars and the Milky Way one shared analytic optical-depth transmission so haze, Mie, humidity, daylight, and twilight attenuate astronomical backgrounds near the horizon instead of compositing them over bright air.
 - Exact packaged `eb82123` passes the optical-depth gate: faint and dramatic Milky Way states remain readable while the twilight frame loses stellar contrast through dense low-altitude air. The renderer already owns per-pass CPU and optional GPU timer-query telemetry; the next evidence gate preserves those real measurements beside every packaged capture instead of inventing GTX 1650 claims from a different GPU.
 - Exact packaged `641082b` records twenty render-graph snapshots. On this PC's RX 7900 XTX, the environment pass measured about 0.30–0.38 ms for clear, twilight, galaxy, and eclipse states and about 1.05–1.12 ms for quality overcast/storm states. These are valid measurements for this GPU only, not GTX 1650 certification. The evidence harness now also preserves desktop/server logs, incidents, crash dumps, and session lifecycle records before deleting its temporary runtime.
+
+## Celestial visibility and optical-star gate
+
+- Separates geometric Sun-disc visibility from the broad day/night lighting factor so the physical Sun can cross the horizon instead of crossfading into another celestial presentation.
+- Clips Sun, Moon, eclipse silhouette, corona, and celestial glow against the geometric horizon.
+- Preserves the visible Moon independently from its daytime world-light contribution and removes an unnecessary second linear phase-darkening term.
+- Caps ordinary stellar point-spread footprints, reserves larger halos and glints for rare hero stars, and strengthens bounded hero-star rays without restoring square or dash artifacts.
+- Adds behavior and shader-contract tests. Exact packaged visual approval is still required.

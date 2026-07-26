@@ -89,6 +89,9 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
   const planetDirection = normalize(directionFromAzimuthElevation(worldSky.planetAzimuth ?? 215, worldSky.planetElevation ?? 28));
   const sunSize = clamp(worldSky.sunSize ?? worldSky.suns?.[0]?.size ?? 1, 0.1, 12);
   const moonSize = clamp(worldSky.moonSize ?? worldSky.moons?.[0]?.size ?? 1.25, 0.1, 32);
+  const sunAngularRadius = 0.2666 * sunSize;
+  const sunElevationDegrees = Math.asin(clamp(sunDirection[1], -1, 1)) / DEG;
+  const sunVisibility = smoothstep(-sunAngularRadius, sunAngularRadius, sunElevationDegrees);
   const moonBrightness = clamp(worldSky.moonBrightness ?? worldSky.moons?.[0]?.radiance ?? 0.92, 0, 8);
   const moonIllumination = clamp01(moonObject?.properties?.illumination ?? moonObject?.properties?.phase ?? worldSky.moonPhase ?? 0.72);
   const moonVisibility = clamp01(moonObject?.properties?.skyVisibility ?? 1);
@@ -146,7 +149,8 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
     milkyWayCoreStrength: clamp(worldSky.milkyWayCoreStrength ?? 0.65, 0, 3),
     milkyWayWidthVariation: clamp(worldSky.milkyWayWidthVariation ?? 0.6, 0, 2),
     milkyWayColor: color(worldSky.milkyWayColor, '#91a4cf'),
-    sunAngularRadius: 0.2666 * sunSize,
+    sunAngularRadius,
+    sunVisibility,
     sunGlow: clamp(worldSky.sunGlow ?? 0.5, 0, 5),
     solarEclipseCoverage: clamp(worldSky.solarEclipseCoverage ?? 1.08, 0.5, 2),
     moonAngularRadius: 0.259 * moonSize,
