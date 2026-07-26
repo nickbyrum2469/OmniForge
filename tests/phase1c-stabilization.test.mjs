@@ -14,20 +14,30 @@ test('camera sanitization contains invalid viewport values instead of propagatin
   const fallback = { position: [4, 5, 6], yaw: 0.4, pitch: -0.3, fov: 62 };
   const camera = sanitizeCameraState({ position: [NaN, Infinity, -Infinity], yaw: NaN, pitch: 99, fov: 0 }, fallback);
   assert.deepEqual(camera.position, fallback.position);
-  assert.equal(camera.yaw, fallback.yaw);
-  closeTo(camera.pitch, Math.PI / 2 - 0.001);
-  assert.equal(camera.fov, 20);
+  closeTo(camera.yaw, fallback.yaw);
+  closeTo(camera.pitch, Math.PI * 0.495);
+  assert.equal(camera.fov, 30);
 });
 
 test('render crash guard keeps failures contained and trips bounded recovery', () => {
   let failures = 0;
   let trips = 0;
-  const guard = new RenderCrashGuard({ failureWindowMs: 1000, tripThreshold: 2, cooldownMs: 0, onFailure: () => failures++, onTrip: () => trips++ });
-  assert.equal(guard.run(() => { throw new Error('first'); }), null);
-  assert.equal(guard.run(() => { throw new Error('second'); }), null);
+  let recoveries = 0;
+  const guard = new RenderCrashGuard({ failureWindowMs: 1000, tripThreshold: 2, cooldownMs: 100, onFailure: () => failures++, onTrip: () => trips++, onRecover: () => recoveries++ });
+  const first = guard.run(() => { throw new Error('first'); }, 1000);
+  const second = guard.run(() => { throw new Error('second'); }, 1001);
+  assert.equal(first.rendered, false);
+  assert.equal(first.suspended, false);
+  assert.match(first.error.message, /first/);
+  assert.equal(second.rendered, false);
+  assert.equal(second.suspended, true);
+  assert.match(second.error.message, /second/);
   assert.equal(failures, 2);
   assert.equal(trips, 1);
-  assert.equal(guard.run(() => 'recovered'), 'recovered');
+  const recovered = guard.run(() => 'recovered', 1200);
+  assert.equal(recovered.rendered, true);
+  assert.equal(recovered.value, 'recovered');
+  assert.equal(recoveries, 1);
   assert.equal(guard.totalFailures, 2);
 });
 
