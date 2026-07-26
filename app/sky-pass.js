@@ -507,7 +507,8 @@ void main(){
   float middleStreamers=noise3(vec3(coronaDirection*4.6,uStarSeed*0.00073));
   float fineStreamers=noise3(vec3(coronaDirection*9.2,uStarSeed*0.0017));
   vec2 magneticAxis=normalize(vec2(0.35,0.94));
-  float polarStructure=pow(abs(dot(coronaDirection,magneticAxis)),5.0);
+  float magneticFacing=dot(coronaDirection,magneticAxis);
+  float polarStructure=pow(max(magneticFacing,0.0),4.2)+pow(max(-magneticFacing,0.0),6.0)*0.62;
   float equatorialStructure=pow(abs(dot(coronaDirection,vec2(-magneticAxis.y,magneticAxis.x))),8.0);
   float streamerStrength=clamp(0.1+broadStreamers*0.38+middleStreamers*0.27+fineStreamers*0.12
     +polarStructure*0.24+equatorialStructure*0.08,0.0,1.0);
@@ -530,10 +531,15 @@ void main(){
   float diamondRing=exp(-pow(diamondAngle/0.055,2.0))*innerRim*diamondWindow;
   vec2 diamondCenter=vec2(cos(2.58),sin(2.58))*0.99;
   vec2 diamondDelta=sunCoronaUv-diamondCenter;
-  float diamondCore=exp(-dot(diamondDelta,diamondDelta)/0.00055)*diamondWindow;
-  float diamondHorizontal=exp(-abs(diamondDelta.x)/0.32-abs(diamondDelta.y)/0.014)*diamondWindow;
-  float diamondVertical=exp(-abs(diamondDelta.x)/0.018-abs(diamondDelta.y)/0.22)*diamondWindow;
-  float diamondFlare=diamondCore*13.0+diamondHorizontal*2.6+diamondVertical*1.35;
+  vec2 diamondRadial=normalize(diamondCenter);
+  vec2 diamondTangent=vec2(-diamondRadial.y,diamondRadial.x);
+  float diamondRadialDistance=dot(diamondDelta,diamondRadial);
+  float diamondTangentDistance=dot(diamondDelta,diamondTangent);
+  float diamondCore=exp(-pow(diamondRadialDistance/0.024,2.0)-pow(diamondTangentDistance/0.024,2.0))*diamondWindow;
+  float diamondHalo=exp(-pow(diamondRadialDistance/0.075,2.0)-pow(diamondTangentDistance/0.092,2.0))*diamondWindow;
+  float diamondTangentialFlare=exp(-pow(diamondRadialDistance/0.011,2.0)-pow(diamondTangentDistance/0.29,2.0))*diamondWindow;
+  float diamondRadialFlare=exp(-pow(diamondRadialDistance/0.12,2.0)-pow(diamondTangentDistance/0.018,2.0))*diamondWindow;
+  float diamondFlare=diamondCore*11.0+diamondHalo*1.15+diamondTangentialFlare*1.7+diamondRadialFlare*0.55;
   float eclipseSilhouette=eclipseDisc*eclipseActive*uDayFactor;
   sky=mix(sky,vec3(0.0015,0.002,0.003),eclipseSilhouette*0.985);
   vec3 coronaColor=mix(vec3(1.0,0.93,0.79),vec3(0.46,0.64,1.0),smoothstep(0.08,1.5,coronaDistance));

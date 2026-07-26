@@ -24,7 +24,8 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /vec2 coronaDirection=vec2\(cos\(eclipseAngle\),sin\(eclipseAngle\)\)/);
   assert.match(sky, /float broadStreamers=noise3\(vec3\(coronaDirection\*1\.8/);
   assert.match(sky, /float middleStreamers=noise3\(vec3\(coronaDirection\*4\.6/);
-  assert.match(sky, /float polarStructure=pow\(abs\(dot\(coronaDirection,magneticAxis\)\),5\.0\)/);
+  assert.match(sky, /float magneticFacing=dot\(coronaDirection,magneticAxis\)/);
+  assert.match(sky, /float polarStructure=pow\(max\(magneticFacing,0\.0\),4\.2\)\+pow\(max\(-magneticFacing,0\.0\),6\.0\)\*0\.62/);
   assert.match(sky, /float coronaReach=mix\(0\.18,1\.24,pow\(streamerStrength,1\.35\)\)/);
   assert.doesNotMatch(sky, /cos\(eclipseAngle\*5\.0/);
   assert.match(sky, /float eclipseRadius=uMoonAngularRadius\*uSolarEclipseCoverage/);
@@ -35,6 +36,10 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /float annularRing=innerRim\*annularity/);
   assert.match(sky, /float diamondCore=/);
   assert.match(sky, /float diamondFlare=/);
+  assert.match(sky, /float diamondTangentialFlare=/);
+  assert.match(sky, /float diamondRadialFlare=/);
+  assert.doesNotMatch(sky, /float diamondHorizontal=/);
+  assert.doesNotMatch(sky, /float diamondVertical=/);
   assert.match(sky, /eclipseStarVisibility=smoothstep\(0\.975,1\.0,uSolarEclipse\)\*uDayFactor\*0\.09/);
   assert.match(sky, /horizonTwinkle/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
