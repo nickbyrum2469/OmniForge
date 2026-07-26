@@ -26,7 +26,7 @@ export function defaultWorldSettings(existing = {}) {
     : Number(existingTime.dayOfYear ?? 172);
   return {
     schemaVersion: 2,
-    lookPreset: existing.lookPreset || 'natural-balanced',
+    lookPreset: existing.lookPreset || 'clear-day',
     time: {
       enabled: true,
       hours: 12,
@@ -39,10 +39,10 @@ export function defaultWorldSettings(existing = {}) {
     },
     lighting: {
       profile: 'balanced',
-      sunIntensity: 3.05,
-      moonIntensity: 0.18,
+      sunIntensity: 2.35,
+      moonIntensity: 0.14,
       shadowQuality: 'balanced',
-      indirectStrength: 0.5,
+      indirectStrength: 0.72,
       reflectionQuality: 'balanced',
       contactShadows: true,
       dynamicResolution: true,
@@ -54,19 +54,21 @@ export function defaultWorldSettings(existing = {}) {
       planetRadiusKm: 6371,
       atmosphereHeightKm: 100,
       rayleigh: 1,
-      mie: 0.16,
+      mie: 0.035,
       mieAnisotropy: 0.78,
       ozone: 1,
-      haze: 0.045,
-      humidity: 0.18,
+      haze: 0.006,
+      humidity: 0.04,
       dust: 0.02,
-      visibilityKm: 145,
+      visibilityKm: 320,
       aerialPerspective: 1,
-      exposure: 0.92,
-      saturation: 1.04,
+      dayFogMultiplier: 0.04,
+      nightFogMultiplier: 0.18,
+      exposure: 0.7,
+      saturation: 1.08,
       contrast: 1.03,
-      vibrance: 0.08,
-      toneMapper: 'aces',
+      vibrance: 0.1,
+      toneMapper: 'neutral',
       ...existing.atmosphere
     },
     sky: {
@@ -74,10 +76,10 @@ export function defaultWorldSettings(existing = {}) {
       sunAzimuth: -90,
       sunElevation: 45,
       sunSize: 1,
-      sunGlow: 0.72,
+      sunGlow: 0.38,
       moonAzimuth: 90,
       moonElevation: 32,
-      moonSize: 1.45,
+      moonSize: 1.25,
       moonPhase: 0.72,
       moonPhaseMode: 'sun-relative',
       moonOrbitPeriodDays: 29.530588,
@@ -89,25 +91,41 @@ export function defaultWorldSettings(existing = {}) {
       moonAscendingNode: 0,
       moonEarthshine: 0.08,
       eclipseMode: 'automatic',
-      moonBrightness: 1.05,
-      moonGlow: 0.48,
-      moonDetail: 1,
-      moonColor: '#a9c5eb',
-      starIntensity: 1.05,
-      starDensity: 0.72,
-      starBrightness: 1,
+      moonBrightness: 0.92,
+      moonGlow: 0.22,
+      moonDetail: 1.45,
+      moonColor: '#c9d4e4',
+      solarEclipseCoverage: 1.08,
+      moonCraterStrength: 0.85,
+      moonMariaStrength: 0.62,
+      moonSurfaceContrast: 1.18,
+      moonPatternRotation: -12,
+      moonPatternSeed: 2718,
+      moonReliefStrength: 0.38,
+      moonLimbDarkening: 0.28,
+      moonStyle: 'earth-like',
+      starRayStrength: 0.24,
+      starRayLength: 1.15,
+      starHeroFraction: 0.035,
+      milkyWayWarp: 0.48,
+      milkyWayClumping: 0.72,
+      milkyWayCoreStrength: 0.65,
+      milkyWayWidthVariation: 0.6,
+      starIntensity: 0.9,
+      starDensity: 0.55,
+      starBrightness: 0.82,
       starTwinkleAmount: 0.32,
       starTwinkleSpeed: 1,
-      starSizeMin: 0.35,
-      starSizeMax: 1.8,
+      starSizeMin: 0.18,
+      starSizeMax: 1.35,
       starColorVariation: 0.65,
       starSeed: 1337,
       starDaylightExtinction: 1.35,
-      milkyWayIntensity: 0.32,
-      milkyWayWidth: 0.16,
-      milkyWayDetail: 0.72,
+      milkyWayIntensity: 0.22,
+      milkyWayWidth: 0.22,
+      milkyWayDetail: 1.15,
       milkyWayOrientation: 22,
-      milkyWayDust: 0.58,
+      milkyWayDust: 0.7,
       milkyWayColor: '#8fa7d8',
       planetEnabled: false,
       planetAzimuth: 215,
@@ -124,18 +142,18 @@ export function defaultWorldSettings(existing = {}) {
     },
     clouds: {
       quality: 'layered',
-      coverage: 0.2,
-      density: 0.42,
+      coverage: 0.03,
+      density: 0.16,
       altitude: 2200,
       thickness: 1800,
       windSpeed: 12,
-      shadowStrength: 0.24,
+      shadowStrength: 0.12,
       ...existing.clouds
     },
     weather: {
       preset: 'clear',
       precipitation: 0,
-      fog: 0.018,
+      fog: 0,
       wetness: 0,
       snow: 0,
       windDirection: [1, 0, 0.25],
@@ -163,8 +181,8 @@ export function applyWorldToScene(scene, world) {
   const twilight = (1 - smoothstep(2, 18, Math.abs(sunElevationDegrees))) * (1 - day * 0.42);
   const night = 1 - day;
   const sunrise = [244, 112, 68];
-  const dayTop = [48, 115, 196];
-  const dayBottom = [155, 199, 229];
+  const dayTop = [31, 101, 183];
+  const dayBottom = [105, 174, 219];
   const nightTop = [2, 5, 18];
   const nightBottom = [8, 16, 36];
   const top = mix(nightTop, dayTop, day);
@@ -179,8 +197,9 @@ export function applyWorldToScene(scene, world) {
   const cloudCoverage = clamp(Number(world.clouds.coverage || 0), 0, 1);
   const cloudDensity = clamp(Number(world.clouds.density || 0), 0, 1);
   const cloudAttenuation = 1 - clamp(cloudCoverage * cloudDensity * Number(world.clouds.shadowStrength || 0.28), 0, 0.82);
-  const atmosphericHaze = clamp(Number(world.atmosphere.haze || 0) + Number(world.atmosphere.mie || 0) * 0.35 + Number(world.atmosphere.humidity || 0) * 0.12, 0, 0.9);
-  const fogMultiplier = Math.max(0.04, (1 - weatherFog * 0.88) * (1 - atmosphericHaze * 0.5));
+  const atmosphericHaze = clamp(Number(world.atmosphere.haze || 0) + Number(world.atmosphere.mie || 0) * 0.22 + Number(world.atmosphere.humidity || 0) * 0.05, 0, 0.9);
+  const authoredFogMultiplier = day * Number(world.atmosphere.dayFogMultiplier ?? 0.04) + night * Number(world.atmosphere.nightFogMultiplier ?? 0.18);
+  const fogMultiplier = Math.max(0.02, (1 - weatherFog * 0.94 * authoredFogMultiplier) * (1 - atmosphericHaze * 0.3));
   const solarEclipse = celestial.moon.solarEclipse;
   const lunarEclipse = celestial.moon.lunarEclipse;
   const eclipseDaylight = 1 - solarEclipse * 0.82;
@@ -195,9 +214,9 @@ export function applyWorldToScene(scene, world) {
     skyBottom: hex(bottom),
     skyGround: hex(mix([4, 7, 14], [31, 43, 50], day)),
     ambientColor: hex(ambientTwilight),
-    ambientIntensity: (0.028 + day * 0.15 + Number(world.lighting.indirectStrength || 0.5) * 0.18) * (0.7 + cloudAttenuation * 0.3) * eclipseDaylight,
-    fogNear: Math.max(18, Number(world.atmosphere.visibilityKm || 120) * 1.35 * fogMultiplier),
-    fogFar: Math.max(70, Number(world.atmosphere.visibilityKm || 120) * 6.2 * fogMultiplier),
+    ambientIntensity: (0.04 + day * 0.16 + Number(world.lighting.indirectStrength || 0.72) * 0.22) * (0.7 + cloudAttenuation * 0.3) * eclipseDaylight,
+    fogNear: Math.max(80, Number(world.atmosphere.visibilityKm || 320) * 2.8 * fogMultiplier),
+    fogFar: Math.max(420, Number(world.atmosphere.visibilityKm || 320) * 18 * fogMultiplier),
     exposure,
     displayExposureEV: Math.log2(Math.max(0.05, exposure)),
     colorSaturation: clamp(Number(world.atmosphere.saturation || 1), 0, 3),
@@ -242,13 +261,14 @@ export function applyWorldToScene(scene, world) {
     ...(sun.properties || {}),
     celestialRole: 'sun',
     color: hex(mix([255, 113, 66], [255, 244, 216], smoothstep(-4, 28, sunElevationDegrees))),
-    intensity: Number(world.lighting.sunIntensity || 3.05) * Math.max(0.002, day) * cloudAttenuation * eclipseDaylight,
+    intensity: Number(world.lighting.sunIntensity || 2.35) * Math.max(0.002, day) * cloudAttenuation * eclipseDaylight,
     azimuth: sunAzimuth,
     elevation: sunElevationDegrees,
     angularSize: Number(world.sky.sunSize ?? 1),
     glow: Number(world.sky.sunGlow ?? 0.72),
     solarEclipse,
     castsShadows: true,
+    renderProxy: false,
     shadowQuality: world.lighting.shadowQuality,
     hybridLightingProfile: world.lighting.profile
   };
@@ -266,7 +286,7 @@ export function applyWorldToScene(scene, world) {
   const moonLight = Number(world.lighting.moonIntensity || 0.18)
     * Math.pow(celestial.moon.illumination, 0.72)
     * celestial.moon.horizonVisibility
-    * (1 - day * 0.86)
+    * (1 - day * 0.94)
     * (1 - lunarEclipse * 0.82);
   moon.properties = {
     ...(moon.properties || {}),
@@ -291,7 +311,8 @@ export function applyWorldToScene(scene, world) {
     eventType: celestial.event.type,
     separationDegrees: celestial.moon.separationDegrees,
     orbitInclination: Number(world.sky.moonOrbitInclination ?? 5.145),
-    castsShadows: false
+    castsShadows: false,
+    renderProxy: false
   };
   return {
     hour: Number(world.time.hours || 0), day, night, twilight,

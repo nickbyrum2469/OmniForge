@@ -25,10 +25,12 @@ crashReporter.start({ productName: PRODUCT_NAME, companyName: 'OmniForge', uploa
 
 const SESSION_DIR = path.join(uniqueUserData, 'sessions');
 const LOG_DIR = path.join(uniqueUserData, 'logs');
+const INCIDENT_DIR = path.join(uniqueUserData, 'incidents');
 const LIFECYCLE_FILE = path.join(SESSION_DIR, 'lifecycle.json');
 const RUNTIME_FILE = path.join(SESSION_DIR, 'runtime.json');
 fs.mkdirSync(SESSION_DIR, { recursive: true });
 fs.mkdirSync(LOG_DIR, { recursive: true });
+fs.mkdirSync(INCIDENT_DIR, { recursive: true });
 
 let engineProcess = null;
 let mainWindow = null;
@@ -36,11 +38,39 @@ let shuttingDown = false;
 let safeMode = process.argv.includes('--safe-mode');
 let recoveryReason = null;
 let runtimeInfo = null;
+let rendererRecoveryInFlight = false;
+let rendererRecoveryAttempts = [];
 
 function readJson(file, fallback=null) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } }
 function writeJson(file, value) { fs.mkdirSync(path.dirname(file), { recursive: true }); const temp=`${file}.${process.pid}.tmp`; fs.writeFileSync(temp, JSON.stringify(value,null,2),'utf8'); fs.renameSync(temp,file); }
 function appendLog(message) { fs.appendFileSync(path.join(LOG_DIR,'desktop.log'),`[${new Date().toISOString()}] ${message}\n`,'utf8'); }
 function appendDiagnostic(message) { fs.appendFileSync(path.join(LOG_DIR,'diagnostics.log'),`[${new Date().toISOString()}] ${message}\n`,'utf8'); }
+function writeIncident(kind, details={}) {
+  const timestamp=new Date();const incident={kind,product:PRODUCT_NAME,version:PRODUCT_VERSION,at:timestamp.toISOString(),pid:process.pid,safeMode,runtime:runtimeInfo,details};
+  const filename=`${timestamp.toISOString().replace(/[:.]/g,'-')}-${String(kind).replace(/[^a-z0-9_-]/gi,'-')}.json`;
+  try{writeJson(path.join(INCIDENT_DIR,filename),incident);}catch(error){appendLog(`Incident write failed: ${error.message}`);}
+  return incident;
+}
+function recentRendererRecoveryCount(now=Date.now()) {
+  const cutoff=now-60000;rendererRecoveryAttempts=rendererRecoveryAttempts.filter(value=>value>=cutoff);return rendererRecoveryAttempts.length;
+}
+async function recoverRendererProcess(kind, details={}) {
+  writeIncident(kind,details);
+  if(shuttingDown||!mainWindow||mainWindow.isDestroyed()||rendererRecoveryInFlight)return;
+  const reason=String(details.reason||'unknown');if(reason==='clean-exit')return;
+  rendererRecoveryAttempts.push(Date.now());const attempts=recentRendererRecoveryCount();
+  if(attempts>2){
+    const result=await dialog.showMessageBox(mainWindow,{type:'error',title:'OmniForge viewport recovery',message:'The viewport renderer stopped repeatedly.',detail:`Crash evidence was saved to ${INCIDENT_DIR}. Reopen in Safe Mode to inspect the project without intensive rendering.`,buttons:['Open Safe Mode','Keep editor open','Quit'],defaultId:0,cancelId:1,noLink:true});
+    if(result.response===0){app.relaunch({args:[...process.argv.slice(1).filter(arg=>arg!=='--safe-mode'),'--safe-mode']});app.exit(0);}
+    else if(result.response===2)app.quit();
+    return;
+  }
+  rendererRecoveryInFlight=true;
+  try{appendLog(`Recovering viewport after ${kind}; attempt=${attempts}`);await new Promise(resolve=>setTimeout(resolve,350));if(mainWindow&&!mainWindow.isDestroyed())await mainWindow.reload();}
+  catch(error){appendLog(`Viewport recovery failed: ${error.stack||error.message}`);writeIncident('renderer-recovery-failed',{message:error.message,stack:error.stack||''});}
+  finally{rendererRecoveryInFlight=false;}
+}
+
 
 function findFreePort() {
   return new Promise((resolve, reject) => {
@@ -194,8 +224,8 @@ async function createMainWindow() {
     if(DIAGNOSTIC_MODE)appendDiagnostic(`Renderer console level=${level} ${sourceId||'unknown'}:${line||0} ${message}`);
     if(Number(level)>=2)appendLog(`Renderer console level=${level} ${sourceId||'unknown'}:${line||0} ${message}`);
   });
-  mainWindow.webContents.on('render-process-gone',(_event,details)=>appendLog(`Renderer process gone reason=${details.reason} exitCode=${details.exitCode}`));
-  mainWindow.on('unresponsive',()=>appendLog('Main window renderer became unresponsive.'));
+  mainWindow.webContents.on('render-process-gone',(_event,details)=>{appendLog(`Renderer process gone reason=${details.reason} exitCode=${details.exitCode}`);recoverRendererProcess('renderer-process-gone',details);});
+  mainWindow.on('unresponsive',()=>{appendLog('Main window renderer became unresponsive.');writeIncident('renderer-unresponsive',{url:mainWindow?.webContents?.getURL?.()||''});});
   mainWindow.on('responsive',()=>appendLog('Main window renderer recovered responsiveness.'));
   mainWindow.once('ready-to-show',()=>{
     mainWindow.show();
@@ -211,9 +241,10 @@ const gotLock=app.requestSingleInstanceLock({appId:APP_ID});
 if(!gotLock)app.quit();
 else{
   app.on('second-instance',()=>{if(mainWindow){if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();}});
+  app.on('child-process-gone',(_event,details)=>{if(details?.type==='GPU'){appendLog(`GPU process gone reason=${details.reason} exitCode=${details.exitCode}`);recoverRendererProcess('gpu-process-gone',details);}});
   app.whenReady().then(()=>{installIpcHandlers();return createMainWindow();}).catch(async error=>{appendLog(error.stack||error.message);dialog.showErrorBox('OmniForge failed to start',error.stack||error.message);await stopRuntime();app.quit();});
   app.on('window-all-closed',()=>app.quit());
   app.on('before-quit',event=>{if(shuttingDown)return;shuttingDown=true;event.preventDefault();stopRuntime().finally(()=>{markSessionClean();app.exit(0);});});
-  process.on('uncaughtException',error=>{appendLog(`Uncaught exception: ${error.stack||error.message}`);});
-  process.on('unhandledRejection',error=>{appendLog(`Unhandled rejection: ${error?.stack||error}`);});
+  process.on('uncaughtException',error=>{appendLog(`Uncaught exception: ${error.stack||error.message}`);writeIncident('desktop-uncaught-exception',{message:error.message,stack:error.stack||''});});
+  process.on('unhandledRejection',error=>{appendLog(`Unhandled rejection: ${error?.stack||error}`);writeIncident('desktop-unhandled-rejection',{message:error?.message||String(error),stack:error?.stack||''});});
 }

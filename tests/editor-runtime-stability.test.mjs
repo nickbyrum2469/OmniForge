@@ -29,7 +29,7 @@ test('compact world runtime queues continuous celestial and lighting interpolati
   };
   const scene = {
     id: 'scene-a',
-    settings: { ambientIntensity: 0.2, gridVisible: true },
+    settings: { ambientIntensity: 0.2, exposure: 0, gridVisible: true },
     objects: [
       {
         id: 'sun-a',
@@ -119,8 +119,8 @@ test('runtime source contains polling, compact-step, persistent celestial migrat
   assert.match(worldUi, /updateCelestialRuntimeInterpolation/);
   assert.match(worldApi, /compactWorldRuntime/);
   assert.match(worldApi, /visualDurationMs: 1100/);
-  assert.doesNotMatch(worldApi.slice(worldApi.indexOf("'/api/v010/world/step'"), worldApi.indexOf("'/api/v010/foliage/species'")), /state: result\.state/);
-  assert.match(worldgenApi, /repairCelestialAuthority/);
+  assert.match(worldApi.slice(worldApi.indexOf("'/api/v010/world/step'"), worldApi.indexOf("'/api/v010/foliage/species'")), /includeFullState[\s\S]*\.\.\.\(includeFullState \? \{ state: result\.state \} : \{\}\)/);
+  assert.match(worldgenApi, /ensureWorldFoundationState/);
   assert.match(worldgenUi, /MutationObserver/);
   assert.match(builder, /source-commit/);
 });

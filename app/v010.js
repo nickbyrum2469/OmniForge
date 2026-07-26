@@ -131,6 +131,14 @@ function installWorldPanel() {
         <label>Moon brightness<input id="v010MoonBrightness" type="range" min="0" max="5" step="0.05"></label>
         <label>Moon glow<input id="v010MoonGlow" type="range" min="0" max="5" step="0.05"></label>
         <label>Moon detail<input id="v010MoonDetail" type="range" min="0" max="3" step="0.05"></label>
+        <label>Moon craters<input id="v010MoonCraters" type="range" min="0" max="2" step="0.02"></label>
+        <label>Moon maria pattern<input id="v010MoonMaria" type="range" min="0" max="2" step="0.02"></label>
+        <label>Moon surface contrast<input id="v010MoonContrast" type="range" min="0.2" max="3" step="0.02"></label>
+        <label>Moon relief<input id="v010MoonRelief" type="range" min="0" max="2" step="0.02"></label>
+        <label>Moon pattern rotation<input id="v010MoonPatternRotation" type="range" min="-180" max="180" step="1"></label>
+        <label>Moon pattern seed<input id="v010MoonPatternSeed" type="number" step="1"></label>
+        <label>Moon limb darkening<input id="v010MoonLimb" type="range" min="0" max="1" step="0.01"></label>
+        <label>Eclipse coverage<input id="v010EclipseCoverage" type="range" min="0.5" max="2" step="0.01"></label>
         <label>Moon azimuth<input id="v010MoonAzimuth" type="number" min="-720" max="720" step="1"></label>
         <label>Moon elevation<input id="v010MoonElevation" type="number" min="-90" max="90" step="1"></label>
         <label>Show planet<input id="v010PlanetEnabled" type="checkbox"></label>
@@ -151,6 +159,9 @@ function installWorldPanel() {
         <label>Rayleigh<input id="v010Rayleigh" type="range" min="0" max="3" step="0.01"></label>
         <label>Mie haze<input id="v010Mie" type="range" min="0" max="1" step="0.01"></label>
         <label>Humidity<input id="v010Humidity" type="range" min="0" max="1" step="0.01"></label>
+        <label>Clear-air haze<input id="v010Haze" type="range" min="0" max="1" step="0.005"></label>
+        <label>Day fog response<input id="v010DayFog" type="range" min="0" max="2" step="0.01"></label>
+        <label>Night fog response<input id="v010NightFog" type="range" min="0" max="2" step="0.01"></label>
         <label>Exposure<input id="v010Exposure" type="range" min="0.2" max="3" step="0.02"></label>
         <label>Stars<input id="v010Stars" type="range" min="0" max="3" step="0.05"></label>
         <label>Star density<input id="v010StarDensity" type="range" min="0.02" max="2" step="0.02"></label>
@@ -160,6 +171,9 @@ function installWorldPanel() {
         <label>Minimum star size<input id="v010StarSizeMin" type="range" min="0.05" max="4" step="0.05"></label>
         <label>Maximum star size<input id="v010StarSizeMax" type="range" min="0.05" max="8" step="0.05"></label>
         <label>Star color variation<input id="v010StarColorVariation" type="range" min="0" max="1" step="0.01"></label>
+        <label>Star ray strength<input id="v010StarRays" type="range" min="0" max="2" step="0.01"></label>
+        <label>Star ray length<input id="v010StarRayLength" type="range" min="0.1" max="4" step="0.02"></label>
+        <label>Hero star fraction<input id="v010HeroStars" type="range" min="0" max="0.2" step="0.002"></label>
         <label>Star seed<input id="v010StarSeed" type="number" step="1"></label>
         <label>Daylight star extinction<input id="v010StarExtinction" type="range" min="0.1" max="8" step="0.05"></label>
         <label>Milky Way brightness<input id="v010MilkyWay" type="range" min="0" max="3" step="0.05"></label>
@@ -167,6 +181,10 @@ function installWorldPanel() {
         <label>Milky Way detail<input id="v010MilkyWayDetail" type="range" min="0" max="3" step="0.05"></label>
         <label>Milky Way orientation<input id="v010MilkyWayOrientation" type="range" min="-180" max="180" step="1"></label>
         <label>Milky Way dust lanes<input id="v010MilkyWayDust" type="range" min="0" max="1" step="0.01"></label>
+        <label>Milky Way warp<input id="v010MilkyWayWarp" type="range" min="0" max="2" step="0.02"></label>
+        <label>Milky Way clumping<input id="v010MilkyWayClumping" type="range" min="0" max="2" step="0.02"></label>
+        <label>Galactic core<input id="v010MilkyWayCore" type="range" min="0" max="3" step="0.02"></label>
+        <label>Width variation<input id="v010MilkyWayWidthVariation" type="range" min="0" max="2" step="0.02"></label>
         <label>Cloud mode<select id="v010CloudQuality"><option value="layered">Optimized layered</option><option value="balanced">Volumetric balanced</option><option value="quality">Volumetric quality</option><option value="reference">Volumetric reference</option></select></label>
         <label>Cloud cover<input id="v010Clouds" type="range" min="0" max="1" step="0.01"></label>
         <label>Cloud density<input id="v010CloudDensity" type="range" min="0" max="1" step="0.01"></label>
@@ -244,6 +262,9 @@ function populate(options = {}) {
   field('v010Rayleigh').value = world.atmosphere.rayleigh;
   field('v010Mie').value = world.atmosphere.mie;
   field('v010Humidity').value = world.atmosphere.humidity;
+  field('v010Haze').value = world.atmosphere.haze ?? 0.006;
+  field('v010DayFog').value = world.atmosphere.dayFogMultiplier ?? 0.04;
+  field('v010NightFog').value = world.atmosphere.nightFogMultiplier ?? 0.18;
   field('v010Exposure').value = world.atmosphere.exposure;
   field('v010CelestialMode').value = world.sky.celestialMode || 'astronomical';
   field('v010SunSize').value = world.sky.sunSize ?? 1;
@@ -262,6 +283,14 @@ function populate(options = {}) {
   field('v010MoonBrightness').value = world.sky.moonBrightness ?? 1.05;
   field('v010MoonGlow').value = world.sky.moonGlow ?? 0.7;
   field('v010MoonDetail').value = world.sky.moonDetail ?? 1;
+  field('v010MoonCraters').value = world.sky.moonCraterStrength ?? 0.85;
+  field('v010MoonMaria').value = world.sky.moonMariaStrength ?? 0.62;
+  field('v010MoonContrast').value = world.sky.moonSurfaceContrast ?? 1.18;
+  field('v010MoonRelief').value = world.sky.moonReliefStrength ?? 0.38;
+  field('v010MoonPatternRotation').value = world.sky.moonPatternRotation ?? -12;
+  field('v010MoonPatternSeed').value = world.sky.moonPatternSeed ?? 2718;
+  field('v010MoonLimb').value = world.sky.moonLimbDarkening ?? 0.28;
+  field('v010EclipseCoverage').value = world.sky.solarEclipseCoverage ?? 1.08;
   field('v010MoonAzimuth').value = world.sky.moonAzimuth ?? 90;
   field('v010MoonElevation').value = world.sky.moonElevation ?? 32;
   field('v010PlanetEnabled').checked = Boolean(world.sky.planetEnabled);
@@ -276,14 +305,21 @@ function populate(options = {}) {
   field('v010StarTwinkleSpeed').value = world.sky.starTwinkleSpeed ?? 1;
   field('v010StarSizeMin').value = world.sky.starSizeMin ?? 0.35;
   field('v010StarSizeMax').value = world.sky.starSizeMax ?? 1.8;
-  field('v010StarColorVariation').value = world.sky.starColorVariation ?? 0.65;
+  field('v010StarColorVariation').value = world.sky.starColorVariation ?? 0.72;
+  field('v010StarRays').value = world.sky.starRayStrength ?? 0.24;
+  field('v010StarRayLength').value = world.sky.starRayLength ?? 1.15;
+  field('v010HeroStars').value = world.sky.starHeroFraction ?? 0.035;
   field('v010StarSeed').value = world.sky.starSeed ?? 1337;
   field('v010StarExtinction').value = world.sky.starDaylightExtinction ?? 1.35;
   field('v010MilkyWay').value = world.sky.milkyWayIntensity ?? 0.32;
   field('v010MilkyWayWidth').value = world.sky.milkyWayWidth ?? 0.16;
   field('v010MilkyWayDetail').value = world.sky.milkyWayDetail ?? 0.72;
   field('v010MilkyWayOrientation').value = world.sky.milkyWayOrientation ?? 22;
-  field('v010MilkyWayDust').value = world.sky.milkyWayDust ?? 0.58;
+  field('v010MilkyWayDust').value = world.sky.milkyWayDust ?? 0.7;
+  field('v010MilkyWayWarp').value = world.sky.milkyWayWarp ?? 0.48;
+  field('v010MilkyWayClumping').value = world.sky.milkyWayClumping ?? 0.72;
+  field('v010MilkyWayCore').value = world.sky.milkyWayCoreStrength ?? 0.65;
+  field('v010MilkyWayWidthVariation').value = world.sky.milkyWayWidthVariation ?? 0.6;
   field('v010CloudQuality').value = world.clouds.quality || 'layered';
   field('v010Clouds').value = world.clouds.coverage;
   field('v010CloudDensity').value = world.clouds.density ?? 0.45;
@@ -322,8 +358,9 @@ async function refresh() {
   }
 }
 
-async function applyWorld(extra = {}) {
+async function applyWorld(extra = {}, options = {}) {
   const payload = {
+    lookPreset: options.preservePreset ? (snapshot?.world?.lookPreset || 'custom') : 'custom',
     time: { hours: numeric('v010Hours', 12), timeScale: numeric('v010TimeScale', 60), ...(extra.time || {}) },
     lighting: { sunIntensity: numeric('v010SunIntensity', 3.2), profile: field('v010LightingProfile').value },
     atmosphere: {
@@ -331,7 +368,10 @@ async function applyWorld(extra = {}) {
       visibilityKm: numeric('v010Visibility', 120),
       rayleigh: numeric('v010Rayleigh', 1),
       mie: numeric('v010Mie', 0.16),
-      humidity: numeric('v010Humidity', 0.22),
+      humidity: numeric('v010Humidity', 0.04),
+      haze: numeric('v010Haze', 0.006),
+      dayFogMultiplier: numeric('v010DayFog', 0.04),
+      nightFogMultiplier: numeric('v010NightFog', 0.18),
       exposure: numeric('v010Exposure', 1)
     },
     sky: {
@@ -342,15 +382,18 @@ async function applyWorld(extra = {}) {
       lunarEpochDay: Number(snapshot?.world?.time?.absoluteDay ?? snapshot?.world?.time?.dayOfYear ?? 172) + numeric('v010Hours', 12) / 24 - numeric('v010MoonAge', 14.765),
       moonOrbitPeriodDays: numeric('v010MoonOrbitPeriod', 29.530588), moonOrbitInclination: numeric('v010MoonInclination', 5.145),
       moonEarthshine: numeric('v010MoonEarthshine', 0.08), eclipseMode: field('v010EclipseMode').value,
-      moonBrightness: numeric('v010MoonBrightness', 1.05), moonGlow: numeric('v010MoonGlow', 0.48), moonDetail: numeric('v010MoonDetail', 1),
+      moonBrightness: numeric('v010MoonBrightness', 0.92), moonGlow: numeric('v010MoonGlow', 0.22), moonDetail: numeric('v010MoonDetail', 1.45),
+      moonCraterStrength: numeric('v010MoonCraters', 0.85), moonMariaStrength: numeric('v010MoonMaria', 0.62), moonSurfaceContrast: numeric('v010MoonContrast', 1.18), moonReliefStrength: numeric('v010MoonRelief', 0.38),
+      moonPatternRotation: numeric('v010MoonPatternRotation', -12), moonPatternSeed: numeric('v010MoonPatternSeed', 2718), moonLimbDarkening: numeric('v010MoonLimb', 0.28), solarEclipseCoverage: numeric('v010EclipseCoverage', 1.08),
       moonAzimuth: numeric('v010MoonAzimuth', 90), moonElevation: numeric('v010MoonElevation', 32),
       planetEnabled: Boolean(field('v010PlanetEnabled').checked), planetSize: numeric('v010PlanetSize', 4.5),
       planetAzimuth: numeric('v010PlanetAzimuth', 215), planetElevation: numeric('v010PlanetElevation', 28), planetRings: numeric('v010PlanetRings', 0.65),
       starIntensity: numeric('v010Stars', 1), starDensity: numeric('v010StarDensity', 0.72), starBrightness: numeric('v010StarBrightness', 1),
       starTwinkleAmount: numeric('v010StarTwinkle', 0.32), starTwinkleSpeed: numeric('v010StarTwinkleSpeed', 1),
-      starSizeMin: numeric('v010StarSizeMin', 0.35), starSizeMax: numeric('v010StarSizeMax', 1.8), starColorVariation: numeric('v010StarColorVariation', 0.65), starSeed: numeric('v010StarSeed', 1337),
+      starSizeMin: numeric('v010StarSizeMin', 0.18), starSizeMax: numeric('v010StarSizeMax', 1.35), starColorVariation: numeric('v010StarColorVariation', 0.72), starRayStrength: numeric('v010StarRays', 0.24), starRayLength: numeric('v010StarRayLength', 1.15), starHeroFraction: numeric('v010HeroStars', 0.035), starSeed: numeric('v010StarSeed', 1337),
       starDaylightExtinction: numeric('v010StarExtinction', 1.35), milkyWayIntensity: numeric('v010MilkyWay', 0.32),
-      milkyWayWidth: numeric('v010MilkyWayWidth', 0.16), milkyWayDetail: numeric('v010MilkyWayDetail', 0.72), milkyWayOrientation: numeric('v010MilkyWayOrientation', 22), milkyWayDust: numeric('v010MilkyWayDust', 0.58)
+      milkyWayWidth: numeric('v010MilkyWayWidth', 0.22), milkyWayDetail: numeric('v010MilkyWayDetail', 1.15), milkyWayOrientation: numeric('v010MilkyWayOrientation', 22), milkyWayDust: numeric('v010MilkyWayDust', 0.7),
+      milkyWayWarp: numeric('v010MilkyWayWarp', 0.48), milkyWayClumping: numeric('v010MilkyWayClumping', 0.72), milkyWayCoreStrength: numeric('v010MilkyWayCore', 0.65), milkyWayWidthVariation: numeric('v010MilkyWayWidthVariation', 0.6)
     },
     clouds: {
       quality: field('v010CloudQuality').value,
@@ -390,7 +433,7 @@ function bindControls() {
 
   field('v010ToggleTime').addEventListener('click', async () => {
     try {
-      await applyWorld({ time: { enabled: snapshot?.world?.time?.enabled === false } });
+      await applyWorld({ time: { enabled: snapshot?.world?.time?.enabled === false } }, { preservePreset: true });
       await refresh();
     } catch (error) {
       setStatus(error.message, true);
@@ -532,7 +575,7 @@ function bindControls() {
     timeStepInFlight = true;
     const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('world-time-step')||(()=>{});
     try {
-      const stepped = await api('/api/v010/world/step', { method: 'POST', body: JSON.stringify({ seconds: 2 }) });
+      const stepped = await api('/api/v010/world/step', { method: 'POST', body: JSON.stringify({ seconds: 1 }) });
       snapshot = {
         ...snapshot,
         ...stepped,
@@ -551,7 +594,7 @@ function bindControls() {
     } finally {
       timeStepInFlight = false;
     }
-  }, 2000);
+  }, 1000);
 }
 
 window.addEventListener('beforeunload', () => {

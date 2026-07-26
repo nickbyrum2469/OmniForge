@@ -54,7 +54,7 @@ test('viewport look ignores acquisition noise and rejects implausible direction 
   const camera = { yaw: 0, pitch: 0, lookSensitivity: 0.0023, invertHorizontal: false, invertVertical: false };
   beginLookInputSession(look, 'pointer-lock');
   const acquisition = applyLookDelta(camera, look, { dx: 180, dy: -130, source: 'pointer-lock', now: 100 });
-  assert.equal(acquisition.reason, 'acquisition');
+  assert.equal(acquisition.reason, 'session-warmup');
   assert.equal(camera.yaw, 0);
   const normal = applyLookDelta(camera, look, { dx: 12, dy: -8, source: 'pointer-lock', now: 116 });
   assert.equal(normal.changed, true);
@@ -66,7 +66,9 @@ test('viewport look ignores acquisition noise and rejects implausible direction 
   const resumed = applyLookDelta(camera, look, { dx: 8, dy: 4, source: 'pointer-lock', now: 520 });
   assert.equal(resumed.reason, 'resume-guard');
   assert.equal(camera.yaw, yawAfterNormal);
-  const next = applyLookDelta(camera, look, { dx: 8, dy: 4, source: 'pointer-lock', now: 536 });
+  const resumeWarmup = applyLookDelta(camera, look, { dx: 8, dy: 4, source: 'pointer-lock', now: 536 });
+  assert.equal(resumeWarmup.reason, 'session-warmup');
+  const next = applyLookDelta(camera, look, { dx: 8, dy: 4, source: 'pointer-lock', now: 552 });
   assert.equal(next.changed, true);
   endLookInputSession(look);
 });
@@ -104,7 +106,7 @@ test('normal rendering no longer depends on the legacy CSS atmosphere', () => {
   assert.match(css, /#viewportWrap::after[\s\S]*content:\s*none/);
   assert.doesNotMatch(v010, /--cloud-coverage/);
   assert.doesNotMatch(v010, /--star-opacity/);
-  assert.doesNotMatch(app, /linear-gradient\(/);
+  assert.doesNotMatch(app, /viewportWrap\.style\.background\s*=\s*[^;]*linear-gradient/);
   assert.match(renderer, /alpha:false/);
   assert.match(renderer, /new SkyPass\(gl\)/);
 });

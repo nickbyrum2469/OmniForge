@@ -2,6 +2,7 @@ import { Renderer3D, terrainHeight } from './renderer.js';
 import { add, sub, scale, length, normalize, clamp, cameraForward, cameraRight } from './math.js';
 import { cloneCamera, shouldPreserveViewportCamera } from './viewport-state.js';
 import { createLookInputState, beginLookInputSession, endLookInputSession, applyLookDelta } from './viewport-navigation.js';
+import { RenderCrashGuard, sanitizeCameraState } from './render-crash-guard.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -88,6 +89,22 @@ let interactionActiveUntil = 0;
 let remotePollInFlight = false;
 let viewportNavigationIntentUntil = 0;
 const lookInputState = createLookInputState();
+let renderRecoveryInFlight = false;
+let lastRenderFailureToastAt = 0;
+const renderCrashGuard = new RenderCrashGuard({
+  failureWindowMs: 5000,
+  tripThreshold: 3,
+  cooldownMs: 1800,
+  onFailure: ({error,recentFailures,totalFailures}) => {
+    window.__omniforgeDiagnostics?.warn?.('viewport-render-failure',{message:error.message,stack:error.stack||'',recentFailures,totalFailures});
+    const now=Date.now();if(now-lastRenderFailureToastAt>1800){lastRenderFailureToastAt=now;showToast('Viewport renderer recovered from an error. Crash evidence was recorded.','error');}
+  },
+  onTrip: ({error}) => {
+    keys.clear();try{document.exitPointerLock?.();}catch{}
+    rebuildRendererAfterFailure(error);
+  },
+  onRecover: () => window.__omniforgeDiagnostics?.event?.('viewport-render-recovered',{})
+});
 
 async function api(path, options={}) {
   const method=String(options.method||'GET').toUpperCase(),mutating=!['GET','HEAD'].includes(method);
@@ -1130,12 +1147,38 @@ function updateCamera(dt) {
   if(length(movement)>.001){camera.position=add(camera.position,scale(normalize(movement),speed*dt));scene.editorCamera=cloneCamera(camera);noteCameraMutation();}
 }
 
+function rebuildRendererAfterFailure(error) {
+  if(renderRecoveryInFlight)return;
+  renderRecoveryInFlight=true;
+  window.__omniforgeDiagnostics?.warn?.('viewport-renderer-rebuild-requested',{message:error?.message||String(error||'unknown')});
+  window.setTimeout(()=>{
+    try{
+      renderer?.dispose?.();
+      renderer=new Renderer3D(ui.viewport);
+      renderer.setAssets(state?.assets||[]);
+      showToast('Viewport renderer restarted without closing OmniForge.','success');
+    }catch(rebuildError){
+      window.__omniforgeDiagnostics?.warn?.('viewport-renderer-rebuild-failed',{message:rebuildError.message,stack:rebuildError.stack||''});
+      showToast('Viewport recovery failed. Reopen OmniForge in Safe Mode and copy the crash details.','error');
+    }finally{renderRecoveryInFlight=false;}
+  },260);
+}
+
 function animationLoop(now) {
   const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('animationLoop',{},20)||(()=>{});
-  const dt=Math.min(.05,(now-lastFrame)/1000);lastFrame=now;updateCamera(dt);if(state?.editor.mode==='play'){behaviorStep(dt);physicsAccumulator=Math.min(.2,physicsAccumulator+dt);while(physicsAccumulator>=1/60){physicsStep(1/60);physicsAccumulator-=1/60;}}if(renderer&&scene)renderer.render(scene,camera,selectedId,{editorMode:state?.editor?.mode||'edit'});
-  frameCounter++;fpsTimer+=dt;if(fpsTimer>=.5){ui.fpsStatus.textContent=`${Math.round(frameCounter/fpsTimer)} FPS`;frameCounter=0;fpsTimer=0;ui.cameraPositionBadge.textContent=`X ${camera.position[0].toFixed(1)} · Y ${camera.position[1].toFixed(1)} · Z ${camera.position[2].toFixed(1)}`;}
-  finishDiagnostic({dtMs:Number((dt*1000).toFixed(3))});
-  requestAnimationFrame(animationLoop);
+  let dt=0;let renderResult={rendered:false};
+  try{
+    dt=Math.min(.05,Math.max(0,(now-lastFrame)/1000));lastFrame=now;
+    if(camera){const safe=sanitizeCameraState(camera,scene?.editorCamera||{});Object.assign(camera,safe);if(scene)scene.editorCamera={...safe,position:[...safe.position]};}
+    updateCamera(dt);
+    if(state?.editor.mode==='play'){behaviorStep(dt);physicsAccumulator=Math.min(.2,physicsAccumulator+dt);while(physicsAccumulator>=1/60){physicsStep(1/60);physicsAccumulator-=1/60;}}
+    renderResult=renderCrashGuard.run(()=>{if(renderer&&scene)renderer.render(scene,camera,selectedId,{editorMode:state?.editor?.mode||'edit'});},now);
+    frameCounter++;fpsTimer+=dt;if(fpsTimer>=.5){ui.fpsStatus.textContent=`${Math.round(frameCounter/Math.max(.001,fpsTimer))} FPS`;frameCounter=0;fpsTimer=0;ui.cameraPositionBadge.textContent=`X ${camera.position[0].toFixed(1)} · Y ${camera.position[1].toFixed(1)} · Z ${camera.position[2].toFixed(1)}`;}
+  }catch(error){renderResult=renderCrashGuard.run(()=>{throw error;},now);}
+  finally{
+    finishDiagnostic({dtMs:Number((dt*1000).toFixed(3)),rendered:Boolean(renderResult.rendered),suspended:Boolean(renderResult.suspended)});
+    requestAnimationFrame(animationLoop);
+  }
 }
 
 async function nudgeSelected(code) {
@@ -1345,7 +1388,7 @@ async function bootstrap() {
     renderer=new Renderer3D(ui.viewport);renderer.setAssets(state.assets);applyState(state,{forceSelection:true});bindEvents();renderProjectHub();loading=false;
     window.__omniforgeV011Bridge=Object.freeze({snapshot:()=>({state,scene,camera,selectedId}),renderer:()=>renderer,api,applyState,selectObject,showToast,markLocalMutation,renderInspector});
     window.__omniforgeDebug=Object.freeze({
-      snapshot:()=>deepClone({state,scene,camera,selectedId,playMode:state?.editor?.mode||'edit',projects,layout:state?.editor?.layout}),
+      snapshot:()=>deepClone({state,scene,camera,selectedId,playMode:state?.editor?.mode||'edit',projects,layout:state?.editor?.layout,renderCrashGuard:renderCrashGuard.snapshot()}),
       setCamera:patch=>{if(patch&&typeof patch==='object'){if(Array.isArray(patch.position))camera.position=patch.position.map(Number);for(const key of ['yaw','pitch','fov','moveSpeed'])if(Number.isFinite(Number(patch[key])))camera[key]=Number(patch[key]);scene.editorCamera={...camera,position:[...camera.position]};}},
       select:id=>selectObject(id,false),togglePlay:()=>enterPlayMode(),capture:title=>captureViewport(title||'Automated viewport inspection'),openProjectHub:()=>loadProjects({openHub:true}),applyLayout:patch=>applyLayout(patch,false)
     });
