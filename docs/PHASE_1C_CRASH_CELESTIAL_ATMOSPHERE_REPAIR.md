@@ -77,3 +77,12 @@ This corrective milestone treats the target-PC viewport closure and the reported
 ## Verification discipline
 
 Every source-changing stage must run syntax checks, the complete automated suite, repository verification, idempotency checks, native Windows packaging, packaged source-identity audit, packaged startup, packaged API smoke, and direct target-PC visual validation. CI success alone cannot prove visual quality or absence of a machine-specific GPU/input crash.
+
+## Current packaged evidence
+
+- The HDR scene target and Chromium backbuffer have different sample counts. Editor overlays now render inside the HDR graph before the display transform, so the renderer does not perform an invalid depth-buffer blit between those targets.
+- The exact packaged render order is `shadow > environment > opaque-world > editor-overlays > display-transform > diagnostics`.
+- The twenty-state packaged capture preserves desktop, server, incident, crash, and session evidence. The current gate has no `GL_INVALID_OPERATION`, framebuffer blit failure, WebGL context loss, render-pass failure, or process crash.
+- Low-Sun rendering derives chromatic transmission from the same Rayleigh, Mie, haze, humidity, and dust authority used by the atmosphere. Warm energy is localized toward the Sun in both azimuth and elevation; the shared anti-solar horizon remains cool.
+- On the development PC's RX 7900 XTX, the measured environment GPU pass is approximately 0.33 ms for clear day, 0.37 ms for golden hour, 0.38 ms for twilight, 0.34 ms for the realistic night, 0.35 ms for the galactic core, 0.37 ms for the Moon close-up, 0.32 ms for total eclipse, 1.13 ms for overcast volumetric clouds, and 1.05 ms for storm volumetric clouds. These values are not GTX 1650 certification.
+- The atmosphere calibration is an accepted foundation, not final visual approval. Forest-shaft and coastal-reflection reference criteria remain blocked by the authoritative test scene's lack of licensed production trees and water; placeholders are not permitted.
