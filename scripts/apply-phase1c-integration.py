@@ -73,12 +73,28 @@ REQUIRED = {
     'app/environment-presets.js': ["'clear-day'", "'horror-fog'", "'fantasy-sky'", "id: 'custom'", "indirectStrength: 0.9"]
 }
 
-FINAL_VISUAL_MARKERS = {
+BASE_FINAL_VISUAL_MARKERS = {
     'app/renderer.js': ['mix(0.66,1.0,sum/9.0)'],
     'app/sky-pass.js': [
         'uStarDensity*0.014',
         'rayLength=radius*mix(2.0,4.5',
         'galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78))',
+        'microStructure=',
+        'coronaInner=pow(sunDot,1500.0)',
+        'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
+    ],
+    'app/environment-runtime.js': ['0.1, 32'],
+    'app/v010.js': ['id="v010MoonSize" type="range" min="0.1" max="32"'],
+    'server/v010-systems.mjs': ['ambientIntensity: (0.09 + day * 0.22'],
+    'app/app.js': ['selectedId=null', 'selectedId=originalSelectedId'],
+    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.006', 'milkyWayOrientation=32', 'moonSize=22', 'sunSize=9']
+}
+
+REFINED_VISUAL_MARKERS = {
+    'app/renderer.js': ['mix(0.66,1.0,sum/9.0)'],
+    'app/sky-pass.js': [
+        'uStarDensity*0.014',
+        'rayLength=radius*mix(2.0,4.5',
         'float galacticCloudEnvelope=',
         'return ring*0.28-basin*0.42',
         'coronaInner=pow(sunDot,1500.0)',
@@ -131,23 +147,23 @@ if missing:
 else:
     print('Phase 1C broad integration is already complete; migration skipped.')
 
-final_visual_missing = contracts_missing(FINAL_VISUAL_MARKERS)
-if final_visual_missing:
-    print('Phase 1C rendered-visual integration is required:')
-    for item in final_visual_missing:
+base_visual_missing = contracts_missing(BASE_FINAL_VISUAL_MARKERS)
+refined_visual_missing = contracts_missing(REFINED_VISUAL_MARKERS)
+if base_visual_missing and refined_visual_missing:
+    print('Base Phase 1C rendered-visual integration is required:')
+    for item in base_visual_missing:
         print(f'  - {item}')
     subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-qa.py'], check=True)
     subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-idempotency.py'], check=True)
     subprocess.run([sys.executable, 'scripts/apply-phase1c-capture-protocol.py'], check=True)
     subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-quality.py'], check=True)
     subprocess.run([sys.executable, 'scripts/apply-phase1c-final-visual.py'], check=True)
-    subprocess.run([sys.executable, 'scripts/apply-phase1c-galaxy-refinement.py'], check=True)
 else:
-    print('Final Phase 1C rendered-visual source is already integrated; broad visual rewrites skipped.')
+    print('Base or refined Phase 1C rendered-visual source is already integrated; broad visual rewrites skipped.')
     subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-idempotency.py'], check=True)
     subprocess.run([sys.executable, 'scripts/apply-phase1c-capture-protocol.py'], check=True)
-    subprocess.run([sys.executable, 'scripts/apply-phase1c-galaxy-refinement.py'], check=True)
 
+subprocess.run([sys.executable, 'scripts/apply-phase1c-galaxy-refinement.py'], check=True)
 subprocess.run([sys.executable, 'scripts/apply-phase1c-test-contracts.py'], check=True)
 
 remaining = missing_contracts()
