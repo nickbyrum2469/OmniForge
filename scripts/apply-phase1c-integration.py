@@ -77,6 +77,11 @@ REQUIRED = {
     ],
     'app/world-runtime.js': ['environmentTracks', "mode: 'continuous-linear'"],
     'app/environment-runtime.js': ['moonCraterStrength', 'milkyWayWidthVariation', 'solarEclipseCoverage', '0.1, 32'],
+    'app/celestial-mechanics.js': [
+        'export function solarDiscCoverage',
+        'const geometricSolarCoverage = solarDiscCoverage',
+        'geometricSolarCoverage * nodeAlignment'
+    ],
     'app/environment-presets.js': ["'clear-day'", "'horror-fog'", "'fantasy-sky'", "id: 'custom'", "indirectStrength: 0.9"]
 }
 

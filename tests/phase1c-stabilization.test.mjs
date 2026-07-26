@@ -99,6 +99,7 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
   const desktop = fs.readFileSync(new URL('../desktop/main.cjs', import.meta.url), 'utf8');
   const sky = fs.readFileSync(new URL('../app/sky-pass.js', import.meta.url), 'utf8');
+  const celestial = fs.readFileSync(new URL('../app/celestial-mechanics.js', import.meta.url), 'utf8');
   const worldUi = fs.readFileSync(new URL('../app/v010.js', import.meta.url), 'utf8');
   const worldSystems = fs.readFileSync(new URL('../server/v010-systems.mjs', import.meta.url), 'utf8');
   const visualCapture = fs.readFileSync(new URL('../scripts/run-phase1c-visual-captures.ps1', import.meta.url), 'utf8');
@@ -155,6 +156,8 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(worldSystems, /const ambientDay = mix\(\[12, 20, 48\], \[154, 178, 210\], day\)/);
   assert.match(visualCapture, /nightFogMultiplier=\.18;exposure=\.86/);
   assert.match(worldSystems, /renderProxy: false/);
+  assert.match(celestial, /export function solarDiscCoverage/);
+  assert.match(celestial, /geometricSolarCoverage \* nodeAlignment/);
   assert.match(visualCapture, /starIntensity=\.24;starDensity=\.72;starBrightness=\.68;milkyWayIntensity=\.72/);
   assert.match(visualCapture, /starHeroFraction=\.004/);
   assert.match(visualCapture, /capture-manifest\.json/);

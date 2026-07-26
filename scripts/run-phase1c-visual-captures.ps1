@@ -189,7 +189,7 @@ try{
     lookPreset='custom';time=@{hours=17.4};weather=@{preset='partly-cloudy';fog=.006};clouds=@{coverage=.18;density=.32;shadowStrength=.2};
     lighting=@{profile='quality'};
     atmosphere=@{haze=.065;mie=.12;humidity=.2;exposure=.76;saturation=1.12;contrast=1.06};
-    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=16;sunSize=9;moonAzimuth=0;moonElevation=16;moonSize=7.5;solarEclipseCoverage=.84;eclipseMode='force-solar';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
+    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=16;sunSize=9;moonAzimuth=0;moonElevation=16;moonSize=7.5;solarEclipseCoverage=1;eclipseMode='automatic';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
   }
   $annularCamera=@{position=@(0,20,0);yaw=0;pitch=.279253;fov=10}
   $revision=Patch-World $port $annularEclipse

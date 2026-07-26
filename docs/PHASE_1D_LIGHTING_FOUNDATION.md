@@ -74,6 +74,8 @@ The eclipse compositor is also corrected to preserve real angular geometry: the 
 
 Expanded packaged evidence then exposed a second physical error: partial events scaled the Moon's opacity by total eclipse strength and simultaneously rendered the normally lit lunar surface. The occluding Moon is now an opaque silhouette whenever an actual solar overlap exists, while eclipse strength remains responsible for atmosphere and world-light dimming. The independent night-Moon surface is suppressed only for that active overlap.
 
+The annular evidence also revealed that the automatic world-light response used a broad alignment heuristic and therefore treated a smaller centered Moon as totality. Automatic eclipse strength now uses the analytic intersection area of the authored Sun and Moon angular discs, normalized by the solar-disc area. This preserves a bright annular sky, gives partial events proportional dimming, and retains forced modes only as explicit deterministic authoring tools.
+
 ## Protected behavior
 
 - The continuous terrain-conforming path remains authoritative.
