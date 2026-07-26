@@ -59,6 +59,20 @@ test('renderer environment exposes adjustable discs, detailed moon, planet, moon
   assert.ok(state.moonLightIntensity >= 0);
 });
 
+test('twilight keeps the shared anti-solar horizon cool while the renderer owns directional warmth', () => {
+  const target = scene();
+  const world = defaultWorldSettings({
+    sky: { celestialMode: 'manual', sunAzimuth: 0, sunElevation: -4 }
+  });
+  applyWorldToScene(target, world);
+  const [red, green, blue] = target.settings.skyBottom
+    .slice(1)
+    .match(/.{2}/g)
+    .map(value => Number.parseInt(value, 16));
+  assert.ok(blue > red, `expected a cool shared horizon, received ${target.settings.skyBottom}`);
+  assert.ok(blue > green, `expected a cool shared horizon, received ${target.settings.skyBottom}`);
+});
+
 test('terrain expansion preserves physical vertex density until the single-mesh safety ceiling', () => {
   const terrain = {
     type: 'terrain', transform: { position: [0, 0, 0], scale: [1, 1, 1] },

@@ -487,10 +487,10 @@ void main(){
   float belowHorizon=clamp(-uSunDirection.y/0.12,0.0,1.0);
   float lowSunAzimuth=exp(-pow(acos(clamp(dot(horizonDirection,sunHorizonDirection),-1.0,1.0))/0.72,2.0));
   float lowSunCenter=mix(clamp(uSunDirection.y,-0.08,0.16)*0.42,-0.055,belowHorizon);
-  float lowSunWidth=mix(0.24,0.09,belowHorizon);
+  float lowSunWidth=mix(0.24,0.06,belowHorizon);
   float lowSunElevation=exp(-pow((ray.y-lowSunCenter)/lowSunWidth,2.0));
   float lowSunEnergy=lowSunWindow*(0.1+uMie*1.4+uHaze*0.82+uHumidity*0.24)
-    *(0.48+uTwilightFactor*0.72)*mix(1.0,0.35,belowHorizon);
+    *(0.48+uTwilightFactor*0.72)*mix(1.0,0.22,belowHorizon);
   vec3 lowSunScatter=mix(vec3(1.0,0.14,0.018),transmittedSun,0.42);
   physicalScatter+=lowSunScatter*lowSunAzimuth*lowSunElevation*lowSunEnergy;
   float physicalWeight=clamp((uDayFactor*0.62+uTwilightFactor*0.34)*uAerialPerspective,0.0,0.72);

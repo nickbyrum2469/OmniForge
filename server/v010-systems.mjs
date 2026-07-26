@@ -189,7 +189,9 @@ export function applyWorldToScene(scene, world) {
   const nightBottom = [8, 16, 36];
   const top = mix(nightTop, dayTop, day);
   const bottom = mix(nightBottom, dayBottom, day);
-  const horizonWarmth = twilight * (0.2 + day * 0.12);
+  // Keep the shared horizon palette cool enough for the anti-solar sky.
+  // Directional warm energy is added only toward the Sun by the sky pass.
+  const horizonWarmth = twilight * (0.065 + day * 0.08);
   for (let i = 0; i < 3; i += 1) bottom[i] = Math.round(bottom[i] * (1 - horizonWarmth) + sunrise[i] * horizonWarmth);
 
   const weatherPreset = String(world.weather.preset || 'clear');

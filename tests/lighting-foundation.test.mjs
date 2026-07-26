@@ -97,7 +97,7 @@ test('light colors are decoded to linear space before BRDF evaluation', () => {
 test('game-accurate daylight includes authored sky irradiance without an editor-only fill light', () => {
   assert.match(worldSystems, /ambientIntensity: \(0\.12 \+ day \* 0\.57 \+ Number\(world\.lighting\.indirectStrength \?\? 0\.72\) \* 0\.66\)/);
   assert.match(worldSystems, /const ambientDay = mix\(\[12, 20, 48\], \[154, 178, 210\], day\)/);
-  assert.match(worldSystems, /const horizonWarmth = twilight \* \(0\.2 \+ day \* 0\.12\)/);
+  assert.match(worldSystems, /const horizonWarmth = twilight \* \(0\.065 \+ day \* 0\.08\)/);
   assert.match(worldSystems, /const ambientTwilight = mix\(ambientDay, \[74, 72, 102\], twilight \* 0\.34\)/);
   assert.match(renderer, /uniform vec3 uSkyZenithColor/);
   assert.match(renderer, /vec3 directionalSky=srgbToLinear\(max\(uSkyZenithColor/);
