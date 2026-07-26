@@ -189,7 +189,8 @@ export function applyWorldToScene(scene, world) {
   const nightBottom = [8, 16, 36];
   const top = mix(nightTop, dayTop, day);
   const bottom = mix(nightBottom, dayBottom, day);
-  for (let i = 0; i < 3; i += 1) bottom[i] = Math.round(bottom[i] * (1 - twilight * 0.42) + sunrise[i] * twilight * 0.42);
+  const horizonWarmth = twilight * (0.2 + day * 0.12);
+  for (let i = 0; i < 3; i += 1) bottom[i] = Math.round(bottom[i] * (1 - horizonWarmth) + sunrise[i] * horizonWarmth);
 
   const weatherPreset = String(world.weather.preset || 'clear');
   const presetPrecipitation = { rain: 0.65, storm: 1, snow: 0.55 }[weatherPreset] || 0;
@@ -210,7 +211,7 @@ export function applyWorldToScene(scene, world) {
   const lunarEclipse = celestial.moon.lunarEclipse;
   const eclipseDaylight = 1 - solarEclipse * 0.94;
   const ambientDay = mix([12, 20, 48], [154, 178, 210], day);
-  const ambientTwilight = mix(ambientDay, [92, 55, 73], twilight * 0.5);
+  const ambientTwilight = mix(ambientDay, [74, 72, 102], twilight * 0.34);
   const eclipseAmbient = mix(ambientTwilight, [14, 22, 40], solarEclipse * 0.82);
   const exposure = clamp(Number(world.atmosphere.exposure || 1), 0.1, 4);
   world.sky.moonPhase = celestial.moon.illumination;

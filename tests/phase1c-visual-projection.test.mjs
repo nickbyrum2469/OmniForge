@@ -78,9 +78,11 @@ test('Moon uses the attributed LRO mosaic with a deterministic procedural fallba
 test('cloud and twilight lighting remain Sun-directed rather than full-screen color washes', () => {
   assert.match(sky, /float edgeLight=1\.0-smoothstep\(threshold,threshold\+0\.38,cloudField\)/);
   assert.match(sky, /vec3 sunTint=srgbToLinear\(uSunColor\)/);
-  assert.match(sky, /float twilightSunward=pow\(max\(dot\(horizonDirection,sunHorizonDirection\),0\.0\),2\.4\)/);
-  assert.match(sky, /physicalScatter\+=twilightScatter\*\(uOzone\*uTwilightFactor\*horizon\)\*0\.13/);
-  assert.match(sky, /sunLinear\*horizon\*uTwilightFactor\*\(0\.025\+twilightSunward\*0\.34\)/);
+  assert.match(sky, /float twilightSunward=pow\(max\(dot\(horizonDirection,sunHorizonDirection\),0\.0\),3\.1\)/);
+  assert.match(sky, /physicalScatter\+=twilightScatter\*\(uOzone\*uTwilightFactor\*horizon\)\*0\.085/);
+  assert.match(sky, /float solarHorizonWindow=1\.0-smoothstep\(0\.12,0\.5,abs\(uSunDirection\.y\)\)/);
+  assert.match(sky, /float aerialAureole=pow\(sunDot,3\.4\)\*horizon\*solarHorizonWindow/);
+  assert.match(sky, /aerialAureole\+horizon\*uTwilightFactor\*\(0\.012\+twilightSunward\*0\.18\)/);
   assert.match(sky, /uCloudQuality>=0\.5&&uCloudCoverage>=0\.35&&ray\.y>=0\.09/);
   assert.match(sky, /mix\(layered,volume,smoothstep\(0\.09,0\.16,ray\.y\)\)/);
 });
