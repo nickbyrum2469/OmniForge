@@ -28,7 +28,8 @@ function Request-Capture([string]$CaptureDir,[string]$Id,[hashtable]$Camera,[int
   $responseFile=Join-Path $CaptureDir "$Id.json"
   $pngFile=Join-Path $CaptureDir "$Id.png"
   Remove-Item $responseFile,$pngFile,$requestFile,$temp -Force -ErrorAction SilentlyContinue
-  $request|ConvertTo-Json -Depth 8|Set-Content $temp -Encoding utf8
+  $requestJson=$request|ConvertTo-Json -Depth 8
+  [IO.File]::WriteAllText($temp,$requestJson,[Text.UTF8Encoding]::new($false))
   Move-Item $temp $requestFile -Force
   $deadline=(Get-Date).AddSeconds(25)
   while((Get-Date)-lt$deadline){

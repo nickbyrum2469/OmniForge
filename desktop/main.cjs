@@ -44,7 +44,7 @@ let rendererRecoveryAttempts = [];
 let visualCaptureTimer = null;
 let visualCaptureInFlight = false;
 
-function readJson(file, fallback=null) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } }
+function readJson(file, fallback=null) { try { return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/,'')); } catch { return fallback; } }
 function writeJson(file, value) { fs.mkdirSync(path.dirname(file), { recursive: true }); const temp=`${file}.${process.pid}.tmp`; fs.writeFileSync(temp, JSON.stringify(value,null,2),'utf8'); fs.renameSync(temp,file); }
 function appendLog(message) { fs.appendFileSync(path.join(LOG_DIR,'desktop.log'),`[${new Date().toISOString()}] ${message}\n`,'utf8'); }
 function appendDiagnostic(message) { fs.appendFileSync(path.join(LOG_DIR,'diagnostics.log'),`[${new Date().toISOString()}] ${message}\n`,'utf8'); }
