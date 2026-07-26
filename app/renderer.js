@@ -345,7 +345,7 @@ void main(){
   float authorityLuma=max(dot(ambientAuthority,vec3(0.2126,0.7152,0.0722)),0.001);
   float directionalLuma=max(dot(directionalSky,vec3(0.2126,0.7152,0.0722)),0.001);
   directionalSky*=authorityLuma/directionalLuma;
-  vec3 ambientIrradiance=mix(ambientAuthority,directionalSky,0.42);
+  vec3 ambientIrradiance=mix(ambientAuthority,directionalSky,0.18);
   vec3 ambient=ambientIrradiance*uAmbientIntensity*(.38+.62*hemi)*materialAO;
   vec3 editorAmbient=baseLinear*vec3(uEditorFill)*(.55+.45*hemi)*materialAO;
   float moonNdl=max(dot(n,normalize(uMoonDir)),0.0);

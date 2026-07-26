@@ -102,7 +102,7 @@ test('game-accurate daylight includes authored sky irradiance without an editor-
   assert.match(renderer, /uniform vec3 uSkyZenithColor/);
   assert.match(renderer, /vec3 directionalSky=srgbToLinear\(max\(uSkyZenithColor/);
   assert.match(renderer, /directionalSky\*=authorityLuma\/directionalLuma/);
-  assert.match(renderer, /vec3 ambientIrradiance=mix\(ambientAuthority,directionalSky,0\.42\)/);
+  assert.match(renderer, /vec3 ambientIrradiance=mix\(ambientAuthority,directionalSky,0\.18\)/);
   assert.match(renderer, /lights\.environment\?\.zenithColor/);
   assert.match(renderer, /baseLinear\*ambient\+editorAmbient/);
   assert.match(renderer, /uEditorFill/);
