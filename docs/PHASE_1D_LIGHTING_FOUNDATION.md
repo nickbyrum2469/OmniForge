@@ -76,6 +76,8 @@ Expanded packaged evidence then exposed a second physical error: partial events 
 
 The annular evidence also revealed that the automatic world-light response used a broad alignment heuristic and therefore treated a smaller centered Moon as totality. Automatic eclipse strength now uses the analytic intersection area of the authored Sun and Moon angular discs, normalized by the solar-disc area. This preserves a bright annular sky, gives partial events proportional dimming, and retains forced modes only as explicit deterministic authoring tools.
 
+Golden-hour, twilight, and overcast evidence exposed two shared presentation problems: clouds were lit as broad uniform gray samples, and the twilight ozone term washed the full horizon magenta. Cloud lighting now separates broad mass, erosion, edges, vertical fill, and Sun-directed forward scattering in both layered and volumetric paths. Twilight color is localized by the horizontal Sun direction, keeping warm scatter near the Sun and restrained violet scatter away from it.
+
 ## Protected behavior
 
 - The continuous terrain-conforming path remains authoritative.

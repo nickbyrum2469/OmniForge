@@ -154,18 +154,19 @@ try{
   $captureRecords+=[ordered]@{id='solar-eclipse';file='solar-eclipse.png';preset='total-eclipse';camera=$eclipseCamera;time=12;seed=1337;worldStateHash=Get-StateHash $solarEclipse;revision=$revision}
 
   $goldenHour=@{
-    lookPreset='golden-hour';time=@{hours=18.15};weather=@{preset='partly-cloudy';fog=.008};clouds=@{coverage=.22;density=.38;shadowStrength=.24};
+    lookPreset='golden-hour';time=@{hours=18.15};weather=@{preset='partly-cloudy';fog=.008};clouds=@{quality='quality';coverage=.22;density=.38;shadowStrength=.24};
     lighting=@{profile='quality';sunIntensity=2.9;indirectStrength=.68};
     atmosphere=@{haze=.055;mie=.11;humidity=.18;dayFogMultiplier=.12;nightFogMultiplier=.2;exposure=.72;saturation=1.15;contrast=1.07;vibrance=.18};
     sky=@{celestialMode='manual';sunAzimuth=24;sunElevation=6;moonAzimuth=204;moonElevation=-12;planetEnabled=$false;eclipseMode='auto';sunGlow=.95;starIntensity=.15;milkyWayIntensity=0}
   }
   $landscapeCamera=@{position=@(20,15,30);yaw=-.55;pitch=.14;fov=62}
+  $goldenCamera=@{position=@(20,15,30);yaw=.42;pitch=.12;fov=62}
   $revision=Patch-World $port $goldenHour
-  Request-Capture $captureDir 'golden-hour' $landscapeCamera $revision 1100|Out-Null
-  $captureRecords+=[ordered]@{id='golden-hour';file='golden-hour.png';preset='golden-hour';camera=$landscapeCamera;time=18.15;seed=1337;worldStateHash=Get-StateHash $goldenHour;revision=$revision}
+  Request-Capture $captureDir 'golden-hour' $goldenCamera $revision 1100|Out-Null
+  $captureRecords+=[ordered]@{id='golden-hour';file='golden-hour.png';preset='golden-hour';camera=$goldenCamera;time=18.15;seed=1337;worldStateHash=Get-StateHash $goldenHour;revision=$revision}
 
   $twilight=@{
-    lookPreset='clean-twilight';time=@{hours=19.45};weather=@{preset='clear';fog=.002};clouds=@{coverage=.1;density=.24;shadowStrength=.15};
+    lookPreset='clean-twilight';time=@{hours=19.45};weather=@{preset='clear';fog=.002};clouds=@{quality='quality';coverage=.1;density=.24;shadowStrength=.15};
     lighting=@{profile='quality';sunIntensity=2.2;moonIntensity=.18;indirectStrength=.62};
     atmosphere=@{haze=.025;mie=.06;humidity=.08;dayFogMultiplier=.06;nightFogMultiplier=.14;exposure=.82;saturation=1.14;contrast=1.06;vibrance=.18};
     sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=-4;moonAzimuth=145;moonElevation=18;planetEnabled=$false;eclipseMode='auto';sunGlow=.62;starIntensity=.9;starDensity=.58;starBrightness=.76;milkyWayIntensity=.28;milkyWayWidth=.2;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.45;milkyWayClumping=.74;milkyWayCoreStrength=.7}

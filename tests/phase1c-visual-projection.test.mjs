@@ -38,6 +38,13 @@ test('Milky Way uses periodic smooth direction-space dust without longitude seam
   assert.doesNotMatch(sky, /ray\*5\.3\+tangent\*longitude/);
 });
 
+test('cloud and twilight lighting remain Sun-directed rather than full-screen color washes', () => {
+  assert.match(sky, /float edgeLight=1\.0-smoothstep\(threshold,threshold\+0\.38,cloudField\)/);
+  assert.match(sky, /vec3 sunTint=srgbToLinear\(uSunColor\)/);
+  assert.match(sky, /float twilightSunward=pow\(max\(dot\(horizonDirection,sunHorizonDirection\),0\.0\),2\.4\)/);
+  assert.match(sky, /physicalScatter\+=twilightScatter\*\(uOzone\*uTwilightFactor\*horizon\)\*0\.13/);
+});
+
 test('solar-eclipse silhouette is constrained to daylight and no longer blacks out a free-floating sky disc', () => {
   assert.match(sky, /float eclipseActive=step\(0\.001,uSolarEclipse\)/);
   assert.match(sky, /eclipseOcclusion=eclipseDisc\*eclipseActive/);
