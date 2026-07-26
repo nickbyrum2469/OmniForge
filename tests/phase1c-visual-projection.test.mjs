@@ -61,6 +61,18 @@ test('procedural Moon uses sparse hierarchical craters and irregular authored ma
   assert.match(sky, /vec3 dark=bright\*vec3\(0\.48,0\.5,0\.55\)/);
 });
 
+test('Moon uses the attributed LRO mosaic with a deterministic procedural fallback', () => {
+  assert.match(sky, /uniform sampler2D uMoonAlbedoMap/);
+  assert.match(sky, /atan\(rotatedNormal\.x,-rotatedNormal\.z\)\/TAU\+0\.5/);
+  assert.match(sky, /mappedAlbedo=srgbToLinear\(texture\(uMoonAlbedoMap,lunarMapUv\)\.rgb\)/);
+  assert.match(sky, /new URL\('\.\/assets\/sky\/lroc_color_2k\.jpg', import\.meta\.url\)\.href/);
+  assert.match(sky, /moon-albedo-load-failed/);
+  assert.ok(fs.existsSync(new URL('../app/assets/sky/lroc_color_2k.jpg', import.meta.url)));
+  const provenance = fs.readFileSync(new URL('../docs/ASSET_PROVENANCE_SKY.md', import.meta.url), 'utf8');
+  assert.match(provenance, /NASA Scientific Visualization Studio/);
+  assert.match(provenance, /f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170/i);
+});
+
 test('cloud and twilight lighting remain Sun-directed rather than full-screen color washes', () => {
   assert.match(sky, /float edgeLight=1\.0-smoothstep\(threshold,threshold\+0\.38,cloudField\)/);
   assert.match(sky, /vec3 sunTint=srgbToLinear\(uSunColor\)/);

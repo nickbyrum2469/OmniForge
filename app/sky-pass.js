@@ -110,6 +110,8 @@ uniform float uMoonPatternRotation;
 uniform float uMoonPatternSeed;
 uniform float uMoonReliefStrength;
 uniform float uMoonLimbDarkening;
+uniform sampler2D uMoonAlbedoMap;
+uniform float uMoonAlbedoMapReady;
 uniform float uLunarEclipse;
 uniform float uSolarEclipse;
 uniform float uPlanetEnabled;
@@ -345,6 +347,11 @@ vec3 lunarSurface(vec2 moonUv,vec3 surfaceNormal,float phaseLighting){
   mat2 r=mat2(cos(rotation),-sin(rotation),sin(rotation),cos(rotation));
   vec2 rotated=r*moonUv;
   vec3 rotatedNormal=normalize(vec3(r*surfaceNormal.xy,surfaceNormal.z));
+  vec2 lunarMapUv=vec2(
+    fract(atan(rotatedNormal.x,-rotatedNormal.z)/TAU+0.5),
+    asin(clamp(rotatedNormal.y,-1.0,1.0))/PI+0.5
+  );
+  vec3 mappedAlbedo=srgbToLinear(texture(uMoonAlbedoMap,lunarMapUv).rgb);
   float low=fbm3(rotatedNormal*2.15+uMoonPatternSeed*0.0009);
   float mid=fbm3(rotatedNormal*5.7+vec3(8.1,2.7,19.4)+uMoonPatternSeed*0.0017);
   vec2 mareWarp=vec2(
@@ -363,14 +370,18 @@ vec3 lunarSurface(vec2 moonUv,vec3 surfaceNormal,float phaseLighting){
   float maria=smoothstep(0.48,1.04,marePotential+mareBreakup);
   maria+=smoothstep(0.64,0.82,low*0.7+mid*0.3)*0.1;
   maria*=smoothstep(1.0,0.72,length(rotated));
-  maria=clamp(maria,0.0,1.0)*uMoonMariaStrength;
+  maria=clamp(maria,0.0,1.0)*uMoonMariaStrength*(1.0-uMoonAlbedoMapReady);
   vec2 craters=(craterField(rotated,5.5,uMoonPatternSeed,0.18)+craterField(rotated,13.0,uMoonPatternSeed+91.0,0.16)*0.5+craterField(rotated,31.0,uMoonPatternSeed+211.0,0.09)*0.2)*uMoonCraterStrength;
   float grain=(fbm3(rotatedNormal*22.0+31.0)-0.5)*0.12*uMoonDetail;
   float relief=craters.y*uMoonReliefStrength;
-  vec3 bright=srgbToLinear(uMoonColor)*mix(0.78,1.1,phaseLighting);
+  vec3 proceduralAlbedo=srgbToLinear(uMoonColor);
+  vec3 mappedLunarAlbedo=mappedAlbedo*1.28;
+  vec3 bright=mix(proceduralAlbedo,mappedLunarAlbedo,uMoonAlbedoMapReady*0.96)*mix(0.78,1.1,phaseLighting);
   vec3 dark=bright*vec3(0.48,0.5,0.55);
   vec3 surface=mix(bright,dark,clamp(maria,0.0,0.88));
-  surface*=1.0+grain+craters.x+relief;
+  float proceduralSurface=grain+craters.x+relief;
+  float mappedSurface=grain*0.12+craters.x*0.1+relief*0.08;
+  surface*=1.0+mix(proceduralSurface,mappedSurface,uMoonAlbedoMapReady);
   surface=pow(max(surface,vec3(0.001)),vec3(max(0.2,uMoonSurfaceContrast)));
   return surface;
 }
@@ -575,13 +586,36 @@ export class SkyPass {
     this.gl = gl;
     this.program = createProgram(gl, skyVS, skyFS);
     this.vao = gl.createVertexArray();
+    this.moonAlbedoTexture = gl.createTexture();
+    this.moonAlbedoReady = 0;
+    gl.bindTexture(gl.TEXTURE_2D, this.moonAlbedoTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([184, 182, 178, 255]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const moonAlbedoImage = new Image();
+    moonAlbedoImage.onload = () => {
+      gl.bindTexture(gl.TEXTURE_2D, this.moonAlbedoTexture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, moonAlbedoImage);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      this.moonAlbedoReady = 1;
+    };
+    moonAlbedoImage.onerror = () => {
+      this.moonAlbedoReady = 0;
+      window.__omniforgeDiagnostics?.warn?.('moon-albedo-load-failed', { url: moonAlbedoImage.src });
+    };
+    moonAlbedoImage.src = new URL('./assets/sky/lroc_color_2k.jpg', import.meta.url).href;
     this.locations = {};
     for (const name of [
       'uForward','uRight','uUp','uCameraPosition','uTanHalfFov','uAspect','uSunDirection','uMoonDirection','uSunColor','uMoonColor',
       'uZenithColor','uHorizonColor','uGroundColor','uDayFactor','uNightFactor','uTwilightFactor','uRayleigh','uMie','uMieAnisotropy','uOzone','uDust','uAerialPerspective','uHaze','uHumidity','uWeatherFog','uDayFogMultiplier','uNightFogMultiplier',
       'uStarVisibility','uStarDensity','uStarBrightness','uStarTwinkleAmount','uStarTwinkleSpeed','uStarSizeMin','uStarSizeMax','uStarColorVariation','uStarRayStrength','uStarRayLength','uStarHeroFraction','uStarSeed',
       'uMilkyWayIntensity','uMilkyWayWidth','uMilkyWayDetail','uMilkyWayOrientation','uMilkyWayDust','uMilkyWayWarp','uMilkyWayClumping','uMilkyWayCoreStrength','uMilkyWayWidthVariation','uMilkyWayColor',
-      'uSunAngularRadius','uSunGlow','uSolarEclipseCoverage','uMoonAngularRadius','uMoonGlow','uMoonPhase','uMoonBrightness','uMoonDetail','uMoonVisibility','uMoonEarthshine','uMoonCraterStrength','uMoonMariaStrength','uMoonSurfaceContrast','uMoonPatternRotation','uMoonPatternSeed','uMoonReliefStrength','uMoonLimbDarkening','uLunarEclipse','uSolarEclipse',
+      'uSunAngularRadius','uSunGlow','uSolarEclipseCoverage','uMoonAngularRadius','uMoonGlow','uMoonPhase','uMoonBrightness','uMoonDetail','uMoonVisibility','uMoonEarthshine','uMoonCraterStrength','uMoonMariaStrength','uMoonSurfaceContrast','uMoonPatternRotation','uMoonPatternSeed','uMoonReliefStrength','uMoonLimbDarkening','uMoonAlbedoMap','uMoonAlbedoMapReady','uLunarEclipse','uSolarEclipse',
       'uPlanetEnabled','uPlanetDirection','uPlanetColor','uPlanetAngularRadius','uPlanetBrightness','uPlanetRings',
       'uCloudCoverage','uCloudDensity','uCloudWind','uCloudSeed','uCloudQuality','uCloudAltitude','uCloudThickness','uTime','uExposure','uWeatherDarkening'
     ]) this.locations[name] = gl.getUniformLocation(this.program, name);
@@ -600,6 +634,11 @@ export class SkyPass {
     gl.depthMask(false);
     gl.useProgram(this.program);
     gl.bindVertexArray(this.vao);
+    const activeTexture = gl.getParameter(gl.ACTIVE_TEXTURE);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.moonAlbedoTexture);
+    gl.uniform1i(this.locations.uMoonAlbedoMap, 0);
+    gl.uniform1f(this.locations.uMoonAlbedoMapReady, this.moonAlbedoReady);
     const u = this.locations;
     const cloudQuality = ({ compatibility: 0, layered: 0, balanced: 1, quality: 2, reference: 3 })[String(environment.cloudQuality)] ?? 0;
     const f = (name, value) => gl.uniform1f(u[name], Number(value) || 0);
@@ -618,6 +657,7 @@ export class SkyPass {
     }))f(name,value);
     gl.uniform3fv(u.uMilkyWayColor,environment.milkyWayColor);gl.uniform3fv(u.uPlanetDirection,environment.planetDirection);gl.uniform3fv(u.uPlanetColor,environment.planetColor);gl.uniform2fv(u.uCloudWind,environment.cloudWindDirection);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.activeTexture(activeTexture);
     gl.bindVertexArray(null);
     gl.depthMask(depthMask);
     if (depthEnabled) gl.enable(gl.DEPTH_TEST); else gl.disable(gl.DEPTH_TEST);
@@ -629,7 +669,9 @@ export class SkyPass {
     const gl = this.gl;
     if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.program) gl.deleteProgram(this.program);
+    if (this.moonAlbedoTexture) gl.deleteTexture(this.moonAlbedoTexture);
     this.vao = null;
     this.program = null;
+    this.moonAlbedoTexture = null;
   }
 }
