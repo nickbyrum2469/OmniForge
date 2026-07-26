@@ -503,17 +503,21 @@ void main(){
   float eclipseRadius01=length(sunCoronaUv);
   float eclipseAngle=atan(sunCoronaUv.y,sunCoronaUv.x);
   vec2 coronaDirection=vec2(cos(eclipseAngle),sin(eclipseAngle));
-  float coronaNoise=noise3(vec3(coronaDirection*3.2,uStarSeed*0.00073));
-  float fineStreamers=smoothstep(0.5,0.84,noise3(vec3(coronaDirection*8.4,uStarSeed*0.0017)));
-  float broadStreamers=smoothstep(0.34,0.82,noise3(vec3(coronaDirection*1.7,uStarSeed*0.0011)));
-  float directionalWisps=pow(0.5+0.5*cos(eclipseAngle*5.0+coronaNoise*4.2),3.2);
-  float streamerStrength=clamp(fineStreamers*0.48+broadStreamers*0.56+directionalWisps*0.24,0.0,1.0);
+  float broadStreamers=noise3(vec3(coronaDirection*1.8,uStarSeed*0.0011));
+  float middleStreamers=noise3(vec3(coronaDirection*4.6,uStarSeed*0.00073));
+  float fineStreamers=noise3(vec3(coronaDirection*9.2,uStarSeed*0.0017));
+  vec2 magneticAxis=normalize(vec2(0.35,0.94));
+  float polarStructure=pow(abs(dot(coronaDirection,magneticAxis)),5.0);
+  float equatorialStructure=pow(abs(dot(coronaDirection,vec2(-magneticAxis.y,magneticAxis.x))),8.0);
+  float streamerStrength=clamp(0.1+broadStreamers*0.38+middleStreamers*0.27+fineStreamers*0.12
+    +polarStructure*0.24+equatorialStructure*0.08,0.0,1.0);
+  streamerStrength=smoothstep(0.2,0.88,streamerStrength);
   float coronaDistance=max(0.0,eclipseRadius01-1.0);
-  float coronaReach=mix(0.16,0.82,streamerStrength);
+  float coronaReach=mix(0.18,1.24,pow(streamerStrength,1.35));
   float coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach));
   float coronaOutside=smoothstep(0.985,1.015,eclipseRadius01)*(1.0-smoothstep(3.6,4.5,eclipseRadius01));
   float innerRim=exp(-pow((eclipseRadius01-1.0)/0.038,2.0))*coronaOutside;
-  float corona=coronaEnvelope*coronaOutside*(0.18+streamerStrength*0.92);
+  float corona=coronaEnvelope*coronaOutside*(0.22+streamerStrength*0.78);
   float eclipseAngularRatio=eclipseRadius/max(0.0001,uSunAngularRadius);
   float eclipseSeparationDegrees=degrees(acos(clamp(dot(uSunDirection,uMoonDirection),-1.0,1.0)));
   float eclipseSeparationRatio=eclipseSeparationDegrees/max(0.0001,uSunAngularRadius);
@@ -533,7 +537,7 @@ void main(){
   float eclipseSilhouette=eclipseDisc*eclipseActive*uDayFactor;
   sky=mix(sky,vec3(0.0015,0.002,0.003),eclipseSilhouette*0.985);
   vec3 coronaColor=mix(vec3(1.0,0.93,0.79),vec3(0.46,0.64,1.0),smoothstep(0.08,1.5,coronaDistance));
-  sky+=coronaColor*(innerRim*2.4+corona*0.82)*totality;
+  sky+=coronaColor*(innerRim*2.05+corona*0.96)*totality;
   sky+=vec3(1.0,0.66,0.24)*(annularRing*3.0+diamondRing*8.0);
   sky+=mix(vec3(1.0,0.72,0.28),vec3(1.0),diamondCore)*(diamondFlare*4.5);
   sky=mix(sky,vec3(0.00001),eclipseSilhouette);

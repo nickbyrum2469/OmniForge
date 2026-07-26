@@ -22,6 +22,11 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /uStarDensity\*0\.13/);
   assert.doesNotMatch(sky, /microStarLayer/);
   assert.match(sky, /vec2 coronaDirection=vec2\(cos\(eclipseAngle\),sin\(eclipseAngle\)\)/);
+  assert.match(sky, /float broadStreamers=noise3\(vec3\(coronaDirection\*1\.8/);
+  assert.match(sky, /float middleStreamers=noise3\(vec3\(coronaDirection\*4\.6/);
+  assert.match(sky, /float polarStructure=pow\(abs\(dot\(coronaDirection,magneticAxis\)\),5\.0\)/);
+  assert.match(sky, /float coronaReach=mix\(0\.18,1\.24,pow\(streamerStrength,1\.35\)\)/);
+  assert.doesNotMatch(sky, /cos\(eclipseAngle\*5\.0/);
   assert.match(sky, /float eclipseRadius=uMoonAngularRadius\*uSolarEclipseCoverage/);
   assert.match(sky, /float eclipseAngularRatio=eclipseRadius\/max\(0\.0001,uSunAngularRadius\)/);
   assert.match(sky, /float eclipseSeparationDegrees=degrees\(acos\(clamp\(dot\(uSunDirection,uMoonDirection\),-1\.0,1\.0\)\)\)/);

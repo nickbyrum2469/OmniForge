@@ -137,6 +137,8 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /marePotential\+=lunarEllipse/);
   assert.doesNotMatch(sky, /mareRegions=max/);
   assert.match(sky, /float coronaEnvelope=exp\(-coronaDistance\/max\(0\.035,coronaReach\)\)/);
+  assert.match(sky, /float middleStreamers=noise3/);
+  assert.doesNotMatch(sky, /directionalWisps/);
   assert.match(sky, /float forwardScatter=pow\(max\(dot\(ray,uSunDirection\),0\.0\),8\.0\)/);
   assert.match(sky, /vec3 twilightScatter=mix\(vec3\(0\.045,0\.07,0\.24\),vec3\(0\.72,0\.2,0\.045\),twilightSunward\)/);
   assert.match(sky, /float aerialAureole=pow\(sunDot,3\.4\)\*horizon\*solarHorizonWindow/);
