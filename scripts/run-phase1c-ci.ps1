@@ -33,6 +33,7 @@ Remove-Item (Join-Path $root 'PHASE1C_VISUAL_CAPTURES') -Recurse -Force -ErrorAc
 
 Write-Host '=== Apply bounded celestial optics repair ==='
 Invoke-Checked python @('scripts/apply-celestial-optics-gate.py') 'Celestial optics repair'
+Invoke-Checked python @('scripts/apply-celestial-optics-test-contracts.py') 'Celestial optics test contracts'
 
 Write-Host '=== Phase 1C current-source contracts ==='
 Invoke-Checked python @('scripts/apply-phase1c-integration.py') 'Phase 1C source validation'
@@ -57,6 +58,7 @@ $trackedRoots=@('app','server','desktop','tests')
 $before=@{}
 foreach($trackedRoot in $trackedRoots){Get-ChildItem $trackedRoot -File -Recurse|ForEach-Object{$relative=Get-RepositoryRelativePath $root $_.FullName;$before[$relative]=(Get-FileHash $_.FullName -Algorithm SHA256).Hash}}
 Invoke-Checked python @('scripts/apply-celestial-optics-gate.py') 'Celestial optics second pass'
+Invoke-Checked python @('scripts/apply-celestial-optics-test-contracts.py') 'Celestial optics test-contract second pass'
 Invoke-Checked python @('scripts/apply-phase1c-integration.py') 'Phase 1C second source validation'
 $after=@{}
 foreach($trackedRoot in $trackedRoots){Get-ChildItem $trackedRoot -File -Recurse|ForEach-Object{$relative=Get-RepositoryRelativePath $root $_.FullName;$after[$relative]=(Get-FileHash $_.FullName -Algorithm SHA256).Hash}}
@@ -69,7 +71,7 @@ Remove-Item $testOutput,$verifyOutput -Force -ErrorAction SilentlyContinue
 git config user.name 'github-actions[bot]'
 git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 git add app server desktop tests progress.md
-git add scripts/apply-celestial-optics-gate.py scripts/apply-phase1c-integration.py scripts/apply-phase1c-visual-qa.py scripts/run-phase1c-visual-captures.ps1 scripts/run-phase1c-ci.ps1
+git add scripts/apply-celestial-optics-gate.py scripts/apply-celestial-optics-test-contracts.py scripts/apply-phase1c-integration.py scripts/apply-phase1c-visual-qa.py scripts/run-phase1c-visual-captures.ps1 scripts/run-phase1c-ci.ps1
 $staged=git diff --cached --name-only
 if($staged-and$env:GITHUB_ACTIONS-eq'true'){git commit -m 'Separate celestial visibility and refine star optics';if($LASTEXITCODE-ne 0){throw 'Verified source commit failed.'};git push origin HEAD:phase1c/crash-celestial-atmosphere-stabilization;if($LASTEXITCODE-ne 0){throw 'Verified source push failed.'}}
 elseif($staged){git reset;Write-Host 'Local verification left source changes uncommitted; only GitHub Actions may publish the verified integration result.'}
