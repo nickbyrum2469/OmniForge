@@ -185,7 +185,7 @@ vec3 starLayer(vec3 ray,float scale,float seed){
   vec2 uv=hemisphereOctEncode(ray);
   vec2 baseCell=floor(uv*scale);
   vec3 accumulated=vec3(0.0);
-  float probability=clamp(uStarDensity*0.052,0.0012,0.11);
+  float probability=clamp(uStarDensity*0.13,0.003,0.25);
   for(int oy=-1;oy<=1;oy++)for(int ox=-1;ox<=1;ox++){
     vec2 cell=baseCell+vec2(float(ox),float(oy));
     float identity=hash21(cell+seed*0.017);
@@ -232,31 +232,6 @@ vec3 starLayer(vec3 ray,float scale,float seed){
     accumulated+=starColor*(disc+rays)*energy;
   }
   return accumulated;
-}
-
-vec3 microStarLayer(vec3 ray,float scale,float seed){
-  vec2 uv=hemisphereOctEncode(ray);
-  vec2 cell=floor(uv*scale);
-  float identity=hash21(cell+seed*0.019);
-  float probability=clamp(uStarDensity*0.19,0.012,0.34);
-  if(identity>probability)return vec3(0.0);
-  vec2 offset=vec2(hash21(cell+seed+12.3),hash21(cell+seed+67.1));
-  vec2 candidateUv=(cell+mix(vec2(0.2),vec2(0.8),offset))/scale;
-  if(any(lessThan(candidateUv,vec2(0.0)))||any(greaterThan(candidateUv,vec2(1.0))))return vec3(0.0);
-  vec3 starDirection=hemisphereOctDecode(candidateUv);
-  if(starDirection.y<=0.0)return vec3(0.0);
-  float cosine=clamp(dot(ray,starDirection),-1.0,1.0);
-  float angularDistance=sqrt(max(0.0,2.0*(1.0-cosine)));
-  float aa=max(fwidth(angularDistance),0.000025);
-  float sigma=aa*mix(0.72,1.02,hash21(cell+seed+31.8));
-  float psf=exp(-0.5*pow(angularDistance/max(0.00002,sigma),2.0));
-  psf*=1.0-smoothstep(aa*1.6,aa*2.45,angularDistance);
-  float temperature=hash21(cell+seed+88.4);
-  vec3 warm=vec3(1.0,0.84,0.7),neutral=vec3(0.92,0.96,1.0),cool=vec3(0.7,0.82,1.0);
-  vec3 color=temperature<0.5?mix(warm,neutral,temperature*2.0):mix(neutral,cool,(temperature-0.5)*2.0);
-  color=mix(vec3(0.9,0.94,1.0),color,uStarColorVariation*0.72);
-  float energy=mix(0.09,0.42,pow(hash21(cell+seed+45.2),2.4))*uStarBrightness;
-  return color*psf*energy;
 }
 
 float wrappedDistance(float a,float b){return abs(atan(sin(a-b),cos(a-b)));}
@@ -534,7 +509,6 @@ void main(){
 
   float starHorizon=smoothstep(0.015,0.16,ray.y);
   vec3 stars=starLayer(ray,180.0,uStarSeed)+starLayer(ray,360.0,uStarSeed+101.0);
-  stars+=microStarLayer(ray,720.0,uStarSeed+211.0)+microStarLayer(ray,1080.0,uStarSeed+307.0);
   float eclipseStarVisibility=pow(uSolarEclipse,7.0)*uDayFactor*0.34;
   sky+=stars*max(uStarVisibility,eclipseStarVisibility)*starHorizon*(1.0-eclipseSilhouette);
   sky+=milkyWay(ray,starHorizon);

@@ -39,6 +39,7 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Exact packaged commit `37086f7c759202f6a43b8554b36d0c63f2cf12a9` proved the eclipse atmosphere and corona direction are working, but manual review rejected a cartoon four-basin lunar pattern, coarse triangular corona wedges, and stars composited over the occulting Moon. The follow-up softens and warps maria, reduces analytic crater rims, increases corona angular detail, and masks eclipse stars behind the silhouette.
 - Exact packaged commit `9c045c107f179e207efbb0410ec47481de1db0f5` removed the lunar paw pattern and the star leak through the eclipsing disc. The Moon is materially more coherent, and the eclipse now has a readable cool atmosphere plus a structured white corona, but both remain short of the photographic references.
 - The next gate adds two low-cost deterministic micro-star populations, keeps bright hero stars on the existing antialiased path, removes the Milky Way's continuous central dust line, and strengthens irregular dust pockets and granular stellar structure.
+- Exact packaged commit `c3de29af11f17707384163dcd204e456da115226` rejected the direct-cell micro-star optimization: it aliased into obvious radial shard patterns at viewport resolution. The implementation is removed rather than hidden. Density is instead raised inside the existing pole-safe, neighbor-aware PSF population, preserving one correct star representation.
 
 ## Remaining visual work
 

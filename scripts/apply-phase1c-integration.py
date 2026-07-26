@@ -54,9 +54,7 @@ REQUIRED = {
     'app/sky-pass.js': [
         'vec2 hemisphereOctEncode',
         'vec3 hemisphereOctDecode',
-        'float probability=clamp(uStarDensity*0.052',
-        'vec3 microStarLayer',
-        'float probability=clamp(uStarDensity*0.19',
+        'float probability=clamp(uStarDensity*0.13',
         'float radius=max(aa*1.45',
         'float rayLength=radius*mix(2.0,4.2',
         'vec2 craterField',
@@ -79,8 +77,7 @@ REQUIRED = {
 BASE_FINAL_VISUAL_MARKERS = {
     'app/renderer.js': ['return sum/9.0;'],
     'app/sky-pass.js': [
-        'uStarDensity*0.052',
-        'microStarLayer(ray,720.0',
+        'uStarDensity*0.13',
         'rayLength=radius*mix(2.0,4.2',
         'galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78))',
         'float dustTransmission=',
@@ -97,8 +94,7 @@ BASE_FINAL_VISUAL_MARKERS = {
 REFINED_VISUAL_MARKERS = {
     'app/renderer.js': ['return sum/9.0;'],
     'app/sky-pass.js': [
-        'uStarDensity*0.052',
-        'microStarLayer(ray,720.0',
+        'uStarDensity*0.13',
         'rayLength=radius*mix(2.0,4.2',
         'float dustTransmission=',
         'return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24))',
@@ -137,7 +133,7 @@ if missing:
         'hemisphereOctEncode', 'hemisphereOctDecode', 'vec3 periodic=', 'eclipseSilhouette',
         'VisualTestCapture', 'VISUAL_CAPTURE_DIR', 'installVisualCaptureWatcher', 'replace(/^\\uFEFF/',
         'return sum/9.0', 'starRayStrength: 0.12', 'starSizeMin: 0.36', 'milkyWayIntensity: 0.34',
-        'uStarDensity*0.014', 'uStarDensity*0.052', 'microStarLayer', 'mix(0.00072,0.00235', 'float radius=max(aa*1.08', 'float radius=max(aa*1.45', 'rayLength=radius*mix(2.0,4.5', 'rayLength=radius*mix(2.0,4.2',
+        'uStarDensity*0.014', 'uStarDensity*0.052', 'uStarDensity*0.13', 'microStarLayer', 'mix(0.00072,0.00235', 'float radius=max(aa*1.08', 'float radius=max(aa*1.45', 'rayLength=radius*mix(2.0,4.5', 'rayLength=radius*mix(2.0,4.2',
         'galacticNormal=normalize', 'galacticCloudEnvelope=', 'dustTransmission=', 'ring*0.28', 'return vec2(clamp(albedo', 'coronaInner=pow(sunDot,1500.0)', 'coronaEnvelope=exp(-coronaDistance',
         'sky=mix(sky,vec3(0.00001)', 'indirectStrength: 0.9', 'ambientIntensity: (0.09',
         'max="32"', '0.1, 32', 'ambientIntensity: (0.09', 'ambientIntensity: (0.12', 'selectedId=null', 'selectedId=originalSelectedId'

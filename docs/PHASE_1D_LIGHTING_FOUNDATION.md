@@ -66,6 +66,8 @@ The first packaged result of that gate (`37086f7c759202f6a43b8554b36d0c63f2cf12a
 
 Packaged commit `9c045c107f179e207efbb0410ec47481de1db0f5` corrected the paw-like maria and eclipse star leak. The next stellar gate keeps the existing high-quality bright-star population, adds two inexpensive direct-cell micro-star layers for photographic density, and further breaks the Milky Way's central dust into irregular gaps and dark pockets. The background layers avoid the nine-neighbor loop used for hero stars, preserving a bounded fragment cost suitable for lower-end profiles.
 
+That direct-cell optimization was rejected after exact packaged commit `c3de29af11f17707384163dcd204e456da115226` exposed radial shard aliasing at real viewport resolution. It was removed completely. The corrected gate raises accepted density inside the existing pole-safe, neighbor-aware point-spread-function renderer, retaining one visually correct star representation instead of shipping a cheaper conflicting path.
+
 ## Protected behavior
 
 - The continuous terrain-conforming path remains authoritative.
