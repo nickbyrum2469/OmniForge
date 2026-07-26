@@ -315,8 +315,8 @@ vec2 craterField(vec2 uv,float scale,float seed){
     float ejecta=(1.0-smoothstep(radius*0.92,radius*2.35,d));
     ejecta*=pow(0.5+0.5*cos(atan(delta.y,delta.x)*mix(4.0,8.0,floor(hash21(id+seed+29.0)*3.0))),3.0);
     float peak=(1.0-smoothstep(0.0,radius*0.18,d))*step(0.78,hash21(id+seed+119.0));
-    albedo+=rim*0.045-bowl*0.105+ejecta*0.012;
-    height+=rim*0.16-bowl*0.29+peak*0.07;
+    albedo+=rim*0.024-bowl*0.082+ejecta*0.009;
+    height+=rim*0.09-bowl*0.22+peak*0.045;
   }
   return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24));
 }
@@ -335,18 +335,25 @@ vec3 lunarSurface(vec2 moonUv,vec3 surfaceNormal,float phaseLighting){
   vec3 rotatedNormal=normalize(vec3(r*surfaceNormal.xy,surfaceNormal.z));
   float low=fbm3(rotatedNormal*2.15+uMoonPatternSeed*0.0009);
   float mid=fbm3(rotatedNormal*5.7+vec3(8.1,2.7,19.4)+uMoonPatternSeed*0.0017);
-  float maria=smoothstep(0.53,0.73,low*0.76+mid*0.24)*0.48;
-  maria=max(maria,lunarEllipse(rotated,vec2(-0.28,0.25),vec2(0.3,0.2),-0.28)*0.88);
-  maria=max(maria,lunarEllipse(rotated,vec2(0.2,0.3),vec2(0.22,0.27),0.18)*0.78);
-  maria=max(maria,lunarEllipse(rotated,vec2(0.34,-0.04),vec2(0.2,0.16),-0.62)*0.68);
-  maria=max(maria,lunarEllipse(rotated,vec2(-0.06,-0.12),vec2(0.3,0.19),0.32)*0.72);
+  vec2 mareWarp=vec2(
+    fbm3(rotatedNormal*4.2+vec3(2.4,8.1,17.7)),
+    fbm3(rotatedNormal*4.7+vec3(19.2,3.7,5.8))
+  )-0.5;
+  vec2 mareUv=rotated+mareWarp*0.16*(1.0-smoothstep(0.7,1.0,length(rotated)));
+  float mareRegions=0.0;
+  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(-0.13,0.21),vec2(0.48,0.23),-0.2));
+  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(0.23,0.07),vec2(0.22,0.36),-0.48)*0.86);
+  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(-0.09,-0.15),vec2(0.33,0.18),0.28)*0.76);
+  float mareBreakup=smoothstep(0.31,0.71,mid*0.68+low*0.32);
+  float maria=smoothstep(0.56,0.75,low*0.72+mid*0.28)*0.38;
+  maria=max(maria,mareRegions*mix(0.36,0.78,mareBreakup));
   maria*=smoothstep(1.0,0.72,length(rotated));
   maria=clamp(maria,0.0,1.0)*uMoonMariaStrength;
   vec2 craters=(craterField(rotated,5.5,uMoonPatternSeed)+craterField(rotated,13.0,uMoonPatternSeed+91.0)*0.48+craterField(rotated,31.0,uMoonPatternSeed+211.0)*0.18)*uMoonCraterStrength;
   float grain=(fbm3(rotatedNormal*22.0+31.0)-0.5)*0.12*uMoonDetail;
   float relief=craters.y*uMoonReliefStrength;
   vec3 bright=srgbToLinear(uMoonColor)*mix(0.78,1.1,phaseLighting);
-  vec3 dark=bright*vec3(0.42,0.48,0.56);
+  vec3 dark=bright*vec3(0.52,0.55,0.61);
   vec3 surface=mix(bright,dark,clamp(maria,0.0,0.86));
   surface*=1.0+grain+craters.x+relief;
   surface=pow(max(surface,vec3(0.001)),vec3(max(0.2,uMoonSurfaceContrast)));
@@ -445,9 +452,10 @@ void main(){
   float eclipseAngle=atan(eclipseUv.y,eclipseUv.x);
   vec2 coronaDirection=vec2(cos(eclipseAngle),sin(eclipseAngle));
   float coronaNoise=noise3(vec3(coronaDirection*3.2,uStarSeed*0.00073));
-  float fineStreamers=0.5+0.5*sin(eclipseAngle*11.0+coronaNoise*5.6);
+  float fineStreamers=smoothstep(0.5,0.84,noise3(vec3(coronaDirection*8.4,uStarSeed*0.0017)));
   float broadStreamers=smoothstep(0.34,0.82,noise3(vec3(coronaDirection*1.7,uStarSeed*0.0011)));
-  float streamerStrength=clamp(fineStreamers*0.42+broadStreamers*0.74,0.0,1.0);
+  float directionalWisps=pow(0.5+0.5*cos(eclipseAngle*5.0+coronaNoise*4.2),3.2);
+  float streamerStrength=clamp(fineStreamers*0.48+broadStreamers*0.56+directionalWisps*0.24,0.0,1.0);
   float coronaDistance=max(0.0,eclipseRadius01-1.0);
   float coronaReach=mix(0.16,0.82,streamerStrength);
   float coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach));
@@ -462,7 +470,7 @@ void main(){
   float diamondRing=exp(-pow(diamondAngle/0.055,2.0))*innerRim*diamondWindow;
   float eclipseSilhouette=eclipseDisc*uSolarEclipse*uDayFactor;
   sky=mix(sky,vec3(0.0015,0.002,0.003),eclipseSilhouette*0.985);
-  vec3 coronaColor=mix(vec3(1.0,0.73,0.38),vec3(0.46,0.64,1.0),smoothstep(0.04,1.4,coronaDistance));
+  vec3 coronaColor=mix(vec3(1.0,0.93,0.79),vec3(0.46,0.64,1.0),smoothstep(0.08,1.5,coronaDistance));
   sky+=coronaColor*(innerRim*2.4+corona*0.82)*totality;
   sky+=vec3(1.0,0.66,0.24)*(annularRing*3.0+diamondRing*8.0);
   sky=mix(sky,vec3(0.00001),eclipseSilhouette);
@@ -501,7 +509,7 @@ void main(){
   float starHorizon=smoothstep(0.015,0.16,ray.y);
   vec3 stars=starLayer(ray,180.0,uStarSeed)+starLayer(ray,360.0,uStarSeed+101.0);
   float eclipseStarVisibility=pow(uSolarEclipse,7.0)*uDayFactor*0.34;
-  sky+=stars*max(uStarVisibility,eclipseStarVisibility)*starHorizon;
+  sky+=stars*max(uStarVisibility,eclipseStarVisibility)*starHorizon*(1.0-eclipseSilhouette);
   sky+=milkyWay(ray,starHorizon);
 
   vec4 cloud=uCloudQuality<0.5?layeredCloud(ray,moonGlow,moonDisc):volumetricCloud(ray);
