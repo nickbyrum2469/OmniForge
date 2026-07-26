@@ -12,6 +12,53 @@ permissions:
   contents: write
 
 jobs:
+  phase1c:
+    if: github.actor != 'github-actions[bot]' && github.event_name == 'pull_request' && github.head_ref == 'phase1c/crash-celestial-atmosphere-stabilization'
+    runs-on: windows-latest
+    timeout-minutes: 65
+    steps:
+      - name: Check out exact Phase 1C branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase1c/crash-celestial-atmosphere-stabilization
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        shell: pwsh
+        run: if(Test-Path package-lock.json){npm ci}else{npm install --no-audit --no-fund}
+      - name: Run authoritative Phase 1C stabilization gate
+        shell: pwsh
+        run: .\scripts\run-phase1c-ci-with-evidence.ps1
+      - name: Upload exact Phase 1C package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniForge-Phase1C-Crash-Sky-${{ github.run_id }}
+          path: |
+            OmniForge-Phase1C-Crash-Sky-Windows-x64.zip
+            OmniForge-Phase1C-Crash-Sky-Windows-x64.sha256
+            PHASE1C_WINDOWS_EVIDENCE.txt
+            PHASE1C_IDEMPOTENCY_DIFF.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload Phase 1C failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniForge-Phase1C-failure-${{ github.run_id }}
+          path: |
+            PHASE1C_CI_ERROR.txt
+            PHASE1C_TEST_OUTPUT.txt
+            PHASE1C_VERIFY_OUTPUT.txt
+            PHASE1C_IDEMPOTENCY_DIFF.txt
+          if-no-files-found: warn
+          retention-days: 14
+
   phase1b:
     if: github.actor != 'github-actions[bot]' && github.event_name == 'pull_request' && github.head_ref == 'phase1b/lunar-cycle-hdr-lighting-presets'
     runs-on: windows-latest
@@ -30,7 +77,7 @@ jobs:
           python-version: '3.13'
       - name: Install dependencies
         shell: pwsh
-        run: if (Test-Path package-lock.json) { npm ci } else { npm install --no-audit --no-fund }
+        run: if(Test-Path package-lock.json){npm ci}else{npm install --no-audit --no-fund}
       - name: Run authoritative Phase 1B integration and Windows gate
         shell: pwsh
         run: .\scripts\run-phase1b-ci-with-evidence.ps1
@@ -46,21 +93,9 @@ jobs:
             PHASE1B_IDEMPOTENCY_DIFF.txt
           if-no-files-found: error
           retention-days: 30
-      - name: Upload Phase 1B failure diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: OmniForge-Phase1B-failure-${{ github.run_id }}
-          path: |
-            PHASE1B_CI_ERROR.txt
-            PHASE1B_TEST_OUTPUT.txt
-            PHASE1B_VERIFY_OUTPUT.txt
-            PHASE1B_IDEMPOTENCY_DIFF.txt
-          if-no-files-found: warn
-          retention-days: 14
 
   verify:
-    if: github.actor != 'github-actions[bot]' && !(github.event_name == 'pull_request' && github.head_ref == 'phase1b/lunar-cycle-hdr-lighting-presets')
+    if: github.actor != 'github-actions[bot]' && !(github.event_name == 'pull_request' && (github.head_ref == 'phase1b/lunar-cycle-hdr-lighting-presets' || github.head_ref == 'phase1c/crash-celestial-atmosphere-stabilization'))
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
