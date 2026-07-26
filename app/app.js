@@ -1,6 +1,7 @@
 import { Renderer3D, terrainHeight } from './renderer.js';
 import { add, sub, scale, length, normalize, clamp, cameraForward, cameraRight } from './math.js';
 import { cloneCamera, shouldPreserveViewportCamera } from './viewport-state.js';
+import { createLookInputState, beginLookInputSession, endLookInputSession, applyLookDelta } from './viewport-navigation.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -85,6 +86,8 @@ let viewportDragLast = null;
 let pointerLockSupported = 'pointerLockElement' in document;
 let interactionActiveUntil = 0;
 let remotePollInFlight = false;
+let viewportNavigationIntentUntil = 0;
+const lookInputState = createLookInputState();
 
 async function api(path, options={}) {
   const method=String(options.method||'GET').toUpperCase(),mutating=!['GET','HEAD'].includes(method);
@@ -184,7 +187,8 @@ function applyState(nextState, options={}) {
   ui.connectionBadge.classList.toggle('available', !codexRecent);
   ui.connectionBadge.querySelector('span:last-child').textContent = codexRecent ? 'Codex connected' : 'MCP available';
   $$('[data-transform-mode]').forEach(button=>button.classList.toggle('active',button.dataset.transformMode===(state.editor.transformMode||'move')));
-  ui.viewportWrap.style.background = `linear-gradient(${scene.settings.skyTop} 0%, ${scene.settings.skyBottom} 72%, #26343c 100%)`;
+  ui.viewportWrap.style.background = '#0b1018';
+  ui.viewportWrap.dataset.environmentRenderer = 'webgl';
   renderer?.setAssets(state.assets);
   renderSceneOptions();
   renderHierarchy();
@@ -957,7 +961,8 @@ function renderWorldSettings() {
   $$(`#worldSettings [data-property-key]`).forEach(input=>input.addEventListener('change',()=>{
     const key=input.dataset.propertyKey;scene.settings[key]=input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value;
     if(key==='gridVisible')ui.gridToggle.checked=scene.settings.gridVisible;
-    ui.viewportWrap.style.background=`linear-gradient(${scene.settings.skyTop} 0%, ${scene.settings.skyBottom} 72%, #26343c 100%)`;
+  ui.viewportWrap.style.background = '#0b1018';
+  ui.viewportWrap.dataset.environmentRenderer = 'webgl';
     saveScene('World settings updated');
   }));
   seasonSelect?.addEventListener('change',()=>{scene.settings.season=seasonSelect.value;saveScene('Season updated');});
@@ -1117,7 +1122,7 @@ function behaviorStep(dt){
   }
 }
 
-function viewportNavigationActive(){return document.pointerLockElement===ui.viewport||viewportDragLook;}
+function viewportNavigationActive(){return document.pointerLockElement===ui.viewport||viewportDragLook||Date.now()<viewportNavigationIntentUntil;}
 
 function updateCamera(dt) {
   if(!viewportNavigationActive())return;
@@ -1252,6 +1257,8 @@ function bindEvents() {
   $$('[data-transform-mode]').forEach(button=>button.addEventListener('click',()=>{$$('[data-transform-mode]').forEach(b=>b.classList.toggle('active',b===button));state.editor.transformMode=button.dataset.transformMode;api('/api/editor',{method:'POST',body:{transformMode:state.editor.transformMode}}).then(next=>state.engine.revision=next.engine.revision);}));
 
   async function enterViewportNavigation(event){
+    viewportNavigationIntentUntil=Date.now()+1600;
+    noteUserInteraction(1800);
     ui.viewport.focus({preventScroll:true});
     if(event){const pick=renderer.pick(scene,camera,event.clientX,event.clientY);selectObject(pick?.id||null,true);}
     if(document.pointerLockElement===ui.viewport)return;
@@ -1259,25 +1266,38 @@ function bindEvents() {
       const result=ui.viewport.requestPointerLock?.();
       if(result&&typeof result.then==='function')await result;
     }catch(error){
+      viewportNavigationIntentUntil=0;
+      endLookInputSession(lookInputState);
       pointerLockSupported=false;
       showToast('Pointer lock was blocked. Hold right mouse and use WASD as a fallback.','error');
     }
   }
   ui.viewport.addEventListener('mousedown',event=>{
     if(event.button===0){enterViewportNavigation(event);return;}
-    if(event.button===2){event.preventDefault();ui.viewport.focus({preventScroll:true});viewportDragLook=true;viewportDragLast=[event.clientX,event.clientY];ui.viewportWrap.classList.add('drag-look');}
+    if(event.button===2){event.preventDefault();viewportNavigationIntentUntil=Date.now()+800;ui.viewport.focus({preventScroll:true});viewportDragLook=true;viewportDragLast=[event.clientX,event.clientY];beginLookInputSession(lookInputState,'right-drag');ui.viewportWrap.classList.add('drag-look');}
   });
   ui.viewport.addEventListener('contextmenu',event=>event.preventDefault());
-  window.addEventListener('mouseup',event=>{if(event.button===2&&viewportDragLook){viewportDragLook=false;viewportDragLast=null;ui.viewportWrap.classList.remove('drag-look');keys.clear();persistCameraSoon();}});
-  document.addEventListener('pointerlockchange',()=>{const locked=document.pointerLockElement===ui.viewport;ui.viewportWrap.classList.toggle('pointer-locked',locked);if(locked){pointerLockSupported=true;showToast('Viewport navigation active','success');}else if(!viewportDragLook){keys.clear();persistCameraSoon();}});
-  document.addEventListener('pointerlockerror',()=>{pointerLockSupported=false;showToast('Pointer lock was denied. Hold right mouse and use WASD.','error');});
+  window.addEventListener('mouseup',event=>{if(event.button===2&&viewportDragLook){viewportDragLook=false;viewportDragLast=null;viewportNavigationIntentUntil=0;endLookInputSession(lookInputState);ui.viewportWrap.classList.remove('drag-look');keys.clear();persistCameraSoon();}});
+  document.addEventListener('pointerlockchange',()=>{const locked=document.pointerLockElement===ui.viewport;ui.viewportWrap.classList.toggle('pointer-locked',locked);if(locked){viewportNavigationIntentUntil=Date.now()+500;beginLookInputSession(lookInputState,'pointer-lock');pointerLockSupported=true;showToast('Viewport navigation active','success');}else if(!viewportDragLook){viewportNavigationIntentUntil=0;endLookInputSession(lookInputState);keys.clear();persistCameraSoon();}});
+  document.addEventListener('pointerlockerror',()=>{viewportNavigationIntentUntil=0;endLookInputSession(lookInputState);pointerLockSupported=false;showToast('Pointer lock was denied. Hold right mouse and use WASD.','error');});
   document.addEventListener('mousemove',event=>{
-    let dx=0,dy=0;
+    let dx=0,dy=0,source='pointer-lock';
     if(document.pointerLockElement===ui.viewport){dx=event.movementX;dy=event.movementY;}
-    else if(viewportDragLook&&viewportDragLast){dx=event.clientX-viewportDragLast[0];dy=event.clientY-viewportDragLast[1];viewportDragLast=[event.clientX,event.clientY];}
+    else if(viewportDragLook&&viewportDragLast){source='right-drag';dx=event.clientX-viewportDragLast[0];dy=event.clientY-viewportDragLast[1];viewportDragLast=[event.clientX,event.clientY];}
     else return;
-    const sensitivity=Number(camera.lookSensitivity||.0023);camera.yaw+=dx*sensitivity*(camera.invertHorizontal?-1:1);camera.pitch=clamp(camera.pitch+dy*sensitivity*(camera.invertVertical?1:-1),-Math.PI/2+.02,Math.PI/2-.02);scene.editorCamera=cloneCamera(camera);noteCameraMutation();
+    const result=applyLookDelta(camera,lookInputState,{dx,dy,source,now:event.timeStamp||performance.now()});
+    if(result.reason==='delta-spike')window.__omniforgeDiagnostics?.warn?.('viewport-look-delta-rejected',{source,dx,dy,rejectedSpikes:lookInputState.rejectedSpikes});
+    if(!result.changed)return;
+    scene.editorCamera=cloneCamera(camera);noteCameraMutation();
   });
+  const releaseViewportInput=()=>{
+    const wasNavigating=viewportDragLook||document.pointerLockElement===ui.viewport||Date.now()<viewportNavigationIntentUntil;
+    if(viewportDragLook){viewportDragLook=false;viewportDragLast=null;ui.viewportWrap.classList.remove('drag-look');}
+    viewportNavigationIntentUntil=0;endLookInputSession(lookInputState);keys.clear();
+    if(wasNavigating&&cameraDirty)persistCameraSoon();
+  };
+  window.addEventListener('blur',releaseViewportInput);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseViewportInput();});
   document.addEventListener('keydown',event=>{
     keys.add(event.code);
     if(viewportNavigationActive()){if(['Space','ControlLeft','ControlRight'].includes(event.code))event.preventDefault();return;}

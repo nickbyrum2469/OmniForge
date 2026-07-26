@@ -172,8 +172,10 @@ test('starter PBR materials include real texture-map files and are protected',()
 });
 
 test('horizontal mouse look uses the intuitive right-positive yaw convention',()=>{
-  const source=fs.readFileSync(path.join(ROOT,'app','app.js'),'utf8');
-  assert.match(source,/camera\.yaw\+=dx\*sensitivity\*\(camera\.invertHorizontal\?-1:1\)/);
+  const source=fs.readFileSync(path.join(ROOT,'app','viewport-navigation.js'),'utf8');
+  assert.match(source,/const horizontal = camera\.invertHorizontal \? -1 : 1/);
+  assert.match(source,/camera\.yaw = wrapYaw/);
+  assert.match(source,/reason: 'delta-spike'/);
 });
 
 test('desktop lifecycle implements native isolation, recovery, safe mode, and clean process ownership',()=>{

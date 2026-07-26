@@ -1,0 +1,50 @@
+name: Apply Phase 1 renderer-owned sky and navigation
+
+on:
+  push:
+    branches:
+      - milestone-12/renderer-owned-sky-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-test-and-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out Phase 1 branch
+        uses: actions/checkout@v4
+        with:
+          ref: milestone-12/renderer-owned-sky-foundation
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Apply deterministic source integration
+        run: node scripts/run-phase1-integration.mjs
+
+      - name: Run complete automated tests
+        run: npm test
+
+      - name: Run repository verification
+        run: npm run verify
+
+      - name: Commit verified Phase 1 source
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Phase 1 source is already integrated."
+            exit 0
+          fi
+          git config user.name "OmniForge CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add app/app.js app/renderer.js app/v010.js app/v010.css app/environment-runtime.js app/sky-pass.js app/viewport-navigation.js tests/phase1-sky-navigation.test.mjs docs/PHASE_1_RENDERER_OWNED_SKY_PLAN.md
+          git commit -m "Add renderer-owned sky and stable viewport look controls"
+          git push origin HEAD:milestone-12/renderer-owned-sky-foundation
