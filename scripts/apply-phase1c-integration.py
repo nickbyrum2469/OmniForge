@@ -58,12 +58,12 @@ REQUIRED = {
         'float radius=mix(0.00072,0.00235',
         'float rayLength=radius*mix(2.0,4.5',
         'float craterField',
+        'return ring*0.28-basin*0.42',
         'uMilkyWayClumping',
         'uStarRayStrength',
         'vec3 galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78))',
-        'microStructure=',
+        'float galacticCloudEnvelope=',
         'vec3 periodic=vec3(cos(longitude),sin(longitude),latitude)',
-        'uMilkyWayIntensity*0.92',
         'float coronaInner=pow(sunDot,1500.0)',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)',
         'float eclipseSilhouette=eclipseDisc*uSolarEclipse*uDayFactor'
@@ -79,7 +79,8 @@ FINAL_VISUAL_MARKERS = {
         'uStarDensity*0.014',
         'rayLength=radius*mix(2.0,4.5',
         'galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78))',
-        'microStructure=',
+        'float galacticCloudEnvelope=',
+        'return ring*0.28-basin*0.42',
         'coronaInner=pow(sunDot,1500.0)',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
     ],
@@ -87,7 +88,7 @@ FINAL_VISUAL_MARKERS = {
     'app/v010.js': ['id="v010MoonSize" type="range" min="0.1" max="32"'],
     'server/v010-systems.mjs': ['ambientIntensity: (0.09 + day * 0.22'],
     'app/app.js': ['selectedId=null', 'selectedId=originalSelectedId'],
-    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.006', 'milkyWayOrientation=32', 'moonSize=22', 'sunSize=9']
+    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.004', 'milkyWayOrientation=32', 'starIntensity=0;milkyWayIntensity=.72', 'moonSize=22', 'sunSize=9']
 }
 
 
@@ -116,7 +117,7 @@ if missing:
         'VisualTestCapture', 'VISUAL_CAPTURE_DIR', 'installVisualCaptureWatcher', 'replace(/^\\uFEFF/',
         'mix(0.66', 'starRayStrength: 0.12', 'starSizeMin: 0.36', 'milkyWayIntensity: 0.34',
         'uStarDensity*0.014', 'mix(0.00072,0.00235', 'rayLength=radius*mix(2.0,4.5',
-        'galacticNormal=normalize', 'microStructure=', 'uMilkyWayIntensity*0.92', 'coronaInner=pow(sunDot,1500.0)',
+        'galacticNormal=normalize', 'galacticCloudEnvelope=', 'ring*0.28', 'coronaInner=pow(sunDot,1500.0)',
         'sky=mix(sky,vec3(0.00001)', 'indirectStrength: 0.9', 'ambientIntensity: (0.09',
         'max="32"', '0.1, 32', 'selectedId=null', 'selectedId=originalSelectedId'
     ])]
@@ -140,10 +141,12 @@ if final_visual_missing:
     subprocess.run([sys.executable, 'scripts/apply-phase1c-capture-protocol.py'], check=True)
     subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-quality.py'], check=True)
     subprocess.run([sys.executable, 'scripts/apply-phase1c-final-visual.py'], check=True)
+    subprocess.run([sys.executable, 'scripts/apply-phase1c-galaxy-refinement.py'], check=True)
 else:
     print('Final Phase 1C rendered-visual source is already integrated; broad visual rewrites skipped.')
     subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-idempotency.py'], check=True)
     subprocess.run([sys.executable, 'scripts/apply-phase1c-capture-protocol.py'], check=True)
+    subprocess.run([sys.executable, 'scripts/apply-phase1c-galaxy-refinement.py'], check=True)
 
 subprocess.run([sys.executable, 'scripts/apply-phase1c-test-contracts.py'], check=True)
 
@@ -151,4 +154,4 @@ remaining = missing_contracts()
 if remaining:
     raise RuntimeError('Phase 1C integration postconditions are incomplete: ' + '; '.join(remaining))
 
-print('Phase 1C integration, projection repair, capture protocol, final visual tuning, and permanent test contracts are complete.')
+print('Phase 1C integration, projection repair, separated stellar evidence, final visual tuning, and permanent test contracts are complete.')
