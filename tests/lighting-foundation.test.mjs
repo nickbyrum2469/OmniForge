@@ -17,6 +17,7 @@ import { resolveViewportLighting } from '../app/world-runtime.js';
 const renderer = fs.readFileSync(new URL('../app/renderer.js', import.meta.url), 'utf8');
 const hdr = fs.readFileSync(new URL('../app/hdr-pipeline.js', import.meta.url), 'utf8');
 const stateStore = fs.readFileSync(new URL('../server/state-store.mjs', import.meta.url), 'utf8');
+const worldSystems = fs.readFileSync(new URL('../server/v010-systems.mjs', import.meta.url), 'utf8');
 
 test('exact sRGB transfer functions round-trip representative values', () => {
   assert.equal(srgbChannelToLinear(0.04045), 0.04045 / 12.92);
@@ -91,6 +92,12 @@ test('light colors are decoded to linear space before BRDF evaluation', () => {
   assert.match(renderer, /srgbToLinear\(uLightColor\)\*uLightIntensity\*shadow/);
   assert.match(renderer, /srgbToLinear\(uMoonColor\)\*uMoonIntensity/);
   assert.match(renderer, /srgbToLinear\(uPointColor\[i\]\)\*uPointData\[i\]\.x/);
+});
+
+test('game-accurate daylight includes authored sky irradiance without an editor-only fill light', () => {
+  assert.match(worldSystems, /ambientIntensity: \(0\.12 \+ day \* 0\.45 \+ Number\(world\.lighting\.indirectStrength \?\? 0\.72\) \* 0\.66\)/);
+  assert.match(renderer, /baseLinear\*ambient\+editorAmbient/);
+  assert.match(renderer, /uEditorFill/);
 });
 
 test('starter editor references are classified and excluded from surface rules', () => {

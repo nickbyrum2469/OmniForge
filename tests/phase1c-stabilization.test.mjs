@@ -117,7 +117,7 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /vec2 hemisphereOctEncode/);
   assert.match(sky, /vec3 hemisphereOctDecode/);
   assert.match(sky, /uStarDensity\*0\.052/);
-  assert.match(sky, /float radius=max\(aa\*1\.08/);
+  assert.match(sky, /float radius=max\(aa\*1\.45/);
   assert.match(sky, /rayLength=radius\*mix\(2\.0,4\.2/);
   assert.match(sky, /float psf=exp\(-0\.5\*pow\(angularDistance\/sigma,2\.0\)\)/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
@@ -137,8 +137,8 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(worldUi, /v010StarRays/);
   assert.match(worldUi, /lookPreset: options\.preservePreset/);
   assert.match(worldSystems, /dayFogMultiplier/);
-  assert.match(worldSystems, /ambientIntensity: \(0\.09 \+ day \* 0\.22/);
+  assert.match(worldSystems, /ambientIntensity: \(0\.12 \+ day \* 0\.45/);
   assert.match(worldSystems, /renderProxy: false/);
-  assert.match(visualCapture, /starIntensity=0;milkyWayIntensity=\.72/);
+  assert.match(visualCapture, /starIntensity=\.24;starDensity=\.72;starBrightness=\.68;milkyWayIntensity=\.72/);
   assert.match(visualCapture, /starHeroFraction=\.004/);
 });

@@ -201,8 +201,8 @@ vec3 starLayer(vec3 ray,float scale,float seed){
     float hero=step(1.0-uStarHeroFraction,hash21(cell+seed+8.8));
     float sizeControl=mix(max(0.08,uStarSizeMin),max(uStarSizeMin,uStarSizeMax),pow(sizeRandom,2.8));
     float aa=max(fwidth(angularDistance),0.000035);
-    float radius=max(aa*1.08,mix(0.00052,0.00172,pow(sizeRandom,2.3))*max(0.32,sizeControl)*(1.0+hero*0.66));
-    float sigma=max(aa*0.82,radius*0.58);
+    float radius=max(aa*1.45,mix(0.00052,0.00172,pow(sizeRandom,2.3))*max(0.32,sizeControl)*(1.0+hero*0.66));
+    float sigma=max(aa*1.05,radius*0.58);
     float psf=exp(-0.5*pow(angularDistance/sigma,2.0));
     psf*=1.0-smoothstep(radius*2.2,radius*3.15,angularDistance);
     float core=1.0-smoothstep(max(0.0,radius-aa),radius+aa,angularDistance);
@@ -259,25 +259,33 @@ vec3 milkyWay(vec3 ray,float horizonMask){
   float outerHalo=exp(-pow(abs(signedDistance)/max(0.025,localWidth*4.6),2.0)*1.2);
   float galacticCore=exp(-pow(wrappedDistance(longitude,1.5708)/0.48,2.0))*uMilkyWayCoreStrength;
   float coreBulge=exp(-pow(abs(signedDistance)/max(0.025,localWidth*2.15),2.0))*galacticCore;
-  float longitudinalBreakup=mix(0.54,smoothstep(0.2,0.82,coarse*0.56+medium*0.44),clamp(uMilkyWayClumping,0.0,1.0));
-  float cloudMasses=(0.28+coarse*0.38+medium*0.26+fine*0.08)*longitudinalBreakup;
+  float longitudinalBreakup=mix(0.44,smoothstep(0.24,0.76,coarse*0.52+medium*0.48),clamp(uMilkyWayClumping,0.0,1.0));
+  float cloudContrast=smoothstep(0.3,0.78,coarse*0.36+medium*0.48+fine*0.16);
+  float cloudMasses=(0.16+cloudContrast*0.84)*longitudinalBreakup;
   float filamentA=exp(-pow(abs(signedDistance-localWidth*(0.52+medium*0.2))/max(0.004,localWidth*0.18),2.0)*1.8);
   float filamentB=exp(-pow(abs(signedDistance+localWidth*(0.68+coarse*0.18))/max(0.004,localWidth*0.2),2.0)*1.9);
   float stellarKnots=pow(smoothstep(0.48,0.88,fine),2.0)*narrowBand*uMilkyWayDetail;
   float micro=pow(smoothstep(0.52,0.9,noise3(periodic*vec3(25.0,25.0,46.0)+uStarSeed*0.0017)),2.8)*narrowBand*uMilkyWayDetail;
-  float centralDust=exp(-pow(abs(signedDistance+localWidth*0.04)/max(0.0035,localWidth*0.125),2.0)*2.1);
-  centralDust*=smoothstep(0.28,0.78,medium*0.58+fine*0.42)*uMilkyWayDust;
-  float branchingDust=exp(-pow(abs(signedDistance-localWidth*(0.28+0.12*sin(longitude*3.0)))/max(0.004,localWidth*0.13),2.0)*1.7);
-  branchingDust*=smoothstep(0.44,0.84,coarse*0.28+fine*0.72)*uMilkyWayDust;
-  float cloudLight=(narrowBand*1.05+broadBand*0.28+outerHalo*0.035+coreBulge*0.92)*cloudMasses;
-  cloudLight+=filamentA*0.1+filamentB*0.075+stellarKnots*0.19+micro*0.08;
-  float dustTransmission=clamp(1.0-centralDust*0.92-branchingDust*0.54,0.06,1.0);
-  float luminance=max(0.0,cloudLight*dustTransmission+coreBulge*0.18);
+  float granularStars=pow(smoothstep(0.72,0.98,noise3(periodic*vec3(82.0,82.0,128.0)+uStarSeed*0.0031)),5.0);
+  granularStars*=narrowBand*uMilkyWayDetail*(0.24+galacticCore*0.52);
+  float dustBreakup=smoothstep(0.34,0.7,noise3(periodic*vec3(5.7,5.7,14.0)+vec3(9.0,17.0,4.0)));
+  float centralOffset=localWidth*(0.08*sin(longitude*4.3+coarse*3.2)+(medium-0.5)*0.16);
+  float centralDust=exp(-pow(abs(signedDistance-centralOffset)/max(0.0032,localWidth*0.09),2.0)*1.8);
+  centralDust*=mix(0.12,1.0,dustBreakup)*uMilkyWayDust;
+  float branchOffset=localWidth*(0.24+0.16*sin(longitude*2.4+medium*4.0));
+  float branchA=exp(-pow(abs(signedDistance-branchOffset)/max(0.0035,localWidth*0.085),2.0)*1.65);
+  float branchB=exp(-pow(abs(signedDistance+branchOffset*0.82)/max(0.0035,localWidth*0.1),2.0)*1.7);
+  float branchMask=smoothstep(0.44,0.82,coarse*0.36+fine*0.64);
+  float branchingDust=(branchA+branchB*0.72)*branchMask*uMilkyWayDust;
+  float cloudLight=narrowBand*(0.15+cloudMasses*0.92)+broadBand*cloudMasses*0.12+outerHalo*0.018;
+  cloudLight+=coreBulge*(0.16+cloudContrast*0.78)+filamentA*0.065+filamentB*0.05+stellarKnots*0.15+micro*0.055+granularStars*0.32;
+  float dustTransmission=clamp(1.0-centralDust*0.94-branchingDust*0.62,0.025,1.0);
+  float luminance=max(0.0,cloudLight*dustTransmission+coreBulge*0.08+granularStars*0.2);
   vec3 coolCloud=srgbToLinear(uMilkyWayColor);
   vec3 warmCore=vec3(1.0,0.56,0.28);
   vec3 color=mix(coolCloud,warmCore,clamp(coreBulge*0.68,0.0,0.72));
   color=mix(color,vec3(0.34,0.2,0.58),clamp((1.0-galacticCore)*uMilkyWayWarp*0.08,0.0,0.18));
-  return color*luminance*uMilkyWayIntensity*1.42*horizonMask;
+  return color*luminance*uMilkyWayIntensity*1.34*horizonMask;
 }
 
 vec2 celestialUv(vec3 ray,vec3 direction,float angularRadius){

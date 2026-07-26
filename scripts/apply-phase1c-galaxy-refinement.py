@@ -65,13 +65,18 @@ if new_night not in capture:
         raise RuntimeError('Star-only night capture authority anchor is missing.')
     capture = capture.replace(old_night, new_night, 1)
 
-milky_way_patch = "sky=@{starIntensity=0;milkyWayIntensity=.72;milkyWayWidth=.18;milkyWayDetail=1.05;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.42;milkyWayClumping=.76;milkyWayCoreStrength=.72;milkyWayWidthVariation=.52}"
+milky_way_patch = "sky=@{starIntensity=.24;starDensity=.72;starBrightness=.68;milkyWayIntensity=.72;milkyWayWidth=.18;milkyWayDetail=1.2;milkyWayOrientation=32;milkyWayDust=.86;milkyWayWarp=.5;milkyWayClumping=.88;milkyWayCoreStrength=1.08;milkyWayWidthVariation=.66}"
 if milky_way_patch not in capture:
-    old_capture_pair = "  Request-Capture $captureDir 'night-sky' @{position=@(0,20,0);yaw=-.65;pitch=.92;fov=78}|Out-Null\n  Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=-1.0123;pitch=1.1815;fov=74}|Out-Null"
-    new_capture_pair = "  Request-Capture $captureDir 'night-sky' @{position=@(0,20,0);yaw=-.65;pitch=.92;fov=78}|Out-Null\n  Patch-World $port @{" + milky_way_patch + "}\n  Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=-1.0123;pitch=1.1815;fov=74}|Out-Null"
-    if old_capture_pair not in capture:
+    old_patch = "sky=@{starIntensity=0;milkyWayIntensity=.72;milkyWayWidth=.18;milkyWayDetail=1.05;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.42;milkyWayClumping=.76;milkyWayCoreStrength=.72;milkyWayWidthVariation=.52}"
+    if old_patch not in capture:
         raise RuntimeError('Separated star/Milky Way capture anchor is missing.')
-    capture = capture.replace(old_capture_pair, new_capture_pair, 1)
+    capture = capture.replace(old_patch, milky_way_patch, 1)
+
+capture = capture.replace(
+    "Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=-1.0123;pitch=1.1815;fov=74}",
+    "Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=-.75;pitch=1.02;fov=68}",
+    1
+)
 
 capture_path.write_text(capture, encoding='utf-8')
 print('Rebuilt the Milky Way as smooth layered dust and separated star-only visual evidence.')

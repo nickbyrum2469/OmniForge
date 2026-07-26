@@ -12,6 +12,7 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /vec2 hemisphereOctEncode/);
   assert.match(sky, /vec3 hemisphereOctDecode/);
   assert.match(sky, /angularDistance=sqrt\(max\(0\.0,2\.0\*\(1\.0-cosine\)\)\)/);
+  assert.match(sky, /float radius=max\(aa\*1\.45/);
   assert.match(sky, /float psf=exp\(-0\.5\*pow\(angularDistance\/sigma,2\.0\)\)/);
   assert.match(sky, /horizonTwinkle/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
@@ -45,6 +46,8 @@ test('packaged visual QA can request actual canvas PNG evidence', () => {
   assert.match(desktop, /capture-request\.json/);
   assert.match(captureScript, /minimumRevision=\$MinimumRevision/);
   assert.match(captureScript, /\$response\.state\.engine\.revision/);
+  assert.match(captureScript, /starIntensity=\.24;starDensity=\.72/);
+  assert.match(captureScript, /yaw=-\.75;pitch=1\.02;fov=68/);
 });
 
 test('the authoritative Windows evidence gate supports Windows PowerShell 5.1', () => {

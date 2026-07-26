@@ -39,7 +39,7 @@ REQUIRED = {
         'starSizeMin: 0.36',
         'milkyWayIntensity: 0.34',
         'milkyWayClumping:',
-        'ambientIntensity: (0.09 + day * 0.22',
+        'ambientIntensity: (0.12 + day * 0.45',
         'renderProxy: false'
     ],
     'app/v010.js': [
@@ -55,7 +55,7 @@ REQUIRED = {
         'vec2 hemisphereOctEncode',
         'vec3 hemisphereOctDecode',
         'float probability=clamp(uStarDensity*0.052',
-        'float radius=max(aa*1.08',
+        'float radius=max(aa*1.45',
         'float rayLength=radius*mix(2.0,4.2',
         'float craterField',
         'return ring*0.28-basin*0.42',
@@ -85,7 +85,7 @@ BASE_FINAL_VISUAL_MARKERS = {
     ],
     'app/environment-runtime.js': ['0.1, 32'],
     'app/v010.js': ['id="v010MoonSize" type="range" min="0.1" max="32"'],
-    'server/v010-systems.mjs': ['ambientIntensity: (0.09 + day * 0.22'],
+    'server/v010-systems.mjs': ['ambientIntensity: (0.12 + day * 0.45'],
     'app/app.js': ['selectedId=null', 'selectedId=originalSelectedId'],
     'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.006', 'milkyWayOrientation=32', 'moonSize=22', 'sunSize=9']
 }
@@ -102,9 +102,9 @@ REFINED_VISUAL_MARKERS = {
     ],
     'app/environment-runtime.js': ['0.1, 32'],
     'app/v010.js': ['id="v010MoonSize" type="range" min="0.1" max="32"'],
-    'server/v010-systems.mjs': ['ambientIntensity: (0.09 + day * 0.22'],
+    'server/v010-systems.mjs': ['ambientIntensity: (0.12 + day * 0.45'],
     'app/app.js': ['selectedId=null', 'selectedId=originalSelectedId'],
-    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.004', 'milkyWayOrientation=32', 'starIntensity=0;milkyWayIntensity=.72', 'moonSize=22', 'sunSize=9']
+    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.004', 'milkyWayOrientation=32', 'starIntensity=.24;starDensity=.72', 'moonSize=22', 'sunSize=9']
 }
 
 
@@ -132,10 +132,10 @@ if missing:
         'hemisphereOctEncode', 'hemisphereOctDecode', 'vec3 periodic=', 'eclipseSilhouette',
         'VisualTestCapture', 'VISUAL_CAPTURE_DIR', 'installVisualCaptureWatcher', 'replace(/^\\uFEFF/',
         'return sum/9.0', 'starRayStrength: 0.12', 'starSizeMin: 0.36', 'milkyWayIntensity: 0.34',
-        'uStarDensity*0.014', 'uStarDensity*0.052', 'mix(0.00072,0.00235', 'float radius=max(aa*1.08', 'rayLength=radius*mix(2.0,4.5', 'rayLength=radius*mix(2.0,4.2',
+        'uStarDensity*0.014', 'uStarDensity*0.052', 'mix(0.00072,0.00235', 'float radius=max(aa*1.08', 'float radius=max(aa*1.45', 'rayLength=radius*mix(2.0,4.5', 'rayLength=radius*mix(2.0,4.2',
         'galacticNormal=normalize', 'galacticCloudEnvelope=', 'dustTransmission=', 'ring*0.28', 'coronaInner=pow(sunDot,1500.0)',
         'sky=mix(sky,vec3(0.00001)', 'indirectStrength: 0.9', 'ambientIntensity: (0.09',
-        'max="32"', '0.1, 32', 'selectedId=null', 'selectedId=originalSelectedId'
+        'max="32"', '0.1, 32', 'ambientIntensity: (0.09', 'ambientIntensity: (0.12', 'selectedId=null', 'selectedId=originalSelectedId'
     ])]
     if broad_missing:
         print('Phase 1C broad integration is required:')

@@ -23,6 +23,18 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
   - eclipse lacks corona structure and world/atmosphere response.
 - Next: correct daylight energy/sign behavior, then rebuild the starfield and Milky Way before moving to Moon and eclipse polish.
 
+## Packaged correction results
+
+- Commit `cee7130a15c8e3e5bbe516e58803d7778c649f71` built with an exact matching `source-commit`.
+- All five revision-synchronized frames passed the automated evidence thresholds.
+- Daylight terrain dark-pixel fraction fell from about 36% to about 2.7%; authored terrain texture became readable.
+- Star density and antialiasing improved, but manual review still found too many one-pixel points.
+- Milky Way peak luma increased from about 0.27 to about 0.72, but manual review still rejected its horizontal cloud-bank composition.
+- Additional packaged camera trials proved framing contributed to the horizontal look, while the shader still needed stronger dust breakup and granular stellar structure.
+- Current uncommitted gate increases authored sky irradiance, strengthens stellar PSF sampling, adds broken multi-branch dust and granular galactic stars, and frames the Milky Way evidence on a diagonal.
+- `npm.cmd test`: 132/132 passed.
+- `npm.cmd run verify`: passed.
+
 ## Remaining visual work
 
 - Dense antialiased pole-safe starfield.
