@@ -100,6 +100,8 @@ test('cloud and twilight lighting remain Sun-directed rather than full-screen co
   assert.match(sky, /float lowSunElevation=/);
   assert.match(sky, /physicalScatter\+=lowSunScatter\*lowSunAzimuth\*lowSunElevation\*lowSunEnergy/);
   assert.match(sky, /float forwardHalo=/);
+  assert.match(sky, /float innerHaloScale=/);
+  assert.match(sky, /float innerHalo=/);
   assert.match(sky, /float solarHorizonWindow=1\.0-smoothstep\(0\.12,0\.5,abs\(uSunDirection\.y\)\)/);
   assert.match(sky, /float aerialAureole=pow\(sunDot,8\.0\)\*horizon\*solarHorizonWindow/);
   assert.match(sky, /transmittedSun\*\(aerialAureole\+horizon\*uTwilightFactor/);

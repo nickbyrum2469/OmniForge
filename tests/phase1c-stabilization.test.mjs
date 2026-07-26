@@ -140,7 +140,7 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /float middleStreamers=noise3/);
   assert.doesNotMatch(sky, /directionalWisps/);
   assert.match(sky, /float forwardScatter=pow\(max\(dot\(ray,uSunDirection\),0\.0\),8\.0\)/);
-  assert.match(sky, /vec3 twilightScatter=mix\(vec3\(0\.045,0\.07,0\.24\),vec3\(0\.72,0\.2,0\.045\),twilightSunward\)/);
+  assert.match(sky, /vec3 twilightScatter=mix\(vec3\(0\.045,0\.07,0\.24\),vec3\(0\.72,0\.28,0\.065\),twilightSunward\)/);
   assert.match(sky, /vec3 solarOpticalDepth=/);
   assert.match(sky, /float lowSunAzimuth=/);
   assert.match(sky, /float aerialAureole=pow\(sunDot,8\.0\)\*horizon\*solarHorizonWindow/);
