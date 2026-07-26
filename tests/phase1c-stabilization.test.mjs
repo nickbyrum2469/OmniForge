@@ -122,10 +122,11 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /vec3 hemisphereOctDecode/);
   assert.match(sky, /uStarDensity\*0\.13/);
   assert.doesNotMatch(sky, /microStarLayer/);
-  assert.match(sky, /float aa=max\(fwidth\(angularDistance\)\*0\.5,0\.000035\)/);
-  assert.match(sky, /float radius=max\(aa\*0\.85/);
-  assert.match(sky, /rayLength=radius\*mix\(2\.0,4\.2/);
-  assert.match(sky, /float psf=exp\(-0\.5\*pow\(angularDistance\/sigma,2\.0\)\)/);
+  assert.match(sky, /vec2 ndcPixel=max\(fwidth\(vNdc\),vec2\(0\.000001\)\)/);
+  assert.match(sky, /vec2 pixelDelta=\(vNdc-starNdc\)\/ndcPixel/);
+  assert.match(sky, /float radiusPixels=mix\(max\(0\.4,uStarSizeMin\*0\.52\)/);
+  assert.match(sky, /rayLength=radiusPixels\*mix\(2\.0,4\.2/);
+  assert.match(sky, /float psf=exp\(-0\.5\*pow\(pixelDistance\/sigmaPixels,2\.0\)\)/);
   assert.match(sky, /float disc=psf\*0\.94/);
   assert.doesNotMatch(sky, /float disc=max\(core,psf/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);

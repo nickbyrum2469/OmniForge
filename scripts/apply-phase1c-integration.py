@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import subprocess
 import sys
 
@@ -56,8 +57,10 @@ REQUIRED = {
         'vec2 hemisphereOctEncode',
         'vec3 hemisphereOctDecode',
         'float probability=clamp(uStarDensity*0.13',
-        'float radius=max(aa*0.85',
-        'float rayLength=radius*mix(2.0,4.2',
+        'vec2 ndcPixel=max(fwidth(vNdc),vec2(0.000001))',
+        'vec2 pixelDelta=(vNdc-starNdc)/ndcPixel',
+        'float radiusPixels=mix(max(0.4,uStarSizeMin*0.52)',
+        'float rayLength=radiusPixels*mix(2.0,4.2',
         'vec2 craterField',
         'return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24))',
         'uMilkyWayClumping',
@@ -72,7 +75,7 @@ REQUIRED = {
         'sunLinear*horizon*uTwilightFactor*(0.025+twilightSunward*0.34)',
         'float eclipseAngularRatio=eclipseRadius/max(0.0001,uSunAngularRadius)',
         'float diamondCore=exp(-dot(diamondDelta,diamondDelta)/0.00055)*diamondWindow',
-        'float aa=max(fwidth(angularDistance)*0.5,0.000035)',
+        'float psf=exp(-0.5*pow(pixelDistance/sigmaPixels,2.0))',
         'float disc=psf*0.94',
         'eclipseStarVisibility=smoothstep(0.975,1.0,uSolarEclipse)*uDayFactor*0.09',
         'uCloudQuality>=0.5&&uCloudCoverage>=0.35&&ray.y>=0.09',
@@ -97,7 +100,7 @@ BASE_FINAL_VISUAL_MARKERS = {
     'app/renderer.js': ['return sum/9.0;'],
     'app/sky-pass.js': [
         'uStarDensity*0.13',
-        'rayLength=radius*mix(2.0,4.2',
+        'rayLength=radiusPixels*mix(2.0,4.2',
         'galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78))',
         'float dustTransmission=',
         'float centralPresence=',
@@ -120,7 +123,7 @@ REFINED_VISUAL_MARKERS = {
     'app/renderer.js': ['return sum/9.0;'],
     'app/sky-pass.js': [
         'uStarDensity*0.13',
-        'rayLength=radius*mix(2.0,4.2',
+        'rayLength=radiusPixels*mix(2.0,4.2',
         'float dustTransmission=',
         'float centralPresence=',
         'return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24))',
@@ -158,6 +161,7 @@ def missing_contracts():
     return contracts_missing(REQUIRED)
 
 
+allow_migration = os.environ.get('OMNIFORGE_ALLOW_PHASE1C_MIGRATION') == '1'
 missing = missing_contracts()
 if missing:
     broad_missing = [item for item in missing if not any(marker in item for marker in [
@@ -170,19 +174,25 @@ if missing:
         'max="32"', '0.1, 32', 'ambientIntensity: (0.09', 'ambientIntensity: (0.12',
         'const ambientDay = mix([12, 20, 48]', 'selectedId=null', 'selectedId=originalSelectedId'
     ])]
-    if broad_missing:
+    if broad_missing and allow_migration:
         print('Phase 1C broad integration is required:')
         for item in broad_missing:
             print(f'  - {item}')
         subprocess.run([sys.executable, 'scripts/apply-phase1c-stabilization.py'], check=True)
-    else:
+    elif not broad_missing:
         print('Phase 1C broad integration is already complete.')
+    else:
+        raise RuntimeError(
+            'Phase 1C postconditions are incomplete. '
+            'Set OMNIFORGE_ALLOW_PHASE1C_MIGRATION=1 only when intentionally migrating a legacy source tree: '
+            + '; '.join(broad_missing)
+        )
 else:
     print('Phase 1C broad integration is already complete; migration skipped.')
 
 base_visual_missing = contracts_missing(BASE_FINAL_VISUAL_MARKERS)
 refined_visual_missing = contracts_missing(REFINED_VISUAL_MARKERS)
-if base_visual_missing and refined_visual_missing:
+if base_visual_missing and refined_visual_missing and allow_migration:
     print('Base Phase 1C rendered-visual integration is required:')
     for item in base_visual_missing:
         print(f'  - {item}')
@@ -191,13 +201,21 @@ if base_visual_missing and refined_visual_missing:
     subprocess.run([sys.executable, 'scripts/apply-phase1c-capture-protocol.py'], check=True)
     subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-quality.py'], check=True)
     subprocess.run([sys.executable, 'scripts/apply-phase1c-final-visual.py'], check=True)
-else:
+elif not (base_visual_missing and refined_visual_missing):
     print('Base or refined Phase 1C rendered-visual source is already integrated; broad visual rewrites skipped.')
-    subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-idempotency.py'], check=True)
-    subprocess.run([sys.executable, 'scripts/apply-phase1c-capture-protocol.py'], check=True)
+    if allow_migration:
+        subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-idempotency.py'], check=True)
+        subprocess.run([sys.executable, 'scripts/apply-phase1c-capture-protocol.py'], check=True)
+else:
+    raise RuntimeError(
+        'Phase 1C rendered-visual markers are incomplete. '
+        'Set OMNIFORGE_ALLOW_PHASE1C_MIGRATION=1 only for an intentional legacy migration: '
+        + '; '.join(base_visual_missing)
+    )
 
-subprocess.run([sys.executable, 'scripts/apply-phase1c-galaxy-refinement.py'], check=True)
-subprocess.run([sys.executable, 'scripts/apply-phase1c-test-contracts.py'], check=True)
+if allow_migration:
+    subprocess.run([sys.executable, 'scripts/apply-phase1c-galaxy-refinement.py'], check=True)
+    subprocess.run([sys.executable, 'scripts/apply-phase1c-test-contracts.py'], check=True)
 
 remaining = missing_contracts()
 if remaining:

@@ -184,6 +184,7 @@ vec3 hemisphereOctDecode(vec2 uv){
 vec3 starLayer(vec3 ray,float scale,float seed){
   vec2 uv=hemisphereOctEncode(ray);
   vec2 baseCell=floor(uv*scale);
+  vec2 ndcPixel=max(fwidth(vNdc),vec2(0.000001));
   vec3 accumulated=vec3(0.0);
   float probability=clamp(uStarDensity*0.13,0.003,0.25);
   for(int oy=-1;oy<=1;oy++)for(int ox=-1;ox<=1;ox++){
@@ -195,26 +196,27 @@ vec3 starLayer(vec3 ray,float scale,float seed){
     if(any(lessThan(candidateUv,vec2(0.0)))||any(greaterThan(candidateUv,vec2(1.0))))continue;
     vec3 starDirection=hemisphereOctDecode(candidateUv);
     if(starDirection.y<=0.0)continue;
-    float cosine=clamp(dot(ray,starDirection),-1.0,1.0);
-    float angularDistance=sqrt(max(0.0,2.0*(1.0-cosine)));
+    float viewDepth=dot(starDirection,uForward);
+    if(viewDepth<=0.0001)continue;
+    vec2 starNdc=vec2(
+      dot(starDirection,uRight)/(viewDepth*uTanHalfFov*uAspect),
+      dot(starDirection,uUp)/(viewDepth*uTanHalfFov)
+    );
+    vec2 pixelDelta=(vNdc-starNdc)/ndcPixel;
+    float pixelDistance=length(pixelDelta);
     float sizeRandom=hash21(cell+seed+33.4);
     float hero=step(1.0-uStarHeroFraction,hash21(cell+seed+8.8));
-    float sizeControl=mix(max(0.08,uStarSizeMin),max(uStarSizeMin,uStarSizeMax),pow(sizeRandom,2.8));
-    float aa=max(fwidth(angularDistance)*0.5,0.000035);
-    float radius=max(aa*0.85,mix(0.00036,0.00128,pow(sizeRandom,2.3))*max(0.28,sizeControl)*(1.0+hero*0.62));
-    float sigma=max(aa*0.62,radius*0.54);
-    float psf=exp(-0.5*pow(angularDistance/sigma,2.0));
-    psf*=1.0-smoothstep(radius*2.2,radius*3.15,angularDistance);
+    float radiusPixels=mix(max(0.4,uStarSizeMin*0.52),max(0.48,uStarSizeMax*1.08),pow(sizeRandom,2.8));
+    radiusPixels*=1.0+hero*0.72;
+    float sigmaPixels=max(0.42,radiusPixels*0.54);
+    float psf=exp(-0.5*pow(pixelDistance/sigmaPixels,2.0));
+    psf*=1.0-smoothstep(radiusPixels*2.2,radiusPixels*3.15,pixelDistance);
     float disc=psf*0.94;
-    vec3 reference=abs(starDirection.y)>.94?vec3(1,0,0):vec3(0,1,0);
-    vec3 right=normalize(cross(reference,starDirection));
-    vec3 up=normalize(cross(starDirection,right));
-    vec2 local=vec2(dot(ray,right),dot(ray,up));
-    float rayLength=radius*mix(2.0,4.2,clamp((uStarRayLength-0.1)/3.9,0.0,1.0));
-    float thin=max(radius*0.095,aa*0.42);
-    float horizontal=exp(-abs(local.y)/thin)*exp(-abs(local.x)/max(rayLength,0.0001));
-    float vertical=exp(-abs(local.x)/thin)*exp(-abs(local.y)/max(rayLength,0.0001));
-    float diagonal=exp(-abs(local.x+local.y)/(thin*1.5))*exp(-abs(local.x-local.y)/max(rayLength*0.65,0.0001));
+    float rayLength=radiusPixels*mix(2.0,4.2,clamp((uStarRayLength-0.1)/3.9,0.0,1.0));
+    float thin=max(0.18,radiusPixels*0.095);
+    float horizontal=exp(-abs(pixelDelta.y)/thin)*exp(-abs(pixelDelta.x)/max(rayLength,0.0001));
+    float vertical=exp(-abs(pixelDelta.x)/thin)*exp(-abs(pixelDelta.y)/max(rayLength,0.0001));
+    float diagonal=exp(-abs(pixelDelta.x+pixelDelta.y)/(thin*1.5))*exp(-abs(pixelDelta.x-pixelDelta.y)/max(rayLength*0.65,0.0001));
     float rays=(horizontal+vertical+diagonal*0.1)*hero*uStarRayStrength*0.018;
     float phase=hash21(cell+seed+43.2)*TAU;
     float speed=mix(0.35,2.1,hash21(cell+seed+9.3))*uStarTwinkleSpeed;

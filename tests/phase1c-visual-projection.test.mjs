@@ -11,12 +11,14 @@ const captureScript = fs.readFileSync(new URL('../scripts/run-phase1c-visual-cap
 test('stellar projection is upper-hemisphere angular space rather than cube-face UV space', () => {
   assert.match(sky, /vec2 hemisphereOctEncode/);
   assert.match(sky, /vec3 hemisphereOctDecode/);
-  assert.match(sky, /angularDistance=sqrt\(max\(0\.0,2\.0\*\(1\.0-cosine\)\)\)/);
-  assert.match(sky, /float aa=max\(fwidth\(angularDistance\)\*0\.5,0\.000035\)/);
-  assert.match(sky, /float radius=max\(aa\*0\.85/);
-  assert.match(sky, /float psf=exp\(-0\.5\*pow\(angularDistance\/sigma,2\.0\)\)/);
+  assert.match(sky, /vec2 ndcPixel=max\(fwidth\(vNdc\),vec2\(0\.000001\)\)/);
+  assert.match(sky, /vec2 starNdc=vec2\(/);
+  assert.match(sky, /vec2 pixelDelta=\(vNdc-starNdc\)\/ndcPixel/);
+  assert.match(sky, /float radiusPixels=mix\(max\(0\.4,uStarSizeMin\*0\.52\)/);
+  assert.match(sky, /float psf=exp\(-0\.5\*pow\(pixelDistance\/sigmaPixels,2\.0\)\)/);
   assert.match(sky, /float disc=psf\*0\.94/);
   assert.doesNotMatch(sky, /float disc=max\(core,psf/);
+  assert.doesNotMatch(sky, /angularDistance=sqrt/);
   assert.match(sky, /uStarDensity\*0\.13/);
   assert.doesNotMatch(sky, /microStarLayer/);
   assert.match(sky, /vec2 coronaDirection=vec2\(cos\(eclipseAngle\),sin\(eclipseAngle\)\)/);
