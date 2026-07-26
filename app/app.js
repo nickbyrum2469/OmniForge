@@ -175,7 +175,10 @@ async function captureVisualTestFrame(options={}) {
     const waitMs=Math.max(80,Math.min(3000,Number(options.waitMs||500)));
     await sleep(waitMs);
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-    return ui.viewport.toDataURL('image/png');
+    return {
+      dataUrl:ui.viewport.toDataURL('image/png'),
+      renderTelemetry:renderer?.getRenderDiagnostics?.()||null
+    };
   }finally{
     camera=originalCamera;
     scene.settings.gridVisible=originalGrid;

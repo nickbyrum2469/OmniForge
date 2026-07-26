@@ -38,7 +38,8 @@ function Request-Capture([string]$CaptureDir,[string]$Id,[hashtable]$Camera,[int
       $response=Get-Content $responseFile -Raw|ConvertFrom-Json
       if(-not$response.ok){throw "Visual capture $Id failed: $($response.error)"}
       if(-not(Test-Path $pngFile -PathType Leaf)){throw "Visual capture $Id reported success without a PNG."}
-      return $pngFile
+      if($response.renderTelemetry){$script:captureTelemetry[$Id]=$response.renderTelemetry}
+      return $response
     }
   }
   throw "Visual capture $Id timed out."
@@ -126,6 +127,7 @@ $env:OMNIFORGE_PORT="$port"
 $env:OMNIFORGE_CAPTURE_DIR=$captureDir
 $process=$null
 $captureRecords=@()
+$captureTelemetry=@{}
 try{
   $process=Start-Process -FilePath(Join-Path $output 'OmniForge.exe')-PassThru
   Wait-Health $port
@@ -338,6 +340,7 @@ try{
     qualityTier='quality'
     generatedAt=(Get-Date).ToUniversalTime().ToString('o')
     files=$captureRecords
+    renderTelemetry=$captureTelemetry
   }
   $manifest|ConvertTo-Json -Depth 12|Set-Content $manifestFile -Encoding utf8
 

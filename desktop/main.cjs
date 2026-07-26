@@ -90,11 +90,12 @@ function installVisualCaptureWatcher() {
       const request=readJson(processingFile,{});
       const id=String(request.id||Date.now()).replace(/[^a-z0-9_-]/gi,'-');
       const options=JSON.stringify(request.options||{});
-      const dataUrl=await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestCapture(${options})`,true);
+      const captureResult=await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestCapture(${options})`,true);
+      const dataUrl=typeof captureResult==='string'?captureResult:captureResult?.dataUrl;
       const match=/^data:image\/png;base64,(.+)$/s.exec(String(dataUrl||''));
       if(!match)throw new Error('Renderer did not return a PNG data URL.');
       fs.writeFileSync(path.join(VISUAL_CAPTURE_DIR,`${id}.png`),Buffer.from(match[1],'base64'));
-      writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:true,id,at:new Date().toISOString()});
+      writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:true,id,at:new Date().toISOString(),renderTelemetry:captureResult?.renderTelemetry||null});
     }catch(error){
       const request=readJson(processingFile,{});const id=String(request.id||'capture-error').replace(/[^a-z0-9_-]/gi,'-');
       writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:false,id,error:error.message,stack:error.stack||''});
