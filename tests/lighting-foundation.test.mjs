@@ -100,6 +100,12 @@ test('game-accurate daylight includes authored sky irradiance without an editor-
   assert.match(renderer, /uEditorFill/);
 });
 
+test('solar eclipses dim and cool the same world-lighting authority used by rendered geometry', () => {
+  assert.match(worldSystems, /const eclipseDaylight = 1 - solarEclipse \* 0\.94/);
+  assert.match(worldSystems, /ambientColor: hex\(eclipseAmbient\)/);
+  assert.match(worldSystems, /intensity: Number\(world\.lighting\.sunIntensity \|\| 2\.35\).*eclipseDaylight/s);
+});
+
 test('starter editor references are classified and excluded from surface rules', () => {
   assert.match(stateStore, /renderClass:'editor-only'/);
   assert.match(stateStore, /affectsSurfaceRecipes:false/);

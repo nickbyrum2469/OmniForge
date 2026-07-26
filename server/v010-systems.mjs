@@ -208,9 +208,10 @@ export function applyWorldToScene(scene, world) {
   });
   const solarEclipse = celestial.moon.solarEclipse;
   const lunarEclipse = celestial.moon.lunarEclipse;
-  const eclipseDaylight = 1 - solarEclipse * 0.82;
+  const eclipseDaylight = 1 - solarEclipse * 0.94;
   const ambientDay = mix([12, 20, 48], [108, 145, 196], day);
   const ambientTwilight = mix(ambientDay, [92, 55, 73], twilight * 0.5);
+  const eclipseAmbient = mix(ambientTwilight, [14, 22, 40], solarEclipse * 0.82);
   const exposure = clamp(Number(world.atmosphere.exposure || 1), 0.1, 4);
   world.sky.moonPhase = celestial.moon.illumination;
 
@@ -219,7 +220,7 @@ export function applyWorldToScene(scene, world) {
     skyTop: hex(top),
     skyBottom: hex(bottom),
     skyGround: hex(mix([4, 7, 14], [31, 43, 50], day)),
-    ambientColor: hex(ambientTwilight),
+    ambientColor: hex(eclipseAmbient),
     ambientIntensity: (0.12 + day * 0.45 + Number(world.lighting.indirectStrength ?? 0.72) * 0.66) * (0.74 + cloudAttenuation * 0.26) * eclipseDaylight,
     fogNear: fogVisibility.near,
     fogFar: fogVisibility.far,

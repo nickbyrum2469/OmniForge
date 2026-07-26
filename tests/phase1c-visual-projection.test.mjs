@@ -14,6 +14,8 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /angularDistance=sqrt\(max\(0\.0,2\.0\*\(1\.0-cosine\)\)\)/);
   assert.match(sky, /float radius=max\(aa\*1\.45/);
   assert.match(sky, /float psf=exp\(-0\.5\*pow\(angularDistance\/sigma,2\.0\)\)/);
+  assert.match(sky, /vec2 coronaDirection=vec2\(cos\(eclipseAngle\),sin\(eclipseAngle\)\)/);
+  assert.match(sky, /float annularRing=innerRim\*annularity/);
   assert.match(sky, /horizonTwinkle/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
   assert.doesNotMatch(sky, /projected\.xy\*scale/);

@@ -296,24 +296,36 @@ vec2 celestialUv(vec3 ray,vec3 direction,float angularRadius){
   return vec2(dot(ray,right),dot(ray,up))/scale;
 }
 
-float craterField(vec2 uv,float scale,float seed){
+vec2 craterField(vec2 uv,float scale,float seed){
   vec2 g=uv*scale;
   vec2 cell=floor(g);
   vec2 local=fract(g)-0.5;
-  float nearest=10.0;
-  float ring=0.0;
-  float basin=0.0;
+  float albedo=0.0;
+  float height=0.0;
   for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
     vec2 neighbor=vec2(float(x),float(y));
     vec2 id=cell+neighbor;
     vec2 center=neighbor+vec2(hash21(id+seed),hash21(id+seed+41.7))-0.5;
     float radius=mix(0.11,0.34,hash21(id+seed+17.3));
-    float d=length(local-center);
-    nearest=min(nearest,d);
-    ring=max(ring,exp(-pow((d-radius)/max(0.012,radius*0.12),2.0)));
-    basin=max(basin,(1.0-smoothstep(0.0,radius,d))*mix(0.2,0.8,hash21(id+seed+73.1)));
+    vec2 delta=local-center;
+    float d=length(delta);
+    float age=mix(0.55,1.0,hash21(id+seed+73.1));
+    float bowl=(1.0-smoothstep(radius*0.08,radius,d))*age;
+    float rim=exp(-pow((d-radius)/max(0.018,radius*0.19),2.0))*age;
+    float ejecta=(1.0-smoothstep(radius*0.92,radius*2.35,d));
+    ejecta*=pow(0.5+0.5*cos(atan(delta.y,delta.x)*mix(4.0,8.0,floor(hash21(id+seed+29.0)*3.0))),3.0);
+    float peak=(1.0-smoothstep(0.0,radius*0.18,d))*step(0.78,hash21(id+seed+119.0));
+    albedo+=rim*0.045-bowl*0.105+ejecta*0.012;
+    height+=rim*0.16-bowl*0.29+peak*0.07;
   }
-  return ring*0.28-basin*0.42;
+  return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24));
+}
+
+float lunarEllipse(vec2 uv,vec2 center,vec2 axes,float angle){
+  float c=cos(angle),s=sin(angle);
+  mat2 rotation=mat2(c,-s,s,c);
+  float distanceToBasin=length((rotation*(uv-center))/axes);
+  return 1.0-smoothstep(0.76,1.08,distanceToBasin);
 }
 
 vec3 lunarSurface(vec2 moonUv,vec3 surfaceNormal,float phaseLighting){
@@ -323,16 +335,20 @@ vec3 lunarSurface(vec2 moonUv,vec3 surfaceNormal,float phaseLighting){
   vec3 rotatedNormal=normalize(vec3(r*surfaceNormal.xy,surfaceNormal.z));
   float low=fbm3(rotatedNormal*2.15+uMoonPatternSeed*0.0009);
   float mid=fbm3(rotatedNormal*5.7+vec3(8.1,2.7,19.4)+uMoonPatternSeed*0.0017);
-  float maria=smoothstep(0.5,0.72,low*0.78+mid*0.22);
-  maria*=smoothstep(-0.86,0.18,rotated.x+rotated.y*0.22)+smoothstep(0.62,-0.4,rotated.x-rotated.y*0.7)*0.45;
+  float maria=smoothstep(0.53,0.73,low*0.76+mid*0.24)*0.48;
+  maria=max(maria,lunarEllipse(rotated,vec2(-0.28,0.25),vec2(0.3,0.2),-0.28)*0.88);
+  maria=max(maria,lunarEllipse(rotated,vec2(0.2,0.3),vec2(0.22,0.27),0.18)*0.78);
+  maria=max(maria,lunarEllipse(rotated,vec2(0.34,-0.04),vec2(0.2,0.16),-0.62)*0.68);
+  maria=max(maria,lunarEllipse(rotated,vec2(-0.06,-0.12),vec2(0.3,0.19),0.32)*0.72);
+  maria*=smoothstep(1.0,0.72,length(rotated));
   maria=clamp(maria,0.0,1.0)*uMoonMariaStrength;
-  float craters=(craterField(rotated,5.5,uMoonPatternSeed)+craterField(rotated,13.0,uMoonPatternSeed+91.0)*0.55+craterField(rotated,31.0,uMoonPatternSeed+211.0)*0.24)*uMoonCraterStrength;
+  vec2 craters=(craterField(rotated,5.5,uMoonPatternSeed)+craterField(rotated,13.0,uMoonPatternSeed+91.0)*0.48+craterField(rotated,31.0,uMoonPatternSeed+211.0)*0.18)*uMoonCraterStrength;
   float grain=(fbm3(rotatedNormal*22.0+31.0)-0.5)*0.12*uMoonDetail;
-  float relief=craters*uMoonReliefStrength;
+  float relief=craters.y*uMoonReliefStrength;
   vec3 bright=srgbToLinear(uMoonColor)*mix(0.78,1.1,phaseLighting);
   vec3 dark=bright*vec3(0.42,0.48,0.56);
   vec3 surface=mix(bright,dark,clamp(maria,0.0,0.86));
-  surface*=1.0+grain+relief;
+  surface*=1.0+grain+craters.x+relief;
   surface=pow(max(surface,vec3(0.001)),vec3(max(0.2,uMoonSurfaceContrast)));
   return surface;
 }
@@ -408,6 +424,9 @@ void main(){
   physicalScatter+=vec3(0.28,0.08,0.16)*(uOzone*uTwilightFactor*horizon)*0.18;
   float physicalWeight=clamp((uDayFactor*0.62+uTwilightFactor*0.34)*uAerialPerspective,0.0,0.72);
   sky=mix(sky,sky*transmittance+physicalScatter,physicalWeight);
+  float eclipseWorldResponse=uSolarEclipse*uDayFactor;
+  sky*=mix(1.0,0.16,eclipseWorldResponse);
+  sky=mix(sky,vec3(0.002,0.006,0.018),eclipseWorldResponse*0.58);
 
   float sunDot=max(dot(ray,uSunDirection),0.0);
   float sunThresholdOuter=cos(radians(max(0.03,uSunAngularRadius*1.18)));
@@ -422,27 +441,49 @@ void main(){
   float sunGlow=pow(sunDot,mix(11.0,36.0,clamp(uSunGlow/3.0,0.0,1.0)))*(0.07+uSunGlow*0.15+uTwilightFactor*0.38);
   sky+=sunLinear*(sunGlow*(1.0-uSolarEclipse*0.93)+visibleSunDisc*(3.15+uSunGlow*1.15));
   sky+=sunLinear*horizon*uTwilightFactor*0.18;
-  float coronaInner=pow(sunDot,1500.0),coronaOuter=pow(sunDot,420.0);
+  float eclipseRadius01=length(eclipseUv);
+  float eclipseAngle=atan(eclipseUv.y,eclipseUv.x);
+  vec2 coronaDirection=vec2(cos(eclipseAngle),sin(eclipseAngle));
+  float coronaNoise=noise3(vec3(coronaDirection*3.2,uStarSeed*0.00073));
+  float fineStreamers=0.5+0.5*sin(eclipseAngle*11.0+coronaNoise*5.6);
+  float broadStreamers=smoothstep(0.34,0.82,noise3(vec3(coronaDirection*1.7,uStarSeed*0.0011)));
+  float streamerStrength=clamp(fineStreamers*0.42+broadStreamers*0.74,0.0,1.0);
+  float coronaDistance=max(0.0,eclipseRadius01-1.0);
+  float coronaReach=mix(0.16,0.82,streamerStrength);
+  float coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach));
+  float coronaOutside=smoothstep(0.985,1.015,eclipseRadius01)*(1.0-smoothstep(3.6,4.5,eclipseRadius01));
+  float innerRim=exp(-pow((eclipseRadius01-1.0)/0.038,2.0))*coronaOutside;
+  float corona=coronaEnvelope*coronaOutside*(0.18+streamerStrength*0.92);
+  float totality=smoothstep(0.995,1.035,uSolarEclipseCoverage)*uSolarEclipse;
+  float annularity=(1.0-smoothstep(0.94,1.0,uSolarEclipseCoverage))*uSolarEclipse;
+  float annularRing=innerRim*annularity;
+  float diamondWindow=exp(-pow((uSolarEclipseCoverage-1.0)/0.025,2.0))*uSolarEclipse;
+  float diamondAngle=abs(atan(sin(eclipseAngle-2.58),cos(eclipseAngle-2.58)));
+  float diamondRing=exp(-pow(diamondAngle/0.055,2.0))*innerRim*diamondWindow;
   float eclipseSilhouette=eclipseDisc*uSolarEclipse*uDayFactor;
   sky=mix(sky,vec3(0.0015,0.002,0.003),eclipseSilhouette*0.985);
-  sky+=vec3(1.0,0.88,0.64)*(coronaInner*2.2+coronaOuter*0.24)*uSolarEclipse*(1.0-eclipseDisc);
+  vec3 coronaColor=mix(vec3(1.0,0.73,0.38),vec3(0.46,0.64,1.0),smoothstep(0.04,1.4,coronaDistance));
+  sky+=coronaColor*(innerRim*2.4+corona*0.82)*totality;
+  sky+=vec3(1.0,0.66,0.24)*(annularRing*3.0+diamondRing*8.0);
   sky=mix(sky,vec3(0.00001),eclipseSilhouette);
 
   float moonDot=max(dot(ray,uMoonDirection),0.0);
   vec2 moonUv=celestialUv(ray,uMoonDirection,uMoonAngularRadius);
   float moonRadius=length(moonUv),moonDisc=1.0-smoothstep(0.965,1.015,moonRadius);
   float moonSphere=sqrt(max(0.0,1.0-moonRadius*moonRadius));
-  vec3 moonReference=abs(uMoonDirection.y)>.94?vec3(1,0,0):vec3(0,1,0);
-  vec3 moonRight=normalize(cross(moonReference,uMoonDirection)),moonUp=normalize(cross(uMoonDirection,moonRight));
-  vec3 moonSurfaceNormal=normalize(moonRight*moonUv.x+moonUp*moonUv.y-uMoonDirection*moonSphere);
-  float directPhase=max(dot(moonSurfaceNormal,uSunDirection),0.0);
-  float phaseLighting=max(directPhase,uMoonEarthshine*(1.0-directPhase));
-  float limb=mix(1.0,pow(max(0.0,moonSphere),0.32),uMoonLimbDarkening);
-  vec3 normalMoonSurface=lunarSurface(moonUv,moonSurfaceNormal,phaseLighting)*limb;
-  vec3 eclipsedMoon=mix(normalMoonSurface,vec3(0.58,0.09,0.035)*(0.7+normalMoonSurface),uLunarEclipse*0.9);
-  float eclipseMoonEnergy=mix(1.0,0.22,uLunarEclipse);
   float independentMoonVisibility=uMoonVisibility*(1.0-smoothstep(0.92,0.999,uSolarEclipse));
-  sky+=eclipsedMoon*moonDisc*phaseLighting*independentMoonVisibility*uMoonBrightness*1.7*eclipseMoonEnergy;
+  if(moonDisc>0.001){
+    vec3 moonReference=abs(uMoonDirection.y)>.94?vec3(1,0,0):vec3(0,1,0);
+    vec3 moonRight=normalize(cross(moonReference,uMoonDirection)),moonUp=normalize(cross(uMoonDirection,moonRight));
+    vec3 moonSurfaceNormal=normalize(moonRight*moonUv.x+moonUp*moonUv.y-uMoonDirection*moonSphere);
+    float directPhase=max(dot(moonSurfaceNormal,uSunDirection),0.0);
+    float phaseLighting=max(directPhase,uMoonEarthshine*(1.0-directPhase));
+    float limb=mix(1.0,pow(max(0.0,moonSphere),0.32),uMoonLimbDarkening);
+    vec3 normalMoonSurface=lunarSurface(moonUv,moonSurfaceNormal,phaseLighting)*limb;
+    vec3 eclipsedMoon=mix(normalMoonSurface,vec3(0.58,0.09,0.035)*(0.7+normalMoonSurface),uLunarEclipse*0.9);
+    float eclipseMoonEnergy=mix(1.0,0.22,uLunarEclipse);
+    sky+=eclipsedMoon*moonDisc*phaseLighting*independentMoonVisibility*uMoonBrightness*1.7*eclipseMoonEnergy;
+  }
   float moonGlow=pow(moonDot,mix(42.0,130.0,clamp(1.0-uMoonGlow/5.0,0.0,1.0)))*independentMoonVisibility*uMoonGlow*0.15;
   sky+=mix(moonLinear,vec3(0.68,0.14,0.05),uLunarEclipse)*moonGlow;
 
@@ -459,7 +500,8 @@ void main(){
 
   float starHorizon=smoothstep(0.015,0.16,ray.y);
   vec3 stars=starLayer(ray,180.0,uStarSeed)+starLayer(ray,360.0,uStarSeed+101.0);
-  sky+=stars*uStarVisibility*starHorizon;
+  float eclipseStarVisibility=pow(uSolarEclipse,7.0)*uDayFactor*0.34;
+  sky+=stars*max(uStarVisibility,eclipseStarVisibility)*starHorizon;
   sky+=milkyWay(ray,starHorizon);
 
   vec4 cloud=uCloudQuality<0.5?layeredCloud(ray,moonGlow,moonDisc):volumetricCloud(ray);

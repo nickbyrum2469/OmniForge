@@ -57,14 +57,15 @@ REQUIRED = {
         'float probability=clamp(uStarDensity*0.052',
         'float radius=max(aa*1.45',
         'float rayLength=radius*mix(2.0,4.2',
-        'float craterField',
-        'return ring*0.28-basin*0.42',
+        'vec2 craterField',
+        'return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24))',
         'uMilkyWayClumping',
         'uStarRayStrength',
         'vec3 galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78))',
         'float dustTransmission=',
         'vec3 periodic=vec3(cos(longitude),sin(longitude),latitude)',
-        'float coronaInner=pow(sunDot,1500.0)',
+        'float coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
+        'float diamondRing=',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)',
         'float eclipseSilhouette=eclipseDisc*uSolarEclipse*uDayFactor'
     ],
@@ -80,7 +81,7 @@ BASE_FINAL_VISUAL_MARKERS = {
         'rayLength=radius*mix(2.0,4.2',
         'galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78))',
         'float dustTransmission=',
-        'coronaInner=pow(sunDot,1500.0)',
+        'coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
     ],
     'app/environment-runtime.js': ['0.1, 32'],
@@ -96,8 +97,8 @@ REFINED_VISUAL_MARKERS = {
         'uStarDensity*0.052',
         'rayLength=radius*mix(2.0,4.2',
         'float dustTransmission=',
-        'return ring*0.28-basin*0.42',
-        'coronaInner=pow(sunDot,1500.0)',
+        'return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24))',
+        'coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
     ],
     'app/environment-runtime.js': ['0.1, 32'],
@@ -133,7 +134,7 @@ if missing:
         'VisualTestCapture', 'VISUAL_CAPTURE_DIR', 'installVisualCaptureWatcher', 'replace(/^\\uFEFF/',
         'return sum/9.0', 'starRayStrength: 0.12', 'starSizeMin: 0.36', 'milkyWayIntensity: 0.34',
         'uStarDensity*0.014', 'uStarDensity*0.052', 'mix(0.00072,0.00235', 'float radius=max(aa*1.08', 'float radius=max(aa*1.45', 'rayLength=radius*mix(2.0,4.5', 'rayLength=radius*mix(2.0,4.2',
-        'galacticNormal=normalize', 'galacticCloudEnvelope=', 'dustTransmission=', 'ring*0.28', 'coronaInner=pow(sunDot,1500.0)',
+        'galacticNormal=normalize', 'galacticCloudEnvelope=', 'dustTransmission=', 'ring*0.28', 'return vec2(clamp(albedo', 'coronaInner=pow(sunDot,1500.0)', 'coronaEnvelope=exp(-coronaDistance',
         'sky=mix(sky,vec3(0.00001)', 'indirectStrength: 0.9', 'ambientIntensity: (0.09',
         'max="32"', '0.1, 32', 'ambientIntensity: (0.09', 'ambientIntensity: (0.12', 'selectedId=null', 'selectedId=originalSelectedId'
     ])]

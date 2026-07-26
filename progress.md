@@ -34,6 +34,8 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Current uncommitted gate increases authored sky irradiance, strengthens stellar PSF sampling, adds broken multi-branch dust and granular galactic stars, and frames the Milky Way evidence on a diagonal.
 - `npm.cmd test`: 132/132 passed.
 - `npm.cmd run verify`: passed.
+- Exact packaged commit `05ed7c6769354e719af1aacc43ec46b03496e836` passed automated capture thresholds but failed manual visual review: daylight remained underlit, stellar density remained low, the galactic dust lane remained too straight, lunar craters read as rings, and the eclipse remained a flat black disc with a uniform halo.
+- The next bounded gate replaces ring decals with layered lunar basins/maria, renders a deterministic structured corona with annular and diamond-ring states, and connects eclipse coverage to the authoritative ambient/direct world light and daylight star visibility.
 
 ## Remaining visual work
 

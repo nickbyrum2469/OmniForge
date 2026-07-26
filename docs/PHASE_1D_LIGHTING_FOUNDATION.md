@@ -60,6 +60,8 @@ Every corrective package must still be built from a clean commit, capture the ex
 
 The second correction package passed automated thresholds but remained manually blocked. A follow-up composition study in the same packaged scene showed that the previous evidence camera was aligned exactly with the galactic plane, exaggerating a horizontal horizon-like presentation. The next evidence revision deliberately frames the configured galactic core off-center and diagonally while keeping the same authoritative world and renderer. The shader also reduces uniform broad-band light, introduces broken central and branching dust lanes, adds contrast-controlled cloud masses and deterministic granular stars, and increases authored daytime sky irradiance without using Editor-only fill lighting.
 
+Exact packaged evidence from `05ed7c6769354e719af1aacc43ec46b03496e836` proved the remaining Moon and eclipse failures. The lunar surface used bright analytic ring profiles that read as stamped circles, while the eclipse used two rotationally uniform Sun-dot powers and left the daytime atmosphere nearly unchanged. The next gate replaces those models with subdued crater basins, coherent maria, a deterministic polar corona with structured streamers, annular and diamond-ring states, daylight star emergence, and eclipse-driven direct/ambient world-light response.
+
 ## Protected behavior
 
 - The continuous terrain-conforming path remains authoritative.
