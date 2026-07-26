@@ -96,6 +96,7 @@ test('light colors are decoded to linear space before BRDF evaluation', () => {
 
 test('game-accurate daylight includes authored sky irradiance without an editor-only fill light', () => {
   assert.match(worldSystems, /ambientIntensity: \(0\.12 \+ day \* 0\.45 \+ Number\(world\.lighting\.indirectStrength \?\? 0\.72\) \* 0\.66\)/);
+  assert.match(worldSystems, /const ambientDay = mix\(\[12, 20, 48\], \[154, 178, 210\], day\)/);
   assert.match(renderer, /baseLinear\*ambient\+editorAmbient/);
   assert.match(renderer, /uEditorFill/);
 });

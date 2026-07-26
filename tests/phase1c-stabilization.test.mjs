@@ -132,6 +132,7 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /vec3 galacticNormal=normalize\(vec3\(cos\(orientation\)\*0\.78,0\.32,sin\(orientation\)\*0\.78\)\)/);
   assert.match(sky, /float dustTransmission=/);
   assert.match(sky, /float darkPockets=/);
+  assert.match(sky, /float centralPresence=/);
   assert.match(sky, /float coreBulge=/);
   assert.doesNotMatch(sky, /microStructure=/);
   assert.match(sky, /sky=mix\(sky,vec3\(0\.00001\),eclipseSilhouette\)/);
@@ -146,6 +147,8 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(worldUi, /lookPreset: options\.preservePreset/);
   assert.match(worldSystems, /dayFogMultiplier/);
   assert.match(worldSystems, /ambientIntensity: \(0\.12 \+ day \* 0\.45/);
+  assert.match(worldSystems, /const ambientDay = mix\(\[12, 20, 48\], \[154, 178, 210\], day\)/);
+  assert.match(visualCapture, /nightFogMultiplier=\.18;exposure=\.86/);
   assert.match(worldSystems, /renderProxy: false/);
   assert.match(visualCapture, /starIntensity=\.24;starDensity=\.72;starBrightness=\.68;milkyWayIntensity=\.72/);
   assert.match(visualCapture, /starHeroFraction=\.004/);

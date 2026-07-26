@@ -269,9 +269,11 @@ vec3 milkyWay(vec3 ray,float horizonMask){
   float granularStars=pow(smoothstep(0.72,0.98,noise3(periodic*vec3(82.0,82.0,128.0)+uStarSeed*0.0031)),5.0);
   granularStars*=narrowBand*uMilkyWayDetail*(0.24+galacticCore*0.52);
   float dustBreakup=smoothstep(0.34,0.7,noise3(periodic*vec3(5.7,5.7,14.0)+vec3(9.0,17.0,4.0)));
-  float centralOffset=localWidth*(0.08*sin(longitude*4.3+coarse*3.2)+(medium-0.5)*0.16);
-  float centralDust=exp(-pow(abs(signedDistance-centralOffset)/max(0.0032,localWidth*0.09),2.0)*1.8);
-  centralDust*=smoothstep(0.28,0.64,dustBreakup)*uMilkyWayDust;
+  float centralOffset=localWidth*(0.32*sin(longitude*3.1+coarse*5.0)+(medium-0.5)*0.55);
+  float centralWidth=localWidth*mix(0.045,0.12,dustBreakup);
+  float centralDust=exp(-pow(abs(signedDistance-centralOffset)/max(0.0028,centralWidth),2.0)*1.7);
+  float centralPresence=smoothstep(0.4,0.66,dustBreakup)*mix(0.28,1.0,smoothstep(0.36,0.7,coarse));
+  centralDust*=centralPresence*uMilkyWayDust;
   float branchOffset=localWidth*(0.24+0.16*sin(longitude*2.4+medium*4.0));
   float branchA=exp(-pow(abs(signedDistance-branchOffset)/max(0.0035,localWidth*0.085),2.0)*1.65);
   float branchB=exp(-pow(abs(signedDistance+branchOffset*0.82)/max(0.0035,localWidth*0.1),2.0)*1.7);

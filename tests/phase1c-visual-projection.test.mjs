@@ -30,6 +30,7 @@ test('Milky Way uses periodic smooth direction-space dust without longitude seam
   assert.match(sky, /float branchingDust=/);
   assert.match(sky, /float dustTransmission=/);
   assert.match(sky, /float darkPockets=/);
+  assert.match(sky, /float centralPresence=/);
   assert.match(sky, /centralDust/);
   assert.match(sky, /float micro=/);
   assert.doesNotMatch(sky, /ray\*5\.3\+tangent\*longitude/);

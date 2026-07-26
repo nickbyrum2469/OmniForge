@@ -40,6 +40,7 @@ REQUIRED = {
         'milkyWayIntensity: 0.34',
         'milkyWayClumping:',
         'ambientIntensity: (0.12 + day * 0.45',
+        'const ambientDay = mix([12, 20, 48], [154, 178, 210], day)',
         'renderProxy: false'
     ],
     'app/v010.js': [
@@ -63,6 +64,7 @@ REQUIRED = {
         'uStarRayStrength',
         'vec3 galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78))',
         'float dustTransmission=',
+        'float centralPresence=',
         'vec3 periodic=vec3(cos(longitude),sin(longitude),latitude)',
         'float coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
         'float diamondRing=',
@@ -81,12 +83,16 @@ BASE_FINAL_VISUAL_MARKERS = {
         'rayLength=radius*mix(2.0,4.2',
         'galacticNormal=normalize(vec3(cos(orientation)*0.78,0.32,sin(orientation)*0.78))',
         'float dustTransmission=',
+        'float centralPresence=',
         'coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
     ],
     'app/environment-runtime.js': ['0.1, 32'],
     'app/v010.js': ['id="v010MoonSize" type="range" min="0.1" max="32"'],
-    'server/v010-systems.mjs': ['ambientIntensity: (0.12 + day * 0.45'],
+    'server/v010-systems.mjs': [
+        'ambientIntensity: (0.12 + day * 0.45',
+        'const ambientDay = mix([12, 20, 48], [154, 178, 210], day)'
+    ],
     'app/app.js': ['selectedId=null', 'selectedId=originalSelectedId'],
     'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.006', 'milkyWayOrientation=32', 'moonSize=22', 'sunSize=9']
 }
@@ -97,13 +103,17 @@ REFINED_VISUAL_MARKERS = {
         'uStarDensity*0.13',
         'rayLength=radius*mix(2.0,4.2',
         'float dustTransmission=',
+        'float centralPresence=',
         'return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24))',
         'coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
     ],
     'app/environment-runtime.js': ['0.1, 32'],
     'app/v010.js': ['id="v010MoonSize" type="range" min="0.1" max="32"'],
-    'server/v010-systems.mjs': ['ambientIntensity: (0.12 + day * 0.45'],
+    'server/v010-systems.mjs': [
+        'ambientIntensity: (0.12 + day * 0.45',
+        'const ambientDay = mix([12, 20, 48], [154, 178, 210], day)'
+    ],
     'app/app.js': ['selectedId=null', 'selectedId=originalSelectedId'],
     'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.004', 'milkyWayOrientation=32', 'starIntensity=.24;starDensity=.72', 'moonSize=22', 'sunSize=9']
 }
@@ -136,7 +146,8 @@ if missing:
         'uStarDensity*0.014', 'uStarDensity*0.052', 'uStarDensity*0.13', 'microStarLayer', 'mix(0.00072,0.00235', 'float radius=max(aa*1.08', 'float radius=max(aa*1.45', 'rayLength=radius*mix(2.0,4.5', 'rayLength=radius*mix(2.0,4.2',
         'galacticNormal=normalize', 'galacticCloudEnvelope=', 'dustTransmission=', 'ring*0.28', 'return vec2(clamp(albedo', 'coronaInner=pow(sunDot,1500.0)', 'coronaEnvelope=exp(-coronaDistance',
         'sky=mix(sky,vec3(0.00001)', 'indirectStrength: 0.9', 'ambientIntensity: (0.09',
-        'max="32"', '0.1, 32', 'ambientIntensity: (0.09', 'ambientIntensity: (0.12', 'selectedId=null', 'selectedId=originalSelectedId'
+        'max="32"', '0.1, 32', 'ambientIntensity: (0.09', 'ambientIntensity: (0.12',
+        'const ambientDay = mix([12, 20, 48]', 'selectedId=null', 'selectedId=originalSelectedId'
     ])]
     if broad_missing:
         print('Phase 1C broad integration is required:')

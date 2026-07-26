@@ -68,6 +68,8 @@ Packaged commit `9c045c107f179e207efbb0410ec47481de1db0f5` corrected the paw-lik
 
 That direct-cell optimization was rejected after exact packaged commit `c3de29af11f17707384163dcd204e456da115226` exposed radial shard aliasing at real viewport resolution. It was removed completely. The corrected gate raises accepted density inside the existing pole-safe, neighbor-aware point-spread-function renderer, retaining one visually correct star representation instead of shipping a cheaper conflicting path.
 
+Packaged commit `88047b34086d43e1f29e7dc79741c316ffe42e7a` restored dense PSF stars without the shard artifact. A source trace then confirmed that the visible Sun, directional shadow, and BRDF use one authority with the correct direction sign. Clear-day underexposure was therefore corrected at the authored exposure and sky-irradiance inputs rather than with an artificial Editor-only lamp. The galactic lane is also given a larger noisy offset, variable width, and a discontinuous presence mask so it cannot remain a single straight stripe.
+
 ## Protected behavior
 
 - The continuous terrain-conforming path remains authoritative.

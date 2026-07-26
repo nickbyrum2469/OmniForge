@@ -66,7 +66,7 @@ export function defaultWorldSettings(existing = {}) {
       aerialPerspective: 1,
       dayFogMultiplier: 0.04,
       nightFogMultiplier: 0.18,
-      exposure: 0.7,
+      exposure: 0.86,
       saturation: 1.08,
       contrast: 1.03,
       vibrance: 0.1,
@@ -209,7 +209,7 @@ export function applyWorldToScene(scene, world) {
   const solarEclipse = celestial.moon.solarEclipse;
   const lunarEclipse = celestial.moon.lunarEclipse;
   const eclipseDaylight = 1 - solarEclipse * 0.94;
-  const ambientDay = mix([12, 20, 48], [108, 145, 196], day);
+  const ambientDay = mix([12, 20, 48], [154, 178, 210], day);
   const ambientTwilight = mix(ambientDay, [92, 55, 73], twilight * 0.5);
   const eclipseAmbient = mix(ambientTwilight, [14, 22, 40], solarEclipse * 0.82);
   const exposure = clamp(Number(world.atmosphere.exposure || 1), 0.1, 4);

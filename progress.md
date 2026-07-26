@@ -40,6 +40,8 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Exact packaged commit `9c045c107f179e207efbb0410ec47481de1db0f5` removed the lunar paw pattern and the star leak through the eclipsing disc. The Moon is materially more coherent, and the eclipse now has a readable cool atmosphere plus a structured white corona, but both remain short of the photographic references.
 - The next gate adds two low-cost deterministic micro-star populations, keeps bright hero stars on the existing antialiased path, removes the Milky Way's continuous central dust line, and strengthens irregular dust pockets and granular stellar structure.
 - Exact packaged commit `c3de29af11f17707384163dcd204e456da115226` rejected the direct-cell micro-star optimization: it aliased into obvious radial shard patterns at viewport resolution. The implementation is removed rather than hidden. Density is instead raised inside the existing pole-safe, neighbor-aware PSF population, preserving one correct star representation.
+- Exact packaged commit `88047b34086d43e1f29e7dc79741c316ffe42e7a` restores correct dense PSF stars without radial shards. Manual review still blocks the slightly dash-like smallest points, the continuous central galactic lane, and a clear-day scene that remains too dark.
+- Direction tracing confirmed one Sun authority and the correct sign from celestial direction through shadow projection and BRDF N·L. The daylight correction therefore raises authored clear-day exposure and environment irradiance instead of adding a fake Editor-only light. The same gate widens, warps, and intermittently removes the central galactic dust lane.
 
 ## Remaining visual work
 

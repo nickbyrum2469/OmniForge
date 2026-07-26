@@ -97,7 +97,7 @@ try{
 
   $revision=Patch-World $port @{
     lookPreset='clear-day';time=@{hours=12};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
-    atmosphere=@{haze=.004;mie=.025;humidity=.02;dayFogMultiplier=.08;nightFogMultiplier=.18;exposure=.72;saturation=1.04;contrast=1.03;vibrance=.06};
+    atmosphere=@{haze=.004;mie=.025;humidity=.02;dayFogMultiplier=.08;nightFogMultiplier=.18;exposure=.86;saturation=1.04;contrast=1.03;vibrance=.06};
     sky=@{celestialMode='manual';sunAzimuth=18;sunElevation=42;moonAzimuth=205;moonElevation=-22;planetEnabled=$false;eclipseMode='auto';starIntensity=0;milkyWayIntensity=0}
   }
   Request-Capture $captureDir 'clear-day' @{position=@(20,15,30);yaw=-.55;pitch=.18;fov=62} $revision|Out-Null
