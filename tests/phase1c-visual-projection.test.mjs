@@ -65,9 +65,10 @@ test('Moon uses the attributed LRO mosaic with a deterministic procedural fallba
   assert.match(sky, /uniform sampler2D uMoonAlbedoMap/);
   assert.match(sky, /atan\(rotatedNormal\.x,-rotatedNormal\.z\)\/TAU\+0\.5/);
   assert.match(sky, /mappedAlbedo=srgbToLinear\(texture\(uMoonAlbedoMap,lunarMapUv\)\.rgb\)/);
-  assert.match(sky, /new URL\('\.\/assets\/sky\/lroc_color_2k\.jpg', import\.meta\.url\)\.href/);
+  assert.match(sky, /new URL\('\.\/sky-assets\/lroc_color_2k\.jpg', import\.meta\.url\)\.href/);
+  assert.match(sky, /moon-albedo-ready/);
   assert.match(sky, /moon-albedo-load-failed/);
-  assert.ok(fs.existsSync(new URL('../app/assets/sky/lroc_color_2k.jpg', import.meta.url)));
+  assert.ok(fs.existsSync(new URL('../app/sky-assets/lroc_color_2k.jpg', import.meta.url)));
   const provenance = fs.readFileSync(new URL('../docs/ASSET_PROVENANCE_SKY.md', import.meta.url), 'utf8');
   assert.match(provenance, /NASA Scientific Visualization Studio/);
   assert.match(provenance, /f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170/i);

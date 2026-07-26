@@ -2,7 +2,7 @@
 
 ## LRO Moon Color Mosaic
 
-- Runtime file: `app/assets/sky/lroc_color_2k.jpg`
+- Runtime file: `app/sky-assets/lroc_color_2k.jpg`
 - Original filename: `lroc_color_2k.jpg`
 - Source: NASA Scientific Visualization Studio, CGI Moon Kit
 - Source page: https://svs.gsfc.nasa.gov/4720/
@@ -19,6 +19,6 @@
 
 ### Runtime use
 
-The sRGB color mosaic supplies the authoritative lunar albedo in the renderer-owned sky pass. The shader maps the equirectangular mosaic onto the Moon's spherical normal, applies the existing physically connected Sun–Moon phase lighting, and retains restrained procedural micro-relief. If the image cannot be loaded, the existing procedural lunar surface remains available as a deterministic fallback.
+The sRGB color mosaic supplies the authoritative lunar albedo in the renderer-owned sky pass. The built-in file deliberately lives outside the server's reserved `/assets/` route, which is owned by imported project assets. The shader maps the equirectangular mosaic onto the Moon's spherical normal, applies the existing physically connected Sun–Moon phase lighting, and retains restrained procedural micro-relief. If the image cannot be loaded, the existing procedural lunar surface remains available as a deterministic fallback.
 
 The texture contains no NASA insignia, logo, identifiable person, or promotional endorsement. OmniForge credits NASA's Scientific Visualization Studio as the source and must not imply NASA endorsement.

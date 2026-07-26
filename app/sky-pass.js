@@ -603,12 +603,17 @@ export class SkyPass {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
       this.moonAlbedoReady = 1;
+      window.__omniforgeDiagnostics?.mark?.('moon-albedo-ready', {
+        url: moonAlbedoImage.src,
+        width: moonAlbedoImage.naturalWidth,
+        height: moonAlbedoImage.naturalHeight
+      });
     };
     moonAlbedoImage.onerror = () => {
       this.moonAlbedoReady = 0;
       window.__omniforgeDiagnostics?.warn?.('moon-albedo-load-failed', { url: moonAlbedoImage.src });
     };
-    moonAlbedoImage.src = new URL('./assets/sky/lroc_color_2k.jpg', import.meta.url).href;
+    moonAlbedoImage.src = new URL('./sky-assets/lroc_color_2k.jpg', import.meta.url).href;
     this.locations = {};
     for (const name of [
       'uForward','uRight','uUp','uCameraPosition','uTanHalfFov','uAspect','uSunDirection','uMoonDirection','uSunColor','uMoonColor',
