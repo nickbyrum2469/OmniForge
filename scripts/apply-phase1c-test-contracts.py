@@ -22,7 +22,11 @@ patch('tests/editor-runtime-stability.test.mjs', [
     ),
     (
         "assert.doesNotMatch(worldApi.slice(worldApi.indexOf(\"'/api/v010/world/step'\"), worldApi.indexOf(\"'/api/v010/foliage/species'\")), /state: result\\.state/);",
-        "assert.match(worldApi.slice(worldApi.indexOf(\"'/api/v010/world/step'\"), worldApi.indexOf(\"'/api/v010/foliage/species'\")), /includeFullState[\\s\\S]*\\.\\.\\.\\(includeFullState \? \{ state: result\\.state \} : \{\}\\)/);"
+        "assert.match(worldApi.slice(worldApi.indexOf(\"'/api/v010/world/step'\"), worldApi.indexOf(\"'/api/v010/foliage/species'\")), /includeFullState[\\s\\S]*\\.\\.\\.\\(includeFullState \\? \\{ state: result\\.state \\} : \\{\\}\\)/);"
+    ),
+    (
+        "assert.match(worldgenApi, /repairCelestialAuthority/);",
+        "assert.match(worldgenApi, /ensureWorldFoundationState/);"
     )
 ])
 
@@ -30,6 +34,10 @@ patch('tests/phase1-sky-navigation.test.mjs', [
     (
         "assert.equal(acquisition.reason, 'acquisition');",
         "assert.equal(acquisition.reason, 'session-warmup');"
+    ),
+    (
+        "const next = applyLookDelta(camera, look, { dx: 8, dy: 4, source: 'pointer-lock', now: 536 });\n  assert.equal(next.changed, true);",
+        "const resumeWarmup = applyLookDelta(camera, look, { dx: 8, dy: 4, source: 'pointer-lock', now: 536 });\n  assert.equal(resumeWarmup.reason, 'session-warmup');\n  const next = applyLookDelta(camera, look, { dx: 8, dy: 4, source: 'pointer-lock', now: 552 });\n  assert.equal(next.changed, true);"
     ),
     (
         "assert.doesNotMatch(app, /linear-gradient\\(/);",
