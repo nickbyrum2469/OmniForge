@@ -59,6 +59,13 @@ uniform vec3 uGroundColor;
 uniform float uDayFactor;
 uniform float uNightFactor;
 uniform float uTwilightFactor;
+uniform float uRayleigh;
+uniform float uMie;
+uniform float uHaze;
+uniform float uHumidity;
+uniform float uWeatherFog;
+uniform float uDayFogMultiplier;
+uniform float uNightFogMultiplier;
 uniform float uStarVisibility;
 uniform float uStarDensity;
 uniform float uStarBrightness;
@@ -67,15 +74,23 @@ uniform float uStarTwinkleSpeed;
 uniform float uStarSizeMin;
 uniform float uStarSizeMax;
 uniform float uStarColorVariation;
+uniform float uStarRayStrength;
+uniform float uStarRayLength;
+uniform float uStarHeroFraction;
 uniform float uStarSeed;
 uniform float uMilkyWayIntensity;
 uniform float uMilkyWayWidth;
 uniform float uMilkyWayDetail;
 uniform float uMilkyWayOrientation;
 uniform float uMilkyWayDust;
+uniform float uMilkyWayWarp;
+uniform float uMilkyWayClumping;
+uniform float uMilkyWayCoreStrength;
+uniform float uMilkyWayWidthVariation;
 uniform vec3 uMilkyWayColor;
 uniform float uSunAngularRadius;
 uniform float uSunGlow;
+uniform float uSolarEclipseCoverage;
 uniform float uMoonAngularRadius;
 uniform float uMoonGlow;
 uniform float uMoonPhase;
@@ -83,6 +98,13 @@ uniform float uMoonBrightness;
 uniform float uMoonDetail;
 uniform float uMoonVisibility;
 uniform float uMoonEarthshine;
+uniform float uMoonCraterStrength;
+uniform float uMoonMariaStrength;
+uniform float uMoonSurfaceContrast;
+uniform float uMoonPatternRotation;
+uniform float uMoonPatternSeed;
+uniform float uMoonReliefStrength;
+uniform float uMoonLimbDarkening;
 uniform float uLunarEclipse;
 uniform float uSolarEclipse;
 uniform float uPlanetEnabled;
@@ -123,82 +145,106 @@ float noise2(vec2 p){
 float noise3(vec3 p){
   vec3 i=floor(p),f=fract(p);
   f=f*f*(3.0-2.0*f);
-  float n000=hash31(i);
-  float n100=hash31(i+vec3(1,0,0));
-  float n010=hash31(i+vec3(0,1,0));
-  float n110=hash31(i+vec3(1,1,0));
-  float n001=hash31(i+vec3(0,0,1));
-  float n101=hash31(i+vec3(1,0,1));
-  float n011=hash31(i+vec3(0,1,1));
-  float n111=hash31(i+vec3(1,1,1));
-  float x00=mix(n000,n100,f.x),x10=mix(n010,n110,f.x);
-  float x01=mix(n001,n101,f.x),x11=mix(n011,n111,f.x);
+  float n000=hash31(i),n100=hash31(i+vec3(1,0,0)),n010=hash31(i+vec3(0,1,0)),n110=hash31(i+vec3(1,1,0));
+  float n001=hash31(i+vec3(0,0,1)),n101=hash31(i+vec3(1,0,1)),n011=hash31(i+vec3(0,1,1)),n111=hash31(i+vec3(1,1,1));
+  float x00=mix(n000,n100,f.x),x10=mix(n010,n110,f.x),x01=mix(n001,n101,f.x),x11=mix(n011,n111,f.x);
   return mix(mix(x00,x10,f.y),mix(x01,x11,f.y),f.z);
 }
 float fbm2(vec2 p){
   float value=0.0,amplitude=0.55;
   mat2 rotation=mat2(0.8,-0.6,0.6,0.8);
-  for(int i=0;i<5;i++){
-    value+=noise2(p)*amplitude;
-    p=rotation*p*2.03+17.17;
-    amplitude*=0.5;
-  }
+  for(int i=0;i<5;i++){value+=noise2(p)*amplitude;p=rotation*p*2.03+17.17;amplitude*=0.5;}
   return value;
 }
 float fbm3(vec3 p){
   float value=0.0,amplitude=0.56;
-  for(int i=0;i<4;i++){
-    value+=noise3(p)*amplitude;
-    p=p*2.03+vec3(13.1,7.7,19.3);
-    amplitude*=0.5;
-  }
+  for(int i=0;i<5;i++){value+=noise3(p)*amplitude;p=p*2.03+vec3(13.1,7.7,19.3);amplitude*=0.5;}
   return value;
 }
-vec3 toneMap(vec3 value){
-  value*=max(0.05,uExposure);
-  value=(value*(2.51*value+0.03))/(value*(2.43*value+0.59)+0.14);
-  return pow(clamp(value,0.0,1.0),vec3(1.0/2.2));
+
+vec3 cubeProjection(vec3 direction){
+  vec3 a=abs(direction);
+  vec2 uv;
+  float face;
+  if(a.x>=a.y&&a.x>=a.z){
+    uv=direction.x>0.0?vec2(-direction.z,direction.y)/a.x:vec2(direction.z,direction.y)/a.x;
+    face=direction.x>0.0?0.0:1.0;
+  }else if(a.y>=a.x&&a.y>=a.z){
+    uv=direction.y>0.0?vec2(direction.x,-direction.z)/a.y:vec2(direction.x,direction.z)/a.y;
+    face=direction.y>0.0?2.0:3.0;
+  }else{
+    uv=direction.z>0.0?vec2(direction.x,direction.y)/a.z:vec2(-direction.x,direction.y)/a.z;
+    face=direction.z>0.0?4.0:5.0;
+  }
+  return vec3(uv*0.5+0.5,face);
 }
 
-vec3 starLayer(vec2 uv,float scale,float seed){
-  vec2 gridScale=vec2(scale,scale*0.5);
-  vec2 cell=floor(uv*gridScale);
-  vec2 local=fract(uv*gridScale)-0.5;
-  float identity=hash21(cell+seed);
-  float probability=clamp(uStarDensity*0.018,0.0004,0.06);
+vec3 starLayer(vec3 ray,float scale,float seed){
+  vec3 projected=cubeProjection(ray);
+  vec2 scaled=projected.xy*scale;
+  vec2 cell=floor(scaled);
+  vec2 local=fract(scaled)-0.5;
+  float faceSeed=projected.z*131.7;
+  float identity=hash21(cell+seed+faceSeed);
+  float probability=clamp(uStarDensity*0.012,0.0002,0.045);
   if(identity<1.0-probability)return vec3(0.0);
-  float sizeRandom=hash21(cell+seed+17.7);
-  float radius=mix(0.018,0.105,pow(sizeRandom,5.0))*mix(uStarSizeMin,uStarSizeMax,sizeRandom);
-  float disc=1.0-smoothstep(radius*0.34,radius,length(local));
-  float phase=hash21(cell+seed+43.2)*TAU;
-  float speed=mix(0.55,2.6,hash21(cell+seed+9.3))*uStarTwinkleSpeed;
+  vec2 offset=vec2(hash21(cell+seed+17.7+faceSeed),hash21(cell+seed+91.2+faceSeed))-0.5;
+  offset*=0.58;
+  vec2 p=local-offset;
+  float sizeRandom=hash21(cell+seed+33.4+faceSeed);
+  float hero=step(1.0-uStarHeroFraction,hash21(cell+seed+8.8+faceSeed));
+  float apparent=mix(uStarSizeMin,uStarSizeMax,pow(sizeRandom,3.7));
+  float radius=mix(0.012,0.055,pow(sizeRandom,4.5))*apparent*(1.0+hero*0.7);
+  float aa=max(fwidth(length(p)),0.0015);
+  float disc=1.0-smoothstep(radius-aa,radius+aa,length(p));
+  float phase=hash21(cell+seed+43.2+faceSeed)*TAU;
+  float speed=mix(0.35,2.4,hash21(cell+seed+9.3+faceSeed))*uStarTwinkleSpeed;
   float pulse=0.5+0.5*sin(uTime*speed+phase);
-  float twinkle=mix(1.0,mix(0.52,1.42,pulse),uStarTwinkleAmount);
-  float temperature=hash21(cell+seed+71.4);
-  vec3 warm=vec3(1.0,0.74,0.52),neutral=vec3(0.92,0.96,1.0),cool=vec3(0.58,0.76,1.0);
+  float shimmer=0.5+0.5*sin(uTime*speed*1.91+phase*1.37);
+  float twinkle=mix(1.0,mix(0.58,1.38,pulse)*mix(0.9,1.1,shimmer),uStarTwinkleAmount);
+  float temperature=hash21(cell+seed+71.4+faceSeed);
+  vec3 warm=vec3(1.0,0.72,0.48),neutral=vec3(0.94,0.97,1.0),cool=vec3(0.56,0.74,1.0);
   vec3 starColor=temperature<0.5?mix(warm,neutral,temperature*2.0):mix(neutral,cool,(temperature-0.5)*2.0);
-  starColor=mix(vec3(0.86,0.91,1.0),starColor,uStarColorVariation);
-  return starColor*disc*twinkle*uStarBrightness*(0.45+sizeRandom*1.8);
+  starColor=mix(vec3(0.9,0.94,1.0),starColor,uStarColorVariation);
+  float rayLength=max(0.1,uStarRayLength);
+  float horizontal=exp(-abs(p.y)*mix(55.0,18.0,rayLength))*exp(-abs(p.x)*mix(5.5,2.0,rayLength));
+  float vertical=exp(-abs(p.x)*mix(55.0,18.0,rayLength))*exp(-abs(p.y)*mix(5.5,2.0,rayLength));
+  float diagonal=exp(-abs(p.x+p.y)*mix(70.0,24.0,rayLength))*exp(-abs(p.x-p.y)*4.0);
+  float rays=(horizontal+vertical+diagonal*0.28)*hero*uStarRayStrength*0.18;
+  float energy=(0.38+sizeRandom*1.5+hero*1.8)*uStarBrightness*twinkle;
+  return starColor*(disc+rays)*energy;
 }
+
+float wrappedDistance(float a,float b){return abs(atan(sin(a-b),cos(a-b)));}
+
 vec3 milkyWay(vec3 ray,float horizonMask){
   float orientation=radians(uMilkyWayOrientation);
-  vec3 galacticNormal=normalize(vec3(0.36*sin(orientation)+0.24,0.82,0.36*cos(orientation)-0.42));
-  vec3 tangent=normalize(cross(abs(galacticNormal.y)>.94?vec3(1,0,0):vec3(0,1,0),galacticNormal));
+  vec3 galacticNormal=normalize(vec3(0.34*sin(orientation)+0.23,0.78,0.34*cos(orientation)-0.46));
+  vec3 reference=abs(galacticNormal.y)>.94?vec3(1,0,0):vec3(0,1,0);
+  vec3 tangent=normalize(cross(reference,galacticNormal));
   vec3 bitangent=normalize(cross(galacticNormal,tangent));
   float latitude=dot(ray,galacticNormal);
   float longitude=atan(dot(ray,bitangent),dot(ray,tangent));
-  float warp=(fbm2(vec2(longitude*1.35,4.7))-0.5)*uMilkyWayWidth*0.7*uMilkyWayDetail;
+  vec3 domain=ray*5.3+tangent*longitude*1.4+uStarSeed*0.0007;
+  float longNoise=fbm3(domain*0.72+vec3(4.1,9.2,2.7));
+  float fineNoise=fbm3(domain*2.35+vec3(19.4,3.7,11.8));
+  float warp=(sin(longitude*1.73+longNoise*3.4)+sin(longitude*4.15-0.7)*0.34)*uMilkyWayWidth*uMilkyWayWarp*0.34;
+  float widthNoise=0.62+uMilkyWayWidthVariation*(0.22+0.45*longNoise+0.18*sin(longitude*2.6+1.1));
+  float localWidth=max(0.006,uMilkyWayWidth*max(0.25,widthNoise));
   float distanceFromPlane=abs(latitude-warp);
-  float core=exp(-pow(distanceFromPlane/max(0.008,uMilkyWayWidth),2.0)*2.2);
-  float halo=exp(-pow(distanceFromPlane/max(0.015,uMilkyWayWidth*2.8),2.0)*1.4)*0.32;
-  vec2 cloudUv=vec2(longitude*7.0,latitude/max(0.01,uMilkyWayWidth)*2.3);
-  float clouds=0.42+0.58*fbm2(cloudUv*mix(0.7,2.2,uMilkyWayDetail/3.0)+uStarSeed*0.001);
-  float granular=pow(noise2(cloudUv*11.0+31.0),4.0)*0.42*uMilkyWayDetail;
-  float dustNoise=fbm2(vec2(longitude*11.0,latitude/max(0.01,uMilkyWayWidth)*5.0)+19.2);
-  float dustLane=exp(-pow((latitude-warp*0.55)/max(0.004,uMilkyWayWidth*0.18),2.0)*2.0)*smoothstep(0.36,0.76,dustNoise)*uMilkyWayDust;
-  float luminance=max(0.0,(core+halo)*(clouds+granular)*(1.0-dustLane*0.88));
-  vec3 color=mix(uMilkyWayColor,vec3(0.92,0.72,0.55),smoothstep(0.55,1.0,clouds)*0.2);
-  return color*luminance*uMilkyWayIntensity*0.72*horizonMask;
+  float coreBand=exp(-pow(distanceFromPlane/localWidth,2.0)*1.8);
+  float broadHalo=exp(-pow(distanceFromPlane/max(0.012,localWidth*3.2),2.0)*1.15)*0.28;
+  float galacticCore=exp(-pow(wrappedDistance(longitude,-0.55)/0.62,2.0))*uMilkyWayCoreStrength;
+  float longitudinalVariation=0.34+0.66*smoothstep(0.16,0.9,longNoise+fineNoise*0.25);
+  float brokenRegions=mix(1.0,smoothstep(0.18,0.72,fbm3(domain*1.15+33.0)),clamp(uMilkyWayClumping,0.0,1.0));
+  float stellarKnots=pow(max(0.0,fineNoise-0.48),3.0)*3.4*uMilkyWayDetail;
+  float dustStructure=fbm3(domain*3.7+vec3(7.2,21.1,4.8));
+  float dustLane=exp(-pow((latitude-warp*0.82)/max(0.0035,localWidth*0.2),2.0)*2.2)*smoothstep(0.32,0.78,dustStructure)*uMilkyWayDust;
+  float sideLane=exp(-pow((latitude-warp-localWidth*0.44)/max(0.004,localWidth*0.25),2.0)*2.0)*smoothstep(0.5,0.85,fineNoise)*uMilkyWayDust*0.4;
+  float luminance=max(0.0,(coreBand+broadHalo)*(longitudinalVariation+galacticCore*0.62+stellarKnots)*brokenRegions*(1.0-dustLane*0.9-sideLane*0.45));
+  vec3 warmCore=vec3(0.96,0.74,0.52);
+  vec3 color=mix(uMilkyWayColor,warmCore,clamp(galacticCore*0.24,0.0,0.34));
+  return color*luminance*uMilkyWayIntensity*0.62*horizonMask;
 }
 
 vec2 celestialUv(vec3 ray,vec3 direction,float angularRadius){
@@ -208,104 +254,142 @@ vec2 celestialUv(vec3 ray,vec3 direction,float angularRadius){
   float scale=max(0.00005,sin(radians(max(0.02,angularRadius))));
   return vec2(dot(ray,right),dot(ray,up))/scale;
 }
+
+float craterField(vec2 uv,float scale,float seed){
+  vec2 g=uv*scale;
+  vec2 cell=floor(g);
+  vec2 local=fract(g)-0.5;
+  float nearest=10.0;
+  float ring=0.0;
+  float basin=0.0;
+  for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+    vec2 neighbor=vec2(float(x),float(y));
+    vec2 id=cell+neighbor;
+    vec2 center=neighbor+vec2(hash21(id+seed),hash21(id+seed+41.7))-0.5;
+    float radius=mix(0.11,0.34,hash21(id+seed+17.3));
+    float d=length(local-center);
+    nearest=min(nearest,d);
+    ring=max(ring,exp(-pow((d-radius)/max(0.012,radius*0.12),2.0)));
+    basin=max(basin,(1.0-smoothstep(0.0,radius,d))*mix(0.2,0.8,hash21(id+seed+73.1)));
+  }
+  return ring*0.62-basin*0.36;
+}
+
+vec3 lunarSurface(vec2 moonUv,vec3 surfaceNormal,float phaseLighting){
+  float rotation=radians(uMoonPatternRotation);
+  mat2 r=mat2(cos(rotation),-sin(rotation),sin(rotation),cos(rotation));
+  vec2 rotated=r*moonUv;
+  vec3 rotatedNormal=normalize(vec3(r*surfaceNormal.xy,surfaceNormal.z));
+  float low=fbm3(rotatedNormal*2.15+uMoonPatternSeed*0.0009);
+  float mid=fbm3(rotatedNormal*5.7+vec3(8.1,2.7,19.4)+uMoonPatternSeed*0.0017);
+  float maria=smoothstep(0.5,0.72,low*0.78+mid*0.22);
+  maria*=smoothstep(-0.86,0.18,rotated.x+rotated.y*0.22)+smoothstep(0.62,-0.4,rotated.x-rotated.y*0.7)*0.45;
+  maria=clamp(maria,0.0,1.0)*uMoonMariaStrength;
+  float craters=(craterField(rotated,5.5,uMoonPatternSeed)+craterField(rotated,13.0,uMoonPatternSeed+91.0)*0.55+craterField(rotated,31.0,uMoonPatternSeed+211.0)*0.24)*uMoonCraterStrength;
+  float grain=(fbm3(rotatedNormal*22.0+31.0)-0.5)*0.12*uMoonDetail;
+  float relief=craters*uMoonReliefStrength;
+  vec3 bright=uMoonColor*mix(0.78,1.1,phaseLighting);
+  vec3 dark=bright*vec3(0.42,0.48,0.56);
+  vec3 surface=mix(bright,dark,clamp(maria,0.0,0.86));
+  surface*=1.0+grain+relief;
+  surface=pow(max(surface,vec3(0.001)),vec3(max(0.2,uMoonSurfaceContrast)));
+  return surface;
+}
+
 vec4 layeredCloud(vec3 ray,float moonGlow,float moonDisc){
   if(uCloudCoverage<=0.001||ray.y<=-0.08)return vec4(0);
   float projection=max(0.1,ray.y+0.22);
-  vec2 cloudUv=ray.xz/projection*0.72;
-  cloudUv+=uCloudWind*uTime*0.00045;
-  cloudUv+=vec2(uCloudSeed*0.00017,uCloudSeed*0.00029);
-  float shape=fbm2(cloudUv*1.15);
-  float detail=fbm2(cloudUv*3.1+23.4)*0.24;
+  vec2 cloudUv=ray.xz/projection*0.72+uCloudWind*uTime*0.00045+vec2(uCloudSeed*0.00017,uCloudSeed*0.00029);
+  float shape=fbm2(cloudUv*1.15),detail=fbm2(cloudUv*3.1+23.4)*0.24;
   float threshold=1.02-uCloudCoverage*0.72;
-  float mask=smoothstep(threshold,threshold+0.16,shape+detail)*uCloudDensity;
-  mask*=smoothstep(-0.05,0.18,ray.y);
+  float mask=smoothstep(threshold,threshold+0.16,shape+detail)*uCloudDensity*smoothstep(-0.05,0.18,ray.y);
   float cloudLight=0.44+0.56*pow(max(dot(normalize(vec3(ray.x,0.32,ray.z)),uSunDirection),0.0),2.0);
   vec3 dayColor=mix(vec3(0.34,0.38,0.44),vec3(1.0,0.96,0.9),cloudLight);
   vec3 nightColor=mix(vec3(0.035,0.045,0.065),uMoonColor*0.34,moonGlow+moonDisc*0.3);
-  vec3 cloudColor=mix(nightColor,dayColor,uDayFactor)*(1.0-uWeatherDarkening*0.72);
-  return vec4(cloudColor,mask*0.86);
+  return vec4(mix(nightColor,dayColor,uDayFactor)*(1.0-uWeatherDarkening*0.72),mask*0.86);
 }
+
 vec4 volumetricCloud(vec3 ray){
   if(uCloudCoverage<=0.001||ray.y<=0.002)return vec4(0);
-  float bottom=uCloudAltitude;
-  float top=bottom+uCloudThickness;
-  float t0=(bottom-uCameraPosition.y)/ray.y;
-  float t1=(top-uCameraPosition.y)/ray.y;
-  float enter=max(0.0,min(t0,t1));
-  float exit=min(80000.0,max(t0,t1));
+  float bottom=uCloudAltitude,top=bottom+uCloudThickness;
+  float t0=(bottom-uCameraPosition.y)/ray.y,t1=(top-uCameraPosition.y)/ray.y;
+  float enter=max(0.0,min(t0,t1)),exit=min(80000.0,max(t0,t1));
   if(exit<=enter)return vec4(0);
-  int steps=uCloudQuality<1.5?12:(uCloudQuality<2.5?20:32);
-  float stepLength=(exit-enter)/float(steps);
-  float jitter=hash21(gl_FragCoord.xy+uCloudSeed);
+  int steps=uCloudQuality<1.5?12:(uCloudQuality<2.5?20:28);
+  float stepLength=(exit-enter)/float(steps),jitter=hash21(gl_FragCoord.xy+uCloudSeed);
   vec3 wind=vec3(uCloudWind.x,0.0,uCloudWind.y)*uTime*0.42;
-  vec3 accumulated=vec3(0);
-  float alpha=0.0;
-  for(int i=0;i<32;i++){
+  vec3 accumulated=vec3(0);float alpha=0.0;
+  for(int i=0;i<28;i++){
     if(i>=steps||alpha>.985)break;
     float t=enter+(float(i)+jitter)*stepLength;
     vec3 position=uCameraPosition+ray*t;
     float height01=clamp((position.y-bottom)/max(1.0,uCloudThickness),0.0,1.0);
     float profile=smoothstep(0.0,0.16,height01)*smoothstep(1.0,0.68,height01);
     vec3 samplePosition=position*vec3(0.00042,0.00074,0.00042)+wind*0.00042+uCloudSeed*0.001;
-    float base=fbm3(samplePosition);
-    float erosion=noise3(samplePosition*3.7+17.0)*0.22;
+    float base=fbm3(samplePosition),erosion=noise3(samplePosition*3.7+17.0)*0.22;
     float threshold=1.03-uCloudCoverage*0.72;
     float density=smoothstep(threshold,threshold+0.15,base+erosion)*profile*uCloudDensity;
     float sampleAlpha=1.0-exp(-density*stepLength*0.00135);
-    float sunFacing=max(dot(normalize(vec3(ray.x,0.28,ray.z)),uSunDirection),0.0);
-    float lighting=0.34+0.66*sunFacing;
+    float sunFacing=max(dot(normalize(vec3(ray.x,0.28,ray.z)),uSunDirection),0.0),lighting=0.34+0.66*sunFacing;
     vec3 dayColor=mix(vec3(0.28,0.31,0.37),vec3(1.0,0.95,0.86),lighting);
     vec3 nightColor=mix(vec3(0.022,0.03,0.05),uMoonColor*0.28,max(dot(ray,uMoonDirection),0.0));
     vec3 sampleColor=mix(nightColor,dayColor,uDayFactor)*(1.0-uWeatherDarkening*0.78);
-    accumulated+=(1.0-alpha)*sampleColor*sampleAlpha;
-    alpha+=(1.0-alpha)*sampleAlpha;
+    accumulated+=(1.0-alpha)*sampleColor*sampleAlpha;alpha+=(1.0-alpha)*sampleAlpha;
   }
   return vec4(accumulated/max(alpha,0.0001),alpha);
 }
+
 void main(){
   vec3 ray=normalize(uForward+uRight*vNdc.x*uTanHalfFov*uAspect+uUp*vNdc.y*uTanHalfFov);
-  float horizon=pow(clamp(1.0-abs(ray.y),0.0,1.0),4.0);
-  float upper=smoothstep(-0.04,0.7,ray.y);
-  float below=smoothstep(-0.45,-0.02,ray.y);
+  float horizon=pow(clamp(1.0-abs(ray.y),0.0,1.0),4.2);
+  float upper=smoothstep(-0.04,0.82,ray.y),below=smoothstep(-0.45,-0.02,ray.y);
   vec3 sky=mix(uGroundColor,uHorizonColor,below);
   sky=mix(sky,uZenithColor,upper);
-  sky=mix(sky,uHorizonColor,horizon*0.48);
+  float clearAirHaze=clamp(uHaze+uMie*0.28+uHumidity*0.08,0.0,1.0);
+  float fogResponse=mix(uNightFogMultiplier,uDayFogMultiplier,uDayFactor)*uWeatherFog;
+  float horizonHaze=clamp(clearAirHaze*0.6+fogResponse,0.0,0.92)*horizon;
+  sky=mix(sky,uHorizonColor,horizon*(0.12+clearAirHaze*0.28));
+  sky=mix(sky,mix(uHorizonColor,vec3(0.78,0.84,0.88),0.2),horizonHaze);
+  sky*=mix(0.9,1.08,clamp(uRayleigh/1.5,0.0,1.0));
 
   float sunDot=max(dot(ray,uSunDirection),0.0);
   float sunThresholdOuter=cos(radians(max(0.03,uSunAngularRadius*1.18)));
   float sunThresholdInner=cos(radians(max(0.02,uSunAngularRadius*0.90)));
   float sunDisc=smoothstep(sunThresholdOuter,sunThresholdInner,sunDot)*uDayFactor;
-  float sunGlow=pow(sunDot,mix(10.0,34.0,clamp(uSunGlow/3.0,0.0,1.0)))*(0.1+uSunGlow*0.18+uTwilightFactor*0.42);
-  float eclipseLight=1.0-uSolarEclipse*0.94;
-  sky+=uSunColor*(sunGlow*(1.0-uSolarEclipse*0.72)+sunDisc*(3.8+uSunGlow*1.5)*eclipseLight);
-  sky+=uSunColor*horizon*uTwilightFactor*0.22;
-  float corona=pow(sunDot,420.0)*uSolarEclipse*(1.0-sunDisc)*3.2;
-  sky+=vec3(1.0,0.88,0.62)*corona;
+  vec3 eclipseDirection=normalize(mix(uMoonDirection,uSunDirection,smoothstep(0.92,0.999,uSolarEclipse)));
+  float eclipseRadius=max(uMoonAngularRadius,uSunAngularRadius*uSolarEclipseCoverage);
+  vec2 eclipseUv=celestialUv(ray,eclipseDirection,eclipseRadius);
+  float eclipseDisc=1.0-smoothstep(0.96,1.015,length(eclipseUv));
+  float eclipseOcclusion=eclipseDisc*uSolarEclipse;
+  float visibleSunDisc=sunDisc*(1.0-eclipseOcclusion);
+  float sunGlow=pow(sunDot,mix(11.0,36.0,clamp(uSunGlow/3.0,0.0,1.0)))*(0.07+uSunGlow*0.15+uTwilightFactor*0.38);
+  sky+=uSunColor*(sunGlow*(1.0-uSolarEclipse*0.68)+visibleSunDisc*(3.15+uSunGlow*1.15));
+  sky+=uSunColor*horizon*uTwilightFactor*0.18;
+  float coronaInner=pow(sunDot,520.0),coronaOuter=pow(sunDot,120.0);
+  sky+=vec3(1.0,0.88,0.64)*(coronaInner*2.8+coronaOuter*0.38)*uSolarEclipse*(1.0-eclipseDisc*0.92);
 
   float moonDot=max(dot(ray,uMoonDirection),0.0);
   vec2 moonUv=celestialUv(ray,uMoonDirection,uMoonAngularRadius);
-  float moonRadius=length(moonUv);
-  float moonDisc=1.0-smoothstep(0.94,1.02,moonRadius);
+  float moonRadius=length(moonUv),moonDisc=1.0-smoothstep(0.965,1.015,moonRadius);
   float moonSphere=sqrt(max(0.0,1.0-moonRadius*moonRadius));
   vec3 moonReference=abs(uMoonDirection.y)>.94?vec3(1,0,0):vec3(0,1,0);
-  vec3 moonRight=normalize(cross(moonReference,uMoonDirection));
-  vec3 moonUp=normalize(cross(uMoonDirection,moonRight));
+  vec3 moonRight=normalize(cross(moonReference,uMoonDirection)),moonUp=normalize(cross(uMoonDirection,moonRight));
   vec3 moonSurfaceNormal=normalize(moonRight*moonUv.x+moonUp*moonUv.y-uMoonDirection*moonSphere);
   float directPhase=max(dot(moonSurfaceNormal,uSunDirection),0.0);
   float phaseLighting=max(directPhase,uMoonEarthshine*(1.0-directPhase));
-  float crater=(noise2(moonUv*16.0+uCloudSeed)-0.5)*0.20*uMoonDetail+(noise2(moonUv*41.0+17.0)-0.5)*0.08*uMoonDetail;
-  vec3 normalMoonSurface=uMoonColor*(0.78+crater);
-  vec3 eclipsedMoon=mix(normalMoonSurface,vec3(0.72,0.12,0.045),uLunarEclipse*0.88);
-  float eclipseMoonEnergy=mix(1.0,0.24,uLunarEclipse);
-  sky*=1.0-moonDisc*uSolarEclipse*0.985;
-  sky+=eclipsedMoon*moonDisc*phaseLighting*uMoonVisibility*uMoonBrightness*2.1*eclipseMoonEnergy;
-  float moonGlow=pow(moonDot,mix(38.0,110.0,clamp(1.0-uMoonGlow/5.0,0.0,1.0)))*uMoonVisibility*uMoonGlow*0.22;
-  sky+=mix(uMoonColor,vec3(0.78,0.18,0.06),uLunarEclipse)*moonGlow;
+  float limb=mix(1.0,pow(max(0.0,moonSphere),0.32),uMoonLimbDarkening);
+  vec3 normalMoonSurface=lunarSurface(moonUv,moonSurfaceNormal,phaseLighting)*limb;
+  vec3 eclipsedMoon=mix(normalMoonSurface,vec3(0.58,0.09,0.035)*(0.7+normalMoonSurface),uLunarEclipse*0.9);
+  float eclipseMoonEnergy=mix(1.0,0.22,uLunarEclipse);
+  float independentMoonVisibility=uMoonVisibility*(1.0-smoothstep(0.92,0.999,uSolarEclipse));
+  sky+=eclipsedMoon*moonDisc*phaseLighting*independentMoonVisibility*uMoonBrightness*1.7*eclipseMoonEnergy;
+  float moonGlow=pow(moonDot,mix(42.0,130.0,clamp(1.0-uMoonGlow/5.0,0.0,1.0)))*independentMoonVisibility*uMoonGlow*0.15;
+  sky+=mix(uMoonColor,vec3(0.68,0.14,0.05),uLunarEclipse)*moonGlow;
+  sky*=1.0-eclipseOcclusion*0.995;
 
   if(uPlanetEnabled>.5){
     vec2 planetUv=celestialUv(ray,uPlanetDirection,uPlanetAngularRadius);
-    float planetRadius=length(planetUv);
-    float planetDisc=1.0-smoothstep(0.94,1.02,planetRadius);
+    float planetRadius=length(planetUv),planetDisc=1.0-smoothstep(0.96,1.015,planetRadius);
     float bands=0.84+0.16*sin(planetUv.y*18.0+noise2(planetUv*5.0)*2.0);
     sky+=uPlanetColor*planetDisc*bands*uPlanetBrightness*uNightFactor;
     float ringEllipse=length(vec2(planetUv.x,planetUv.y*4.4));
@@ -314,15 +398,14 @@ void main(){
     sky+=uPlanetColor*ring*uPlanetBrightness*0.72*uNightFactor;
   }
 
-  float starHorizon=smoothstep(0.02,0.2,ray.y);
-  vec2 starUv=vec2(atan(ray.z,ray.x)/TAU+0.5,asin(clamp(ray.y,-1.0,1.0))/PI+0.5);
-  vec3 stars=starLayer(starUv,420.0,uStarSeed)+starLayer(starUv,760.0,uStarSeed+101.0)+starLayer(starUv,1180.0,uStarSeed+271.0);
+  float starHorizon=smoothstep(0.015,0.16,ray.y);
+  vec3 stars=starLayer(ray,280.0,uStarSeed)+starLayer(ray,510.0,uStarSeed+101.0)+starLayer(ray,860.0,uStarSeed+271.0);
   sky+=stars*uStarVisibility*starHorizon;
   sky+=milkyWay(ray,starHorizon);
 
   vec4 cloud=uCloudQuality<0.5?layeredCloud(ray,moonGlow,moonDisc):volumetricCloud(ray);
   sky=mix(sky,cloud.rgb,clamp(cloud.a,0.0,0.96));
-  sky*=1.0-uWeatherDarkening*0.42;
+  sky*=1.0-uWeatherDarkening*0.38;
   outColor=vec4(max(sky,vec3(0.0001)),1.0);
 }`;
 
@@ -334,8 +417,10 @@ export class SkyPass {
     this.locations = {};
     for (const name of [
       'uForward','uRight','uUp','uCameraPosition','uTanHalfFov','uAspect','uSunDirection','uMoonDirection','uSunColor','uMoonColor',
-      'uZenithColor','uHorizonColor','uGroundColor','uDayFactor','uNightFactor','uTwilightFactor','uStarVisibility','uStarDensity','uStarBrightness','uStarTwinkleAmount','uStarTwinkleSpeed','uStarSizeMin','uStarSizeMax','uStarColorVariation','uStarSeed',
-      'uMilkyWayIntensity','uMilkyWayWidth','uMilkyWayDetail','uMilkyWayOrientation','uMilkyWayDust','uMilkyWayColor','uSunAngularRadius','uSunGlow','uMoonAngularRadius','uMoonGlow','uMoonPhase','uMoonBrightness','uMoonDetail','uMoonVisibility','uMoonEarthshine','uLunarEclipse','uSolarEclipse',
+      'uZenithColor','uHorizonColor','uGroundColor','uDayFactor','uNightFactor','uTwilightFactor','uRayleigh','uMie','uHaze','uHumidity','uWeatherFog','uDayFogMultiplier','uNightFogMultiplier',
+      'uStarVisibility','uStarDensity','uStarBrightness','uStarTwinkleAmount','uStarTwinkleSpeed','uStarSizeMin','uStarSizeMax','uStarColorVariation','uStarRayStrength','uStarRayLength','uStarHeroFraction','uStarSeed',
+      'uMilkyWayIntensity','uMilkyWayWidth','uMilkyWayDetail','uMilkyWayOrientation','uMilkyWayDust','uMilkyWayWarp','uMilkyWayClumping','uMilkyWayCoreStrength','uMilkyWayWidthVariation','uMilkyWayColor',
+      'uSunAngularRadius','uSunGlow','uSolarEclipseCoverage','uMoonAngularRadius','uMoonGlow','uMoonPhase','uMoonBrightness','uMoonDetail','uMoonVisibility','uMoonEarthshine','uMoonCraterStrength','uMoonMariaStrength','uMoonSurfaceContrast','uMoonPatternRotation','uMoonPatternSeed','uMoonReliefStrength','uMoonLimbDarkening','uLunarEclipse','uSolarEclipse',
       'uPlanetEnabled','uPlanetDirection','uPlanetColor','uPlanetAngularRadius','uPlanetBrightness','uPlanetRings',
       'uCloudCoverage','uCloudDensity','uCloudWind','uCloudSeed','uCloudQuality','uCloudAltitude','uCloudThickness','uTime','uExposure','uWeatherDarkening'
     ]) this.locations[name] = gl.getUniformLocation(this.program, name);
@@ -356,69 +441,34 @@ export class SkyPass {
     gl.bindVertexArray(this.vao);
     const u = this.locations;
     const cloudQuality = ({ compatibility: 0, layered: 0, balanced: 1, quality: 2, reference: 3 })[String(environment.cloudQuality)] ?? 0;
-    gl.uniform3fv(u.uForward, forward);
-    gl.uniform3fv(u.uRight, right);
-    gl.uniform3fv(u.uUp, up);
+    const f = (name, value) => gl.uniform1f(u[name], Number(value) || 0);
+    gl.uniform3fv(u.uForward, forward);gl.uniform3fv(u.uRight, right);gl.uniform3fv(u.uUp, up);
     gl.uniform3fv(u.uCameraPosition, camera.position || [0, 0, 0]);
-    gl.uniform1f(u.uTanHalfFov, Math.tan((Number(camera.fov || 62) * DEG) * 0.5));
-    gl.uniform1f(u.uAspect, gl.drawingBufferWidth / Math.max(1, gl.drawingBufferHeight));
-    gl.uniform3fv(u.uSunDirection, environment.sunDirection);
-    gl.uniform3fv(u.uMoonDirection, environment.moonDirection);
-    gl.uniform3fv(u.uSunColor, environment.sunColor);
-    gl.uniform3fv(u.uMoonColor, environment.moonColor);
-    gl.uniform3fv(u.uZenithColor, environment.zenithColor);
-    gl.uniform3fv(u.uHorizonColor, environment.horizonColor);
-    gl.uniform3fv(u.uGroundColor, environment.groundColor);
-    gl.uniform1f(u.uDayFactor, environment.dayFactor);
-    gl.uniform1f(u.uNightFactor, environment.nightFactor);
-    gl.uniform1f(u.uTwilightFactor, environment.twilightFactor);
-    gl.uniform1f(u.uStarVisibility, environment.starVisibility);
-    gl.uniform1f(u.uStarDensity, environment.starDensity);
-    gl.uniform1f(u.uStarBrightness, environment.starBrightness);
-    gl.uniform1f(u.uStarTwinkleAmount, environment.starTwinkleAmount);
-    gl.uniform1f(u.uStarTwinkleSpeed, environment.starTwinkleSpeed);
-    gl.uniform1f(u.uStarSizeMin, environment.starSizeMin);
-    gl.uniform1f(u.uStarSizeMax, environment.starSizeMax);
-    gl.uniform1f(u.uStarColorVariation, environment.starColorVariation);
-    gl.uniform1f(u.uStarSeed, environment.starSeed);
-    gl.uniform1f(u.uMilkyWayIntensity, environment.milkyWayIntensity);
-    gl.uniform1f(u.uMilkyWayWidth, environment.milkyWayWidth);
-    gl.uniform1f(u.uMilkyWayDetail, environment.milkyWayDetail);
-    gl.uniform1f(u.uMilkyWayOrientation, environment.milkyWayOrientation);
-    gl.uniform1f(u.uMilkyWayDust, environment.milkyWayDust);
-    gl.uniform3fv(u.uMilkyWayColor, environment.milkyWayColor);
-    gl.uniform1f(u.uSunAngularRadius, environment.sunAngularRadius);
-    gl.uniform1f(u.uSunGlow, environment.sunGlow);
-    gl.uniform1f(u.uMoonAngularRadius, environment.moonAngularRadius);
-    gl.uniform1f(u.uMoonGlow, environment.moonGlow);
-    gl.uniform1f(u.uMoonPhase, environment.moonPhase);
-    gl.uniform1f(u.uMoonBrightness, environment.moonBrightness);
-    gl.uniform1f(u.uMoonDetail, environment.moonDetail);
-    gl.uniform1f(u.uMoonVisibility, environment.moonVisibility);
-    gl.uniform1f(u.uMoonEarthshine, environment.moonEarthshine);
-    gl.uniform1f(u.uLunarEclipse, environment.lunarEclipseFactor);
-    gl.uniform1f(u.uSolarEclipse, environment.solarEclipseFactor);
-    gl.uniform1f(u.uPlanetEnabled, environment.planetEnabled ? 1 : 0);
-    gl.uniform3fv(u.uPlanetDirection, environment.planetDirection);
-    gl.uniform3fv(u.uPlanetColor, environment.planetColor);
-    gl.uniform1f(u.uPlanetAngularRadius, environment.planetAngularRadius);
-    gl.uniform1f(u.uPlanetBrightness, environment.planetBrightness);
-    gl.uniform1f(u.uPlanetRings, environment.planetRings);
-    gl.uniform1f(u.uCloudCoverage, environment.cloudCoverage);
-    gl.uniform1f(u.uCloudDensity, environment.cloudDensity);
-    gl.uniform2fv(u.uCloudWind, environment.cloudWindDirection);
-    gl.uniform1f(u.uCloudSeed, environment.cloudSeed);
-    gl.uniform1f(u.uCloudQuality, cloudQuality);
-    gl.uniform1f(u.uCloudAltitude, environment.cloudAltitude);
-    gl.uniform1f(u.uCloudThickness, environment.cloudThickness);
-    gl.uniform1f(u.uTime, environment.timeSeconds * Math.max(0.05, environment.cloudWindSpeed / 12));
-    gl.uniform1f(u.uExposure, environment.exposure);
-    gl.uniform1f(u.uWeatherDarkening, environment.weatherDarkening);
+    f('uTanHalfFov',Math.tan((Number(camera.fov || 62) * DEG) * 0.5));f('uAspect',gl.drawingBufferWidth / Math.max(1, gl.drawingBufferHeight));
+    gl.uniform3fv(u.uSunDirection, environment.sunDirection);gl.uniform3fv(u.uMoonDirection, environment.moonDirection);gl.uniform3fv(u.uSunColor, environment.sunColor);gl.uniform3fv(u.uMoonColor, environment.moonColor);
+    gl.uniform3fv(u.uZenithColor, environment.zenithColor);gl.uniform3fv(u.uHorizonColor, environment.horizonColor);gl.uniform3fv(u.uGroundColor, environment.groundColor);
+    for(const [name,value] of Object.entries({
+      uDayFactor:environment.dayFactor,uNightFactor:environment.nightFactor,uTwilightFactor:environment.twilightFactor,uRayleigh:environment.atmosphereRayleigh,uMie:environment.atmosphereMie,uHaze:environment.atmosphereHaze,uHumidity:environment.atmosphereHumidity,uWeatherFog:environment.weatherFog,uDayFogMultiplier:environment.dayFogMultiplier,uNightFogMultiplier:environment.nightFogMultiplier,
+      uStarVisibility:environment.starVisibility,uStarDensity:environment.starDensity,uStarBrightness:environment.starBrightness,uStarTwinkleAmount:environment.starTwinkleAmount,uStarTwinkleSpeed:environment.starTwinkleSpeed,uStarSizeMin:environment.starSizeMin,uStarSizeMax:environment.starSizeMax,uStarColorVariation:environment.starColorVariation,uStarRayStrength:environment.starRayStrength,uStarRayLength:environment.starRayLength,uStarHeroFraction:environment.starHeroFraction,uStarSeed:environment.starSeed,
+      uMilkyWayIntensity:environment.milkyWayIntensity,uMilkyWayWidth:environment.milkyWayWidth,uMilkyWayDetail:environment.milkyWayDetail,uMilkyWayOrientation:environment.milkyWayOrientation,uMilkyWayDust:environment.milkyWayDust,uMilkyWayWarp:environment.milkyWayWarp,uMilkyWayClumping:environment.milkyWayClumping,uMilkyWayCoreStrength:environment.milkyWayCoreStrength,uMilkyWayWidthVariation:environment.milkyWayWidthVariation,
+      uSunAngularRadius:environment.sunAngularRadius,uSunGlow:environment.sunGlow,uSolarEclipseCoverage:environment.solarEclipseCoverage,uMoonAngularRadius:environment.moonAngularRadius,uMoonGlow:environment.moonGlow,uMoonPhase:environment.moonPhase,uMoonBrightness:environment.moonBrightness,uMoonDetail:environment.moonDetail,uMoonVisibility:environment.moonVisibility,uMoonEarthshine:environment.moonEarthshine,uMoonCraterStrength:environment.moonCraterStrength,uMoonMariaStrength:environment.moonMariaStrength,uMoonSurfaceContrast:environment.moonSurfaceContrast,uMoonPatternRotation:environment.moonPatternRotation,uMoonPatternSeed:environment.moonPatternSeed,uMoonReliefStrength:environment.moonReliefStrength,uMoonLimbDarkening:environment.moonLimbDarkening,uLunarEclipse:environment.lunarEclipseFactor,uSolarEclipse:environment.solarEclipseFactor,
+      uPlanetEnabled:environment.planetEnabled?1:0,uPlanetAngularRadius:environment.planetAngularRadius,uPlanetBrightness:environment.planetBrightness,uPlanetRings:environment.planetRings,
+      uCloudCoverage:environment.cloudCoverage,uCloudDensity:environment.cloudDensity,uCloudSeed:environment.cloudSeed,uCloudQuality:cloudQuality,uCloudAltitude:environment.cloudAltitude,uCloudThickness:environment.cloudThickness,uTime:environment.timeSeconds*Math.max(0.05,environment.cloudWindSpeed/12),uExposure:environment.exposure,uWeatherDarkening:environment.weatherDarkening
+    }))f(name,value);
+    gl.uniform3fv(u.uMilkyWayColor,environment.milkyWayColor);gl.uniform3fv(u.uPlanetDirection,environment.planetDirection);gl.uniform3fv(u.uPlanetColor,environment.planetColor);gl.uniform2fv(u.uCloudWind,environment.cloudWindDirection);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
     gl.depthMask(depthMask);
     if (depthEnabled) gl.enable(gl.DEPTH_TEST); else gl.disable(gl.DEPTH_TEST);
     if (cullEnabled) gl.enable(gl.CULL_FACE); else gl.disable(gl.CULL_FACE);
     if (blendEnabled) gl.enable(gl.BLEND); else gl.disable(gl.BLEND);
+  }
+
+  dispose() {
+    const gl = this.gl;
+    if (this.vao) gl.deleteVertexArray(this.vao);
+    if (this.program) gl.deleteProgram(this.program);
+    this.vao = null;
+    this.program = null;
   }
 }
