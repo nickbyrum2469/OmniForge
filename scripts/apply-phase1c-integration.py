@@ -63,6 +63,8 @@ REQUIRED = {
         'float rayLength=radiusPixels*mix(2.0,4.2',
         'craterField(vec2 uv,float scale,float seed,float density)',
         'if(identity<1.0-clamp(density,0.0,1.0))continue',
+        'float boundaryNoise=(noise2(uv*7.4+center*13.7)-0.5)*0.2',
+        'marePotential+=lunarEllipse',
         'return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24))',
         'uMilkyWayClumping',
         'uStarRayStrength',
@@ -117,7 +119,7 @@ BASE_FINAL_VISUAL_MARKERS = {
         'const ambientDay = mix([12, 20, 48], [154, 178, 210], day)'
     ],
     'app/app.js': ['selectedId=null', 'selectedId=originalSelectedId'],
-    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.006', 'milkyWayOrientation=32', '$moonWorld=@{sky=@{moonSize=4}}', "moonColor='#d8d3c8'", 'moonSize=22', 'sunSize=9']
+    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.006', 'milkyWayOrientation=32', '$moonWorld=@{sky=@{moonSize=4}}', "moonColor='#d8d3c8'", 'fov=7', 'moonSize=22', 'sunSize=9']
 }
 
 REFINED_VISUAL_MARKERS = {
@@ -140,7 +142,7 @@ REFINED_VISUAL_MARKERS = {
         'const ambientDay = mix([12, 20, 48], [154, 178, 210], day)'
     ],
     'app/app.js': ['selectedId=null', 'selectedId=originalSelectedId'],
-    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.004', 'milkyWayOrientation=32', 'starIntensity=.24;starDensity=.72', '$moonWorld=@{sky=@{moonSize=4}}', "moonColor='#d8d3c8'", 'moonSize=22', 'sunSize=9']
+    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.004', 'milkyWayOrientation=32', 'starIntensity=.24;starDensity=.72', '$moonWorld=@{sky=@{moonSize=4}}', "moonColor='#d8d3c8'", 'fov=7', 'moonSize=22', 'sunSize=9']
 }
 
 

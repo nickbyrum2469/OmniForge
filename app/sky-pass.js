@@ -335,7 +335,9 @@ float lunarEllipse(vec2 uv,vec2 center,vec2 axes,float angle){
   float c=cos(angle),s=sin(angle);
   mat2 rotation=mat2(c,-s,s,c);
   float distanceToBasin=length((rotation*(uv-center))/axes);
-  return 1.0-smoothstep(0.76,1.08,distanceToBasin);
+  float boundaryNoise=(noise2(uv*7.4+center*13.7)-0.5)*0.2;
+  boundaryNoise+=(noise2(uv*19.0-center*8.1)-0.5)*0.07;
+  return 1.0-smoothstep(0.72+boundaryNoise,1.14+boundaryNoise,distanceToBasin);
 }
 
 vec3 lunarSurface(vec2 moonUv,vec3 surfaceNormal,float phaseLighting){
@@ -350,24 +352,24 @@ vec3 lunarSurface(vec2 moonUv,vec3 surfaceNormal,float phaseLighting){
     fbm3(rotatedNormal*4.7+vec3(19.2,3.7,5.8))
   )-0.5;
   vec2 mareUv=rotated+mareWarp*0.16*(1.0-smoothstep(0.7,1.0,length(rotated)));
-  float mareRegions=0.0;
-  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(-0.31,0.08),vec2(0.24,0.44),-0.12));
-  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(-0.2,0.3),vec2(0.3,0.22),-0.22));
-  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(0.12,0.28),vec2(0.17,0.19),0.1)*0.88);
-  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(0.25,0.09),vec2(0.2,0.27),-0.42)*0.92);
-  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(0.43,0.23),vec2(0.11,0.14),0.18)*0.76);
-  mareRegions=max(mareRegions,lunarEllipse(mareUv,vec2(-0.07,-0.18),vec2(0.22,0.16),0.24)*0.72);
-  float mareBreakup=smoothstep(0.31,0.71,mid*0.68+low*0.32);
-  float maria=smoothstep(0.58,0.78,low*0.72+mid*0.28)*0.22;
-  maria=max(maria,mareRegions*mix(0.7,1.0,mareBreakup));
+  float marePotential=0.0;
+  marePotential+=lunarEllipse(mareUv,vec2(-0.34,0.06),vec2(0.24,0.43),-0.12)*0.72;
+  marePotential+=lunarEllipse(mareUv,vec2(-0.19,0.31),vec2(0.28,0.21),-0.24)*0.62;
+  marePotential+=lunarEllipse(mareUv,vec2(0.09,0.3),vec2(0.18,0.17),0.16)*0.4;
+  marePotential+=lunarEllipse(mareUv,vec2(0.23,0.09),vec2(0.19,0.25),-0.44)*0.5;
+  marePotential+=lunarEllipse(mareUv,vec2(0.45,0.24),vec2(0.1,0.13),0.18)*0.3;
+  marePotential+=lunarEllipse(mareUv,vec2(-0.08,-0.19),vec2(0.22,0.15),0.24)*0.28;
+  float mareBreakup=(low-0.5)*0.48+(mid-0.5)*0.24;
+  float maria=smoothstep(0.48,1.04,marePotential+mareBreakup);
+  maria+=smoothstep(0.64,0.82,low*0.7+mid*0.3)*0.1;
   maria*=smoothstep(1.0,0.72,length(rotated));
   maria=clamp(maria,0.0,1.0)*uMoonMariaStrength;
   vec2 craters=(craterField(rotated,5.5,uMoonPatternSeed,0.18)+craterField(rotated,13.0,uMoonPatternSeed+91.0,0.16)*0.5+craterField(rotated,31.0,uMoonPatternSeed+211.0,0.09)*0.2)*uMoonCraterStrength;
   float grain=(fbm3(rotatedNormal*22.0+31.0)-0.5)*0.12*uMoonDetail;
   float relief=craters.y*uMoonReliefStrength;
   vec3 bright=srgbToLinear(uMoonColor)*mix(0.78,1.1,phaseLighting);
-  vec3 dark=bright*vec3(0.34,0.37,0.43);
-  vec3 surface=mix(bright,dark,clamp(maria,0.0,0.92));
+  vec3 dark=bright*vec3(0.48,0.5,0.55);
+  vec3 surface=mix(bright,dark,clamp(maria,0.0,0.88));
   surface*=1.0+grain+craters.x+relief;
   surface=pow(max(surface,vec3(0.001)),vec3(max(0.2,uMoonSurfaceContrast)));
   return surface;

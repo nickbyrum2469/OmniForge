@@ -55,7 +55,10 @@ test('procedural Moon uses sparse hierarchical craters and irregular authored ma
   assert.match(sky, /float irregularity=1\.0\+sin\(/);
   assert.match(sky, /craterField\(rotated,5\.5,uMoonPatternSeed,0\.18\)/);
   assert.match(sky, /craterField\(rotated,31\.0,uMoonPatternSeed\+211\.0,0\.09\)/);
-  assert.match(sky, /vec3 dark=bright\*vec3\(0\.34,0\.37,0\.43\)/);
+  assert.match(sky, /float boundaryNoise=\(noise2\(uv\*7\.4\+center\*13\.7\)-0\.5\)\*0\.2/);
+  assert.match(sky, /marePotential\+=lunarEllipse/);
+  assert.doesNotMatch(sky, /mareRegions=max/);
+  assert.match(sky, /vec3 dark=bright\*vec3\(0\.48,0\.5,0\.55\)/);
 });
 
 test('cloud and twilight lighting remain Sun-directed rather than full-screen color washes', () => {
@@ -91,6 +94,7 @@ test('packaged visual QA can request actual canvas PNG evidence', () => {
   assert.match(captureScript, /yaw=-\.75;pitch=1\.02;fov=68/);
   assert.match(captureScript, /\$moonWorld=@\{sky=@\{moonSize=4\}\}/);
   assert.match(captureScript, /Patch-World \$port @\{sky=@\{moonSize=22\}\}/);
+  assert.match(captureScript, /\$moonCamera=@\{position=@\(0,20,0\);yaw=0;pitch=\.610865;fov=7\}/);
   for (const id of [
     '01-clear-midday-wide', '02-clear-midday-player', '03-golden-hour-coast', '04-twilight-stars',
     '05-night-realistic-wide', '06-night-faint-milkyway', '07-night-core-close', '08-fantasy-violet-galaxy',
