@@ -94,7 +94,7 @@ test('manual environment edits resolve to Custom and presets preserve their auth
   assert.equal(environmentPresetOptions()[0].id, 'custom');
 });
 
-test('source contracts cover crash recovery, proxy suppression, pole-safe stars, lunar detail, and authoring controls', () => {
+test('source contracts cover crash recovery, proxy suppression, visible stars, lunar detail, and authoring controls', () => {
   const renderer = fs.readFileSync(new URL('../app/renderer.js', import.meta.url), 'utf8');
   const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
   const desktop = fs.readFileSync(new URL('../desktop/main.cjs', import.meta.url), 'utf8');
@@ -103,7 +103,7 @@ test('source contracts cover crash recovery, proxy suppression, pole-safe stars,
   const worldSystems = fs.readFileSync(new URL('../server/v010-systems.mjs', import.meta.url), 'utf8');
   assert.match(renderer, /if\(object\.properties\?\.celestialRole\)return null/);
   assert.match(renderer, /directionFromAzimuthElevation\(azimuth,elevation\)/);
-  assert.match(renderer, /mix\(0\.48,1\.0,sum\/9\.0\)/);
+  assert.match(renderer, /mix\(0\.58,1\.0,sum\/9\.0\)/);
   assert.match(app, /new RenderCrashGuard/);
   assert.match(app, /finally\{[\s\S]*requestAnimationFrame\(animationLoop\)/);
   assert.match(app, /sanitizeCameraState/);
@@ -112,10 +112,13 @@ test('source contracts cover crash recovery, proxy suppression, pole-safe stars,
   assert.match(desktop, /gpu-process-gone/);
   assert.match(sky, /vec2 hemisphereOctEncode/);
   assert.match(sky, /vec3 hemisphereOctDecode/);
+  assert.match(sky, /uStarDensity\*0\.0065/);
+  assert.match(sky, /mix\(0\.00072,0\.00235/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
   assert.match(sky, /float craterField/);
   assert.match(sky, /uMoonMariaStrength/);
   assert.match(sky, /uMilkyWayClumping/);
+  assert.match(sky, /uMilkyWayIntensity\*0\.92/);
   assert.match(sky, /uStarRayStrength/);
   assert.doesNotMatch(sky, /vec2 starUv=vec2\(atan/);
   assert.match(worldUi, /v010MoonCraters/);
