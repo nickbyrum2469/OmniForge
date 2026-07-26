@@ -90,6 +90,7 @@ else:
     print('Phase 1C broad integration is already complete; migration skipped.')
 
 subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-qa.py'], check=True)
+subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-idempotency.py'], check=True)
 subprocess.run([sys.executable, 'scripts/apply-phase1c-test-contracts.py'], check=True)
 
 remaining = missing_contracts()
