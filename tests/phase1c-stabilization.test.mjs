@@ -94,13 +94,14 @@ test('manual environment edits resolve to Custom and presets preserve their auth
   assert.equal(environmentPresetOptions()[0].id, 'custom');
 });
 
-test('source contracts cover crash recovery, proxy suppression, readable stars, galactic structure, lunar detail, and clean evidence', () => {
+test('source contracts cover crash recovery, proxy suppression, readable stars, smooth galactic dust, lunar detail, and isolated evidence', () => {
   const renderer = fs.readFileSync(new URL('../app/renderer.js', import.meta.url), 'utf8');
   const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
   const desktop = fs.readFileSync(new URL('../desktop/main.cjs', import.meta.url), 'utf8');
   const sky = fs.readFileSync(new URL('../app/sky-pass.js', import.meta.url), 'utf8');
   const worldUi = fs.readFileSync(new URL('../app/v010.js', import.meta.url), 'utf8');
   const worldSystems = fs.readFileSync(new URL('../server/v010-systems.mjs', import.meta.url), 'utf8');
+  const visualCapture = fs.readFileSync(new URL('../scripts/run-phase1c-visual-captures.ps1', import.meta.url), 'utf8');
   assert.match(renderer, /if\(object\.properties\?\.celestialRole\)return null/);
   assert.match(renderer, /directionFromAzimuthElevation\(azimuth,elevation\)/);
   assert.match(renderer, /mix\(0\.66,1\.0,sum\/9\.0\)/);
@@ -119,10 +120,11 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /rayLength=radius\*mix\(2\.0,4\.5/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
   assert.match(sky, /float craterField/);
+  assert.match(sky, /return ring\*0\.28-basin\*0\.42/);
   assert.match(sky, /uMoonMariaStrength/);
   assert.match(sky, /vec3 galacticNormal=normalize\(vec3\(cos\(orientation\)\*0\.78,0\.32,sin\(orientation\)\*0\.78\)\)/);
-  assert.match(sky, /microStructure=/);
-  assert.match(sky, /uMilkyWayIntensity\*0\.92/);
+  assert.match(sky, /float galacticCloudEnvelope=/);
+  assert.doesNotMatch(sky, /microStructure=/);
   assert.match(sky, /sky=mix\(sky,vec3\(0\.00001\),eclipseSilhouette\)/);
   assert.match(sky, /uStarRayStrength/);
   assert.doesNotMatch(sky, /vec2 starUv=vec2\(atan/);
@@ -134,4 +136,6 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(worldSystems, /dayFogMultiplier/);
   assert.match(worldSystems, /ambientIntensity: \(0\.09 \+ day \* 0\.22/);
   assert.match(worldSystems, /renderProxy: false/);
+  assert.match(visualCapture, /starIntensity=0;milkyWayIntensity=\.72/);
+  assert.match(visualCapture, /starHeroFraction=\.004/);
 });
