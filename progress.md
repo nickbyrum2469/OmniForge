@@ -58,3 +58,18 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Cloud lighting and volumetric shafts.
 - Data-driven biome/style profiles and authoring controls.
 - Expanded packaged capture manifest and measured GTX 1650 quality budgets.
+
+## Twenty-frame corrective gate
+
+- Manual inspection of the exact packaged `bc22c5e` evidence found four bounded harness/compositor defects:
+  - the world-scale Moon reused the close-up `moonSize=22`;
+  - eclipse variant classification used the authoring size multiplier instead of the rendered Sun/Moon angular-radius ratio;
+  - the diamond-ring state had only a symmetric annular rim;
+  - quality volumetric clouds produced unstable horizon speckling at shallow ray angles.
+- The current gate gives the world-scale Moon its own `moonSize=4` capture state and restores `moonSize=22` only for the close-up.
+- Eclipse silhouette radius, totality, annularity, and diamond-window logic now use the same rendered angular radii and actual Sun/Moon directional separation.
+- Diamond-ring rendering adds a bounded asymmetric photosphere core and horizontal/vertical flare localized to the correct limb.
+- Quality clouds use the stable layered solution near the horizon and crossfade into bounded volumetric marching above it.
+- Focused lunar/celestial/projection tests: 19/19 passed.
+- PowerShell visual-harness parser: passed.
+- Next: run full verification, package the exact committed head, and manually inspect frames 09, 12, 13, and 15 before accepting this gate.

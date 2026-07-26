@@ -70,7 +70,8 @@ REQUIRED = {
         'float edgeLight=1.0-smoothstep(threshold,threshold+0.38,cloudField)',
         'float twilightSunward=pow(max(dot(horizonDirection,sunHorizonDirection),0.0),2.4)',
         'sunLinear*horizon*uTwilightFactor*(0.025+twilightSunward*0.34)',
-        'vec2 eclipseUv=celestialUv(ray,uMoonDirection,eclipseRadius)',
+        'float eclipseAngularRatio=eclipseRadius/max(0.0001,uSunAngularRadius)',
+        'float diamondCore=exp(-dot(diamondDelta,diamondDelta)/0.00055)*diamondWindow',
         'vec2 sunCoronaUv=celestialUv(ray,uSunDirection,uSunAngularRadius)',
         'float eclipseActive=step(0.001,uSolarEclipse)',
         'float eclipseSilhouette=eclipseDisc*eclipseActive*uDayFactor',
@@ -108,7 +109,7 @@ BASE_FINAL_VISUAL_MARKERS = {
         'const ambientDay = mix([12, 20, 48], [154, 178, 210], day)'
     ],
     'app/app.js': ['selectedId=null', 'selectedId=originalSelectedId'],
-    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.006', 'milkyWayOrientation=32', 'moonSize=22', 'sunSize=9']
+    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.006', 'milkyWayOrientation=32', '$moonWorld=@{sky=@{moonSize=4}}', 'moonSize=22', 'sunSize=9']
 }
 
 REFINED_VISUAL_MARKERS = {
@@ -131,7 +132,7 @@ REFINED_VISUAL_MARKERS = {
         'const ambientDay = mix([12, 20, 48], [154, 178, 210], day)'
     ],
     'app/app.js': ['selectedId=null', 'selectedId=originalSelectedId'],
-    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.004', 'milkyWayOrientation=32', 'starIntensity=.24;starDensity=.72', 'moonSize=22', 'sunSize=9']
+    'scripts/run-phase1c-visual-captures.ps1': ['starHeroFraction=.004', 'milkyWayOrientation=32', 'starIntensity=.24;starDensity=.72', '$moonWorld=@{sky=@{moonSize=4}}', 'moonSize=22', 'sunSize=9']
 }
 
 

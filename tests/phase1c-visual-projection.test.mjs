@@ -17,9 +17,14 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /uStarDensity\*0\.13/);
   assert.doesNotMatch(sky, /microStarLayer/);
   assert.match(sky, /vec2 coronaDirection=vec2\(cos\(eclipseAngle\),sin\(eclipseAngle\)\)/);
+  assert.match(sky, /float eclipseRadius=uMoonAngularRadius\*uSolarEclipseCoverage/);
+  assert.match(sky, /float eclipseAngularRatio=eclipseRadius\/max\(0\.0001,uSunAngularRadius\)/);
+  assert.match(sky, /float eclipseSeparationDegrees=degrees\(acos\(clamp\(dot\(uSunDirection,uMoonDirection\),-1\.0,1\.0\)\)\)/);
   assert.match(sky, /vec2 eclipseUv=celestialUv\(ray,uMoonDirection,eclipseRadius\)/);
   assert.match(sky, /vec2 sunCoronaUv=celestialUv\(ray,uSunDirection,uSunAngularRadius\)/);
   assert.match(sky, /float annularRing=innerRim\*annularity/);
+  assert.match(sky, /float diamondCore=/);
+  assert.match(sky, /float diamondFlare=/);
   assert.match(sky, /horizonTwinkle/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
   assert.doesNotMatch(sky, /projected\.xy\*scale/);
@@ -44,6 +49,8 @@ test('cloud and twilight lighting remain Sun-directed rather than full-screen co
   assert.match(sky, /float twilightSunward=pow\(max\(dot\(horizonDirection,sunHorizonDirection\),0\.0\),2\.4\)/);
   assert.match(sky, /physicalScatter\+=twilightScatter\*\(uOzone\*uTwilightFactor\*horizon\)\*0\.13/);
   assert.match(sky, /sunLinear\*horizon\*uTwilightFactor\*\(0\.025\+twilightSunward\*0\.34\)/);
+  assert.match(sky, /uCloudQuality>=0\.5&&ray\.y>=0\.09/);
+  assert.match(sky, /mix\(layered,volume,smoothstep\(0\.09,0\.16,ray\.y\)\)/);
 });
 
 test('solar-eclipse silhouette is constrained to daylight and no longer blacks out a free-floating sky disc', () => {
@@ -67,6 +74,8 @@ test('packaged visual QA can request actual canvas PNG evidence', () => {
   assert.match(captureScript, /\$response\.state\.engine\.revision/);
   assert.match(captureScript, /starIntensity=\.24;starDensity=\.72/);
   assert.match(captureScript, /yaw=-\.75;pitch=1\.02;fov=68/);
+  assert.match(captureScript, /\$moonWorld=@\{sky=@\{moonSize=4\}\}/);
+  assert.match(captureScript, /Patch-World \$port @\{sky=@\{moonSize=22\}\}/);
   for (const id of [
     '01-clear-midday-wide', '02-clear-midday-player', '03-golden-hour-coast', '04-twilight-stars',
     '05-night-realistic-wide', '06-night-faint-milkyway', '07-night-core-close', '08-fantasy-violet-galaxy',

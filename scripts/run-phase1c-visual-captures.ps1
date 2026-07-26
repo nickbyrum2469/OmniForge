@@ -159,10 +159,13 @@ try{
     sky=@{celestialMode='manual';sunAzimuth=155;sunElevation=-12;moonAzimuth=0;moonElevation=35;moonSize=22;moonBrightness=1.05;moonGlow=.12;moonPhaseMode='manual';moonPhase=.88;moonCraterStrength=1.15;moonMariaStrength=.9;moonSurfaceContrast=1.22;moonReliefStrength=.48;moonLimbDarkening=.34;planetEnabled=$false;eclipseMode='auto';starIntensity=.22;milkyWayIntensity=0}
   }
   $moonCamera=@{position=@(0,20,0);yaw=0;pitch=.610865;fov=12}
+  $moonWorld=@{sky=@{moonSize=4}}
   $revision=Patch-World $port $moonClose
+  $revision=Patch-World $port $moonWorld
   $moonWorldCamera=@{position=@(0,20,0);yaw=0;pitch=.610865;fov=46}
   Request-Capture $captureDir '09-moon-world-scale' $moonWorldCamera $revision|Out-Null
-  $captureRecords+=[ordered]@{id='09-moon-world-scale';file='09-moon-world-scale.png';preset='realistic-moon';camera=$moonWorldCamera;time=1;seed=2718;worldStateHash=Get-StateHash $moonClose;revision=$revision}
+  $captureRecords+=[ordered]@{id='09-moon-world-scale';file='09-moon-world-scale.png';preset='realistic-moon';camera=$moonWorldCamera;time=1;seed=2718;worldStateHash=Get-StateHash $moonWorld;revision=$revision}
+  $revision=Patch-World $port @{sky=@{moonSize=22}}
   Request-Capture $captureDir '10-moon-close' $moonCamera $revision|Out-Null
   $captureRecords+=[ordered]@{id='10-moon-close';file='10-moon-close.png';preset='realistic-moon';camera=$moonCamera;time=1;seed=2718;worldStateHash=Get-StateHash $moonClose;revision=$revision}
 

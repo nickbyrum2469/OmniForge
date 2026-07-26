@@ -132,11 +132,14 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /float forwardScatter=pow\(max\(dot\(ray,uSunDirection\),0\.0\),8\.0\)/);
   assert.match(sky, /vec3 twilightScatter=mix\(vec3\(0\.08,0\.035,0\.18\),vec3\(0\.7,0\.16,0\.035\),twilightSunward\)/);
   assert.match(sky, /vec2 eclipseUv=celestialUv\(ray,uMoonDirection,eclipseRadius\)/);
+  assert.match(sky, /float eclipseAngularRatio=eclipseRadius\/max\(0\.0001,uSunAngularRadius\)/);
+  assert.match(sky, /float eclipseCentered=1\.0-smoothstep\(0\.08,0\.32,eclipseSeparationRatio\)/);
   assert.match(sky, /vec2 sunCoronaUv=celestialUv\(ray,uSunDirection,uSunAngularRadius\)/);
   assert.match(sky, /float eclipseActive=step\(0\.001,uSolarEclipse\)/);
   assert.match(sky, /eclipseSilhouette=eclipseDisc\*eclipseActive\*uDayFactor/);
   assert.match(sky, /independentMoonVisibility=uMoonVisibility\*\(1\.0-eclipseActive\)/);
   assert.match(sky, /float diamondRing=/);
+  assert.match(sky, /float diamondCore=/);
   assert.match(sky, /eclipseStarVisibility/);
   assert.match(sky, /return vec2\(clamp\(albedo,-0\.28,0\.16\),clamp\(height,-0\.48,0\.24\)\)/);
   assert.match(sky, /uMoonMariaStrength/);
@@ -169,4 +172,5 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(visualCapture, /11-partial-eclipse/);
   assert.match(visualCapture, /12-annular-eclipse/);
   assert.match(visualCapture, /20-path-terrain-regression/);
+  assert.match(visualCapture, /\$moonWorld=@\{sky=@\{moonSize=4\}\}/);
 });
