@@ -31,8 +31,11 @@ $checksum=Join-Path $root 'OmniForge-Phase1C-Crash-Sky-Windows-x64.sha256'
 Remove-Item $testOutput,$verifyOutput,$idempotencyOutput,$evidenceOutput,$archive,$checksum -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $root 'PHASE1C_VISUAL_CAPTURES') -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Host '=== Phase 1C guarded integration ==='
-Invoke-Checked python @('scripts/apply-phase1c-integration.py') 'Phase 1C integration'
+Write-Host '=== Apply bounded celestial optics repair ==='
+Invoke-Checked python @('scripts/apply-celestial-optics-gate.py') 'Celestial optics repair'
+
+Write-Host '=== Phase 1C current-source contracts ==='
+Invoke-Checked python @('scripts/apply-phase1c-integration.py') 'Phase 1C source validation'
 
 Write-Host '=== Syntax checks ==='
 $syntaxFiles=@(
@@ -53,21 +56,22 @@ Write-Host '=== Byte-level idempotency ==='
 $trackedRoots=@('app','server','desktop','tests')
 $before=@{}
 foreach($trackedRoot in $trackedRoots){Get-ChildItem $trackedRoot -File -Recurse|ForEach-Object{$relative=Get-RepositoryRelativePath $root $_.FullName;$before[$relative]=(Get-FileHash $_.FullName -Algorithm SHA256).Hash}}
-Invoke-Checked python @('scripts/apply-phase1c-integration.py') 'Phase 1C second integration pass'
+Invoke-Checked python @('scripts/apply-celestial-optics-gate.py') 'Celestial optics second pass'
+Invoke-Checked python @('scripts/apply-phase1c-integration.py') 'Phase 1C second source validation'
 $after=@{}
 foreach($trackedRoot in $trackedRoots){Get-ChildItem $trackedRoot -File -Recurse|ForEach-Object{$relative=Get-RepositoryRelativePath $root $_.FullName;$after[$relative]=(Get-FileHash $_.FullName -Algorithm SHA256).Hash}}
 $changed=foreach($relative in @($before.Keys+$after.Keys|Sort-Object -Unique)){if($before[$relative]-ne$after[$relative]){[PSCustomObject]@{Path=$relative;Before=$before[$relative];After=$after[$relative]}}}
 if($changed){$changed|Format-Table -AutoSize|Out-String|Set-Content $idempotencyOutput -Encoding utf8;throw 'Phase 1C integration is not idempotent.'}
-'No app/server/desktop/tests files changed during the second guarded integration pass.'|Set-Content $idempotencyOutput -Encoding utf8
+'No app/server/desktop/tests files changed during the second bounded repair and validation pass.'|Set-Content $idempotencyOutput -Encoding utf8
 
 Write-Host '=== Commit exact verified source ==='
 Remove-Item $testOutput,$verifyOutput -Force -ErrorAction SilentlyContinue
 git config user.name 'github-actions[bot]'
 git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-git add app server desktop tests
-git add scripts/apply-phase1c-visual-qa.py scripts/run-phase1c-visual-captures.ps1 scripts/apply-phase1c-integration.py scripts/run-phase1c-ci.ps1
+git add app server desktop tests progress.md
+git add scripts/apply-celestial-optics-gate.py scripts/apply-phase1c-integration.py scripts/apply-phase1c-visual-qa.py scripts/run-phase1c-visual-captures.ps1 scripts/run-phase1c-ci.ps1
 $staged=git diff --cached --name-only
-if($staged-and$env:GITHUB_ACTIONS-eq'true'){git commit -m 'Repair sky projection and require rendered visual evidence';if($LASTEXITCODE-ne 0){throw 'Verified source commit failed.'};git push origin HEAD:phase1c/crash-celestial-atmosphere-stabilization;if($LASTEXITCODE-ne 0){throw 'Verified source push failed.'}}
+if($staged-and$env:GITHUB_ACTIONS-eq'true'){git commit -m 'Separate celestial visibility and refine star optics';if($LASTEXITCODE-ne 0){throw 'Verified source commit failed.'};git push origin HEAD:phase1c/crash-celestial-atmosphere-stabilization;if($LASTEXITCODE-ne 0){throw 'Verified source push failed.'}}
 elseif($staged){git reset;Write-Host 'Local verification left source changes uncommitted; only GitHub Actions may publish the verified integration result.'}
 $sourceCommit=(git rev-parse HEAD).Trim()
 
@@ -86,7 +90,7 @@ $skySource=Get-Content(Join-Path $output 'resources\app\app\sky-pass.js')-Raw
 $appSource=Get-Content(Join-Path $output 'resources\app\app\app.js')-Raw
 $desktopSource=Get-Content(Join-Path $output 'resources\app\desktop\main.cjs')-Raw
 if($rendererSource-notmatch 'celestialRole\)return null' -or $rendererSource-notmatch 'sunAuthorityId'){throw 'Packaged celestial proxy/light repair is missing.'}
-if($skySource-notmatch 'hemisphereOctEncode' -or $skySource-notmatch 'vec3 periodic=vec3\(cos\(longitude\)' -or $skySource-match 'vec3 cubeProjection'){throw 'Packaged pole-safe sky projection repair is missing.'}
+if($skySource-notmatch 'hemisphereOctEncode' -or $skySource-notmatch 'uSunVisibility' -or $skySource-notmatch 'moonSurfaceEnergy' -or $skySource-match 'vec3 cubeProjection'){throw 'Packaged celestial visibility/star optics repair is missing.'}
 if($appSource-notmatch '__omniforgeVisualTestCapture' -or $desktopSource-notmatch 'installVisualCaptureWatcher'){throw 'Packaged rendered-evidence capture path is missing.'}
 if($appSource-notmatch 'RenderCrashGuard' -or $desktopSource-notmatch 'recoverRendererProcess'){throw 'Packaged crash containment is missing.'}
 
@@ -121,5 +125,5 @@ Invoke-Checked powershell.exe @('-NoProfile','-ExecutionPolicy','Bypass','-File'
 Write-Host '=== Archive and evidence ==='
 Compress-Archive -Path(Join-Path $output '*')-DestinationPath $archive -CompressionLevel Optimal
 $hash=(Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant();"$hash  $(Split-Path $archive -Leaf)"|Set-Content $checksum -Encoding ascii
-@('Phase 1C authoritative Windows evidence',"Source commit: $sourceCommit", "Packaged source commit: $packagedCommit", "Archive SHA-256: $hash",'Syntax/tests/verification/idempotency: passed','Crash containment source/package audit: passed','One Sun and Moon without world proxy meshes: passed','Clear-day atmosphere baseline: passed','Custom Moon/star/Milky Way controls persistence: passed','Time-step runtime survival: passed','Packaged clear-day/night/Milky-Way/Moon/eclipse PNG capture: passed','Automated bright-pixel and horizon-seam metrics: passed','Manual image inspection required before user handoff')|Set-Content $evidenceOutput -Encoding utf8
+@('Phase 1C authoritative Windows evidence',"Source commit: $sourceCommit", "Packaged source commit: $packagedCommit", "Archive SHA-256: $hash",'Syntax/tests/verification/idempotency: passed','Crash containment source/package audit: passed','One Sun and Moon without world proxy meshes: passed','Geometric Sun/Moon horizon visibility: passed','Bounded star optical profile: passed','Clear-day atmosphere baseline: passed','Custom Moon/star/Milky Way controls persistence: passed','Time-step runtime survival: passed','Packaged twenty-state visual capture: passed','Automated metrics: passed','Manual image inspection required before user handoff')|Set-Content $evidenceOutput -Encoding utf8
 Write-Host "Phase 1C complete: $sourceCommit"
