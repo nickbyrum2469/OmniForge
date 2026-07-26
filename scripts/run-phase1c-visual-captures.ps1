@@ -364,6 +364,12 @@ try{
 }finally{
   if($process-and-not$process.HasExited){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue}
   Stop-OmniForgeProcesses
+  $runtimeEvidence=Join-Path $captureDir 'runtime-evidence'
+  New-Item -ItemType Directory -Force -Path $runtimeEvidence|Out-Null
+  foreach($name in @('logs','incidents','crashes','sessions')){
+    $source=Join-Path $runtime $name
+    if(Test-Path -LiteralPath $source){Copy-Item -LiteralPath $source -Destination $runtimeEvidence -Recurse -Force}
+  }
   Remove-Item Env:OMNIFORGE_DATA_ROOT,Env:OMNIFORGE_PORT,Env:OMNIFORGE_CAPTURE_DIR -ErrorAction SilentlyContinue
   Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
 }

@@ -148,6 +148,8 @@ test('packaged visual QA can request actual canvas PNG evidence', () => {
   assert.match(captureScript, /capture-manifest\.json/);
   assert.match(captureScript, /worldStateHash=Get-StateHash/);
   assert.match(captureScript, /renderTelemetry=\$captureTelemetry/);
+  assert.match(captureScript, /foreach\(\$name in @\('logs','incidents','crashes','sessions'\)\)/);
+  assert.match(captureScript, /Join-Path \$captureDir 'runtime-evidence'/);
 });
 
 test('the authoritative Windows evidence gate supports Windows PowerShell 5.1', () => {
