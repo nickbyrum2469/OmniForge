@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { RenderCrashGuard, sanitizeCameraState } from '../app/render-crash-guard.js';
-import { createEnvironmentInterpolator } from '../app/world-runtime.js';
+import { applyCompactWorldRuntime, updateCelestialRuntimeInterpolation } from '../app/world-runtime.js';
 import { normalizeEnvironmentState } from '../app/environment-runtime.js';
 import { applyEnvironmentPreset, environmentPresetOptions } from '../app/environment-presets.js';
 
@@ -32,27 +32,37 @@ test('render crash guard keeps failures contained and trips bounded recovery', (
 });
 
 test('celestial and environment interpolation remain linear through the update interval', () => {
-  const interpolate = createEnvironmentInterpolator();
-  const start = {
-    sky: { sunAzimuth: 350, sunElevation: 10, moonAzimuth: 20, moonElevation: 30 },
-    lighting: { sunIntensity: 1, moonIntensity: 0.1 },
-    atmosphere: { exposure: 0.7 },
-    weather: { fog: 0 }
+  const target = {
+    state: { engine: { revision: 0 } },
+    scene: {
+      id: 'scene-linear',
+      settings: { exposure: 0.7, fogNear: 90, fogFar: 280 },
+      objects: [{
+        id: 'sun-linear',
+        visible: true,
+        transform: { position: [0, 0, 0], rotation: [10, 350, 0], scale: [1, 1, 1] },
+        properties: { celestialRole: 'sun', intensity: 1, azimuth: 350, elevation: 10 }
+      }]
+    }
   };
-  const end = {
-    sky: { sunAzimuth: 10, sunElevation: 30, moonAzimuth: 80, moonElevation: 50 },
-    lighting: { sunIntensity: 3, moonIntensity: 0.3 },
-    atmosphere: { exposure: 1.1 },
-    weather: { fog: 0.4 }
-  };
-  interpolate.push(start, 0, 1000);
-  interpolate.push(end, 1000, 1000);
-  const middle = interpolate.sample(1500);
-  closeTo(middle.sky.sunAzimuth, 0);
-  closeTo(middle.sky.sunElevation, 20);
-  closeTo(middle.lighting.sunIntensity, 2);
-  closeTo(middle.atmosphere.exposure, 0.9);
-  closeTo(middle.weather.fog, 0.2);
+  const applied = applyCompactWorldRuntime(target, {
+    sceneId: 'scene-linear',
+    engineRevision: 2,
+    visualDurationMs: 1000,
+    settings: { exposure: 1.1, fogNear: 130, fogFar: 360 },
+    celestialObjects: [{
+      id: 'sun-linear',
+      visible: true,
+      transform: { position: [0, 0, 0], rotation: [30, 10, 0], scale: [1, 1, 1] },
+      properties: { celestialRole: 'sun', intensity: 3, azimuth: 10, elevation: 30 }
+    }]
+  }, { now: 1000, durationMs: 1000 });
+  assert.equal(applied, true);
+  updateCelestialRuntimeInterpolation(target, 1500);
+  closeTo(target.scene.objects[0].transform.rotation[1], 360);
+  closeTo(target.scene.objects[0].properties.intensity, 2);
+  closeTo(target.scene.settings.exposure, 0.9);
+  closeTo(target.scene.settings.fogNear, 110);
 });
 
 test('visible Sun authority overrides a mismatched legacy light vector', () => {
