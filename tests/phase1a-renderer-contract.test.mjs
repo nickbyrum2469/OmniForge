@@ -5,6 +5,7 @@ import fs from 'node:fs';
 const renderer = fs.readFileSync(new URL('../app/renderer.js', import.meta.url), 'utf8');
 const graphSource = fs.readFileSync(new URL('../app/render-graph.js', import.meta.url), 'utf8');
 const resourcesSource = fs.readFileSync(new URL('../app/frame-resources.js', import.meta.url), 'utf8');
+const hdrSource = fs.readFileSync(new URL('../app/hdr-pipeline.js', import.meta.url), 'utf8');
 const plan = fs.readFileSync(new URL('../docs/PHASE_1A_RENDERGRAPH_FRAME_RESOURCES.md', import.meta.url), 'utf8');
 
 const phase1bHdr = /import \{ HDRPipeline \} from '\.\/hdr-pipeline\.js';/.test(renderer);
@@ -26,12 +27,12 @@ test('Phase 1A pass names and dependencies remain unique as later phases extend 
   assert.match(renderer, /after:\['environment'\]/);
   if (phase1bHdr) {
     assert.match(renderer, /name:'display-transform'/);
-    assert.match(renderer, /after:\['opaque-world'\]/);
-    assert.match(renderer, /after:\['display-transform'\]/);
+    assert.match(renderer, /name:'editor-overlays'[\s\S]*after:\['opaque-world'\]/);
+    assert.match(renderer, /name:'display-transform'[\s\S]*after:\['editor-overlays'\]/);
   } else {
     assert.match(renderer, /after:\['opaque-world'\]/);
   }
-  assert.match(renderer, /after:\['editor-overlays'\]/);
+  assert.match(renderer, /name:'diagnostics'[\s\S]*after:\['display-transform'\]/);
 });
 
 test('monolithic renderer work is separated into explicit pass methods', () => {
@@ -58,6 +59,8 @@ test('display mapping remains explicit and advances only through a declared phas
     assert.match(renderer, /hdr-scene-color/);
     assert.match(renderer, /name:'display-transform'/);
     assert.match(renderer, /this\.hdrPipeline\.present/);
+    assert.match(renderer, /name:'editor-overlays'[\s\S]*reads:\['scene','camera','hdr-scene-color','hdr-scene-depth'\][\s\S]*writes:\['hdr-scene-color'\]/);
+    assert.doesNotMatch(hdrSource, /blitFramebuffer/);
     assert.doesNotMatch(renderer, /color\*=max\(\.05,uExposure\)/);
     assert.doesNotMatch(renderer, /color=\(color\*\(2\.51\*color\+\.03\)\)/);
   } else {

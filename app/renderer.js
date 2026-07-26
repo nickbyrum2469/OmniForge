@@ -682,9 +682,9 @@ export class Renderer3D{
     graph.addPass({name:'shadow',category:'shadow',reads:['scene','camera','lighting'],writes:['shadow-map'],enabled:frame=>Boolean(frame.lights.shadows),execute:frame=>this.renderShadow(frame.scene,frame.lightViewProj,frame.options)});
     graph.addPass({name:'environment',category:'environment',after:['shadow'],reads:['camera','environment','default-framebuffer'],writes:['hdr-scene-color','hdr-scene-depth'],execute:frame=>this.renderEnvironmentPass(frame)});
     graph.addPass({name:'opaque-world',category:'geometry',after:['environment'],reads:['scene','camera','lighting','environment','shadow-map','hdr-scene-color','hdr-scene-depth'],writes:['hdr-scene-color','hdr-scene-depth'],execute:frame=>this.renderOpaqueWorldPass(frame)});
-    graph.addPass({name:'display-transform',category:'display',after:['opaque-world'],reads:['hdr-scene-color','hdr-scene-depth','environment'],writes:['scene-color','scene-depth'],execute:frame=>this.renderDisplayPass(frame)});
-    graph.addPass({name:'editor-overlays',category:'editor',after:['display-transform'],reads:['scene','camera','scene-color','scene-depth'],writes:['scene-color'],execute:frame=>this.renderEditorOverlayPass(frame)});
-    graph.addPass({name:'diagnostics',category:'diagnostics',after:['editor-overlays'],reads:['scene-color'],writes:['frame-telemetry'],critical:false,execute:frame=>this.renderDiagnosticsPass(frame)});
+    graph.addPass({name:'editor-overlays',category:'editor',after:['opaque-world'],reads:['scene','camera','hdr-scene-color','hdr-scene-depth'],writes:['hdr-scene-color'],execute:frame=>this.renderEditorOverlayPass(frame)});
+    graph.addPass({name:'display-transform',category:'display',after:['editor-overlays'],reads:['hdr-scene-color','environment'],writes:['scene-color'],execute:frame=>this.renderDisplayPass(frame)});
+    graph.addPass({name:'diagnostics',category:'diagnostics',after:['display-transform'],reads:['scene-color'],writes:['frame-telemetry'],critical:false,execute:frame=>this.renderDiagnosticsPass(frame)});
     graph.compile();
     return graph;
   }

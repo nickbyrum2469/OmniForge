@@ -183,9 +183,6 @@ export class HDRPipeline {
     const cullEnabled = gl.isEnabled(gl.CULL_FACE);
     const blendEnabled = gl.isEnabled(gl.BLEND);
     const depthMask = gl.getParameter(gl.DEPTH_WRITEMASK);
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.framebuffer);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-    gl.blitFramebuffer(0, 0, this.width, this.height, 0, 0, this.width, this.height, gl.DEPTH_BUFFER_BIT, gl.NEAREST);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.width, this.height);
     gl.disable(gl.DEPTH_TEST);

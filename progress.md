@@ -59,6 +59,11 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Data-driven biome/style profiles and authoring controls.
 - Expanded packaged capture manifest and measured GTX 1650 quality budgets.
 
+## HDR backbuffer correction gate
+
+- Exact packaged `4f5de8f` preserved runtime evidence and exposed a real every-frame Chromium/WebGL failure: `GL_INVALID_OPERATION: glBlitFramebuffer: Invalid operation on multisampled framebuffer`. The HDR target is single-sampled while Electron's default backbuffer is multisampled, so copying the HDR depth renderbuffer into the default depth buffer is invalid.
+- The bounded root correction keeps editor overlays in the HDR render graph, where the authoritative scene depth already exists, then performs the display transform once at the end. `HDRPipeline.present()` no longer attempts a cross-sample-count depth blit. A permanent renderer-contract test locks both the pass order and the absence of `blitFramebuffer`.
+
 ## Twenty-frame corrective gate
 
 - Manual inspection of the exact packaged `bc22c5e` evidence found four bounded harness/compositor defects:
