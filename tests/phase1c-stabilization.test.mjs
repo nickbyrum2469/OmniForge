@@ -117,6 +117,9 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /vec2 hemisphereOctEncode/);
   assert.match(sky, /vec3 hemisphereOctDecode/);
   assert.match(sky, /uStarDensity\*0\.052/);
+  assert.match(sky, /vec3 microStarLayer/);
+  assert.match(sky, /uStarDensity\*0\.19/);
+  assert.match(sky, /microStarLayer\(ray,720\.0/);
   assert.match(sky, /float radius=max\(aa\*1\.45/);
   assert.match(sky, /rayLength=radius\*mix\(2\.0,4\.2/);
   assert.match(sky, /float psf=exp\(-0\.5\*pow\(angularDistance\/sigma,2\.0\)\)/);
@@ -130,6 +133,7 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /uMoonMariaStrength/);
   assert.match(sky, /vec3 galacticNormal=normalize\(vec3\(cos\(orientation\)\*0\.78,0\.32,sin\(orientation\)\*0\.78\)\)/);
   assert.match(sky, /float dustTransmission=/);
+  assert.match(sky, /float darkPockets=/);
   assert.match(sky, /float coreBulge=/);
   assert.doesNotMatch(sky, /microStructure=/);
   assert.match(sky, /sky=mix\(sky,vec3\(0\.00001\),eclipseSilhouette\)/);

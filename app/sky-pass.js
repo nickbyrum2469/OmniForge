@@ -234,6 +234,31 @@ vec3 starLayer(vec3 ray,float scale,float seed){
   return accumulated;
 }
 
+vec3 microStarLayer(vec3 ray,float scale,float seed){
+  vec2 uv=hemisphereOctEncode(ray);
+  vec2 cell=floor(uv*scale);
+  float identity=hash21(cell+seed*0.019);
+  float probability=clamp(uStarDensity*0.19,0.012,0.34);
+  if(identity>probability)return vec3(0.0);
+  vec2 offset=vec2(hash21(cell+seed+12.3),hash21(cell+seed+67.1));
+  vec2 candidateUv=(cell+mix(vec2(0.2),vec2(0.8),offset))/scale;
+  if(any(lessThan(candidateUv,vec2(0.0)))||any(greaterThan(candidateUv,vec2(1.0))))return vec3(0.0);
+  vec3 starDirection=hemisphereOctDecode(candidateUv);
+  if(starDirection.y<=0.0)return vec3(0.0);
+  float cosine=clamp(dot(ray,starDirection),-1.0,1.0);
+  float angularDistance=sqrt(max(0.0,2.0*(1.0-cosine)));
+  float aa=max(fwidth(angularDistance),0.000025);
+  float sigma=aa*mix(0.72,1.02,hash21(cell+seed+31.8));
+  float psf=exp(-0.5*pow(angularDistance/max(0.00002,sigma),2.0));
+  psf*=1.0-smoothstep(aa*1.6,aa*2.45,angularDistance);
+  float temperature=hash21(cell+seed+88.4);
+  vec3 warm=vec3(1.0,0.84,0.7),neutral=vec3(0.92,0.96,1.0),cool=vec3(0.7,0.82,1.0);
+  vec3 color=temperature<0.5?mix(warm,neutral,temperature*2.0):mix(neutral,cool,(temperature-0.5)*2.0);
+  color=mix(vec3(0.9,0.94,1.0),color,uStarColorVariation*0.72);
+  float energy=mix(0.09,0.42,pow(hash21(cell+seed+45.2),2.4))*uStarBrightness;
+  return color*psf*energy;
+}
+
 float wrappedDistance(float a,float b){return abs(atan(sin(a-b),cos(a-b)));}
 
 vec3 milkyWay(vec3 ray,float horizonMask){
@@ -271,15 +296,16 @@ vec3 milkyWay(vec3 ray,float horizonMask){
   float dustBreakup=smoothstep(0.34,0.7,noise3(periodic*vec3(5.7,5.7,14.0)+vec3(9.0,17.0,4.0)));
   float centralOffset=localWidth*(0.08*sin(longitude*4.3+coarse*3.2)+(medium-0.5)*0.16);
   float centralDust=exp(-pow(abs(signedDistance-centralOffset)/max(0.0032,localWidth*0.09),2.0)*1.8);
-  centralDust*=mix(0.12,1.0,dustBreakup)*uMilkyWayDust;
+  centralDust*=smoothstep(0.28,0.64,dustBreakup)*uMilkyWayDust;
   float branchOffset=localWidth*(0.24+0.16*sin(longitude*2.4+medium*4.0));
   float branchA=exp(-pow(abs(signedDistance-branchOffset)/max(0.0035,localWidth*0.085),2.0)*1.65);
   float branchB=exp(-pow(abs(signedDistance+branchOffset*0.82)/max(0.0035,localWidth*0.1),2.0)*1.7);
   float branchMask=smoothstep(0.44,0.82,coarse*0.36+fine*0.64);
   float branchingDust=(branchA+branchB*0.72)*branchMask*uMilkyWayDust;
-  float cloudLight=narrowBand*(0.15+cloudMasses*0.92)+broadBand*cloudMasses*0.12+outerHalo*0.018;
-  cloudLight+=coreBulge*(0.16+cloudContrast*0.78)+filamentA*0.065+filamentB*0.05+stellarKnots*0.15+micro*0.055+granularStars*0.32;
-  float dustTransmission=clamp(1.0-centralDust*0.94-branchingDust*0.62,0.025,1.0);
+  float darkPockets=smoothstep(0.58,0.82,(1.0-medium)*0.58+fine*0.42)*narrowBand*uMilkyWayDust;
+  float cloudLight=narrowBand*(0.045+cloudMasses*1.05)+broadBand*cloudMasses*0.075+outerHalo*0.01;
+  cloudLight+=coreBulge*(0.12+cloudContrast*0.98)+filamentA*0.052+filamentB*0.04+stellarKnots*0.18+micro*0.06+granularStars*0.46;
+  float dustTransmission=clamp(1.0-centralDust*0.94-branchingDust*0.62-darkPockets*0.58,0.018,1.0);
   float luminance=max(0.0,cloudLight*dustTransmission+coreBulge*0.08+granularStars*0.2);
   vec3 coolCloud=srgbToLinear(uMilkyWayColor);
   vec3 warmCore=vec3(1.0,0.56,0.28);
@@ -508,6 +534,7 @@ void main(){
 
   float starHorizon=smoothstep(0.015,0.16,ray.y);
   vec3 stars=starLayer(ray,180.0,uStarSeed)+starLayer(ray,360.0,uStarSeed+101.0);
+  stars+=microStarLayer(ray,720.0,uStarSeed+211.0)+microStarLayer(ray,1080.0,uStarSeed+307.0);
   float eclipseStarVisibility=pow(uSolarEclipse,7.0)*uDayFactor*0.34;
   sky+=stars*max(uStarVisibility,eclipseStarVisibility)*starHorizon*(1.0-eclipseSilhouette);
   sky+=milkyWay(ray,starHorizon);

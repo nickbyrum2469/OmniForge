@@ -37,6 +37,8 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Exact packaged commit `05ed7c6769354e719af1aacc43ec46b03496e836` passed automated capture thresholds but failed manual visual review: daylight remained underlit, stellar density remained low, the galactic dust lane remained too straight, lunar craters read as rings, and the eclipse remained a flat black disc with a uniform halo.
 - The next bounded gate replaces ring decals with layered lunar basins/maria, renders a deterministic structured corona with annular and diamond-ring states, and connects eclipse coverage to the authoritative ambient/direct world light and daylight star visibility.
 - Exact packaged commit `37086f7c759202f6a43b8554b36d0c63f2cf12a9` proved the eclipse atmosphere and corona direction are working, but manual review rejected a cartoon four-basin lunar pattern, coarse triangular corona wedges, and stars composited over the occulting Moon. The follow-up softens and warps maria, reduces analytic crater rims, increases corona angular detail, and masks eclipse stars behind the silhouette.
+- Exact packaged commit `9c045c107f179e207efbb0410ec47481de1db0f5` removed the lunar paw pattern and the star leak through the eclipsing disc. The Moon is materially more coherent, and the eclipse now has a readable cool atmosphere plus a structured white corona, but both remain short of the photographic references.
+- The next gate adds two low-cost deterministic micro-star populations, keeps bright hero stars on the existing antialiased path, removes the Milky Way's continuous central dust line, and strengthens irregular dust pockets and granular stellar structure.
 
 ## Remaining visual work
 

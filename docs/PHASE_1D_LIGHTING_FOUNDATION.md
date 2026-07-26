@@ -64,6 +64,8 @@ Exact packaged evidence from `05ed7c6769354e719af1aacc43ec46b03496e836` proved t
 
 The first packaged result of that gate (`37086f7c759202f6a43b8554b36d0c63f2cf12a9`) correctly darkened the atmosphere and produced a directional corona, but manual inspection found three new presentation defects: oversized discrete maria read as a cartoon paw, low-frequency corona sectors read as triangular wedges, and daylight stars were composed over the occulting lunar silhouette. The corrective revision warps and blends the maria regions, reduces analytic rim energy, increases angular corona detail, and applies the same eclipse silhouette as an occlusion mask to the star pass.
 
+Packaged commit `9c045c107f179e207efbb0410ec47481de1db0f5` corrected the paw-like maria and eclipse star leak. The next stellar gate keeps the existing high-quality bright-star population, adds two inexpensive direct-cell micro-star layers for photographic density, and further breaks the Milky Way's central dust into irregular gaps and dark pockets. The background layers avoid the nine-neighbor loop used for hero stars, preserving a bounded fragment cost suitable for lower-end profiles.
+
 ## Protected behavior
 
 - The continuous terrain-conforming path remains authoritative.
