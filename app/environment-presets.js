@@ -69,6 +69,90 @@ export const ENVIRONMENT_PRESETS = Object.freeze({
       weather: { preset: 'clear', fog: 0.002 }
     }
   }),
+  'forest-morning-shafts': Object.freeze({
+    label: 'Forest Morning Shafts',
+    description: 'Cool humid morning air, warm low-angle sunlight, long shadows, and restrained mist for wooded worlds.',
+    patch: {
+      time: { hours: 7 },
+      lighting: { profile: 'quality', sunIntensity: 2.8, indirectStrength: 0.72 },
+      atmosphere: { exposure: 0.86, haze: 0.075, mie: 0.14, mieAnisotropy: 0.84, ozone: 1.05, humidity: 0.72, dust: 0.01, aerialPerspective: 1.28, visibilityKm: 115, dayFogMultiplier: 0.26, nightFogMultiplier: 0.3, saturation: 1.05, contrast: 1.06, vibrance: 0.08, toneMapper: 'neutral' },
+      sky: { sunGlow: 0.82, starIntensity: 0, milkyWayIntensity: 0 },
+      clouds: { quality: 'quality', coverage: 0.12, density: 0.28, shadowStrength: 0.14 },
+      weather: { preset: 'fog', fog: 0.18 }
+    }
+  }),
+  'coastal-backlight': Object.freeze({
+    label: 'Coastal Backlight',
+    description: 'Humid low-Sun glare, warm highlights, cool open shadows, and long-distance coastal haze.',
+    patch: {
+      time: { hours: 17.65 },
+      lighting: { profile: 'quality', sunIntensity: 3.05, indirectStrength: 0.7 },
+      atmosphere: { exposure: 0.76, haze: 0.065, mie: 0.13, mieAnisotropy: 0.86, ozone: 1.08, humidity: 0.62, dust: 0.018, aerialPerspective: 1.18, visibilityKm: 150, dayFogMultiplier: 0.16, nightFogMultiplier: 0.22, saturation: 1.1, contrast: 1.08, vibrance: 0.16, toneMapper: 'neutral' },
+      sky: { sunGlow: 1.18, starIntensity: 0, milkyWayIntensity: 0 },
+      clouds: { quality: 'quality', coverage: 0.14, density: 0.3, shadowStrength: 0.18 },
+      weather: { preset: 'partly-cloudy', fog: 0.012 }
+    }
+  }),
+  'realistic-night-core': Object.freeze({
+    label: 'Realistic Galactic Core',
+    description: 'A restrained astronomical palette with dense stars, irregular dust lanes, and a warm galactic core.',
+    patch: {
+      time: { hours: 1 },
+      lighting: { profile: 'quality', moonIntensity: 0.2, indirectStrength: 0.46 },
+      atmosphere: { exposure: 0.82, haze: 0.008, mie: 0.025, mieAnisotropy: 0.76, ozone: 0.94, humidity: 0.025, dust: 0.008, aerialPerspective: 0.82, visibilityKm: 360, dayFogMultiplier: 0.02, nightFogMultiplier: 0.1, saturation: 1.04, contrast: 1.08, vibrance: 0.06, toneMapper: 'neutral' },
+      sky: { moonBrightness: 0.9, moonGlow: 0.18, starIntensity: 1.12, starDensity: 0.74, starBrightness: 0.76, starSizeMin: 0.34, starSizeMax: 1.45, starTwinkleAmount: 0.24, starRayStrength: 0.08, starHeroFraction: 0.012, milkyWayIntensity: 0.82, milkyWayWidth: 0.2, milkyWayDetail: 1.55, milkyWayOrientation: 22, milkyWayDust: 0.86, milkyWayWarp: 0.5, milkyWayClumping: 0.92, milkyWayCoreStrength: 1.08, milkyWayWidthVariation: 0.78, milkyWayColor: '#8fa7d8' },
+      clouds: { coverage: 0.02, density: 0.12, shadowStrength: 0.08 },
+      weather: { preset: 'clear', fog: 0 }
+    }
+  }),
+  'faint-natural-milkyway': Object.freeze({
+    label: 'Faint Natural Milky Way',
+    description: 'A subtle naked-eye galaxy with dark adapted stars and low-contrast dust structure.',
+    patch: {
+      time: { hours: 1.4 },
+      lighting: { profile: 'balanced', moonIntensity: 0.12, indirectStrength: 0.42 },
+      atmosphere: { exposure: 0.78, haze: 0.012, mie: 0.032, humidity: 0.035, visibilityKm: 310, dayFogMultiplier: 0.02, nightFogMultiplier: 0.12, saturation: 1.02, contrast: 1.04, vibrance: 0.03, toneMapper: 'neutral' },
+      sky: { moonBrightness: 0.72, moonGlow: 0.14, starIntensity: 0.9, starDensity: 0.64, starBrightness: 0.66, starTwinkleAmount: 0.2, starRayStrength: 0.04, starHeroFraction: 0.008, milkyWayIntensity: 0.28, milkyWayWidth: 0.17, milkyWayDetail: 1.2, milkyWayDust: 0.78, milkyWayWarp: 0.34, milkyWayClumping: 0.66, milkyWayCoreStrength: 0.56, milkyWayWidthVariation: 0.5, milkyWayColor: '#91a0bd' },
+      clouds: { coverage: 0.04, density: 0.14, shadowStrength: 0.08 },
+      weather: { preset: 'clear', fog: 0.001 }
+    }
+  }),
+  'fantasy-violet-galaxy': Object.freeze({
+    label: 'Fantasy Violet Galaxy',
+    description: 'An intentional magenta-violet galactic treatment isolated from realistic night profiles.',
+    patch: {
+      time: { hours: 21.2 },
+      lighting: { profile: 'quality', moonIntensity: 0.24, indirectStrength: 0.6 },
+      atmosphere: { exposure: 0.8, haze: 0.018, mie: 0.045, humidity: 0.04, visibilityKm: 300, dayFogMultiplier: 0.04, nightFogMultiplier: 0.12, saturation: 1.24, contrast: 1.08, vibrance: 0.3, toneMapper: 'neutral' },
+      sky: { moonBrightness: 1.2, moonGlow: 0.45, starIntensity: 1.5, starDensity: 0.84, starBrightness: 0.98, starRayStrength: 0.32, starHeroFraction: 0.045, milkyWayIntensity: 0.92, milkyWayWidth: 0.25, milkyWayDetail: 1.45, milkyWayDust: 0.74, milkyWayWarp: 0.82, milkyWayClumping: 1.08, milkyWayCoreStrength: 1.02, milkyWayWidthVariation: 0.94, milkyWayColor: '#b889e8' },
+      clouds: { coverage: 0.06, density: 0.16, shadowStrength: 0.1 },
+      weather: { preset: 'clear', fog: 0 }
+    }
+  }),
+  'total-eclipse-realistic': Object.freeze({
+    label: 'Total Eclipse — Realistic',
+    description: 'Centered totality with a restrained white corona and physically connected world dimming.',
+    patch: {
+      time: { hours: 12 },
+      lighting: { profile: 'quality', indirectStrength: 0.58 },
+      atmosphere: { exposure: 0.78, haze: 0.018, mie: 0.045, humidity: 0.05, saturation: 1.02, contrast: 1.05, vibrance: 0.04, toneMapper: 'neutral' },
+      sky: { celestialMode: 'manual', sunAzimuth: 0, sunElevation: 30, sunSize: 1, moonAzimuth: 0, moonElevation: 30, moonSize: 1.04, eclipseMode: 'force-solar', solarEclipseCoverage: 1.08, starIntensity: 0.3, milkyWayIntensity: 0 },
+      clouds: { coverage: 0.02, density: 0.12, shadowStrength: 0.08 },
+      weather: { preset: 'clear', fog: 0 }
+    }
+  }),
+  'annular-eclipse-warm': Object.freeze({
+    label: 'Annular Eclipse — Warm',
+    description: 'A low-altitude annular event with warm atmospheric extinction and controlled cloud response.',
+    patch: {
+      time: { hours: 17.4 },
+      lighting: { profile: 'quality', indirectStrength: 0.62 },
+      atmosphere: { exposure: 0.76, haze: 0.065, mie: 0.12, mieAnisotropy: 0.84, humidity: 0.2, aerialPerspective: 1.18, saturation: 1.12, contrast: 1.06, vibrance: 0.12, toneMapper: 'neutral' },
+      sky: { celestialMode: 'manual', sunAzimuth: 0, sunElevation: 16, sunSize: 1, moonAzimuth: 0, moonElevation: 16, moonSize: 0.83, eclipseMode: 'automatic', solarEclipseCoverage: 1, starIntensity: 0, milkyWayIntensity: 0 },
+      clouds: { quality: 'quality', coverage: 0.18, density: 0.32, shadowStrength: 0.2 },
+      weather: { preset: 'partly-cloudy', fog: 0.006 }
+    }
+  }),
   'moonlit-night': Object.freeze({
     label: 'Moonlit Night',
     description: 'Dark blue-silver moonlight with readable silhouettes, strong stars, and light night haze.',

@@ -159,11 +159,19 @@ function installWorldPanel() {
         <label>Visibility (km)<input id="v010Visibility" type="number" min="2" max="500" step="1"></label>
         <label>Rayleigh<input id="v010Rayleigh" type="range" min="0" max="3" step="0.01"></label>
         <label>Mie haze<input id="v010Mie" type="range" min="0" max="1" step="0.01"></label>
+        <label>Mie directionality<input id="v010MieAnisotropy" type="range" min="0" max="0.95" step="0.01"></label>
+        <label>Ozone / twilight<input id="v010Ozone" type="range" min="0" max="3" step="0.01"></label>
+        <label>Atmospheric dust<input id="v010Dust" type="range" min="0" max="1" step="0.005"></label>
+        <label>Aerial perspective<input id="v010AerialPerspective" type="range" min="0" max="3" step="0.01"></label>
         <label>Humidity<input id="v010Humidity" type="range" min="0" max="1" step="0.01"></label>
         <label>Clear-air haze<input id="v010Haze" type="range" min="0" max="1" step="0.005"></label>
         <label>Day fog response<input id="v010DayFog" type="range" min="0" max="2" step="0.01"></label>
         <label>Night fog response<input id="v010NightFog" type="range" min="0" max="2" step="0.01"></label>
         <label>Exposure<input id="v010Exposure" type="range" min="0.2" max="3" step="0.02"></label>
+        <label>Saturation<input id="v010Saturation" type="range" min="0" max="3" step="0.01"></label>
+        <label>Contrast<input id="v010Contrast" type="range" min="0.2" max="3" step="0.01"></label>
+        <label>Vibrance<input id="v010Vibrance" type="range" min="-1" max="1" step="0.01"></label>
+        <label>Tone mapper<select id="v010ToneMapper"><option value="neutral">Neutral</option><option value="aces">ACES filmic</option></select></label>
         <label>Stars<input id="v010Stars" type="range" min="0" max="3" step="0.05"></label>
         <label>Star density<input id="v010StarDensity" type="range" min="0.02" max="2" step="0.02"></label>
         <label>Star brightness<input id="v010StarBrightness" type="range" min="0" max="8" step="0.05"></label>
@@ -186,6 +194,7 @@ function installWorldPanel() {
         <label>Milky Way clumping<input id="v010MilkyWayClumping" type="range" min="0" max="2" step="0.02"></label>
         <label>Galactic core<input id="v010MilkyWayCore" type="range" min="0" max="3" step="0.02"></label>
         <label>Width variation<input id="v010MilkyWayWidthVariation" type="range" min="0" max="2" step="0.02"></label>
+        <label>Milky Way color<input id="v010MilkyWayColor" type="color"></label>
         <label>Cloud mode<select id="v010CloudQuality"><option value="layered">Optimized layered</option><option value="balanced">Volumetric balanced</option><option value="quality">Volumetric quality</option><option value="reference">Volumetric reference</option></select></label>
         <label>Cloud cover<input id="v010Clouds" type="range" min="0" max="1" step="0.01"></label>
         <label>Cloud density<input id="v010CloudDensity" type="range" min="0" max="1" step="0.01"></label>
@@ -263,11 +272,19 @@ function populate(options = {}) {
   field('v010Visibility').value = world.atmosphere.visibilityKm;
   field('v010Rayleigh').value = world.atmosphere.rayleigh;
   field('v010Mie').value = world.atmosphere.mie;
+  field('v010MieAnisotropy').value = world.atmosphere.mieAnisotropy ?? 0.78;
+  field('v010Ozone').value = world.atmosphere.ozone ?? 1;
+  field('v010Dust').value = world.atmosphere.dust ?? 0.02;
+  field('v010AerialPerspective').value = world.atmosphere.aerialPerspective ?? 1;
   field('v010Humidity').value = world.atmosphere.humidity;
   field('v010Haze').value = world.atmosphere.haze ?? 0.006;
   field('v010DayFog').value = world.atmosphere.dayFogMultiplier ?? 0.04;
   field('v010NightFog').value = world.atmosphere.nightFogMultiplier ?? 0.18;
   field('v010Exposure').value = world.atmosphere.exposure;
+  field('v010Saturation').value = world.atmosphere.saturation ?? 1.08;
+  field('v010Contrast').value = world.atmosphere.contrast ?? 1.03;
+  field('v010Vibrance').value = world.atmosphere.vibrance ?? 0.1;
+  field('v010ToneMapper').value = world.atmosphere.toneMapper || 'neutral';
   field('v010CelestialMode').value = world.sky.celestialMode || 'astronomical';
   field('v010SunSize').value = world.sky.sunSize ?? 1;
   field('v010SunGlow').value = world.sky.sunGlow ?? 1;
@@ -322,6 +339,7 @@ function populate(options = {}) {
   field('v010MilkyWayClumping').value = world.sky.milkyWayClumping ?? 0.72;
   field('v010MilkyWayCore').value = world.sky.milkyWayCoreStrength ?? 0.65;
   field('v010MilkyWayWidthVariation').value = world.sky.milkyWayWidthVariation ?? 0.6;
+  field('v010MilkyWayColor').value = world.sky.milkyWayColor || '#8fa7d8';
   field('v010CloudQuality').value = world.clouds.quality || 'layered';
   field('v010Clouds').value = world.clouds.coverage;
   field('v010CloudDensity').value = world.clouds.density ?? 0.45;
@@ -370,11 +388,19 @@ async function applyWorld(extra = {}, options = {}) {
       visibilityKm: numeric('v010Visibility', 120),
       rayleigh: numeric('v010Rayleigh', 1),
       mie: numeric('v010Mie', 0.16),
+      mieAnisotropy: numeric('v010MieAnisotropy', 0.78),
+      ozone: numeric('v010Ozone', 1),
+      dust: numeric('v010Dust', 0.02),
+      aerialPerspective: numeric('v010AerialPerspective', 1),
       humidity: numeric('v010Humidity', 0.04),
       haze: numeric('v010Haze', 0.006),
       dayFogMultiplier: numeric('v010DayFog', 0.04),
       nightFogMultiplier: numeric('v010NightFog', 0.18),
-      exposure: numeric('v010Exposure', 1)
+      exposure: numeric('v010Exposure', 1),
+      saturation: numeric('v010Saturation', 1.08),
+      contrast: numeric('v010Contrast', 1.03),
+      vibrance: numeric('v010Vibrance', 0.1),
+      toneMapper: field('v010ToneMapper').value
     },
     sky: {
       celestialMode: field('v010CelestialMode').value,
@@ -395,7 +421,8 @@ async function applyWorld(extra = {}, options = {}) {
       starSizeMin: numeric('v010StarSizeMin', 0.18), starSizeMax: numeric('v010StarSizeMax', 1.35), starColorVariation: numeric('v010StarColorVariation', 0.72), starRayStrength: numeric('v010StarRays', 0.24), starRayLength: numeric('v010StarRayLength', 1.15), starHeroFraction: numeric('v010HeroStars', 0.035), starSeed: numeric('v010StarSeed', 1337),
       starDaylightExtinction: numeric('v010StarExtinction', 1.35), milkyWayIntensity: numeric('v010MilkyWay', 0.32),
       milkyWayWidth: numeric('v010MilkyWayWidth', 0.22), milkyWayDetail: numeric('v010MilkyWayDetail', 1.15), milkyWayOrientation: numeric('v010MilkyWayOrientation', 22), milkyWayDust: numeric('v010MilkyWayDust', 0.7),
-      milkyWayWarp: numeric('v010MilkyWayWarp', 0.48), milkyWayClumping: numeric('v010MilkyWayClumping', 0.72), milkyWayCoreStrength: numeric('v010MilkyWayCore', 0.65), milkyWayWidthVariation: numeric('v010MilkyWayWidthVariation', 0.6)
+      milkyWayWarp: numeric('v010MilkyWayWarp', 0.48), milkyWayClumping: numeric('v010MilkyWayClumping', 0.72), milkyWayCoreStrength: numeric('v010MilkyWayCore', 0.65), milkyWayWidthVariation: numeric('v010MilkyWayWidthVariation', 0.6),
+      milkyWayColor: field('v010MilkyWayColor').value
     },
     clouds: {
       quality: field('v010CloudQuality').value,

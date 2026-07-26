@@ -168,6 +168,11 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(worldUi, /v010MoonCraters/);
   assert.match(worldUi, /id="v010MoonSize" type="range" min="0\.1" max="32"/);
   assert.match(worldUi, /v010MilkyWayWarp/);
+  assert.match(worldUi, /v010MilkyWayColor/);
+  assert.match(worldUi, /v010MieAnisotropy/);
+  assert.match(worldUi, /v010Ozone/);
+  assert.match(worldUi, /v010AerialPerspective/);
+  assert.match(worldUi, /v010ToneMapper/);
   assert.match(worldUi, /v010StarRays/);
   assert.match(worldUi, /lookPreset: options\.preservePreset/);
   assert.match(worldSystems, /dayFogMultiplier/);

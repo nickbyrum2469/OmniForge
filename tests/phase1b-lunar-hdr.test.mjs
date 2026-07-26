@@ -96,7 +96,7 @@ test('solar eclipse strength follows angular disc overlap for partial and annula
 });
 
 test('Environment presets edit the same authoritative world sections', () => {
-  assert.ok(Object.keys(ENVIRONMENT_PRESETS).length >= 6);
+  assert.ok(Object.keys(ENVIRONMENT_PRESETS).length >= 16);
   const source = {
     time: { hours: 12 }, lighting: { profile: 'compatibility' }, atmosphere: { exposure: 1 },
     sky: { moonSize: 2 }, clouds: { coverage: 0 }, weather: { preset: 'clear' }
@@ -107,6 +107,17 @@ test('Environment presets edit the same authoritative world sections', () => {
   assert.ok(result.atmosphere.saturation > 1);
   assert.ok(result.atmosphere.contrast > 1);
   assert.notEqual(result, source);
+  for (const id of [
+    'forest-morning-shafts',
+    'coastal-backlight',
+    'realistic-night-core',
+    'faint-natural-milkyway',
+    'fantasy-violet-galaxy',
+    'total-eclipse-realistic',
+    'annular-eclipse-warm'
+  ]) assert.ok(ENVIRONMENT_PRESETS[id], `missing environment profile ${id}`);
+  assert.equal(ENVIRONMENT_PRESETS['total-eclipse-realistic'].patch.sky.eclipseMode, 'force-solar');
+  assert.equal(ENVIRONMENT_PRESETS['fantasy-violet-galaxy'].patch.sky.milkyWayColor, '#b889e8');
 });
 
 test('Phase 1B renderer source has one HDR display transform and controllable non-aurora star systems', () => {
