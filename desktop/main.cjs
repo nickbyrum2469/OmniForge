@@ -12,6 +12,7 @@ const PRODUCT_VERSION = '0.11.0';
 const APP_ID = 'com.omniforge.editor';
 const ICON = path.join(APP_ROOT, 'resources', process.platform === 'win32' ? 'omniforge-icon.ico' : 'omniforge-icon.png');
 const DIAGNOSTIC_MODE = process.env.OMNIFORGE_DIAGNOSTICS === '1' || process.argv.includes('--diagnostics');
+const VISUAL_CAPTURE_DIR = String(process.env.OMNIFORGE_CAPTURE_DIR || '').trim();
 if(DIAGNOSTIC_MODE)app.commandLine.appendSwitch('remote-debugging-port',String(process.env.OMNIFORGE_DEBUG_PORT||'9229'));
 
 app.setName(PRODUCT_NAME);
@@ -40,6 +41,8 @@ let recoveryReason = null;
 let runtimeInfo = null;
 let rendererRecoveryInFlight = false;
 let rendererRecoveryAttempts = [];
+let visualCaptureTimer = null;
+let visualCaptureInFlight = false;
 
 function readJson(file, fallback=null) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } }
 function writeJson(file, value) { fs.mkdirSync(path.dirname(file), { recursive: true }); const temp=`${file}.${process.pid}.tmp`; fs.writeFileSync(temp, JSON.stringify(value,null,2),'utf8'); fs.renameSync(temp,file); }
@@ -71,6 +74,37 @@ async function recoverRendererProcess(kind, details={}) {
   finally{rendererRecoveryInFlight=false;}
 }
 
+
+
+function installVisualCaptureWatcher() {
+  if(!VISUAL_CAPTURE_DIR||!mainWindow||mainWindow.isDestroyed())return;
+  fs.mkdirSync(VISUAL_CAPTURE_DIR,{recursive:true});
+  const requestFile=path.join(VISUAL_CAPTURE_DIR,'capture-request.json');
+  if(visualCaptureTimer)clearInterval(visualCaptureTimer);
+  visualCaptureTimer=setInterval(async()=>{
+    if(visualCaptureInFlight||!mainWindow||mainWindow.isDestroyed()||!fs.existsSync(requestFile))return;
+    visualCaptureInFlight=true;
+    const processingFile=path.join(VISUAL_CAPTURE_DIR,`capture-processing-${process.pid}.json`);
+    try{
+      fs.renameSync(requestFile,processingFile);
+      const request=readJson(processingFile,{});
+      const id=String(request.id||Date.now()).replace(/[^a-z0-9_-]/gi,'-');
+      const options=JSON.stringify(request.options||{});
+      const dataUrl=await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestCapture(${options})`,true);
+      const match=/^data:image\/png;base64,(.+)$/s.exec(String(dataUrl||''));
+      if(!match)throw new Error('Renderer did not return a PNG data URL.');
+      fs.writeFileSync(path.join(VISUAL_CAPTURE_DIR,`${id}.png`),Buffer.from(match[1],'base64'));
+      writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:true,id,at:new Date().toISOString()});
+    }catch(error){
+      const request=readJson(processingFile,{});const id=String(request.id||'capture-error').replace(/[^a-z0-9_-]/gi,'-');
+      writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:false,id,error:error.message,stack:error.stack||''});
+      writeIncident('visual-capture-failed',{id,message:error.message,stack:error.stack||''});
+    }finally{
+      fs.rmSync(processingFile,{force:true});visualCaptureInFlight=false;
+    }
+  },180);
+  visualCaptureTimer.unref?.();
+}
 
 function findFreePort() {
   return new Promise((resolve, reject) => {
@@ -232,8 +266,9 @@ async function createMainWindow() {
     if(DIAGNOSTIC_MODE)mainWindow.webContents.openDevTools({mode:'detach',activate:true});
   });
   mainWindow.on('close',()=>{if(!mainWindow.isDestroyed()){const bounds=mainWindow.getBounds();writeJson(windowStateFile,{...bounds,maximized:mainWindow.isMaximized()});}});
-  mainWindow.on('closed',()=>{mainWindow=null;});
+  mainWindow.on('closed',()=>{if(visualCaptureTimer){clearInterval(visualCaptureTimer);visualCaptureTimer=null;}mainWindow=null;});
   await mainWindow.loadURL(`${allowedOrigin}/?desktop=1&safeMode=${safeMode?'1':'0'}&recovered=${recoveryReason?'1':'0'}&diagnostics=${DIAGNOSTIC_MODE?'1':'0'}`);
+  installVisualCaptureWatcher();
 }
 
 markSessionStart();

@@ -141,6 +141,31 @@ function showToast(message, type='') {
   toastTimer = setTimeout(()=>ui.viewportToast.className='viewport-toast',2400);
 }
 
+async function captureVisualTestFrame(options={}) {
+  if(!ui.viewport||!camera||!scene)throw new Error('Viewport is not ready for visual capture.');
+  const originalCamera=cloneCamera(camera);
+  const originalGrid=scene.settings.gridVisible;
+  const originalSplines=scene.settings.splinesVisible;
+  try{
+    if(options.camera){
+      const next=cloneCamera(camera);
+      if(Array.isArray(options.camera.position)&&options.camera.position.length===3)next.position=options.camera.position.map(Number);
+      for(const key of ['yaw','pitch','fov'])if(Number.isFinite(Number(options.camera[key])))next[key]=Number(options.camera[key]);
+      camera=sanitizeCameraState(next,originalCamera);
+    }
+    if(options.hideGuides!==false){scene.settings.gridVisible=false;scene.settings.splinesVisible=false;}
+    const waitMs=Math.max(80,Math.min(3000,Number(options.waitMs||500)));
+    await sleep(waitMs);
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    return ui.viewport.toDataURL('image/png');
+  }finally{
+    camera=originalCamera;
+    scene.settings.gridVisible=originalGrid;
+    scene.settings.splinesVisible=originalSplines;
+  }
+}
+window.__omniforgeVisualTestCapture=captureVisualTestFrame;
+
 function objectIcon(type) {
   return ({box:'▣',sphere:'●',cylinder:'⬭',plane:'▱',terrain:'⌁',path:'⌇',model:'◆',decal:'◫',directionalLight:'☀',pointLight:'✦',empty:'＋'})[type] || '◇';
 }
