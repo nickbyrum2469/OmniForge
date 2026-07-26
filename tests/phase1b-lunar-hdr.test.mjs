@@ -55,6 +55,22 @@ test('Forced eclipse modes are deterministic authoring tools', () => {
   assert.equal(lunar.moon.lunarEclipse, 1);
 });
 
+test('manual celestial coordinates produce partial eclipse strength without orbital-node vetoes', () => {
+  const world = worldAt({ moonAgeDays: 3, eclipseMode: 'automatic' });
+  world.sky = {
+    ...world.sky,
+    celestialMode: 'manual',
+    sunAzimuth: 0,
+    sunElevation: 30,
+    moonAzimuth: 0.58,
+    moonElevation: 30,
+    moonOrbitInclination: 45
+  };
+  const partial = evaluateCelestialSystem(world);
+  assert.ok(partial.moon.solarEclipse > 0.05 && partial.moon.solarEclipse < 1);
+  assert.ok(partial.moon.separationDegrees > 0.1);
+});
+
 test('Environment presets edit the same authoritative world sections', () => {
   assert.ok(Object.keys(ENVIRONMENT_PRESETS).length >= 6);
   const source = {

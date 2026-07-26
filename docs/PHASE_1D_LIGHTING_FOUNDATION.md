@@ -70,6 +70,8 @@ That direct-cell optimization was rejected after exact packaged commit `c3de29af
 
 Packaged commit `88047b34086d43e1f29e7dc79741c316ffe42e7a` restored dense PSF stars without the shard artifact. A source trace then confirmed that the visible Sun, directional shadow, and BRDF use one authority with the correct direction sign. Clear-day underexposure was therefore corrected at the authored exposure and sky-irradiance inputs rather than with an artificial Editor-only lamp. The galactic lane is also given a larger noisy offset, variable width, and a discontinuous presence mask so it cannot remain a single straight stripe.
 
+The eclipse compositor is also corrected to preserve real angular geometry: the lunar silhouette is projected from the authoritative Moon direction, while the corona remains projected around the authoritative Sun. Manual celestial coordinates no longer receive an unrelated astronomical node penalty, because their authored azimuth and elevation already define both alignment axes. This provides a real basis for partial, annular, total, and diamond-ring evidence instead of recentering every strong eclipse into totality.
+
 ## Protected behavior
 
 - The continuous terrain-conforming path remains authoritative.

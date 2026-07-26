@@ -42,6 +42,7 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Exact packaged commit `c3de29af11f17707384163dcd204e456da115226` rejected the direct-cell micro-star optimization: it aliased into obvious radial shard patterns at viewport resolution. The implementation is removed rather than hidden. Density is instead raised inside the existing pole-safe, neighbor-aware PSF population, preserving one correct star representation.
 - Exact packaged commit `88047b34086d43e1f29e7dc79741c316ffe42e7a` restores correct dense PSF stars without radial shards. Manual review still blocks the slightly dash-like smallest points, the continuous central galactic lane, and a clear-day scene that remains too dark.
 - Direction tracing confirmed one Sun authority and the correct sign from celestial direction through shadow projection and BRDF N·L. The daylight correction therefore raises authored clear-day exposure and environment irradiance instead of adding a fake Editor-only light. The same gate widens, warps, and intermittently removes the central galactic dust lane.
+- Eclipse evidence expansion found that the compositor snapped its occluder direction toward the Sun at high coverage, preventing honest partial geometry. The correction keeps the Moon silhouette on the real Moon direction, anchors the corona to the real Sun, and treats explicitly authored manual azimuth/elevation as authoritative instead of applying an unrelated orbital-node veto.
 
 ## Remaining visual work
 

@@ -125,6 +125,8 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /vec2 craterField/);
   assert.match(sky, /float lunarEllipse/);
   assert.match(sky, /float coronaEnvelope=exp\(-coronaDistance\/max\(0\.035,coronaReach\)\)/);
+  assert.match(sky, /vec2 eclipseUv=celestialUv\(ray,uMoonDirection,eclipseRadius\)/);
+  assert.match(sky, /vec2 sunCoronaUv=celestialUv\(ray,uSunDirection,uSunAngularRadius\)/);
   assert.match(sky, /float diamondRing=/);
   assert.match(sky, /eclipseStarVisibility/);
   assert.match(sky, /return vec2\(clamp\(albedo,-0\.28,0\.16\),clamp\(height,-0\.48,0\.24\)\)/);

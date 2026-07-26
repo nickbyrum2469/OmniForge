@@ -67,6 +67,8 @@ REQUIRED = {
         'float centralPresence=',
         'vec3 periodic=vec3(cos(longitude),sin(longitude),latitude)',
         'float coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
+        'vec2 eclipseUv=celestialUv(ray,uMoonDirection,eclipseRadius)',
+        'vec2 sunCoronaUv=celestialUv(ray,uSunDirection,uSunAngularRadius)',
         'float diamondRing=',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)',
         'float eclipseSilhouette=eclipseDisc*uSolarEclipse*uDayFactor'
@@ -85,6 +87,7 @@ BASE_FINAL_VISUAL_MARKERS = {
         'float dustTransmission=',
         'float centralPresence=',
         'coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
+        'sunCoronaUv=celestialUv(ray,uSunDirection,uSunAngularRadius)',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
     ],
     'app/environment-runtime.js': ['0.1, 32'],
@@ -106,6 +109,7 @@ REFINED_VISUAL_MARKERS = {
         'float centralPresence=',
         'return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24))',
         'coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
+        'sunCoronaUv=celestialUv(ray,uSunDirection,uSunAngularRadius)',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
     ],
     'app/environment-runtime.js': ['0.1, 32'],
@@ -144,7 +148,7 @@ if missing:
         'VisualTestCapture', 'VISUAL_CAPTURE_DIR', 'installVisualCaptureWatcher', 'replace(/^\\uFEFF/',
         'return sum/9.0', 'starRayStrength: 0.12', 'starSizeMin: 0.36', 'milkyWayIntensity: 0.34',
         'uStarDensity*0.014', 'uStarDensity*0.052', 'uStarDensity*0.13', 'microStarLayer', 'mix(0.00072,0.00235', 'float radius=max(aa*1.08', 'float radius=max(aa*1.45', 'rayLength=radius*mix(2.0,4.5', 'rayLength=radius*mix(2.0,4.2',
-        'galacticNormal=normalize', 'galacticCloudEnvelope=', 'dustTransmission=', 'ring*0.28', 'return vec2(clamp(albedo', 'coronaInner=pow(sunDot,1500.0)', 'coronaEnvelope=exp(-coronaDistance',
+        'galacticNormal=normalize', 'galacticCloudEnvelope=', 'dustTransmission=', 'ring*0.28', 'return vec2(clamp(albedo', 'coronaInner=pow(sunDot,1500.0)', 'coronaEnvelope=exp(-coronaDistance', 'sunCoronaUv=celestialUv',
         'sky=mix(sky,vec3(0.00001)', 'indirectStrength: 0.9', 'ambientIntensity: (0.09',
         'max="32"', '0.1, 32', 'ambientIntensity: (0.09', 'ambientIntensity: (0.12',
         'const ambientDay = mix([12, 20, 48]', 'selectedId=null', 'selectedId=originalSelectedId'

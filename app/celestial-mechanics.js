@@ -125,7 +125,7 @@ function resolveMoon(world, absoluteDay, sun) {
   const nodeDistance = Math.abs(eclipticLatitude) * RAD;
   const solarAlignment = 1 - smoothstep(0.12, 1.45, separation * RAD);
   const lunarAlignment = 1 - smoothstep(0.15, 1.8, Math.abs(180 - separation * RAD));
-  const nodeAlignment = 1 - smoothstep(0.18, 1.35, nodeDistance);
+  const nodeAlignment = manual ? 1 : 1 - smoothstep(0.18, 1.35, nodeDistance);
   const eclipseMode = String(sky.eclipseMode || 'automatic');
   let solarEclipse = eclipseMode === 'off' ? 0 : solarAlignment * nodeAlignment;
   let lunarEclipse = eclipseMode === 'off' ? 0 : lunarAlignment * nodeAlignment;
