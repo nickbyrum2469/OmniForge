@@ -69,6 +69,7 @@ REQUIRED = {
         'float coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
         'float edgeLight=1.0-smoothstep(threshold,threshold+0.38,cloudField)',
         'float twilightSunward=pow(max(dot(horizonDirection,sunHorizonDirection),0.0),2.4)',
+        'sunLinear*horizon*uTwilightFactor*(0.025+twilightSunward*0.34)',
         'vec2 eclipseUv=celestialUv(ray,uMoonDirection,eclipseRadius)',
         'vec2 sunCoronaUv=celestialUv(ray,uSunDirection,uSunAngularRadius)',
         'float eclipseActive=step(0.001,uSolarEclipse)',

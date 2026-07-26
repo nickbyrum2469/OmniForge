@@ -470,7 +470,7 @@ void main(){
   float visibleSunDisc=sunDisc*(1.0-eclipseOcclusion);
   float sunGlow=pow(sunDot,mix(11.0,36.0,clamp(uSunGlow/3.0,0.0,1.0)))*(0.07+uSunGlow*0.15+uTwilightFactor*0.38);
   sky+=sunLinear*(sunGlow*(1.0-uSolarEclipse*0.93)+visibleSunDisc*(3.15+uSunGlow*1.15));
-  sky+=sunLinear*horizon*uTwilightFactor*0.18;
+  sky+=sunLinear*horizon*uTwilightFactor*(0.025+twilightSunward*0.34);
   vec2 sunCoronaUv=celestialUv(ray,uSunDirection,uSunAngularRadius);
   float eclipseRadius01=length(sunCoronaUv);
   float eclipseAngle=atan(sunCoronaUv.y,sunCoronaUv.x);

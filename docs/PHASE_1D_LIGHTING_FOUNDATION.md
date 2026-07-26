@@ -78,6 +78,8 @@ The annular evidence also revealed that the automatic world-light response used 
 
 Golden-hour, twilight, and overcast evidence exposed two shared presentation problems: clouds were lit as broad uniform gray samples, and the twilight ozone term washed the full horizon magenta. Cloud lighting now separates broad mass, erosion, edges, vertical fill, and Sun-directed forward scattering in both layered and volumetric paths. Twilight color is localized by the horizontal Sun direction, keeping warm scatter near the Sun and restrained violet scatter away from it.
 
+The first corrected twilight frame showed that the legacy full-horizon Sun tint and the `Clean Twilight` preset's stylized saturation still overpowered that directional scattering. The full-horizon tint is replaced by a narrow Sun-relative glow, and `Clean Twilight` now uses restrained saturation, vibrance, stars, and galactic intensity. The separate fantasy profile remains the intentional high-saturation option.
+
 ## Protected behavior
 
 - The continuous terrain-conforming path remains authoritative.

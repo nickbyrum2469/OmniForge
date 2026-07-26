@@ -167,9 +167,9 @@ try{
 
   $twilight=@{
     lookPreset='clean-twilight';time=@{hours=19.45};weather=@{preset='clear';fog=.002};clouds=@{quality='quality';coverage=.1;density=.24;shadowStrength=.15};
-    lighting=@{profile='quality';sunIntensity=2.2;moonIntensity=.18;indirectStrength=.62};
-    atmosphere=@{haze=.025;mie=.06;humidity=.08;dayFogMultiplier=.06;nightFogMultiplier=.14;exposure=.82;saturation=1.14;contrast=1.06;vibrance=.18};
-    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=-4;moonAzimuth=145;moonElevation=18;planetEnabled=$false;eclipseMode='auto';sunGlow=.62;starIntensity=.9;starDensity=.58;starBrightness=.76;milkyWayIntensity=.28;milkyWayWidth=.2;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.45;milkyWayClumping=.74;milkyWayCoreStrength=.7}
+    lighting=@{profile='quality';sunIntensity=2.2;moonIntensity=.18;indirectStrength=.68};
+    atmosphere=@{haze=.018;mie=.05;humidity=.07;dayFogMultiplier=.05;nightFogMultiplier=.12;exposure=.82;saturation=1.03;contrast=1.03;vibrance=.08};
+    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=-4;moonAzimuth=145;moonElevation=18;planetEnabled=$false;eclipseMode='auto';sunGlow=.54;starIntensity=.82;starDensity=.58;starBrightness=.72;milkyWayIntensity=.18;milkyWayWidth=.2;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.45;milkyWayClumping=.74;milkyWayCoreStrength=.7}
   }
   $twilightCamera=@{position=@(0,20,0);yaw=0;pitch=.2;fov=72}
   $revision=Patch-World $port $twilight

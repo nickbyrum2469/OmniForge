@@ -43,6 +43,7 @@ test('cloud and twilight lighting remain Sun-directed rather than full-screen co
   assert.match(sky, /vec3 sunTint=srgbToLinear\(uSunColor\)/);
   assert.match(sky, /float twilightSunward=pow\(max\(dot\(horizonDirection,sunHorizonDirection\),0\.0\),2\.4\)/);
   assert.match(sky, /physicalScatter\+=twilightScatter\*\(uOzone\*uTwilightFactor\*horizon\)\*0\.13/);
+  assert.match(sky, /sunLinear\*horizon\*uTwilightFactor\*\(0\.025\+twilightSunward\*0\.34\)/);
 });
 
 test('solar-eclipse silhouette is constrained to daylight and no longer blacks out a free-floating sky disc', () => {

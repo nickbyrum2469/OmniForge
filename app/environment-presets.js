@@ -62,9 +62,9 @@ export const ENVIRONMENT_PRESETS = Object.freeze({
     description: 'Deep blue twilight with a clean horizon, early stars, and controlled atmospheric glow.',
     patch: {
       time: { hours: 19.45 },
-      lighting: { profile: 'quality', sunIntensity: 2.2, moonIntensity: 0.18, indirectStrength: 0.62 },
-      atmosphere: { exposure: 0.78, haze: 0.025, mie: 0.06, humidity: 0.08, visibilityKm: 245, dayFogMultiplier: 0.06, nightFogMultiplier: 0.14, saturation: 1.14, contrast: 1.06, vibrance: 0.18, toneMapper: 'neutral' },
-      sky: { sunGlow: 0.62, moonBrightness: 1, moonGlow: 0.3, starIntensity: 1.24, milkyWayIntensity: 0.36 },
+      lighting: { profile: 'quality', sunIntensity: 2.2, moonIntensity: 0.18, indirectStrength: 0.68 },
+      atmosphere: { exposure: 0.82, haze: 0.018, mie: 0.05, humidity: 0.07, visibilityKm: 260, dayFogMultiplier: 0.05, nightFogMultiplier: 0.12, saturation: 1.03, contrast: 1.03, vibrance: 0.08, toneMapper: 'neutral' },
+      sky: { sunGlow: 0.54, moonBrightness: 1, moonGlow: 0.3, starIntensity: 0.94, milkyWayIntensity: 0.2 },
       clouds: { coverage: 0.08, density: 0.22, shadowStrength: 0.15 },
       weather: { preset: 'clear', fog: 0.002 }
     }

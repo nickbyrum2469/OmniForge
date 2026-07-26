@@ -92,6 +92,9 @@ test('manual environment edits resolve to Custom and presets preserve their auth
   assert.equal(alpine.lookPreset, 'clear-alpine');
   assert.ok(alpine.atmosphere.visibilityKm >= 400);
   assert.equal(environmentPresetOptions()[0].id, 'custom');
+  const twilight = applyEnvironmentPreset({}, 'clean-twilight');
+  assert.ok(twilight.atmosphere.saturation <= 1.05);
+  assert.ok(twilight.sky.milkyWayIntensity <= 0.2);
 });
 
 test('source contracts cover crash recovery, proxy suppression, readable stars, smooth galactic dust, lunar detail, and isolated evidence', () => {
