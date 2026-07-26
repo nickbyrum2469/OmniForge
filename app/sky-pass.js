@@ -535,17 +535,17 @@ void main(){
   vec2 diamondTangent=vec2(-diamondRadial.y,diamondRadial.x);
   float diamondRadialDistance=dot(diamondDelta,diamondRadial);
   float diamondTangentDistance=dot(diamondDelta,diamondTangent);
-  float diamondCore=exp(-pow(diamondRadialDistance/0.024,2.0)-pow(diamondTangentDistance/0.024,2.0))*diamondWindow;
-  float diamondHalo=exp(-pow(diamondRadialDistance/0.075,2.0)-pow(diamondTangentDistance/0.092,2.0))*diamondWindow;
-  float diamondTangentialFlare=exp(-pow(diamondRadialDistance/0.011,2.0)-pow(diamondTangentDistance/0.29,2.0))*diamondWindow;
-  float diamondRadialFlare=exp(-pow(diamondRadialDistance/0.12,2.0)-pow(diamondTangentDistance/0.018,2.0))*diamondWindow;
-  float diamondFlare=diamondCore*11.0+diamondHalo*1.15+diamondTangentialFlare*1.7+diamondRadialFlare*0.55;
+  float diamondCore=exp(-pow(diamondRadialDistance/0.055,2.0)-pow(diamondTangentDistance/0.055,2.0))*diamondWindow;
+  float diamondHalo=exp(-pow(diamondRadialDistance/0.16,2.0)-pow(diamondTangentDistance/0.19,2.0))*diamondWindow;
+  float diamondTangentialFlare=exp(-pow(diamondRadialDistance/0.03,2.0)-pow(diamondTangentDistance/0.48,2.0))*diamondWindow;
+  float diamondRadialFlare=exp(-pow(diamondRadialDistance/0.23,2.0)-pow(diamondTangentDistance/0.038,2.0))*diamondWindow;
+  float diamondFlare=diamondCore*14.0+diamondHalo*2.2+diamondTangentialFlare*3.4+diamondRadialFlare*0.85;
   float eclipseSilhouette=eclipseDisc*eclipseActive*uDayFactor;
   sky=mix(sky,vec3(0.0015,0.002,0.003),eclipseSilhouette*0.985);
   vec3 coronaColor=mix(vec3(1.0,0.93,0.79),vec3(0.46,0.64,1.0),smoothstep(0.08,1.5,coronaDistance));
   sky+=coronaColor*(innerRim*2.05+corona*0.96)*totality;
   sky+=vec3(1.0,0.66,0.24)*(annularRing*3.0+diamondRing*8.0);
-  sky+=mix(vec3(1.0,0.72,0.28),vec3(1.0),diamondCore)*(diamondFlare*4.5);
+  sky+=mix(vec3(1.0,0.72,0.28),vec3(1.0),diamondCore)*(diamondFlare*5.8);
   sky=mix(sky,vec3(0.00001),eclipseSilhouette);
 
   float moonDot=max(dot(ray,uMoonDirection),0.0);
