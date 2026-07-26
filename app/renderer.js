@@ -86,6 +86,9 @@ out vec4 outColor;
 uniform vec3 uBaseColor;
 uniform vec3 uPathColor;
 uniform vec3 uAmbientColor;
+uniform vec3 uSkyZenithColor;
+uniform vec3 uSkyHorizonColor;
+uniform vec3 uSkyGroundColor;
 uniform float uAmbientIntensity;
 uniform float uEditorFill;
 uniform vec3 uLightDir;
@@ -334,7 +337,16 @@ void main(){
   float ndl=max(dot(n,lightDir),0.0);
   float shadow=shadowFactor();
   float hemi=n.y*.5+.5;
-  vec3 ambient=srgbToLinear(max(uAmbientColor,vec3(0.0)))*uAmbientIntensity*(.38+.62*hemi)*materialAO;
+  vec3 ambientAuthority=srgbToLinear(max(uAmbientColor,vec3(0.0)));
+  float upFacing=max(n.y,0.0),downFacing=max(-n.y,0.0),horizonFacing=1.0-abs(n.y);
+  vec3 directionalSky=srgbToLinear(max(uSkyZenithColor,vec3(0.0)))*upFacing
+    +srgbToLinear(max(uSkyHorizonColor,vec3(0.0)))*horizonFacing
+    +srgbToLinear(max(uSkyGroundColor,vec3(0.0)))*downFacing;
+  float authorityLuma=max(dot(ambientAuthority,vec3(0.2126,0.7152,0.0722)),0.001);
+  float directionalLuma=max(dot(directionalSky,vec3(0.2126,0.7152,0.0722)),0.001);
+  directionalSky*=authorityLuma/directionalLuma;
+  vec3 ambientIrradiance=mix(ambientAuthority,directionalSky,0.42);
+  vec3 ambient=ambientIrradiance*uAmbientIntensity*(.38+.62*hemi)*materialAO;
   vec3 editorAmbient=baseLinear*vec3(uEditorFill)*(.55+.45*hemi)*materialAO;
   float moonNdl=max(dot(n,normalize(uMoonDir)),0.0);
   vec3 color=baseLinear*ambient+editorAmbient;
@@ -607,7 +619,9 @@ export class Renderer3D{
     const instanceCount=instanced?this.prepareInstances(mesh,instances):0,asset=object.type==='model'?this.assets.find(item=>item.type==='model'&&item.id===object.properties?.assetId):null,bounds=asset?.bounds||{min:[0,0,0],size:[1,1,1]},foliageWind=object.properties?.wind||{};
     set1('uTime',(performance.now()-this.renderStart)/1000);set1('uFoliageWind',instanced?1:0);set1('uFoliageWindStrength',Number(foliageWind.strength??.35)*Number(scene.settings.windStrength??.35));set1('uFoliageWindFrequency',Number(foliageWind.frequency??1));set1('uFoliageBaseY',Number(bounds.min?.[1]??0));set1('uFoliageHeight',Math.max(.001,Number(bounds.size?.[1]??1)));set3('uFoliageWindDirection',new Float32Array(Array.isArray(scene.settings.windDirection)?scene.settings.windDirection:[1,0,.25]));
     const drawRange=(count,offset=0)=>{if(instanced)gl.drawElementsInstanced(gl.TRIANGLES,count,mesh.indexType,offset,instanceCount);else gl.drawElements(gl.TRIANGLES,count,mesh.indexType,offset);};
-    set3('uBaseColor',hexToRgb(object.properties.color||'#9da7b8'));set3('uPathColor',hexToRgb(firstPath?.properties?.color||'#73573d'));set3('uAmbientColor',hexToRgb(scene.settings.ambientColor||'#ffffff'));set1('uAmbientIntensity',lights.ambientIntensity);set1('uEditorFill',lights.editorFill);
+    set3('uBaseColor',hexToRgb(object.properties.color||'#9da7b8'));set3('uPathColor',hexToRgb(firstPath?.properties?.color||'#73573d'));set3('uAmbientColor',hexToRgb(scene.settings.ambientColor||'#ffffff'));
+    set3('uSkyZenithColor',lights.environment?.zenithColor||hexToRgb(scene.settings.skyTop||'#1f65b7'));set3('uSkyHorizonColor',lights.environment?.horizonColor||hexToRgb(scene.settings.skyBottom||'#69a9d8'));set3('uSkyGroundColor',lights.environment?.groundColor||hexToRgb(scene.settings.skyGround||'#17242d'));
+    set1('uAmbientIntensity',lights.ambientIntensity);set1('uEditorFill',lights.editorFill);
     set3('uLightDir',lights.dir);set3('uLightColor',lights.color);set1('uLightIntensity',lights.intensity);set3('uMoonDir',lights.moonDir||[0,1,0]);set3('uMoonColor',lights.moonColor||[.66,.78,.92]);set1('uMoonIntensity',Number(lights.moonIntensity||0));gl.uniform1i(gl.getUniformLocation(p,'uPointCount'),lights.points.length);
     const pp=new Float32Array(12),pc=new Float32Array(12),pd=new Float32Array(8);lights.points.forEach((l,i)=>{pp.set(l.transform.position,i*3);pc.set(hexToRgb(l.properties.color),i*3);pd.set([Number(l.properties.intensity||1),Number(l.properties.range||10)],i*2);});gl.uniform3fv(gl.getUniformLocation(p,'uPointPos[0]'),pp);gl.uniform3fv(gl.getUniformLocation(p,'uPointColor[0]'),pc);gl.uniform2fv(gl.getUniformLocation(p,'uPointData[0]'),pd);
     set1('uSelected',selected?1:0);set3('uCameraPos',camera.position);set1('uRoughness',Number(baseAsset?.settings?.roughness??object.properties.roughness??.75));set1('uMetallic',Number(baseAsset?.settings?.metallic??object.properties.metallic??0));set1('uIsTerrain',object.type==='terrain'?1:0);

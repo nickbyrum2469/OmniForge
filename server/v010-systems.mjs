@@ -222,7 +222,7 @@ export function applyWorldToScene(scene, world) {
     skyBottom: hex(bottom),
     skyGround: hex(mix([4, 7, 14], [31, 43, 50], day)),
     ambientColor: hex(eclipseAmbient),
-    ambientIntensity: (0.12 + day * 0.45 + Number(world.lighting.indirectStrength ?? 0.72) * 0.66) * (0.74 + cloudAttenuation * 0.26) * eclipseDaylight,
+    ambientIntensity: (0.12 + day * 0.57 + Number(world.lighting.indirectStrength ?? 0.72) * 0.66) * (0.74 + cloudAttenuation * 0.26) * eclipseDaylight,
     fogNear: fogVisibility.near,
     fogFar: fogVisibility.far,
     viewportLightingMode: String(world.lighting.viewportMode || 'authoring-assist'),

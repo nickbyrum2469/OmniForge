@@ -169,7 +169,7 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(worldUi, /v010StarRays/);
   assert.match(worldUi, /lookPreset: options\.preservePreset/);
   assert.match(worldSystems, /dayFogMultiplier/);
-  assert.match(worldSystems, /ambientIntensity: \(0\.12 \+ day \* 0\.45/);
+  assert.match(worldSystems, /ambientIntensity: \(0\.12 \+ day \* 0\.57/);
   assert.match(worldSystems, /const ambientDay = mix\(\[12, 20, 48\], \[154, 178, 210\], day\)/);
   assert.match(visualCapture, /nightFogMultiplier=\.18;exposure=\.86/);
   assert.match(worldSystems, /renderProxy: false/);
