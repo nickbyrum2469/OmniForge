@@ -65,6 +65,33 @@ test('Phase 0B interpolates celestial rotations through the shortest angular pat
   assert.equal(scene.objects[0].transform.rotation[1], 10);
 });
 
+test('celestial interpolation crosses the nightly nadir without an azimuth slingshot', () => {
+  const state = { engine: { revision: 1 } };
+  const scene = {
+    id: 'scene-nadir',
+    settings: {},
+    objects: [{
+      id: 'sun-nadir',
+      type: 'directionalLight',
+      visible: true,
+      transform: { position: [0, 0, 0], rotation: [89, 180, 0], scale: [1, 1, 1] },
+      properties: { celestialRole: 'sun', azimuth: 0, elevation: -89, intensity: 0 }
+    }]
+  };
+  applyCompactWorldRuntime({ state, scene }, {
+    sceneId: 'scene-nadir',
+    celestialObjects: [{
+      id: 'sun-nadir',
+      visible: true,
+      transform: { position: [0, 0, 0], rotation: [89, 360, 0], scale: [1, 1, 1] },
+      properties: { celestialRole: 'sun', azimuth: 180, elevation: -89, intensity: 0 }
+    }]
+  }, { now: 0, durationMs: 1000 });
+  updateCelestialRuntimeInterpolation({ state, scene }, 500);
+  assert.ok(scene.objects[0].properties.elevation < -89.9);
+  assert.ok(Math.abs(scene.objects[0].transform.rotation[0] - 90) < 0.1);
+});
+
 test('Phase 0C editor readability no longer invents a white directional Sun or forces high exposure', () => {
   const settings = { ambientIntensity: 0.05, exposure: 0.6, environmentV010: { nightFactor: 1 } };
   const edit = resolveViewportLighting(settings, 'edit', 0);

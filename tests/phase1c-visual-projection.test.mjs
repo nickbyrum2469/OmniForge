@@ -43,6 +43,9 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /eclipseStarVisibility=smoothstep\(0\.975,1\.0,uSolarEclipse\)\*uDayFactor\*0\.09/);
   assert.match(sky, /float stellarAirMass=1\.0\/max\(0\.12,ray\.y\+0\.09\)/);
   assert.match(sky, /float stellarTransmission=exp\(-stellarOpticalDepth\)/);
+  assert.match(sky, /float moonStellarOcclusion=clamp\(moonDisc\*independentMoonVisibility,0\.0,1\.0\)/);
+  assert.match(sky, /float stellarCelestialMask=\(1\.0-eclipseSilhouette\)\*\(1\.0-moonStellarOcclusion\)/);
+  assert.match(sky, /milkyWay\(ray,starHorizon\*stellarTransmission\)\*stellarCelestialMask/);
   assert.match(sky, /milkyWay\(ray,starHorizon\*stellarTransmission\)/);
   assert.match(sky, /horizonTwinkle/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);

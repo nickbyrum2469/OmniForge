@@ -259,6 +259,13 @@ async function createMainWindow() {
     if(DIAGNOSTIC_MODE)appendDiagnostic(`Renderer console level=${level} ${sourceId||'unknown'}:${line||0} ${message}`);
     if(Number(level)>=2)appendLog(`Renderer console level=${level} ${sourceId||'unknown'}:${line||0} ${message}`);
   });
+  mainWindow.webContents.on('before-input-event',(event,input)=>{
+    const protectedNavigationChord=(input.control||input.meta)&&!input.alt&&String(input.key||'').toLowerCase()==='w';
+    if(protectedNavigationChord){
+      event.preventDefault();
+      if(DIAGNOSTIC_MODE)appendDiagnostic('Protected viewport Ctrl+W navigation chord from closing the editor.');
+    }
+  });
   mainWindow.webContents.on('render-process-gone',(_event,details)=>{appendLog(`Renderer process gone reason=${details.reason} exitCode=${details.exitCode}`);recoverRendererProcess('renderer-process-gone',details);});
   mainWindow.on('unresponsive',()=>{appendLog('Main window renderer became unresponsive.');writeIncident('renderer-unresponsive',{url:mainWindow?.webContents?.getURL?.()||''});});
   mainWindow.on('responsive',()=>appendLog('Main window renderer recovered responsiveness.'));

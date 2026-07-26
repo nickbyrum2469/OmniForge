@@ -1,5 +1,16 @@
 Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cloud, lighting, eclipse, biome-lighting, performance, and packaged visual-evidence plan against the 14 supplied reference images on phase1c/crash-celestial-atmosphere-stabilization.
 
+## Live-project visual regression gate
+
+- The exact packaged `04fa2169e98c966eb62910055b9528e9b865c0eb` build was confirmed running from the authoritative repository.
+- The user's saved `Custom` world exposed two gaps not covered by the controlled capture presets:
+  - normal Moon rendering did not mask stellar and Milky Way contributions composited later in the sky shader;
+  - depth-tested spline guides z-fought with steep terrain and appeared as disconnected fragments.
+- Added a shared celestial mask for normal Moon and eclipse occlusion and made spline guides explicit depth-independent editor overlays.
+- Added direction-space Sun/Moon interpolation so the nightly azimuth singularity at the nadir cannot sling the light around the horizon.
+- Protected Ctrl+W in both the renderer input path and Electron main process so crouch/descend + forward cannot close the editor.
+- Added source-contract and behavior regression coverage. Next: run tests, commit/push the bounded repair, rebuild the exact package, and visually test both the saved Custom state and a named realistic-night profile.
+
 ## Current gate
 
 - Starting authoritative commit: `0413feff30d1d363c19b14efd14a0838342ebaf8`.

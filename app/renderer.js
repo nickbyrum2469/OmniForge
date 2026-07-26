@@ -726,9 +726,12 @@ export class Renderer3D{
     gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     this.ensureGrid(scene);if(scene.settings.gridVisible)this.drawLines(this.grid,mat4Identity(),viewProj,[.45,.56,.68,.18]);
     if(scene.settings.splinesVisible!==false){
-      const xray=typeof document!=='undefined'&&document.body.classList.contains('v011-spline-editing');if(xray)gl.disable(gl.DEPTH_TEST);
+      // Spline guides are editor overlays, not world geometry. The previous
+      // v011-spline-editing-only x-ray path left unselected guides depth-tested,
+      // making them z-fight with sampled terrain and appear disconnected.
+      gl.disable(gl.DEPTH_TEST);
       for(const pathObject of scene.objects.filter(o=>o.type==='path'&&o.visible&&o.properties?.showSpline!==false)){const buffers=this.pathBuffers(pathObject,scene),selected=pathObject.id===selectedId;this.drawLines(buffers.edges,mat4Identity(),viewProj,selected?[.96,.56,1,1]:[.56,.34,.18,.7],selected?3:2);if(selected)this.drawLines(buffers.center,mat4Identity(),viewProj,[1,.9,1,1],3);}
-      if(xray)gl.enable(gl.DEPTH_TEST);
+      gl.enable(gl.DEPTH_TEST);
     }
     const selected=scene.objects.find(o=>o.id===selectedId);
     if(selected&&selected.visible&&!['terrain','path','empty'].includes(selected.type)){

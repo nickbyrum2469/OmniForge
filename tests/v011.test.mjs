@@ -131,6 +131,8 @@ test('v0.11 editor, renderer, runtime, desktop, and MCP expose the connected wor
   assert.match(editor,/data-v011-expand/);
   assert.match(renderer,/samplePathSpline/);
   assert.match(renderer,/scene\.settings\.splinesVisible!==false/);
+  assert.match(renderer,/Spline guides are editor overlays, not world geometry/);
+  assert.match(renderer,/if\(scene\.settings\.splinesVisible!==false\)\{\s*\/\/[\s\S]*?gl\.disable\(gl\.DEPTH_TEST\)/);
   assert.match(renderer,/terrainPointFromScreen/);
   assert.match(app,/__omniforgeV011Bridge/);
   assert.match(mcp,/v011Tools, callV011Tool/);

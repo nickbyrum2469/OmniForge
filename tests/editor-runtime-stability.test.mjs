@@ -104,6 +104,8 @@ test('runtime source contains polling, compact-step, persistent celestial migrat
   const builder = fs.readFileSync(path.join(ROOT, 'BUILD_DESKTOP_WINDOWS.ps1'), 'utf8');
 
   assert.match(editor, /remotePollInFlight/);
+  assert.match(editor, /event\.ctrlKey\|\|event\.metaKey/);
+  assert.match(editor, /event\.code==='KeyW'\)event\.preventDefault\(\)/);
   assert.match(editor, /interactionActiveUntil/);
   assert.match(editor, /renderer\.render\(scene,camera,selectedId,\{editorMode:/);
   assert.match(renderer, /uniform float uEditorFill/);
@@ -123,4 +125,7 @@ test('runtime source contains polling, compact-step, persistent celestial migrat
   assert.match(worldgenApi, /ensureWorldFoundationState/);
   assert.match(worldgenUi, /MutationObserver/);
   assert.match(builder, /source-commit/);
+  const desktop = fs.readFileSync(path.join(ROOT, 'desktop', 'main.cjs'), 'utf8');
+  assert.match(desktop, /before-input-event/);
+  assert.match(desktop, /Protected viewport Ctrl\+W navigation chord/);
 });

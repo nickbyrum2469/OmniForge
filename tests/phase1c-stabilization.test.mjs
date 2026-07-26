@@ -41,7 +41,7 @@ test('render crash guard keeps failures contained and trips bounded recovery', (
   assert.equal(guard.totalFailures, 2);
 });
 
-test('celestial and environment interpolation remain linear through the update interval', () => {
+test('celestial direction stays coherent while environment values remain linear through the update interval', () => {
   const target = {
     state: { engine: { revision: 0 } },
     scene: {
@@ -50,7 +50,7 @@ test('celestial and environment interpolation remain linear through the update i
       objects: [{
         id: 'sun-linear',
         visible: true,
-        transform: { position: [0, 0, 0], rotation: [10, 350, 0], scale: [1, 1, 1] },
+        transform: { position: [0, 0, 0], rotation: [-10, 530, 0], scale: [1, 1, 1] },
         properties: { celestialRole: 'sun', intensity: 1, azimuth: 350, elevation: 10 }
       }]
     }
@@ -63,13 +63,14 @@ test('celestial and environment interpolation remain linear through the update i
     celestialObjects: [{
       id: 'sun-linear',
       visible: true,
-      transform: { position: [0, 0, 0], rotation: [30, 10, 0], scale: [1, 1, 1] },
+      transform: { position: [0, 0, 0], rotation: [-30, 190, 0], scale: [1, 1, 1] },
       properties: { celestialRole: 'sun', intensity: 3, azimuth: 10, elevation: 30 }
     }]
   }, { now: 1000, durationMs: 1000 });
   assert.equal(applied, true);
   updateCelestialRuntimeInterpolation(target, 1500);
-  closeTo(target.scene.objects[0].transform.rotation[1], 360);
+  closeTo(target.scene.objects[0].transform.rotation[1], target.scene.objects[0].properties.azimuth + 180);
+  closeTo(target.scene.objects[0].transform.rotation[0], -target.scene.objects[0].properties.elevation);
   closeTo(target.scene.objects[0].properties.intensity, 2);
   closeTo(target.scene.settings.exposure, 0.9);
   closeTo(target.scene.settings.fogNear, 110);

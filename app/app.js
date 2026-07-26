@@ -1389,6 +1389,7 @@ function bindEvents() {
   window.addEventListener('blur',releaseViewportInput);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseViewportInput();});
   document.addEventListener('keydown',event=>{
+    if((event.ctrlKey||event.metaKey)&&event.code==='KeyW')event.preventDefault();
     keys.add(event.code);
     if(viewportNavigationActive()){if(['Space','ControlLeft','ControlRight'].includes(event.code))event.preventDefault();return;}
     const target=event.target,typing=target instanceof HTMLInputElement||target instanceof HTMLTextAreaElement||target instanceof HTMLSelectElement||target?.isContentEditable;

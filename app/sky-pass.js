@@ -608,8 +608,10 @@ void main(){
   float stellarTransmission=exp(-stellarOpticalDepth);
   vec3 stars=starLayer(ray,180.0,uStarSeed)+starLayer(ray,360.0,uStarSeed+101.0);
   float eclipseStarVisibility=smoothstep(0.975,1.0,uSolarEclipse)*uDayFactor*0.09;
-  sky+=stars*max(uStarVisibility,eclipseStarVisibility)*starHorizon*stellarTransmission*(1.0-eclipseSilhouette);
-  sky+=milkyWay(ray,starHorizon*stellarTransmission);
+  float moonStellarOcclusion=clamp(moonDisc*independentMoonVisibility,0.0,1.0);
+  float stellarCelestialMask=(1.0-eclipseSilhouette)*(1.0-moonStellarOcclusion);
+  sky+=stars*max(uStarVisibility,eclipseStarVisibility)*starHorizon*stellarTransmission*stellarCelestialMask;
+  sky+=milkyWay(ray,starHorizon*stellarTransmission)*stellarCelestialMask;
 
   vec4 layered=layeredCloud(ray,moonGlow,moonDisc);
   vec4 cloud=layered;

@@ -9,6 +9,36 @@ const shortestAngleDelta = (from, to) => {
 const lerp = (from, to, amount) => Number(from || 0) + (Number(to || 0) - Number(from || 0)) * amount;
 const lerpAngle = (from, to, amount) => Number(from || 0) + shortestAngleDelta(from, to) * amount;
 const linearAmount = value => clamp01(value);
+const DEG = Math.PI / 180;
+
+function directionFromAngles(azimuth, elevation) {
+  const azimuthRadians = Number(azimuth || 0) * DEG;
+  const elevationRadians = Number(elevation || 0) * DEG;
+  const horizontal = Math.cos(elevationRadians);
+  return [
+    Math.sin(azimuthRadians) * horizontal,
+    Math.sin(elevationRadians),
+    -Math.cos(azimuthRadians) * horizontal
+  ];
+}
+
+function interpolateCelestialAngles(fromProperties, toProperties, amount) {
+  const values = [
+    fromProperties?.azimuth, fromProperties?.elevation,
+    toProperties?.azimuth, toProperties?.elevation
+  ].map(Number);
+  if (!values.every(Number.isFinite)) return null;
+  const from = directionFromAngles(values[0], values[1]);
+  const to = directionFromAngles(values[2], values[3]);
+  let direction = from.map((value, index) => lerp(value, to[index], amount));
+  const magnitude = Math.hypot(...direction);
+  if (magnitude < 1e-6) direction = amount < 0.5 ? from : to;
+  else direction = direction.map(value => value / magnitude);
+  return {
+    azimuth: ((Math.atan2(direction[0], -direction[2]) / DEG) % 360 + 360) % 360,
+    elevation: Math.asin(Math.max(-1, Math.min(1, direction[1]))) / DEG
+  };
+}
 
 const INTERPOLATED_SETTING_KEYS = Object.freeze([
   'ambientIntensity', 'exposure', 'displayExposureEV', 'colorSaturation', 'colorContrast', 'colorVibrance',
@@ -175,11 +205,18 @@ export function updateCelestialRuntimeInterpolation(target, now = performance.no
       scale: from.scale.map((value, index) => lerp(value, to.scale[index], amount))
     };
     const nextProperties = { ...(object.properties || {}) };
+    const celestialAngles = interpolateCelestialAngles(track.fromProperties, track.toProperties, amount);
     for (const [property, targetValue] of Object.entries(track.toProperties)) {
       const startValue = track.fromProperties[property] ?? targetValue;
-      nextProperties[property] = property === 'azimuth' || property === 'elevation'
-        ? lerpAngle(startValue, targetValue, amount)
+      nextProperties[property] = celestialAngles && (property === 'azimuth' || property === 'elevation')
+        ? celestialAngles[property]
+        : property === 'azimuth'
+          ? lerpAngle(startValue, targetValue, amount)
         : lerp(startValue, targetValue, amount);
+    }
+    if (celestialAngles) {
+      object.transform.rotation[0] = -celestialAngles.elevation;
+      object.transform.rotation[1] = celestialAngles.azimuth + 180;
     }
     object.properties = nextProperties;
     changed = true;
