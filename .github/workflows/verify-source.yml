@@ -15,7 +15,7 @@ jobs:
   phase1c:
     if: github.actor != 'github-actions[bot]' && github.event_name == 'pull_request' && github.head_ref == 'phase1c/crash-celestial-atmosphere-stabilization'
     runs-on: windows-latest
-    timeout-minutes: 65
+    timeout-minutes: 75
     steps:
       - name: Check out exact Phase 1C branch
         uses: actions/checkout@v4
@@ -31,10 +31,10 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: if(Test-Path package-lock.json){npm ci}else{npm install --no-audit --no-fund}
-      - name: Run authoritative Phase 1C stabilization gate
+      - name: Run authoritative Phase 1C stabilization and rendered-image gate
         shell: pwsh
         run: .\scripts\run-phase1c-ci-with-evidence.ps1
-      - name: Upload exact Phase 1C package
+      - name: Upload exact Phase 1C package and rendered visual evidence
         if: success()
         uses: actions/upload-artifact@v4
         with:
@@ -44,9 +44,10 @@ jobs:
             OmniForge-Phase1C-Crash-Sky-Windows-x64.sha256
             PHASE1C_WINDOWS_EVIDENCE.txt
             PHASE1C_IDEMPOTENCY_DIFF.txt
+            PHASE1C_VISUAL_CAPTURES/**
           if-no-files-found: error
           retention-days: 30
-      - name: Upload Phase 1C failure diagnostics
+      - name: Upload Phase 1C failure diagnostics and partial captures
         if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -56,6 +57,7 @@ jobs:
             PHASE1C_TEST_OUTPUT.txt
             PHASE1C_VERIFY_OUTPUT.txt
             PHASE1C_IDEMPOTENCY_DIFF.txt
+            PHASE1C_VISUAL_CAPTURES/**
           if-no-files-found: warn
           retention-days: 14
 
