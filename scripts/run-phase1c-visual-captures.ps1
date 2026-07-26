@@ -17,12 +17,12 @@ function Wait-Health([int]$Port,[int]$TimeoutSeconds=45){
 
 function Patch-World([int]$Port,[hashtable]$Body){
   $json=$Body|ConvertTo-Json -Depth 12
-  Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v010/world" -Method Patch -ContentType 'application/json' -Body $json -TimeoutSec 10|Out-Null
-  Start-Sleep -Milliseconds 1700
+  $response=Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v010/world" -Method Patch -ContentType 'application/json' -Body $json -TimeoutSec 10
+  return [int64]$response.state.engine.revision
 }
 
-function Request-Capture([string]$CaptureDir,[string]$Id,[hashtable]$Camera,[int]$WaitMs=700){
-  $request=@{id=$Id;options=@{camera=$Camera;hideGuides=$true;waitMs=$WaitMs}}
+function Request-Capture([string]$CaptureDir,[string]$Id,[hashtable]$Camera,[int64]$MinimumRevision,[int]$WaitMs=700){
+  $request=@{id=$Id;options=@{camera=$Camera;hideGuides=$true;hideEditorReferences=$true;waitMs=$WaitMs;minimumRevision=$MinimumRevision;revisionTimeoutMs=8000}}
   $temp=Join-Path $CaptureDir 'capture-request.tmp.json'
   $requestFile=Join-Path $CaptureDir 'capture-request.json'
   $responseFile=Join-Path $CaptureDir "$Id.json"
@@ -95,33 +95,33 @@ try{
   Wait-Health $port
   Start-Sleep -Seconds 3
 
-  Patch-World $port @{
+  $revision=Patch-World $port @{
     lookPreset='clear-day';time=@{hours=12};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
     atmosphere=@{haze=.004;mie=.025;humidity=.02;dayFogMultiplier=.08;nightFogMultiplier=.18;exposure=.72;saturation=1.04;contrast=1.03;vibrance=.06};
     sky=@{celestialMode='manual';sunAzimuth=18;sunElevation=42;moonAzimuth=205;moonElevation=-22;planetEnabled=$false;eclipseMode='auto';starIntensity=0;milkyWayIntensity=0}
   }
-  Request-Capture $captureDir 'clear-day' @{position=@(20,15,30);yaw=-.55;pitch=.18;fov=62}|Out-Null
+  Request-Capture $captureDir 'clear-day' @{position=@(20,15,30);yaw=-.55;pitch=.18;fov=62} $revision|Out-Null
 
-  Patch-World $port @{
+  $revision=Patch-World $port @{
     lookPreset='custom';time=@{hours=0};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
     atmosphere=@{haze=.002;mie=.018;humidity=.01;dayFogMultiplier=.05;nightFogMultiplier=.08;exposure=.82;saturation=1.05;contrast=1.05;vibrance=.08};
     sky=@{celestialMode='manual';sunAzimuth=180;sunElevation=-35;moonAzimuth=150;moonElevation=-18;planetEnabled=$false;eclipseMode='auto';starIntensity=1;starDensity=.62;starBrightness=.86;starTwinkleAmount=.42;starTwinkleSpeed=.9;starSizeMin=.38;starSizeMax=1.4;starRayStrength=.06;starRayLength=.7;starHeroFraction=.004;milkyWayIntensity=0;milkyWayWidth=.2;milkyWayDetail=1.05;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.42;milkyWayClumping=.72;milkyWayCoreStrength=.72;milkyWayWidthVariation=.52}
   }
-  Request-Capture $captureDir 'night-sky' @{position=@(0,20,0);yaw=-.65;pitch=.92;fov=78}|Out-Null
-  Patch-World $port @{sky=@{starIntensity=0;milkyWayIntensity=.72;milkyWayWidth=.18;milkyWayDetail=1.05;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.42;milkyWayClumping=.76;milkyWayCoreStrength=.72;milkyWayWidthVariation=.52}}
-  Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=-1.0123;pitch=1.1815;fov=74}|Out-Null
+  Request-Capture $captureDir 'night-sky' @{position=@(0,20,0);yaw=-.65;pitch=.92;fov=78} $revision|Out-Null
+  $revision=Patch-World $port @{sky=@{starIntensity=0;milkyWayIntensity=.72;milkyWayWidth=.18;milkyWayDetail=1.05;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.42;milkyWayClumping=.76;milkyWayCoreStrength=.72;milkyWayWidthVariation=.52}}
+  Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=-1.0123;pitch=1.1815;fov=74} $revision|Out-Null
 
-  Patch-World $port @{
+  $revision=Patch-World $port @{
     lookPreset='custom';time=@{hours=1};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
     sky=@{celestialMode='manual';sunAzimuth=155;sunElevation=-12;moonAzimuth=0;moonElevation=35;moonSize=22;moonBrightness=1.05;moonGlow=.12;moonPhaseMode='manual';moonPhase=.88;moonCraterStrength=1.15;moonMariaStrength=.9;moonSurfaceContrast=1.22;moonReliefStrength=.48;moonLimbDarkening=.34;planetEnabled=$false;eclipseMode='auto';starIntensity=.22;milkyWayIntensity=0}
   }
-  Request-Capture $captureDir 'moon-close' @{position=@(0,20,0);yaw=0;pitch=.610865;fov=12}|Out-Null
+  Request-Capture $captureDir 'moon-close' @{position=@(0,20,0);yaw=0;pitch=.610865;fov=12} $revision|Out-Null
 
-  Patch-World $port @{
+  $revision=Patch-World $port @{
     lookPreset='custom';time=@{hours=12};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
     sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=30;sunSize=9;moonAzimuth=0;moonElevation=30;moonSize=9;solarEclipseCoverage=1.12;eclipseMode='force-solar';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
   }
-  Request-Capture $captureDir 'solar-eclipse' @{position=@(0,20,0);yaw=0;pitch=.523599;fov=10}|Out-Null
+  Request-Capture $captureDir 'solar-eclipse' @{position=@(0,20,0);yaw=0;pitch=.523599;fov=10} $revision|Out-Null
 
   $metrics=[ordered]@{}
   foreach($id in @('clear-day','night-sky','milky-way','moon-close','solar-eclipse')){$metrics[$id]=Get-ImageMetrics(Join-Path $captureDir "$id.png")}

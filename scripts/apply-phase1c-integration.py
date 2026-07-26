@@ -7,7 +7,7 @@ REQUIRED = {
         "import { directionFromAzimuthElevation } from './celestial-mechanics.js';",
         'if(object.properties?.celestialRole)return null;',
         'sunAuthorityId:',
-        'mix(0.66,1.0,sum/9.0)'
+        'return sum/9.0;'
     ],
     'app/app.js': [
         "import { RenderCrashGuard, sanitizeCameraState } from './render-crash-guard.js';",
@@ -74,7 +74,7 @@ REQUIRED = {
 }
 
 BASE_FINAL_VISUAL_MARKERS = {
-    'app/renderer.js': ['mix(0.66,1.0,sum/9.0)'],
+    'app/renderer.js': ['return sum/9.0;'],
     'app/sky-pass.js': [
         'uStarDensity*0.014',
         'rayLength=radius*mix(2.0,4.5',
@@ -91,7 +91,7 @@ BASE_FINAL_VISUAL_MARKERS = {
 }
 
 REFINED_VISUAL_MARKERS = {
-    'app/renderer.js': ['mix(0.66,1.0,sum/9.0)'],
+    'app/renderer.js': ['return sum/9.0;'],
     'app/sky-pass.js': [
         'uStarDensity*0.014',
         'rayLength=radius*mix(2.0,4.5',
@@ -131,7 +131,7 @@ if missing:
     broad_missing = [item for item in missing if not any(marker in item for marker in [
         'hemisphereOctEncode', 'hemisphereOctDecode', 'vec3 periodic=', 'eclipseSilhouette',
         'VisualTestCapture', 'VISUAL_CAPTURE_DIR', 'installVisualCaptureWatcher', 'replace(/^\\uFEFF/',
-        'mix(0.66', 'starRayStrength: 0.12', 'starSizeMin: 0.36', 'milkyWayIntensity: 0.34',
+        'return sum/9.0', 'starRayStrength: 0.12', 'starSizeMin: 0.36', 'milkyWayIntensity: 0.34',
         'uStarDensity*0.014', 'mix(0.00072,0.00235', 'rayLength=radius*mix(2.0,4.5',
         'galacticNormal=normalize', 'galacticCloudEnvelope=', 'ring*0.28', 'coronaInner=pow(sunDot,1500.0)',
         'sky=mix(sky,vec3(0.00001)', 'indirectStrength: 0.9', 'ambientIntensity: (0.09',

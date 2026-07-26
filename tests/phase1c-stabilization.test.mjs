@@ -104,7 +104,8 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   const visualCapture = fs.readFileSync(new URL('../scripts/run-phase1c-visual-captures.ps1', import.meta.url), 'utf8');
   assert.match(renderer, /if\(object\.properties\?\.celestialRole\)return null/);
   assert.match(renderer, /directionFromAzimuthElevation\(azimuth,elevation\)/);
-  assert.match(renderer, /mix\(0\.66,1\.0,sum\/9\.0\)/);
+  assert.match(renderer, /return sum\/9\.0;/);
+  assert.doesNotMatch(renderer, /mix\(0\.66,1\.0,sum\/9\.0\)/);
   assert.match(app, /new RenderCrashGuard/);
   assert.match(app, /finally\{[\s\S]*requestAnimationFrame\(animationLoop\)/);
   assert.match(app, /sanitizeCameraState/);

@@ -1,5 +1,6 @@
 import { terrainHeightAt as sharedTerrainHeightAt, terrainNormalAt as sharedTerrainNormalAt, distanceToPaths as sharedDistanceToPaths } from '../app/worldgen.js';
 import { evaluateCelestialSystem } from '../app/celestial-mechanics.js';
+import { atmosphereVisibilityRange } from '../app/world-units.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
 const smoothstep = (edge0, edge1, value) => { const t = clamp((Number(value) - edge0) / ((edge1 - edge0) || 1), 0, 1); return t * t * (3 - 2 * t); };
@@ -39,6 +40,7 @@ export function defaultWorldSettings(existing = {}) {
     },
     lighting: {
       profile: 'balanced',
+      viewportMode: 'authoring-assist',
       sunIntensity: 2.35,
       moonIntensity: 0.14,
       shadowQuality: 'balanced',
@@ -199,7 +201,11 @@ export function applyWorldToScene(scene, world) {
   const cloudAttenuation = 1 - clamp(cloudCoverage * cloudDensity * Number(world.clouds.shadowStrength || 0.28), 0, 0.82);
   const atmosphericHaze = clamp(Number(world.atmosphere.haze || 0) + Number(world.atmosphere.mie || 0) * 0.22 + Number(world.atmosphere.humidity || 0) * 0.05, 0, 0.9);
   const authoredFogMultiplier = day * Number(world.atmosphere.dayFogMultiplier ?? 0.04) + night * Number(world.atmosphere.nightFogMultiplier ?? 0.18);
-  const fogMultiplier = Math.max(0.02, (1 - weatherFog * 0.94 * authoredFogMultiplier) * (1 - atmosphericHaze * 0.3));
+  const fogVisibility = atmosphereVisibilityRange({
+    visibilityKm: world.atmosphere.visibilityKm,
+    weatherFog: clamp(weatherFog * (0.85 + authoredFogMultiplier), 0, 1),
+    haze: atmosphericHaze
+  });
   const solarEclipse = celestial.moon.solarEclipse;
   const lunarEclipse = celestial.moon.lunarEclipse;
   const eclipseDaylight = 1 - solarEclipse * 0.82;
@@ -215,8 +221,9 @@ export function applyWorldToScene(scene, world) {
     skyGround: hex(mix([4, 7, 14], [31, 43, 50], day)),
     ambientColor: hex(ambientTwilight),
     ambientIntensity: (0.09 + day * 0.22 + Number(world.lighting.indirectStrength || 0.72) * 0.29) * (0.74 + cloudAttenuation * 0.26) * eclipseDaylight,
-    fogNear: Math.max(80, Number(world.atmosphere.visibilityKm || 320) * 2.8 * fogMultiplier),
-    fogFar: Math.max(420, Number(world.atmosphere.visibilityKm || 320) * 18 * fogMultiplier),
+    fogNear: fogVisibility.near,
+    fogFar: fogVisibility.far,
+    viewportLightingMode: String(world.lighting.viewportMode || 'authoring-assist'),
     exposure,
     displayExposureEV: Math.log2(Math.max(0.05, exposure)),
     colorSaturation: clamp(Number(world.atmosphere.saturation || 1), 0, 3),

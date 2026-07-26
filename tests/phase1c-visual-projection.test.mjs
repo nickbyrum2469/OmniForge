@@ -5,6 +5,8 @@ import fs from 'node:fs';
 const sky = fs.readFileSync(new URL('../app/sky-pass.js', import.meta.url), 'utf8');
 const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
 const desktop = fs.readFileSync(new URL('../desktop/main.cjs', import.meta.url), 'utf8');
+const ci = fs.readFileSync(new URL('../scripts/run-phase1c-ci.ps1', import.meta.url), 'utf8');
+const captureScript = fs.readFileSync(new URL('../scripts/run-phase1c-visual-captures.ps1', import.meta.url), 'utf8');
 
 test('stellar projection is upper-hemisphere angular space rather than cube-face UV space', () => {
   assert.match(sky, /vec2 hemisphereOctEncode/);
@@ -33,7 +35,16 @@ test('solar-eclipse silhouette is constrained to daylight and no longer blacks o
 test('packaged visual QA can request actual canvas PNG evidence', () => {
   assert.match(app, /window\.__omniforgeVisualTestCapture=captureVisualTestFrame/);
   assert.match(app, /ui\.viewport\.toDataURL\('image\/png'\)/);
+  assert.match(app, /minimumRevision/);
+  assert.match(app, /Visual capture timed out waiting for authoritative revision/);
   assert.match(desktop, /OMNIFORGE_CAPTURE_DIR/);
   assert.match(desktop, /installVisualCaptureWatcher/);
   assert.match(desktop, /capture-request\.json/);
+  assert.match(captureScript, /minimumRevision=\$MinimumRevision/);
+  assert.match(captureScript, /\$response\.state\.engine\.revision/);
+});
+
+test('the authoritative Windows evidence gate supports Windows PowerShell 5.1', () => {
+  assert.match(ci, /function Get-RepositoryRelativePath/);
+  assert.doesNotMatch(ci, /\[IO\.Path\]::GetRelativePath/);
 });

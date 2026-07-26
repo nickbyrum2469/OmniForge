@@ -202,13 +202,14 @@ export function clearCelestialRuntimeInterpolation(sceneId = null) {
   environmentTracks.delete(environmentKey(sceneId));
 }
 
-export function resolveViewportLighting(settings = {}, editorMode = 'edit', authoredSunIntensity = 1) {
+export function resolveViewportLighting(settings = {}, editorMode = 'edit', authoredSunIntensity = 1, requestedMode = null) {
   const night = clamp01(settings.environmentV010?.nightFactor || 0);
   const editing = editorMode !== 'play';
+  const viewportMode = String(requestedMode || settings.viewportLightingMode || 'authoring-assist');
   const ambient = Math.max(0, Number(settings.ambientIntensity ?? 0.3));
   const exposure = Math.max(0.05, Number(settings.exposure ?? 1));
   const sun = Math.max(0, Number(authoredSunIntensity || 0));
-  if (!editing) return { ambientIntensity: ambient, exposure, sunIntensity: sun, editorFill: 0, authoringAssist: false };
+  if (!editing || viewportMode === 'game-accurate') return { ambientIntensity: ambient, exposure, sunIntensity: sun, editorFill: 0, authoringAssist: false };
   const editorFill = 0.045 + night * 0.085;
   return {
     ambientIntensity: Math.max(ambient, 0.2 + night * 0.07),

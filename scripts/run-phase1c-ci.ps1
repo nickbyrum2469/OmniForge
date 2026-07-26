@@ -7,6 +7,16 @@ function Invoke-Checked {
     if ($LASTEXITCODE -ne 0) { throw "$Label failed with exit code $LASTEXITCODE." }
 }
 
+function Get-RepositoryRelativePath {
+    param([string]$BasePath,[string]$FullPath)
+    $base=[IO.Path]::GetFullPath($BasePath).TrimEnd([char[]]@('\','/'))+[IO.Path]::DirectorySeparatorChar
+    $full=[IO.Path]::GetFullPath($FullPath)
+    if(-not $full.StartsWith($base,[StringComparison]::OrdinalIgnoreCase)){
+        throw "Path '$full' is outside repository root '$base'."
+    }
+    return $full.Substring($base.Length).Replace('\','/')
+}
+
 function Stop-OmniForgeProcesses {
     Get-Process OmniForge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 }
@@ -42,10 +52,10 @@ if($LASTEXITCODE -ne 0){throw 'Phase 1C repository verification failed.'}
 Write-Host '=== Byte-level idempotency ==='
 $trackedRoots=@('app','server','desktop','tests')
 $before=@{}
-foreach($trackedRoot in $trackedRoots){Get-ChildItem $trackedRoot -File -Recurse|ForEach-Object{$relative=[IO.Path]::GetRelativePath($root,$_.FullName).Replace('\','/');$before[$relative]=(Get-FileHash $_.FullName -Algorithm SHA256).Hash}}
+foreach($trackedRoot in $trackedRoots){Get-ChildItem $trackedRoot -File -Recurse|ForEach-Object{$relative=Get-RepositoryRelativePath $root $_.FullName;$before[$relative]=(Get-FileHash $_.FullName -Algorithm SHA256).Hash}}
 Invoke-Checked python @('scripts/apply-phase1c-integration.py') 'Phase 1C second integration pass'
 $after=@{}
-foreach($trackedRoot in $trackedRoots){Get-ChildItem $trackedRoot -File -Recurse|ForEach-Object{$relative=[IO.Path]::GetRelativePath($root,$_.FullName).Replace('\','/');$after[$relative]=(Get-FileHash $_.FullName -Algorithm SHA256).Hash}}
+foreach($trackedRoot in $trackedRoots){Get-ChildItem $trackedRoot -File -Recurse|ForEach-Object{$relative=Get-RepositoryRelativePath $root $_.FullName;$after[$relative]=(Get-FileHash $_.FullName -Algorithm SHA256).Hash}}
 $changed=foreach($relative in @($before.Keys+$after.Keys|Sort-Object -Unique)){if($before[$relative]-ne$after[$relative]){[PSCustomObject]@{Path=$relative;Before=$before[$relative];After=$after[$relative]}}}
 if($changed){$changed|Format-Table -AutoSize|Out-String|Set-Content $idempotencyOutput -Encoding utf8;throw 'Phase 1C integration is not idempotent.'}
 'No app/server/desktop/tests files changed during the second guarded integration pass.'|Set-Content $idempotencyOutput -Encoding utf8
@@ -57,7 +67,8 @@ git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 git add app server desktop tests
 git add scripts/apply-phase1c-visual-qa.py scripts/run-phase1c-visual-captures.ps1 scripts/apply-phase1c-integration.py scripts/run-phase1c-ci.ps1
 $staged=git diff --cached --name-only
-if($staged){git commit -m 'Repair sky projection and require rendered visual evidence';if($LASTEXITCODE-ne 0){throw 'Verified source commit failed.'};git push origin HEAD:phase1c/crash-celestial-atmosphere-stabilization;if($LASTEXITCODE-ne 0){throw 'Verified source push failed.'}}
+if($staged-and$env:GITHUB_ACTIONS-eq'true'){git commit -m 'Repair sky projection and require rendered visual evidence';if($LASTEXITCODE-ne 0){throw 'Verified source commit failed.'};git push origin HEAD:phase1c/crash-celestial-atmosphere-stabilization;if($LASTEXITCODE-ne 0){throw 'Verified source push failed.'}}
+elseif($staged){git reset;Write-Host 'Local verification left source changes uncommitted; only GitHub Actions may publish the verified integration result.'}
 $sourceCommit=(git rev-parse HEAD).Trim()
 
 Write-Host '=== Native Windows package ==='

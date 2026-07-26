@@ -27,6 +27,8 @@ function createProgram(gl, vertexSource, fragmentSource) {
   return program;
 }
 
+import { SRGB_GLSL } from './color-management.js';
+
 const displayVS = `#version 300 es
 precision highp float;
 out vec2 vUv;
@@ -48,6 +50,7 @@ uniform float uContrast;
 uniform float uVibrance;
 uniform int uToneMapper;
 
+${SRGB_GLSL}
 vec3 aces(vec3 value){
   return clamp((value*(2.51*value+0.03))/(value*(2.43*value+0.59)+0.14),0.0,1.0);
 }
@@ -79,7 +82,7 @@ void main(){
   color*=exp2(uExposure);
   color=grade(color);
   color=uToneMapper==1?reinhard(color):(uToneMapper==2?neutral(color):aces(color));
-  color=pow(clamp(color,0.0,1.0),vec3(1.0/2.2));
+  color=linearToSrgb(clamp(color,0.0,1.0));
   outColor=vec4(color,1.0);
 }`;
 

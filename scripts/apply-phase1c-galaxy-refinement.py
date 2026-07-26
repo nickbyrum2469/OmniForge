@@ -65,9 +65,10 @@ if new_night not in capture:
         raise RuntimeError('Star-only night capture authority anchor is missing.')
     capture = capture.replace(old_night, new_night, 1)
 
-old_capture_pair = "  Request-Capture $captureDir 'night-sky' @{position=@(0,20,0);yaw=-.65;pitch=.92;fov=78}|Out-Null\n  Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=-1.0123;pitch=1.1815;fov=74}|Out-Null"
-new_capture_pair = "  Request-Capture $captureDir 'night-sky' @{position=@(0,20,0);yaw=-.65;pitch=.92;fov=78}|Out-Null\n  Patch-World $port @{sky=@{starIntensity=0;milkyWayIntensity=.72;milkyWayWidth=.18;milkyWayDetail=1.05;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.42;milkyWayClumping=.76;milkyWayCoreStrength=.72;milkyWayWidthVariation=.52}}\n  Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=-1.0123;pitch=1.1815;fov=74}|Out-Null"
-if new_capture_pair not in capture:
+milky_way_patch = "sky=@{starIntensity=0;milkyWayIntensity=.72;milkyWayWidth=.18;milkyWayDetail=1.05;milkyWayOrientation=32;milkyWayDust=.72;milkyWayWarp=.42;milkyWayClumping=.76;milkyWayCoreStrength=.72;milkyWayWidthVariation=.52}"
+if milky_way_patch not in capture:
+    old_capture_pair = "  Request-Capture $captureDir 'night-sky' @{position=@(0,20,0);yaw=-.65;pitch=.92;fov=78}|Out-Null\n  Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=-1.0123;pitch=1.1815;fov=74}|Out-Null"
+    new_capture_pair = "  Request-Capture $captureDir 'night-sky' @{position=@(0,20,0);yaw=-.65;pitch=.92;fov=78}|Out-Null\n  Patch-World $port @{" + milky_way_patch + "}\n  Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=-1.0123;pitch=1.1815;fov=74}|Out-Null"
     if old_capture_pair not in capture:
         raise RuntimeError('Separated star/Milky Way capture anchor is missing.')
     capture = capture.replace(old_capture_pair, new_capture_pair, 1)

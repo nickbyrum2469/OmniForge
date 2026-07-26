@@ -91,6 +91,7 @@ let viewportNavigationIntentUntil = 0;
 const lookInputState = createLookInputState();
 let renderRecoveryInFlight = false;
 let lastRenderFailureToastAt = 0;
+let visualCaptureHideEditorReferences = false;
 const renderCrashGuard = new RenderCrashGuard({
   failureWindowMs: 5000,
   tripThreshold: 3,
@@ -148,6 +149,21 @@ async function captureVisualTestFrame(options={}) {
   const originalSplines=scene.settings.splinesVisible;
   const originalSelectedId=selectedId;
   try{
+    const minimumRevision=Math.max(0,Number(options.minimumRevision||0));
+    if(minimumRevision>Number(state?.engine?.revision||0)){
+      const deadline=performance.now()+Math.max(1000,Math.min(12000,Number(options.revisionTimeoutMs||8000)));
+      while(performance.now()<deadline){
+        const remote=await api('/api/state');
+        if(Number(remote?.engine?.revision||0)>=minimumRevision){
+          applyState(remote,{forceSelection:false,preserveCamera:true});
+          break;
+        }
+        await sleep(80);
+      }
+      if(Number(state?.engine?.revision||0)<minimumRevision){
+        throw new Error(`Visual capture timed out waiting for authoritative revision ${minimumRevision}; renderer has ${Number(state?.engine?.revision||0)}.`);
+      }
+    }
     if(options.camera){
       const next=cloneCamera(camera);
       if(Array.isArray(options.camera.position)&&options.camera.position.length===3)next.position=options.camera.position.map(Number);
@@ -155,6 +171,7 @@ async function captureVisualTestFrame(options={}) {
       camera=sanitizeCameraState(next,originalCamera);
     }
     if(options.hideGuides!==false){scene.settings.gridVisible=false;scene.settings.splinesVisible=false;selectedId=null;}
+    visualCaptureHideEditorReferences=options.hideEditorReferences!==false;
     const waitMs=Math.max(80,Math.min(3000,Number(options.waitMs||500)));
     await sleep(waitMs);
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
@@ -164,6 +181,7 @@ async function captureVisualTestFrame(options={}) {
     scene.settings.gridVisible=originalGrid;
     scene.settings.splinesVisible=originalSplines;
     selectedId=originalSelectedId;
+    visualCaptureHideEditorReferences=false;
   }
 }
 window.__omniforgeVisualTestCapture=captureVisualTestFrame;
@@ -1199,7 +1217,7 @@ function animationLoop(now) {
     if(camera){const safe=sanitizeCameraState(camera,scene?.editorCamera||{});Object.assign(camera,safe);if(scene)scene.editorCamera={...safe,position:[...safe.position]};}
     updateCamera(dt);
     if(state?.editor.mode==='play'){behaviorStep(dt);physicsAccumulator=Math.min(.2,physicsAccumulator+dt);while(physicsAccumulator>=1/60){physicsStep(1/60);physicsAccumulator-=1/60;}}
-    renderResult=renderCrashGuard.run(()=>{if(renderer&&scene)renderer.render(scene,camera,selectedId,{editorMode:state?.editor?.mode||'edit'});},now);
+    renderResult=renderCrashGuard.run(()=>{if(renderer&&scene)renderer.render(scene,camera,selectedId,{editorMode:state?.editor?.mode||'edit',hideEditorReferences:visualCaptureHideEditorReferences});},now);
     frameCounter++;fpsTimer+=dt;if(fpsTimer>=.5){ui.fpsStatus.textContent=`${Math.round(frameCounter/Math.max(.001,fpsTimer))} FPS`;frameCounter=0;fpsTimer=0;ui.cameraPositionBadge.textContent=`X ${camera.position[0].toFixed(1)} · Y ${camera.position[1].toFixed(1)} · Z ${camera.position[2].toFixed(1)}`;}
   }catch(error){renderResult=renderCrashGuard.run(()=>{throw error;},now);}
   finally{

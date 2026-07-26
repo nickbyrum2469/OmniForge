@@ -81,7 +81,8 @@ sky_path.write_text(sky, encoding='utf-8')
 
 renderer_path = Path('app/renderer.js')
 renderer = renderer_path.read_text(encoding='utf-8')
-renderer = replace_required(renderer, '  return mix(0.58,1.0,sum/9.0);', '  return mix(0.66,1.0,sum/9.0);', 'final shadow floor')
+renderer = renderer.replace('  return mix(0.66,1.0,sum/9.0);', '  return sum/9.0;')
+renderer = replace_required(renderer, '  return mix(0.58,1.0,sum/9.0);', '  return sum/9.0;', 'physically correct shadow visibility')
 renderer_path.write_text(renderer, encoding='utf-8')
 
 environment_path = Path('app/environment-runtime.js')

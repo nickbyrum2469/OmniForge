@@ -12,6 +12,7 @@ import { RenderGraph } from './render-graph.js';
 import { FrameResources, detectRenderCapabilities } from './frame-resources.js';
 import { HDRPipeline } from './hdr-pipeline.js';
 import { directionFromAzimuthElevation } from './celestial-mechanics.js';
+import { SRGB_GLSL } from './color-management.js';
 
 function compile(gl,type,source){
   const shader=gl.createShader(type); gl.shaderSource(shader,source); gl.compileShader(shader);
@@ -25,6 +26,8 @@ function program(gl,vs,fs){
 }
 function smoothstep(a,b,x){const t=clamp((x-a)/(b-a||1),0,1);return t*t*(3-2*t);}
 function lerp(a,b,t){return a+(b-a)*t;}
+function isEditorReference(object){return object?.properties?.renderClass==='editor-only'||object?.properties?.editorReference===true;}
+function affectsSurfaceRecipes(object){return object?.properties?.affectsSurfaceRecipes!==false&&!isEditorReference(object);}
 
 const meshVS=`#version 300 es
 precision highp float;
@@ -168,6 +171,9 @@ uniform int uStructureCount;
 uniform vec3 uStructurePos[4];
 uniform float uOpacity;
 
+${SRGB_GLSL}
+const float PI=3.14159265359;
+
 float hash21(vec2 p){
   p=fract(p*vec2(123.34,456.21));
   p+=dot(p,p+45.32);
@@ -189,7 +195,33 @@ float shadowFactor(){
     float closest=texture(uShadowMap,proj.xy+vec2(x,y)*texel).r;
     sum+=current<=closest?1.0:0.0;
   }
-  return mix(0.66,1.0,sum/9.0);
+  return sum/9.0;
+}
+float distributionGGX(vec3 n,vec3 h,float roughness){
+  float a=roughness*roughness,a2=a*a,nDotH=max(dot(n,h),0.0);
+  float denominator=nDotH*nDotH*(a2-1.0)+1.0;
+  return a2/max(PI*denominator*denominator,0.000001);
+}
+float geometrySchlickGGX(float nDotV,float roughness){
+  float r=roughness+1.0,k=(r*r)/8.0;
+  return nDotV/max(nDotV*(1.0-k)+k,0.000001);
+}
+float geometrySmith(vec3 n,vec3 v,vec3 l,float roughness){
+  return geometrySchlickGGX(max(dot(n,v),0.0),roughness)*geometrySchlickGGX(max(dot(n,l),0.0),roughness);
+}
+vec3 fresnelSchlick(float cosTheta,vec3 f0){
+  return f0+(1.0-f0)*pow(clamp(1.0-cosTheta,0.0,1.0),5.0);
+}
+vec3 evaluateDirectBRDF(vec3 albedo,vec3 n,vec3 viewDir,vec3 lightDir,vec3 radiance,float roughness,float metallic){
+  vec3 halfDir=normalize(viewDir+lightDir);
+  float nDotL=max(dot(n,lightDir),0.0),nDotV=max(dot(n,viewDir),0.0);
+  if(nDotL<=0.0||nDotV<=0.0)return vec3(0.0);
+  vec3 f0=mix(vec3(0.04),albedo,metallic);
+  vec3 f=fresnelSchlick(max(dot(halfDir,viewDir),0.0),f0);
+  float d=distributionGGX(n,halfDir,roughness),g=geometrySmith(n,viewDir,lightDir,roughness);
+  vec3 specular=(d*g*f)/max(4.0*nDotV*nDotL,0.0001);
+  vec3 diffuse=(vec3(1.0)-f)*(1.0-metallic)*albedo/PI;
+  return (diffuse+specular)*radiance*nDotL;
 }
 vec3 applyWorldNormal(vec3 geometricNormal, vec3 sampledNormal, float strength){
   vec3 n=normalize(geometricNormal);
@@ -250,19 +282,19 @@ void main(){
   }
   float blend=uIsTerrain>.5?smoothstep(.015,.985,clamp(vBlend+(noise2(vWorld.xz*.65)-.5)*.10,0.0,1.0)):0.0;
 
-  vec3 baseLinear=pow(max(uBaseColor,vec3(0.001)),vec3(2.2));
+  vec3 baseLinear=srgbToLinear(max(uBaseColor,vec3(0.0)));
   if(uUseBaseTexture>0.5){
     vec3 tex=texture(uBaseTexture,baseUV).rgb;
-    baseLinear*=pow(max(tex,vec3(0.001)),vec3(2.2))*1.34;
+    baseLinear*=srgbToLinear(max(tex,vec3(0.0)));
   }else if(uIsTerrain>0.5){
     float macro=noise2(vWorld.xz*0.035)*0.22+noise2(vWorld.xz*0.21)*0.08;
     baseLinear*=0.82+macro;
   }
 
-  vec3 pathLinear=pow(max(uPathColor,vec3(0.001)),vec3(2.2));
+  vec3 pathLinear=srgbToLinear(max(uPathColor,vec3(0.0)));
   if(uUsePathTexture>0.5){
     vec3 ptex=texture(uPathTexture,pathUV).rgb;
-    pathLinear*=pow(max(ptex,vec3(0.001)),vec3(2.2))*1.30;
+    pathLinear*=srgbToLinear(max(ptex,vec3(0.0)));
   }else{
     float grit=noise2(vWorld.xz*1.8)*0.18+noise2(vWorld.xz*.3)*.12;
     pathLinear*=.78+grit;
@@ -298,33 +330,30 @@ void main(){
   float ndl=max(dot(n,lightDir),0.0);
   float shadow=shadowFactor();
   float hemi=n.y*.5+.5;
-  vec3 ambient=pow(max(uAmbientColor,vec3(.001)),vec3(2.2))*uAmbientIntensity*(.38+.62*hemi)*materialAO;
+  vec3 ambient=srgbToLinear(max(uAmbientColor,vec3(0.0)))*uAmbientIntensity*(.38+.62*hemi)*materialAO;
   vec3 editorAmbient=baseLinear*vec3(uEditorFill)*(.55+.45*hemi)*materialAO;
-  float slopeCavity=mix(.72,1.0,smoothstep(.03,.82,abs(n.y)));
-  vec3 diffuse=uLightColor*ndl*uLightIntensity*shadow;
   float moonNdl=max(dot(n,normalize(uMoonDir)),0.0);
-  vec3 moonDiffuse=uMoonColor*moonNdl*uMoonIntensity;
-  vec3 halfDir=normalize(lightDir+viewDir);
-  float specPower=mix(128.0,6.0,roughness);
-  float f0=mix(.04,1.0,uMetallic);
-  float spec=pow(max(dot(n,halfDir),0.0),specPower)*f0*(1.05-roughness*.52)*shadow;
-  vec3 color=(baseLinear*(ambient+diffuse+moonDiffuse)+editorAmbient)*slopeCavity+uLightColor*spec*uLightIntensity;
+  vec3 color=baseLinear*ambient+editorAmbient;
+  color+=evaluateDirectBRDF(baseLinear,n,viewDir,lightDir,uLightColor*uLightIntensity*shadow,roughness,uMetallic);
+  color+=evaluateDirectBRDF(baseLinear,n,viewDir,normalize(uMoonDir),uMoonColor*uMoonIntensity,roughness,uMetallic);
 
   for(int i=0;i<4;i++){
     if(i>=uPointCount)break;
     vec3 toL=uPointPos[i]-vWorld;
     float dist=length(toL),range=uPointData[i].y;
-    float att=max(0.0,1.0-dist/max(range,0.001));
-    float d=max(dot(n,normalize(toL)),0.0);
-    color+=baseLinear*uPointColor[i]*d*uPointData[i].x*att*att*materialAO;
+    float normalizedDistance=dist/max(range,0.001);
+    float rangeWindow=clamp(1.0-pow(normalizedDistance,4.0),0.0,1.0);
+    float attenuation=(rangeWindow*rangeWindow)/max(dist*dist,0.25);
+    color+=evaluateDirectBRDF(baseLinear,n,viewDir,normalize(toL),uPointColor[i]*uPointData[i].x*attenuation,roughness,uMetallic);
   }
 
   float rim=pow(1.0-max(dot(viewDir,n),0.0),4.0)*.028;
   color+=rim;
   color=mix(color,color+vec3(.18,.055,.34),uSelected*.25);
   float distanceToCamera=length(uCameraPos-vWorld);
-  float fog=smoothstep(uFogNear,uFogFar,distanceToCamera);
-  color=mix(color,pow(max(uFogColor,vec3(.001)),vec3(2.2)),fog*.86);
+  float extinction=4.60517/max(1.0,uFogFar-uFogNear);
+  float transmittance=exp(-extinction*max(0.0,distanceToCamera-uFogNear));
+  color=mix(srgbToLinear(max(uFogColor,vec3(0.0))),color,transmittance);
   outColor=vec4(max(color,vec3(0.0)),clamp(uOpacity,0.0,1.0));
 }`;
 const depthVS=`#version 300 es
@@ -450,7 +479,7 @@ export class Renderer3D{
     this.meshProgram=program(gl,meshVS,meshFS);this.depthProgram=program(gl,depthVS,depthFS);this.lineProgram=program(gl,lineVS,lineFS);this.skyPass=null;try{this.skyPass=new SkyPass(gl);}catch(error){console.error('Renderer-owned sky initialization failed; using the opaque environment fallback.',error);window.__omniforgeDiagnostics?.warn?.('sky-pass-initialization-failed',{message:error.message});}
     this.staticMeshes={cube:createBufferMesh(gl,cubeMesh()),plane:createBufferMesh(gl,planeMesh()),sphere:createBufferMesh(gl,sphereMesh()),cylinder:createBufferMesh(gl,cylinderMesh())};
     this.dynamic=new Map();this.pathLines=new Map();this.textureCache=new Map();this.instanceBuffers=new Set();this.renderStart=performance.now();this.assets=[];this.modelMeshes=new Map();this.modelLoads=new Map();this.modelRevisions=new Map();this.modelLoadRevisions=new Map();this.grid=null;this.gridKey='';this.selectionBox=createLineBuffer(gl,this.boxLines());this.whiteTexture=this.createSolidTexture([255,255,255,255]);this.flatNormalTexture=this.createSolidTexture([128,128,255,255]);
-    this.createShadowResources(2048);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    this.createShadowResources(2048);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.disable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     this.renderGraph=this.createRenderGraph();
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(canvas);this.resize();
   }
@@ -542,7 +571,7 @@ export class Renderer3D{
   worldToScreen(camera,point){const rect=this.canvas.getBoundingClientRect(),{viewProj}=this.cameraMatrices(camera),x=point[0],y=point[1],z=point[2],cx=viewProj[0]*x+viewProj[4]*y+viewProj[8]*z+viewProj[12],cy=viewProj[1]*x+viewProj[5]*y+viewProj[9]*z+viewProj[13],cz=viewProj[2]*x+viewProj[6]*y+viewProj[10]*z+viewProj[14],cw=viewProj[3]*x+viewProj[7]*y+viewProj[11]*z+viewProj[15];if(cw<=.001)return {visible:false,x:0,y:0};const nx=cx/cw,ny=cy/cw;return {visible:cz/cw>=-1&&cz/cw<=1&&nx>=-1.2&&nx<=1.2&&ny>=-1.2&&ny<=1.2,x:(nx*.5+.5)*rect.width,y:(1-(ny*.5+.5))*rect.height};}
   terrainHeightForScene(scene,x,z){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false),paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);return terrainHeight(terrain,x,z,paths);}
   terrainPointFromScreen(scene,camera,x,y){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return null;const paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false),ray=this.rayFromScreen(camera,x,y),bounds=terrainBounds(terrain);let previous=null;for(let distance=0;distance<=12000;distance+=Math.max(1,Number(terrain.properties?.chunkSize||64)*.08)){const point=add(ray.origin,scale(ray.dir,distance));if(point[0]<bounds.minX-10||point[0]>bounds.maxX+10||point[2]<bounds.minZ-10||point[2]>bounds.maxZ+10)continue;const delta=point[1]-terrainHeight(terrain,point[0],point[2],paths);if(previous&&previous.delta>=0&&delta<=0){let low=previous.distance,high=distance;for(let step=0;step<18;step++){const mid=(low+high)*.5,p=add(ray.origin,scale(ray.dir,mid)),d=p[1]-terrainHeight(terrain,p[0],p[2],paths);if(d>0)low=mid;else high=mid;}const hit=add(ray.origin,scale(ray.dir,(low+high)*.5));return [hit[0],terrainHeight(terrain,hit[0],hit[2],paths),hit[2]];}previous={distance,delta};}return null;}
-  lightState(scene,editorMode='edit'){
+  lightState(scene,editorMode='edit',viewportLightingMode=null){
     const sun=scene.objects.find(o=>o.type==='directionalLight'&&o.visible&&o.properties?.celestialRole==='sun')||scene.objects.find(o=>o.type==='directionalLight'&&o.visible&&!o.properties?.celestialRole);let dir=[.45,-.8,.25],color=[1,.95,.82],intensity=1,shadows=true;
     if(sun){
       const azimuth=Number(sun.properties?.azimuth),elevation=Number(sun.properties?.elevation);
@@ -550,16 +579,16 @@ export class Renderer3D{
       else{const rx=(sun.transform.rotation[0]||0)*DEG,ry=(sun.transform.rotation[1]||0)*DEG;dir=normalize([Math.sin(ry)*Math.cos(rx),Math.sin(rx),-Math.cos(ry)*Math.cos(rx)]);}
       color=hexToRgb(sun.properties?.color||'#fff4d8');intensity=Number(sun.properties?.intensity||1);shadows=sun.properties?.castsShadows!==false;
     }
-    const viewportLighting=resolveViewportLighting(scene.settings||{},editorMode,intensity);intensity=viewportLighting.sunIntensity;
+    const viewportLighting=resolveViewportLighting(scene.settings||{},editorMode,intensity,viewportLightingMode);intensity=viewportLighting.sunIntensity;
     const points=scene.objects.filter(o=>o.type==='pointLight'&&o.visible&&!o.properties?.celestialRole).slice(0,4);return {dir,color,intensity,points,shadows,sunAuthorityId:sun?.id||null,...viewportLighting};
   }
   lightMatrix(scene,lights){
     const terrain=scene.objects.find(o=>o.type==='terrain'),bounds=terrain?terrainBounds(terrain):{minX:-50,maxX:50,minZ:-50,maxZ:50},size=Math.max(60,Math.max(bounds.maxX-bounds.minX,bounds.maxZ-bounds.minZ)*.72),center=[(bounds.minX+bounds.maxX)*.5,terrain?.transform?.position?.[1]||0,(bounds.minZ+bounds.maxZ)*.5],eye=sub(center,scale(lights.dir,size*.8)),view=mat4LookAt(eye,center,[0,1,0]),proj=mat4Ortho(-size,size,-size,size,1,size*3);return mat4Multiply(proj,view);
   }
-  renderShadow(scene,lightViewProj){
+  renderShadow(scene,lightViewProj,options={}){
     const gl=this.gl;gl.bindFramebuffer(gl.FRAMEBUFFER,this.shadowFramebuffer);gl.viewport(0,0,this.shadowSize,this.shadowSize);gl.clear(gl.DEPTH_BUFFER_BIT);gl.colorMask(false,false,false,false);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT);gl.useProgram(this.depthProgram);
     gl.uniformMatrix4fv(gl.getUniformLocation(this.depthProgram,'uLightViewProj'),false,lightViewProj);
-    for(const object of scene.objects){if(!object.visible||['empty','path','directionalLight','pointLight'].includes(object.type)||object.properties?.castsShadows===false)continue;const mesh=this.meshFor(object,scene);if(!mesh)continue;gl.bindVertexArray(mesh.vao);gl.uniformMatrix4fv(gl.getUniformLocation(this.depthProgram,'uModel'),false,modelMatrix(object.transform));gl.drawElements(gl.TRIANGLES,mesh.count,mesh.indexType,0);}
+    for(const object of scene.objects){if(!object.visible||['empty','path','directionalLight','pointLight'].includes(object.type)||object.properties?.castsShadows===false||(options.hideEditorReferences&&isEditorReference(object)))continue;const mesh=this.meshFor(object,scene);if(!mesh)continue;gl.bindVertexArray(mesh.vao);gl.uniformMatrix4fv(gl.getUniformLocation(this.depthProgram,'uModel'),false,modelMatrix(object.transform));gl.drawElements(gl.TRIANGLES,mesh.count,mesh.indexType,0);}
     gl.bindVertexArray(null);gl.cullFace(gl.BACK);gl.colorMask(true,true,true,true);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);
   }
   drawMesh(object,mesh,viewProj,lightViewProj,scene,selected,camera,lights,instances=null){
@@ -598,7 +627,7 @@ export class Renderer3D{
     set3('uBaseDirtColor',recipeColor(baseRecipe,'dirt','#4b2c18'));set3('uBaseMossColor',recipeColor(baseRecipe,'moss','#245b29'));set3('uBaseSnowColor',recipeColor(baseRecipe,'snow','#dbe7f0'));set3('uBaseDamageColor',recipeColor(baseRecipe,'damage','#17100d'));
     set3('uPathDirtColor',recipeColor(pathRecipe,'dirt','#4b2c18'));set3('uPathMossColor',recipeColor(pathRecipe,'moss','#245b29'));set3('uPathSnowColor',recipeColor(pathRecipe,'snow','#dbe7f0'));set3('uPathDamageColor',recipeColor(pathRecipe,'damage','#17100d'));
     const wind=Array.isArray(scene.settings.windDirection)?scene.settings.windDirection:[1,0,.25];gl.uniform4fv(gl.getUniformLocation(p,'uEnvironmentState'),new Float32Array([Number(scene.settings.waterLevel??-100),Number(scene.settings.weatherWetness??0),Number(scene.settings.weatherSnow??0),Number(scene.settings.windStrength??.35)]));set3('uWindDirection',new Float32Array(wind));
-    const structures=scene.objects.filter(item=>item.visible&&['box','model','cylinder'].includes(item.type)).slice(0,4),sp=new Float32Array(12);structures.forEach((item,index)=>sp.set(item.transform.position,index*3));gl.uniform1i(gl.getUniformLocation(p,'uStructureCount'),structures.length);gl.uniform3fv(gl.getUniformLocation(p,'uStructurePos[0]'),sp);
+    const structures=scene.objects.filter(item=>item.visible&&['box','model','cylinder'].includes(item.type)&&affectsSurfaceRecipes(item)).slice(0,4),sp=new Float32Array(12);structures.forEach((item,index)=>sp.set(item.transform.position,index*3));gl.uniform1i(gl.getUniformLocation(p,'uStructureCount'),structures.length);gl.uniform3fv(gl.getUniformLocation(p,'uStructurePos[0]'),sp);
     set1('uOpacity',Number(object.properties?.opacity??1));
     set1('uBaseTextureScale',baseMaps.baseColor.scale);set1('uPathTextureScale',pathMaps.baseColor.scale);set1('uBaseNormalStrength',Number(baseSettings.normalStrength??1)*Number(baseRecipe?.layers?.detailAmount??1));set1('uPathNormalStrength',Number(pathSettings.normalStrength??1)*Number(pathRecipe?.layers?.detailAmount??1));
     set1('uBaseTextureRotation',Number(baseSettings.uvRotation||0)*DEG);set1('uPathTextureRotation',Number(pathSettings.uvRotation||0)*DEG);
@@ -615,11 +644,12 @@ export class Renderer3D{
         const color=Array.isArray(material.baseColor)?material.baseColor:[.62,.66,.72,1],importedBase=this.textureFromUrl(material.textureUrls?.baseColor,false);
         set3('uBaseColor',new Float32Array([Number(color[0]??.62),Number(color[1]??.66),Number(color[2]??.72)]));
         bindMap(0,'uBaseTexture',importedBase);set1('uUseBaseTexture',importedBase.ready?1:0);set1('uBaseTextureScale',1);
-        set1('uOpacity',Number(color[3]??1));set1('uRoughness',Number(material.roughness??.8));set1('uMetallic',Number(material.metallic??0));
+        const alpha=Number(color[3]??1);set1('uOpacity',alpha);set1('uRoughness',Number(material.roughness??.8));set1('uMetallic',Number(material.metallic??0));
+        if(alpha<.999){gl.enable(gl.BLEND);gl.depthMask(false);}else{gl.disable(gl.BLEND);gl.depthMask(true);}
         if(material.doubleSided)gl.disable(gl.CULL_FACE);else gl.enable(gl.CULL_FACE);
         drawRange(Number(group.indexCount||0),Number(group.indexOffset||0)*mesh.indexStride);
       }
-      gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
+      gl.disable(gl.BLEND);gl.depthMask(true);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
     }else drawRange(mesh.count,0);
     gl.bindVertexArray(null);
   }
@@ -630,7 +660,7 @@ export class Renderer3D{
       ['scene',{kind:'authority'}],['camera',{kind:'authority'}],['lighting',{kind:'frame-state'}],['environment',{kind:'frame-state'}],
       ['default-framebuffer',{kind:'framebuffer',format:'canvas'}],['hdr-scene-color',{kind:'texture',format:'rgba16f'}],['hdr-scene-depth',{kind:'renderbuffer',format:'depth24'}]
     ])graph.importResource(name,name==='default-framebuffer'?null:null,descriptor);
-    graph.addPass({name:'shadow',category:'shadow',reads:['scene','camera','lighting'],writes:['shadow-map'],enabled:frame=>Boolean(frame.lights.shadows),execute:frame=>this.renderShadow(frame.scene,frame.lightViewProj)});
+    graph.addPass({name:'shadow',category:'shadow',reads:['scene','camera','lighting'],writes:['shadow-map'],enabled:frame=>Boolean(frame.lights.shadows),execute:frame=>this.renderShadow(frame.scene,frame.lightViewProj,frame.options)});
     graph.addPass({name:'environment',category:'environment',after:['shadow'],reads:['camera','environment','default-framebuffer'],writes:['hdr-scene-color','hdr-scene-depth'],execute:frame=>this.renderEnvironmentPass(frame)});
     graph.addPass({name:'opaque-world',category:'geometry',after:['environment'],reads:['scene','camera','lighting','environment','shadow-map','hdr-scene-color','hdr-scene-depth'],writes:['hdr-scene-color','hdr-scene-depth'],execute:frame=>this.renderOpaqueWorldPass(frame)});
     graph.addPass({name:'display-transform',category:'display',after:['opaque-world'],reads:['hdr-scene-color','hdr-scene-depth','environment'],writes:['scene-color','scene-depth'],execute:frame=>this.renderDisplayPass(frame)});
@@ -645,7 +675,7 @@ export class Renderer3D{
     gl.clearColor(environment.groundColor[0],environment.groundColor[1],environment.groundColor[2],1);
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     if(this.skyPass){try{this.skyPass.render(camera,environment);}catch(error){window.__omniforgeDiagnostics?.warn?.('sky-pass-failed',{message:error.message});}}
-    gl.clear(gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.cullFace(gl.BACK);
+    gl.clear(gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.disable(gl.BLEND);gl.depthMask(true);gl.cullFace(gl.BACK);
   }
   renderDisplayPass(frame){
     this.hdrPipeline.present({
@@ -658,18 +688,23 @@ export class Renderer3D{
   }
   renderOpaqueWorldPass(frame){
     const {gl,scene,camera,selectedId,viewProj,lightViewProj,lights,foliageGroups,foliageIds}=frame;
-    const objects=scene.objects.filter(o=>o.visible&&!['empty','path'].includes(o.type)&&!foliageIds.has(o.id));
+    const objects=scene.objects.filter(o=>o.visible&&!['empty','path'].includes(o.type)&&!foliageIds.has(o.id)&&!(frame.options.hideEditorReferences&&isEditorReference(o)));
     objects.sort((a,b)=>{const rank=o=>o.type==='terrain'?-20:o.type==='decal'?20+Number(o.properties?.sortOrder||0):0;return rank(a)-rank(b);});
     for(const object of objects){
       const mesh=this.meshFor(object,scene);if(!mesh)continue;
-      if(object.type==='decal'){gl.enable(gl.BLEND);gl.depthMask(false);gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);}
+      gl.disable(gl.BLEND);gl.depthMask(true);
+      const transparent=object.type==='decal'||Number(object.properties?.opacity??1)<.999;
+      if(transparent){gl.enable(gl.BLEND);gl.depthMask(false);}
+      if(object.type==='decal'){gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);}
       this.drawMesh(object,mesh,viewProj,lightViewProj,scene,object.id===selectedId,camera,lights);
-      if(object.type==='decal'){gl.disable(gl.POLYGON_OFFSET_FILL);gl.depthMask(true);gl.enable(gl.CULL_FACE);}
+      if(object.type==='decal'){gl.disable(gl.POLYGON_OFFSET_FILL);gl.enable(gl.CULL_FACE);}
+      if(transparent){gl.disable(gl.BLEND);gl.depthMask(true);}
     }
     for(const instances of foliageGroups.values()){const object=instances[0],mesh=this.meshFor(object,scene);if(mesh)this.drawMesh(object,mesh,viewProj,lightViewProj,scene,false,camera,lights,instances);}
   }
   renderEditorOverlayPass(frame){
     const {gl,scene,camera,selectedId,viewProj}=frame;
+    gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     this.ensureGrid(scene);if(scene.settings.gridVisible)this.drawLines(this.grid,mat4Identity(),viewProj,[.45,.56,.68,.18]);
     if(scene.settings.splinesVisible!==false){
       const xray=typeof document!=='undefined'&&document.body.classList.contains('v011-spline-editing');if(xray)gl.disable(gl.DEPTH_TEST);
@@ -682,6 +717,7 @@ export class Renderer3D{
       if(selected.type==='model'){const asset=this.assets.find(item=>item.type==='model'&&item.id===selected.properties?.assetId),bounds=asset?.bounds;if(bounds)selectionTransform={position:[selected.transform.position[0]+(bounds.center?.[0]||0)*selected.transform.scale[0],selected.transform.position[1]+(bounds.center?.[1]||0)*selected.transform.scale[1],selected.transform.position[2]+(bounds.center?.[2]||0)*selected.transform.scale[2]],rotation:selected.transform.rotation,scale:[Math.max(.02,Math.abs((bounds.size?.[0]||1)*selected.transform.scale[0])),Math.max(.02,Math.abs((bounds.size?.[1]||1)*selected.transform.scale[1])),Math.max(.02,Math.abs((bounds.size?.[2]||1)*selected.transform.scale[2]))]};}
       this.drawLines(this.selectionBox,modelMatrix(selectionTransform),viewProj,[.72,.45,1,1],2);gl.enable(gl.DEPTH_TEST);
     }
+    gl.disable(gl.BLEND);
   }
   renderDiagnosticsPass(frame){
     if(window.__omniforgeDiagnostics?.enabled&&performance.now()-Number(this.lastDiagnosticGlCheck||0)>=1000){
@@ -705,7 +741,7 @@ export class Renderer3D{
     const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('Renderer3D.render',{objects:scene.objects.length},12)||(()=>{});
     if(this.contextLost||this.frameResources.contextLost){finishDiagnostic({suspended:true,reason:'webgl-context-lost'});return;}
     this.resize();this.frameCounter+=1;
-    const gl=this.gl,{viewProj}=this.cameraMatrices(camera),lights=this.lightState(scene,options.editorMode||'edit'),lightViewProj=this.lightMatrix(scene,lights);
+    const gl=this.gl,{viewProj}=this.cameraMatrices(camera),lights=this.lightState(scene,options.editorMode||'edit',options.hideEditorReferences?'game-accurate':options.viewportLightingMode),lightViewProj=this.lightMatrix(scene,lights);
     const environment=normalizeEnvironmentState(scene,lights,(performance.now()-this.renderStart)/1000);
     lights.environment=environment;lights.moonDir=environment.moonDirection;lights.moonColor=environment.moonColor;lights.moonIntensity=environment.moonLightIntensity;
     const foliageGroups=this.foliageGroups(scene,camera),foliageIds=new Set([...foliageGroups.values()].flat().map(item=>item.id));

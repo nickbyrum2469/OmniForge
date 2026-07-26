@@ -105,6 +105,7 @@ function installWorldPanel() {
         <label>Time scale<input id="v010TimeScale" type="number" min="-86400" max="86400" step="10"></label>
         <label>Sun intensity<input id="v010SunIntensity" type="number" min="0" max="20" step="0.1"></label>
         <label>Lighting profile<select id="v010LightingProfile"><option value="compatibility">GTX 1650 compatibility</option><option value="balanced">Balanced</option><option value="quality">Quality</option><option value="reference">Reference capture</option></select></label>
+        <label>Editor lighting<select id="v010ViewportLightingMode"><option value="authoring-assist">Authoring Assist</option><option value="game-accurate">Game Accurate</option></select></label>
         <label>Look preset<select id="v010LookPreset">${environmentPresetOptions().map(item => `<option value="${item.id}">${item.label}</option>`).join('')}</select></label>
         <label>Preview time while editing<input id="v010PreviewTime" type="checkbox"></label>
       </div>
@@ -256,6 +257,7 @@ function populate(options = {}) {
   field('v010TimeScale').value = world.time.timeScale;
   field('v010SunIntensity').value = world.lighting.sunIntensity;
   field('v010LightingProfile').value = world.lighting.profile;
+  field('v010ViewportLightingMode').value = world.lighting.viewportMode || 'authoring-assist';
   field('v010LookPreset').value = world.lookPreset || 'natural-balanced';
   field('v010AtmosphereQuality').value = world.atmosphere.quality;
   field('v010Visibility').value = world.atmosphere.visibilityKm;
@@ -362,7 +364,7 @@ async function applyWorld(extra = {}, options = {}) {
   const payload = {
     lookPreset: options.preservePreset ? (snapshot?.world?.lookPreset || 'custom') : 'custom',
     time: { hours: numeric('v010Hours', 12), timeScale: numeric('v010TimeScale', 60), ...(extra.time || {}) },
-    lighting: { sunIntensity: numeric('v010SunIntensity', 3.2), profile: field('v010LightingProfile').value },
+    lighting: { sunIntensity: numeric('v010SunIntensity', 3.2), profile: field('v010LightingProfile').value, viewportMode: field('v010ViewportLightingMode').value },
     atmosphere: {
       quality: field('v010AtmosphereQuality').value,
       visibilityKm: numeric('v010Visibility', 120),
