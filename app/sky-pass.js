@@ -179,7 +179,7 @@ vec3 starLayer(vec3 ray,float scale,float seed){
   vec2 uv=hemisphereOctEncode(ray);
   vec2 baseCell=floor(uv*scale);
   vec3 accumulated=vec3(0.0);
-  float probability=clamp(uStarDensity*0.00145,0.00004,0.0045);
+  float probability=clamp(uStarDensity*0.0065,0.00018,0.018);
   for(int oy=-1;oy<=1;oy++)for(int ox=-1;ox<=1;ox++){
     vec2 cell=baseCell+vec2(float(ox),float(oy));
     float identity=hash21(cell+seed*0.017);
@@ -194,7 +194,7 @@ vec3 starLayer(vec3 ray,float scale,float seed){
     float sizeRandom=hash21(cell+seed+33.4);
     float hero=step(1.0-uStarHeroFraction,hash21(cell+seed+8.8));
     float sizeControl=mix(max(0.08,uStarSizeMin),max(uStarSizeMin,uStarSizeMax),pow(sizeRandom,2.8));
-    float radius=mix(0.00016,0.00062,pow(sizeRandom,3.2))*sizeControl*(1.0+hero*0.55);
+    float radius=mix(0.00072,0.00235,pow(sizeRandom,2.45))*max(0.28,sizeControl)*(1.0+hero*0.82);
     float aa=max(fwidth(angularDistance),0.000035);
     float disc=1.0-smoothstep(radius-aa,radius+aa,angularDistance);
     vec3 reference=abs(starDirection.y)>.94?vec3(1,0,0):vec3(0,1,0);
@@ -258,7 +258,7 @@ vec3 milkyWay(vec3 ray,float horizonMask){
   float luminance=max(0.0,structure*clumpMask*brokenEdges*(1.0-centralDust*0.88-sideDust));
   vec3 warmCore=vec3(0.96,0.76,0.57);
   vec3 color=mix(uMilkyWayColor,warmCore,clamp(galacticCore*0.28,0.0,0.36));
-  return color*luminance*uMilkyWayIntensity*0.48*horizonMask;
+  return color*luminance*uMilkyWayIntensity*0.92*horizonMask;
 }
 
 vec2 celestialUv(vec3 ray,vec3 direction,float angularRadius){
@@ -377,7 +377,7 @@ void main(){
   float eclipseOcclusion=eclipseDisc*uSolarEclipse;
   float visibleSunDisc=sunDisc*(1.0-eclipseOcclusion);
   float sunGlow=pow(sunDot,mix(11.0,36.0,clamp(uSunGlow/3.0,0.0,1.0)))*(0.07+uSunGlow*0.15+uTwilightFactor*0.38);
-  sky+=uSunColor*(sunGlow*(1.0-uSolarEclipse*0.68)+visibleSunDisc*(3.15+uSunGlow*1.15));
+  sky+=uSunColor*(sunGlow*(1.0-uSolarEclipse*0.93)+visibleSunDisc*(3.15+uSunGlow*1.15));
   sky+=uSunColor*horizon*uTwilightFactor*0.18;
   float coronaInner=pow(sunDot,520.0),coronaOuter=pow(sunDot,120.0);
   float eclipseSilhouette=eclipseDisc*uSolarEclipse*uDayFactor;

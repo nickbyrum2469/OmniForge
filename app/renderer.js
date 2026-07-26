@@ -189,7 +189,7 @@ float shadowFactor(){
     float closest=texture(uShadowMap,proj.xy+vec2(x,y)*texel).r;
     sum+=current<=closest?1.0:0.0;
   }
-  return mix(0.48,1.0,sum/9.0);
+  return mix(0.58,1.0,sum/9.0);
 }
 vec3 applyWorldNormal(vec3 geometricNormal, vec3 sampledNormal, float strength){
   vec3 n=normalize(geometricNormal);

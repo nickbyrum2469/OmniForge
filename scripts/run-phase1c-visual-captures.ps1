@@ -48,7 +48,7 @@ function Get-ImageMetrics([string]$Path){
   Add-Type -AssemblyName System.Drawing
   $bitmap=[System.Drawing.Bitmap]::FromFile($Path)
   try{
-    $step=4;$count=0;$sumR=0.0;$sumG=0.0;$sumB=0.0;$bright=0;$dark=0
+    $step=2;$count=0;$sumR=0.0;$sumG=0.0;$sumB=0.0;$sumL=0.0;$sumL2=0.0;$minL=1.0;$maxL=0.0;$bright=0;$dark=0
     $rows=New-Object System.Collections.Generic.List[double]
     for($y=0;$y-lt$bitmap.Height;$y+=$step){
       $rowSum=0.0;$rowCount=0
@@ -56,11 +56,13 @@ function Get-ImageMetrics([string]$Path){
         $color=$bitmap.GetPixel($x,$y)
         $r=$color.R/255.0;$g=$color.G/255.0;$b=$color.B/255.0
         $luma=.2126*$r+.7152*$g+.0722*$b
-        $sumR+=$r;$sumG+=$g;$sumB+=$b;$count++;$rowSum+=$luma;$rowCount++
+        $sumR+=$r;$sumG+=$g;$sumB+=$b;$sumL+=$luma;$sumL2+=$luma*$luma;$minL=[Math]::Min($minL,$luma);$maxL=[Math]::Max($maxL,$luma);$count++;$rowSum+=$luma;$rowCount++
         if($luma-gt.92){$bright++};if($luma-lt.035){$dark++}
       }
       $rows.Add($rowSum/[Math]::Max(1,$rowCount))
     }
+    $averageLuma=$sumL/[Math]::Max(1,$count)
+    $lumaStdDev=[Math]::Sqrt([Math]::Max(0.0,$sumL2/[Math]::Max(1,$count)-$averageLuma*$averageLuma))
     $maxSpike=0.0
     for($i=3;$i-lt$rows.Count-3;$i++){
       $neighbor=($rows[$i-3]+$rows[$i-2]+$rows[$i-1]+$rows[$i+1]+$rows[$i+2]+$rows[$i+3])/6.0
@@ -70,6 +72,7 @@ function Get-ImageMetrics([string]$Path){
     return [ordered]@{
       width=$bitmap.Width;height=$bitmap.Height
       averageRed=$sumR/$count;averageGreen=$sumG/$count;averageBlue=$sumB/$count
+      averageLuma=$averageLuma;lumaStdDev=$lumaStdDev;minimumLuma=$minL;maximumLuma=$maxL
       brightFraction=$bright/$count;darkFraction=$dark/$count;maximumSingleRowSpike=$maxSpike
     }
   }finally{$bitmap.Dispose()}
@@ -102,30 +105,34 @@ try{
   Patch-World $port @{
     lookPreset='custom';time=@{hours=0};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
     atmosphere=@{haze=.002;mie=.018;humidity=.01;dayFogMultiplier=.05;nightFogMultiplier=.08;exposure=.82;saturation=1.05;contrast=1.05;vibrance=.08};
-    sky=@{celestialMode='manual';sunAzimuth=180;sunElevation=-35;moonAzimuth=150;moonElevation=-18;planetEnabled=$false;eclipseMode='auto';starIntensity=.72;starDensity=.38;starBrightness=.62;starTwinkleAmount=.35;starTwinkleSpeed=.8;starSizeMin=.16;starSizeMax=.9;starRayStrength=.08;starRayLength=.8;starHeroFraction=.012;milkyWayIntensity=.14;milkyWayWidth=.17;milkyWayDetail=.9;milkyWayOrientation=28;milkyWayDust=.62;milkyWayWarp=.36;milkyWayClumping=.62;milkyWayCoreStrength=.52;milkyWayWidthVariation=.45}
+    sky=@{celestialMode='manual';sunAzimuth=180;sunElevation=-35;moonAzimuth=150;moonElevation=-18;planetEnabled=$false;eclipseMode='auto';starIntensity=1;starDensity=.62;starBrightness=.86;starTwinkleAmount=.42;starTwinkleSpeed=.9;starSizeMin=.38;starSizeMax=1.4;starRayStrength=.1;starRayLength=.9;starHeroFraction=.018;milkyWayIntensity=.62;milkyWayWidth=.2;milkyWayDetail=1.05;milkyWayOrientation=0;milkyWayDust=.72;milkyWayWarp=.42;milkyWayClumping=.72;milkyWayCoreStrength=.72;milkyWayWidthVariation=.52}
   }
-  Request-Capture $captureDir 'night-sky' @{position=@(0,20,0);yaw=.35;pitch=1.03;fov=72}|Out-Null
-  Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=1.15;pitch=.78;fov=66}|Out-Null
+  Request-Capture $captureDir 'night-sky' @{position=@(0,20,0);yaw=.2;pitch=.8;fov=80}|Out-Null
+  Request-Capture $captureDir 'milky-way' @{position=@(0,20,0);yaw=-1.856;pitch=.3;fov=78}|Out-Null
 
   Patch-World $port @{
     lookPreset='custom';time=@{hours=1};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
-    sky=@{celestialMode='manual';sunAzimuth=155;sunElevation=-12;moonAzimuth=0;moonElevation=35;moonSize=4.5;moonBrightness=1.05;moonGlow=.12;moonPhaseMode='manual';moonPhase=.88;moonCraterStrength=1.15;moonMariaStrength=.9;moonSurfaceContrast=1.22;moonReliefStrength=.48;moonLimbDarkening=.34;planetEnabled=$false;eclipseMode='auto';starIntensity=.22;milkyWayIntensity=0}
+    sky=@{celestialMode='manual';sunAzimuth=155;sunElevation=-12;moonAzimuth=0;moonElevation=35;moonSize=8;moonBrightness=1.05;moonGlow=.12;moonPhaseMode='manual';moonPhase=.88;moonCraterStrength=1.15;moonMariaStrength=.9;moonSurfaceContrast=1.22;moonReliefStrength=.48;moonLimbDarkening=.34;planetEnabled=$false;eclipseMode='auto';starIntensity=.22;milkyWayIntensity=0}
   }
-  Request-Capture $captureDir 'moon-close' @{position=@(0,20,0);yaw=0;pitch=.610865;fov=20}|Out-Null
+  Request-Capture $captureDir 'moon-close' @{position=@(0,20,0);yaw=0;pitch=.610865;fov=12}|Out-Null
 
   Patch-World $port @{
     lookPreset='custom';time=@{hours=12};weather=@{preset='clear';fog=0};clouds=@{coverage=0;density=0};
-    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=30;sunSize=1.1;moonAzimuth=0;moonElevation=30;moonSize=1.15;solarEclipseCoverage=1.08;eclipseMode='force-solar';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
+    sky=@{celestialMode='manual';sunAzimuth=0;sunElevation=30;sunSize=4;moonAzimuth=0;moonElevation=30;moonSize=4;solarEclipseCoverage=1.12;eclipseMode='force-solar';planetEnabled=$false;starIntensity=0;milkyWayIntensity=0}
   }
-  Request-Capture $captureDir 'solar-eclipse' @{position=@(0,20,0);yaw=0;pitch=.523599;fov=18}|Out-Null
+  Request-Capture $captureDir 'solar-eclipse' @{position=@(0,20,0);yaw=0;pitch=.523599;fov=10}|Out-Null
 
   $metrics=[ordered]@{}
   foreach($id in @('clear-day','night-sky','milky-way','moon-close','solar-eclipse')){$metrics[$id]=Get-ImageMetrics(Join-Path $captureDir "$id.png")}
   $metrics|ConvertTo-Json -Depth 8|Set-Content $metricsFile -Encoding utf8
 
-  if($metrics['night-sky'].brightFraction-gt.08){throw "Night sky is overdrawn: bright fraction $($metrics['night-sky'].brightFraction)."}
+  if($metrics['night-sky'].brightFraction-gt.1){throw "Night sky is overdrawn: bright fraction $($metrics['night-sky'].brightFraction)."}
+  if($metrics['night-sky'].maximumLuma-lt.42 -or $metrics['night-sky'].lumaStdDev-lt.012){throw 'Night sky does not contain a readable varied star field.'}
   if($metrics['night-sky'].maximumSingleRowSpike-gt.18){throw "Night sky contains a severe horizontal seam: $($metrics['night-sky'].maximumSingleRowSpike)."}
+  if($metrics['milky-way'].maximumLuma-lt.34 -or $metrics['milky-way'].lumaStdDev-lt.014){throw 'Milky Way is absent or lacks visible internal structure.'}
   if($metrics['milky-way'].maximumSingleRowSpike-gt.18){throw "Milky Way contains a severe row seam: $($metrics['milky-way'].maximumSingleRowSpike)."}
+  if($metrics['moon-close'].maximumLuma-lt.42 -or $metrics['moon-close'].lumaStdDev-lt.018){throw 'Moon close-up is too small or lacks readable surface contrast.'}
+  if($metrics['solar-eclipse'].darkFraction-lt.001){throw 'Solar eclipse does not contain a clearly readable dark occluder.'}
   if($metrics['clear-day'].averageBlue-lt$metrics['clear-day'].averageRed){throw 'Clear-day capture is not blue-dominant.'}
   if($metrics['clear-day'].brightFraction-gt.72){throw 'Clear-day capture is still excessively blown out.'}
   if($process.HasExited){throw 'Packaged editor exited during visual evidence capture.'}

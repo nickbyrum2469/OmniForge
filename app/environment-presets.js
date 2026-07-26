@@ -5,7 +5,7 @@ export const ENVIRONMENT_PRESETS = Object.freeze({
     label: 'Clear Day',
     description: 'Clean blue daylight, minimal haze, long visibility, readable shadows, and restrained highlights.',
     patch: {
-      lighting: { profile: 'balanced', sunIntensity: 2.35, moonIntensity: 0.14, indirectStrength: 0.72 },
+      lighting: { profile: 'balanced', sunIntensity: 2.35, moonIntensity: 0.14, indirectStrength: 0.9 },
       atmosphere: { exposure: 0.7, haze: 0.006, mie: 0.035, humidity: 0.04, visibilityKm: 320, rayleigh: 1.08, dayFogMultiplier: 0.04, nightFogMultiplier: 0.18, saturation: 1.08, contrast: 1.03, vibrance: 0.1, toneMapper: 'neutral' },
       sky: { sunGlow: 0.38, moonBrightness: 0.92, moonGlow: 0.22, starIntensity: 0.9, milkyWayIntensity: 0.18 },
       clouds: { coverage: 0.03, density: 0.16, shadowStrength: 0.12 },
@@ -76,7 +76,7 @@ export const ENVIRONMENT_PRESETS = Object.freeze({
       time: { hours: 0.4 },
       lighting: { profile: 'quality', sunIntensity: 2.2, moonIntensity: 0.28, indirectStrength: 0.52 },
       atmosphere: { exposure: 0.86, haze: 0.012, mie: 0.04, humidity: 0.05, visibilityKm: 280, dayFogMultiplier: 0.03, nightFogMultiplier: 0.12, saturation: 1.1, contrast: 1.07, vibrance: 0.15, toneMapper: 'neutral' },
-      sky: { moonBrightness: 1.22, moonGlow: 0.34, moonEarthshine: 0.08, starIntensity: 1.45, starDensity: 0.72, starBrightness: 0.8, milkyWayIntensity: 0.46 },
+      sky: { moonBrightness: 1.22, moonGlow: 0.34, moonEarthshine: 0.08, starIntensity: 1.18, starDensity: 0.62, starBrightness: 0.82, starSizeMin: 0.38, starSizeMax: 1.45, starTwinkleAmount: 0.42, starRayStrength: 0.1, starHeroFraction: 0.018, milkyWayIntensity: 0.56, milkyWayWidth: 0.2, milkyWayWarp: 0.42, milkyWayClumping: 0.7 },
       clouds: { coverage: 0.06, density: 0.18, shadowStrength: 0.12 },
       weather: { preset: 'clear', fog: 0.002 }
     }
