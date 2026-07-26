@@ -71,8 +71,10 @@ if missing:
 else:
     print('Phase 1C broad integration is already complete; migration skipped.')
 
+subprocess.run([sys.executable, 'scripts/apply-phase1c-test-contracts.py'], check=True)
+
 remaining = missing_contracts()
 if remaining:
     raise RuntimeError('Phase 1C integration postconditions are incomplete: ' + '; '.join(remaining))
 
-print('Phase 1C integration contracts are complete.')
+print('Phase 1C integration and permanent test contracts are complete.')
