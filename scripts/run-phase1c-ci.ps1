@@ -19,6 +19,7 @@ $evidenceOutput=Join-Path $root 'PHASE1C_WINDOWS_EVIDENCE.txt'
 $archive=Join-Path $root 'OmniForge-Phase1C-Crash-Sky-Windows-x64.zip'
 $checksum=Join-Path $root 'OmniForge-Phase1C-Crash-Sky-Windows-x64.sha256'
 Remove-Item $testOutput,$verifyOutput,$idempotencyOutput,$evidenceOutput,$archive,$checksum -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $root 'PHASE1C_VISUAL_CAPTURES') -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host '=== Phase 1C guarded integration ==='
 Invoke-Checked python @('scripts/apply-phase1c-integration.py') 'Phase 1C integration'
@@ -54,8 +55,9 @@ Remove-Item $testOutput,$verifyOutput -Force -ErrorAction SilentlyContinue
 git config user.name 'github-actions[bot]'
 git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 git add app server desktop tests
+git add scripts/apply-phase1c-visual-qa.py scripts/run-phase1c-visual-captures.ps1 scripts/apply-phase1c-integration.py scripts/run-phase1c-ci.ps1
 $staged=git diff --cached --name-only
-if($staged){git commit -m 'Stabilize viewport crashes and rebuild celestial atmosphere quality';if($LASTEXITCODE-ne 0){throw 'Verified source commit failed.'};git push origin HEAD:phase1c/crash-celestial-atmosphere-stabilization;if($LASTEXITCODE-ne 0){throw 'Verified source push failed.'}}
+if($staged){git commit -m 'Repair sky projection and require rendered visual evidence';if($LASTEXITCODE-ne 0){throw 'Verified source commit failed.'};git push origin HEAD:phase1c/crash-celestial-atmosphere-stabilization;if($LASTEXITCODE-ne 0){throw 'Verified source push failed.'}}
 $sourceCommit=(git rev-parse HEAD).Trim()
 
 Write-Host '=== Native Windows package ==='
@@ -73,7 +75,8 @@ $skySource=Get-Content(Join-Path $output 'resources\app\app\sky-pass.js')-Raw
 $appSource=Get-Content(Join-Path $output 'resources\app\app\app.js')-Raw
 $desktopSource=Get-Content(Join-Path $output 'resources\app\desktop\main.cjs')-Raw
 if($rendererSource-notmatch 'celestialRole\)return null' -or $rendererSource-notmatch 'sunAuthorityId'){throw 'Packaged celestial proxy/light repair is missing.'}
-if($skySource-notmatch 'cubeProjection' -or $skySource-notmatch 'craterField' -or $skySource-notmatch 'uMilkyWayClumping'){throw 'Packaged sky-quality repair is missing.'}
+if($skySource-notmatch 'hemisphereOctEncode' -or $skySource-notmatch 'vec3 periodic=vec3\(cos\(longitude\)' -or $skySource-match 'vec3 cubeProjection'){throw 'Packaged pole-safe sky projection repair is missing.'}
+if($appSource-notmatch '__omniforgeVisualTestCapture' -or $desktopSource-notmatch 'installVisualCaptureWatcher'){throw 'Packaged rendered-evidence capture path is missing.'}
 if($appSource-notmatch 'RenderCrashGuard' -or $desktopSource-notmatch 'recoverRendererProcess'){throw 'Packaged crash containment is missing.'}
 
 Write-Host '=== Packaged runtime smoke ==='
@@ -101,8 +104,11 @@ try{
   Remove-Item Env:OMNIFORGE_DATA_ROOT,Env:OMNIFORGE_PORT -ErrorAction SilentlyContinue;Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+Write-Host '=== Packaged rendered visual evidence ==='
+Invoke-Checked powershell.exe @('-NoProfile','-ExecutionPolicy','Bypass','-File','.\scripts\run-phase1c-visual-captures.ps1') 'Rendered visual capture gate'
+
 Write-Host '=== Archive and evidence ==='
 Compress-Archive -Path(Join-Path $output '*')-DestinationPath $archive -CompressionLevel Optimal
 $hash=(Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant();"$hash  $(Split-Path $archive -Leaf)"|Set-Content $checksum -Encoding ascii
-@('Phase 1C authoritative Windows evidence',"Source commit: $sourceCommit", "Packaged source commit: $packagedCommit", "Archive SHA-256: $hash",'Syntax/tests/verification/idempotency: passed','Crash containment source/package audit: passed','One Sun and Moon without world proxy meshes: passed','Clear-day atmosphere baseline: passed','Custom Moon/star/Milky Way controls persistence: passed','Time-step runtime survival: passed')|Set-Content $evidenceOutput -Encoding utf8
+@('Phase 1C authoritative Windows evidence',"Source commit: $sourceCommit", "Packaged source commit: $packagedCommit", "Archive SHA-256: $hash",'Syntax/tests/verification/idempotency: passed','Crash containment source/package audit: passed','One Sun and Moon without world proxy meshes: passed','Clear-day atmosphere baseline: passed','Custom Moon/star/Milky Way controls persistence: passed','Time-step runtime survival: passed','Packaged clear-day/night/Milky-Way/Moon/eclipse PNG capture: passed','Automated bright-pixel and horizon-seam metrics: passed','Manual image inspection required before user handoff')|Set-Content $evidenceOutput -Encoding utf8
 Write-Host "Phase 1C complete: $sourceCommit"
