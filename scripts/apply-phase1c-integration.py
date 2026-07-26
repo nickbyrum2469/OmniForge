@@ -22,7 +22,8 @@ REQUIRED = {
         'recoverRendererProcess',
         "app.on('child-process-gone'",
         'VISUAL_CAPTURE_DIR',
-        'installVisualCaptureWatcher'
+        'installVisualCaptureWatcher',
+        "replace(/^\\uFEFF/,'')"
     ],
     'server/v010-api.mjs': [
         'visualDurationMs: 1100',
@@ -77,7 +78,7 @@ missing = missing_contracts()
 if missing:
     broad_missing = [item for item in missing if not any(marker in item for marker in [
         'hemisphereOctEncode', 'hemisphereOctDecode', 'vec3 periodic=', 'eclipseSilhouette',
-        'VisualTestCapture', 'VISUAL_CAPTURE_DIR', 'installVisualCaptureWatcher'
+        'VisualTestCapture', 'VISUAL_CAPTURE_DIR', 'installVisualCaptureWatcher', 'replace(/^\\uFEFF/'
     ])]
     if broad_missing:
         print('Phase 1C broad integration is required:')
@@ -91,10 +92,11 @@ else:
 
 subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-qa.py'], check=True)
 subprocess.run([sys.executable, 'scripts/apply-phase1c-visual-idempotency.py'], check=True)
+subprocess.run([sys.executable, 'scripts/apply-phase1c-capture-protocol.py'], check=True)
 subprocess.run([sys.executable, 'scripts/apply-phase1c-test-contracts.py'], check=True)
 
 remaining = missing_contracts()
 if remaining:
     raise RuntimeError('Phase 1C integration postconditions are incomplete: ' + '; '.join(remaining))
 
-print('Phase 1C integration, visual projection repair, and permanent test contracts are complete.')
+print('Phase 1C integration, visual projection repair, capture protocol, and permanent test contracts are complete.')
