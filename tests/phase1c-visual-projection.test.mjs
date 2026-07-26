@@ -39,7 +39,10 @@ test('Milky Way uses periodic smooth direction-space dust without longitude seam
 });
 
 test('solar-eclipse silhouette is constrained to daylight and no longer blacks out a free-floating sky disc', () => {
-  assert.match(sky, /eclipseSilhouette=eclipseDisc\*uSolarEclipse\*uDayFactor/);
+  assert.match(sky, /float eclipseActive=step\(0\.001,uSolarEclipse\)/);
+  assert.match(sky, /eclipseOcclusion=eclipseDisc\*eclipseActive/);
+  assert.match(sky, /eclipseSilhouette=eclipseDisc\*eclipseActive\*uDayFactor/);
+  assert.match(sky, /independentMoonVisibility=uMoonVisibility\*\(1\.0-eclipseActive\)/);
   assert.match(sky, /sky=mix\(sky,vec3\(0\.00001\),eclipseSilhouette\)/);
   assert.doesNotMatch(sky, /sky\*=1\.0-eclipseOcclusion/);
 });
@@ -56,6 +59,11 @@ test('packaged visual QA can request actual canvas PNG evidence', () => {
   assert.match(captureScript, /\$response\.state\.engine\.revision/);
   assert.match(captureScript, /starIntensity=\.24;starDensity=\.72/);
   assert.match(captureScript, /yaw=-\.75;pitch=1\.02;fov=68/);
+  for (const id of ['golden-hour', 'twilight-stars', 'partial-eclipse', 'annular-eclipse', 'overcast']) {
+    assert.match(captureScript, new RegExp(`'${id}'`));
+  }
+  assert.match(captureScript, /capture-manifest\.json/);
+  assert.match(captureScript, /worldStateHash=Get-StateHash/);
 });
 
 test('the authoritative Windows evidence gate supports Windows PowerShell 5.1', () => {

@@ -69,9 +69,11 @@ REQUIRED = {
         'float coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
         'vec2 eclipseUv=celestialUv(ray,uMoonDirection,eclipseRadius)',
         'vec2 sunCoronaUv=celestialUv(ray,uSunDirection,uSunAngularRadius)',
+        'float eclipseActive=step(0.001,uSolarEclipse)',
+        'float eclipseSilhouette=eclipseDisc*eclipseActive*uDayFactor',
+        'independentMoonVisibility=uMoonVisibility*(1.0-eclipseActive)',
         'float diamondRing=',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)',
-        'float eclipseSilhouette=eclipseDisc*uSolarEclipse*uDayFactor'
     ],
     'app/world-runtime.js': ['environmentTracks', "mode: 'continuous-linear'"],
     'app/environment-runtime.js': ['moonCraterStrength', 'milkyWayWidthVariation', 'solarEclipseCoverage', '0.1, 32'],
@@ -88,6 +90,7 @@ BASE_FINAL_VISUAL_MARKERS = {
         'float centralPresence=',
         'coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
         'sunCoronaUv=celestialUv(ray,uSunDirection,uSunAngularRadius)',
+        'eclipseSilhouette=eclipseDisc*eclipseActive*uDayFactor',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
     ],
     'app/environment-runtime.js': ['0.1, 32'],
@@ -110,6 +113,7 @@ REFINED_VISUAL_MARKERS = {
         'return vec2(clamp(albedo,-0.28,0.16),clamp(height,-0.48,0.24))',
         'coronaEnvelope=exp(-coronaDistance/max(0.035,coronaReach))',
         'sunCoronaUv=celestialUv(ray,uSunDirection,uSunAngularRadius)',
+        'eclipseSilhouette=eclipseDisc*eclipseActive*uDayFactor',
         'sky=mix(sky,vec3(0.00001),eclipseSilhouette)'
     ],
     'app/environment-runtime.js': ['0.1, 32'],

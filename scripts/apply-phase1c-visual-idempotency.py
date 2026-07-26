@@ -2,7 +2,7 @@ from pathlib import Path
 
 path = Path('app/sky-pass.js')
 source = path.read_text(encoding='utf-8')
-block = "  float eclipseSilhouette=eclipseDisc*uSolarEclipse*uDayFactor;\n  sky=mix(sky,vec3(0.0015,0.002,0.003),eclipseSilhouette*0.985);\n"
+block = "  float eclipseSilhouette=eclipseDisc*eclipseActive*uDayFactor;\n  sky=mix(sky,vec3(0.0015,0.002,0.003),eclipseSilhouette*0.985);\n"
 
 while block + block in source:
     source = source.replace(block + block, block, 1)

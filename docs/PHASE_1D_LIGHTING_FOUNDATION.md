@@ -72,6 +72,8 @@ Packaged commit `88047b34086d43e1f29e7dc79741c316ffe42e7a` restored dense PSF st
 
 The eclipse compositor is also corrected to preserve real angular geometry: the lunar silhouette is projected from the authoritative Moon direction, while the corona remains projected around the authoritative Sun. Manual celestial coordinates no longer receive an unrelated astronomical node penalty, because their authored azimuth and elevation already define both alignment axes. This provides a real basis for partial, annular, total, and diamond-ring evidence instead of recentering every strong eclipse into totality.
 
+Expanded packaged evidence then exposed a second physical error: partial events scaled the Moon's opacity by total eclipse strength and simultaneously rendered the normally lit lunar surface. The occluding Moon is now an opaque silhouette whenever an actual solar overlap exists, while eclipse strength remains responsible for atmosphere and world-light dimming. The independent night-Moon surface is suppressed only for that active overlap.
+
 ## Protected behavior
 
 - The continuous terrain-conforming path remains authoritative.

@@ -13,3 +13,5 @@ logs/
 dist/
 output/
 PHASE1C_VISUAL_CAPTURES/
+__pycache__/
+*.pyc

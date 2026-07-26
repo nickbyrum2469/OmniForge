@@ -445,7 +445,8 @@ void main(){
   float eclipseRadius=max(uMoonAngularRadius,uSunAngularRadius*uSolarEclipseCoverage);
   vec2 eclipseUv=celestialUv(ray,uMoonDirection,eclipseRadius);
   float eclipseDisc=1.0-smoothstep(0.96,1.015,length(eclipseUv));
-  float eclipseOcclusion=eclipseDisc*uSolarEclipse;
+  float eclipseActive=step(0.001,uSolarEclipse);
+  float eclipseOcclusion=eclipseDisc*eclipseActive;
   float visibleSunDisc=sunDisc*(1.0-eclipseOcclusion);
   float sunGlow=pow(sunDot,mix(11.0,36.0,clamp(uSunGlow/3.0,0.0,1.0)))*(0.07+uSunGlow*0.15+uTwilightFactor*0.38);
   sky+=sunLinear*(sunGlow*(1.0-uSolarEclipse*0.93)+visibleSunDisc*(3.15+uSunGlow*1.15));
@@ -471,7 +472,7 @@ void main(){
   float diamondWindow=exp(-pow((uSolarEclipseCoverage-1.0)/0.025,2.0))*uSolarEclipse;
   float diamondAngle=abs(atan(sin(eclipseAngle-2.58),cos(eclipseAngle-2.58)));
   float diamondRing=exp(-pow(diamondAngle/0.055,2.0))*innerRim*diamondWindow;
-  float eclipseSilhouette=eclipseDisc*uSolarEclipse*uDayFactor;
+  float eclipseSilhouette=eclipseDisc*eclipseActive*uDayFactor;
   sky=mix(sky,vec3(0.0015,0.002,0.003),eclipseSilhouette*0.985);
   vec3 coronaColor=mix(vec3(1.0,0.93,0.79),vec3(0.46,0.64,1.0),smoothstep(0.08,1.5,coronaDistance));
   sky+=coronaColor*(innerRim*2.4+corona*0.82)*totality;
@@ -482,7 +483,7 @@ void main(){
   vec2 moonUv=celestialUv(ray,uMoonDirection,uMoonAngularRadius);
   float moonRadius=length(moonUv),moonDisc=1.0-smoothstep(0.965,1.015,moonRadius);
   float moonSphere=sqrt(max(0.0,1.0-moonRadius*moonRadius));
-  float independentMoonVisibility=uMoonVisibility*(1.0-smoothstep(0.92,0.999,uSolarEclipse));
+  float independentMoonVisibility=uMoonVisibility*(1.0-eclipseActive);
   if(moonDisc>0.001){
     vec3 moonReference=abs(uMoonDirection.y)>.94?vec3(1,0,0):vec3(0,1,0);
     vec3 moonRight=normalize(cross(moonReference,uMoonDirection)),moonUp=normalize(cross(uMoonDirection,moonRight));

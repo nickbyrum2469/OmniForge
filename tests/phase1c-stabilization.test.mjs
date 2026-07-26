@@ -127,6 +127,9 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(sky, /float coronaEnvelope=exp\(-coronaDistance\/max\(0\.035,coronaReach\)\)/);
   assert.match(sky, /vec2 eclipseUv=celestialUv\(ray,uMoonDirection,eclipseRadius\)/);
   assert.match(sky, /vec2 sunCoronaUv=celestialUv\(ray,uSunDirection,uSunAngularRadius\)/);
+  assert.match(sky, /float eclipseActive=step\(0\.001,uSolarEclipse\)/);
+  assert.match(sky, /eclipseSilhouette=eclipseDisc\*eclipseActive\*uDayFactor/);
+  assert.match(sky, /independentMoonVisibility=uMoonVisibility\*\(1\.0-eclipseActive\)/);
   assert.match(sky, /float diamondRing=/);
   assert.match(sky, /eclipseStarVisibility/);
   assert.match(sky, /return vec2\(clamp\(albedo,-0\.28,0\.16\),clamp\(height,-0\.48,0\.24\)\)/);
@@ -154,4 +157,7 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(worldSystems, /renderProxy: false/);
   assert.match(visualCapture, /starIntensity=\.24;starDensity=\.72;starBrightness=\.68;milkyWayIntensity=\.72/);
   assert.match(visualCapture, /starHeroFraction=\.004/);
+  assert.match(visualCapture, /capture-manifest\.json/);
+  assert.match(visualCapture, /partial-eclipse/);
+  assert.match(visualCapture, /annular-eclipse/);
 });
