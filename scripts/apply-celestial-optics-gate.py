@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from celestial_recovery_capture import apply as apply_capture
 from celestial_recovery_followup import apply as apply_followup
 from celestial_recovery_runtime import apply as apply_runtime
 from celestial_recovery_sky import apply as apply_sky
@@ -98,6 +99,10 @@ if initial_failures:
 else:
     print('Celestial recovery final source contract already present; no source migration required.')
 
+# The packaged evidence harness is part of the gate and must also be idempotent.
+# It does not alter renderer behavior or relax visual acceptance metrics.
+apply_capture(ROOT, CHANGED)
+
 progress = ROOT / 'progress.md'
 progress_text = progress.read_text(encoding='utf-8')
 marker = '## Celestial compositor recovery gate'
@@ -113,7 +118,8 @@ if marker not in progress_text:
         + '- Added lunar-map highlight compression and capped micro/medium/hero star optics.\n'
         + '- Derived day, night, and twilight continuously from interpolated solar elevation.\n'
         + '- Added predictive spherical interpolation across compact runtime snapshot intervals.\n'
-        + '- Preserved wide manual Custom ranges while constraining astronomical Physical mode.\n\n'
+        + '- Preserved wide manual Custom ranges while constraining astronomical Physical mode.\n'
+        + '- Added bounded capture retries and health checks for exact packaged evidence.\n\n'
         + 'The branch remains blocked pending exact packaged Windows visual validation.\n',
         encoding='utf-8',
     )
