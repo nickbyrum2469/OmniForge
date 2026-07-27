@@ -8,7 +8,8 @@ const shortestAngleDelta = (from, to) => {
 };
 const lerp = (from, to, amount) => Number(from || 0) + (Number(to || 0) - Number(from || 0)) * amount;
 const lerpAngle = (from, to, amount) => Number(from || 0) + shortestAngleDelta(from, to) * amount;
-const linearAmount = value => clamp01(value);
+const clampedAmount = value => clamp01(value);
+const predictiveAmount = value => Math.max(0, Math.min(2.25, Number(value) || 0));
 const DEG = Math.PI / 180;
 
 function directionFromAngles(azimuth, elevation) {
@@ -22,18 +23,32 @@ function directionFromAngles(azimuth, elevation) {
   ];
 }
 
+function normalizeDirection(direction, fallback) {
+  const magnitude = Math.hypot(...direction);
+  return magnitude < 1e-7 ? [...fallback] : direction.map(value => value / magnitude);
+}
+
+function slerpDirection(from, to, amount) {
+  const cosine = Math.max(-0.999999, Math.min(0.999999, from.reduce((sum, value, index) => sum + value * to[index], 0)));
+  const angle = Math.acos(cosine);
+  if (angle < 1e-5) return normalizeDirection(from.map((value, index) => lerp(value, to[index], amount)), from);
+  const denominator = Math.sin(angle);
+  const fromWeight = Math.sin((1 - amount) * angle) / denominator;
+  const toWeight = Math.sin(amount * angle) / denominator;
+  return normalizeDirection(from.map((value, index) => value * fromWeight + to[index] * toWeight), amount < 0.5 ? from : to);
+}
+
 function interpolateCelestialAngles(fromProperties, toProperties, amount) {
   const values = [
     fromProperties?.azimuth, fromProperties?.elevation,
     toProperties?.azimuth, toProperties?.elevation
   ].map(Number);
   if (!values.every(Number.isFinite)) return null;
-  const from = directionFromAngles(values[0], values[1]);
-  const to = directionFromAngles(values[2], values[3]);
-  let direction = from.map((value, index) => lerp(value, to[index], amount));
-  const magnitude = Math.hypot(...direction);
-  if (magnitude < 1e-6) direction = amount < 0.5 ? from : to;
-  else direction = direction.map(value => value / magnitude);
+  const direction = slerpDirection(
+    directionFromAngles(values[0], values[1]),
+    directionFromAngles(values[2], values[3]),
+    amount
+  );
   return {
     azimuth: ((Math.atan2(direction[0], -direction[2]) / DEG) % 360 + 360) % 360,
     elevation: Math.asin(Math.max(-1, Math.min(1, direction[1]))) / DEG
@@ -176,7 +191,7 @@ export function updateCelestialRuntimeInterpolation(target, now = performance.no
 
   const environmentTrack = environmentTracks.get(environmentKey(target.scene.id));
   if (environmentTrack) {
-    const amount = linearAmount((timestamp - environmentTrack.startedAt) / environmentTrack.durationMs);
+    const amount = clampedAmount((timestamp - environmentTrack.startedAt) / environmentTrack.durationMs);
     const settings = { ...(target.scene.settings || {}), ...environmentTrack.incoming };
     for (const [key, targetValue] of Object.entries(environmentTrack.toNumbers)) {
       settings[key] = lerp(environmentTrack.fromNumbers[key], targetValue, amount);
@@ -196,35 +211,41 @@ export function updateCelestialRuntimeInterpolation(target, now = performance.no
       celestialTracks.delete(key);
       continue;
     }
-    const amount = linearAmount((timestamp - track.startedAt) / track.durationMs);
+    const rawAmount = (timestamp - track.startedAt) / track.durationMs;
+    const visualAmount = clampedAmount(rawAmount);
+    const celestialAmount = predictiveAmount(rawAmount);
     const from = track.fromTransform;
     const to = track.toTransform;
     object.transform = {
-      position: from.position.map((value, index) => lerp(value, to.position[index], amount)),
-      rotation: from.rotation.map((value, index) => lerpAngle(value, to.rotation[index], amount)),
-      scale: from.scale.map((value, index) => lerp(value, to.scale[index], amount))
+      position: from.position.map((value, index) => lerp(value, to.position[index], visualAmount)),
+      rotation: from.rotation.map((value, index) => lerpAngle(value, to.rotation[index], visualAmount)),
+      scale: from.scale.map((value, index) => lerp(value, to.scale[index], visualAmount))
     };
-    const nextProperties = { ...(object.properties || {}) };
-    const celestialAngles = interpolateCelestialAngles(track.fromProperties, track.toProperties, amount);
+    const nextProperties = {
+      ...(object.properties || {}),
+      ...(rawAmount >= 1 ? structuredClone(track.finalProperties) : {})
+    };
+    const celestialAngles = interpolateCelestialAngles(track.fromProperties, track.toProperties, celestialAmount);
     for (const [property, targetValue] of Object.entries(track.toProperties)) {
       const startValue = track.fromProperties[property] ?? targetValue;
       nextProperties[property] = celestialAngles && (property === 'azimuth' || property === 'elevation')
         ? celestialAngles[property]
         : property === 'azimuth'
-          ? lerpAngle(startValue, targetValue, amount)
-        : lerp(startValue, targetValue, amount);
+          ? lerpAngle(startValue, targetValue, visualAmount)
+        : lerp(startValue, targetValue, visualAmount);
     }
     if (celestialAngles) {
       object.transform.rotation[0] = -celestialAngles.elevation;
       object.transform.rotation[1] = celestialAngles.azimuth + 180;
     }
     object.properties = nextProperties;
-    changed = true;
-    if (amount >= 0.9999) {
+    // Synchronization anchors remain exact for deterministic save/load and
+    // tests. Between and beyond anchors the direction stays predictive.
+    if (Math.abs(rawAmount - 1) <= 1e-9) {
       object.transform = cloneTransform(track.toTransform);
       object.properties = { ...object.properties, ...structuredClone(track.finalProperties) };
-      celestialTracks.delete(key);
     }
+    changed = true;
   }
   return changed;
 }
@@ -259,5 +280,5 @@ export function resolveViewportLighting(settings = {}, editorMode = 'edit', auth
 
 export function runtimeInterpolationDiagnostics(sceneId) {
   const celestial = [...celestialTracks.values()].filter(track => !sceneId || track.sceneId === sceneId).length;
-  return { celestialTracks: celestial, environmentTrack: environmentTracks.has(environmentKey(sceneId)), mode: 'continuous-linear' };
+  return { celestialTracks: celestial, environmentTrack: environmentTracks.has(environmentKey(sceneId)), mode: 'continuous-predictive' };
 }

@@ -68,14 +68,28 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
   const sunDirection = celestialObjectDirection(scene, 'sun', fallbackSun);
   const automaticMoon = normalize([-sunDirection[0] * 0.94, -sunDirection[1], -sunDirection[2] * 0.94 + 0.18]);
   const moonDirection = celestialObjectDirection(scene, 'moon', automaticMoon);
-  const geometricDay = smoothstep(-0.08, 0.14, sunDirection[1]);
+  const sunElevationDegrees = Math.asin(clamp(sunDirection[1], -1, 1)) / DEG;
+  // Visual lighting is evaluated continuously from the current interpolated
+  // solar direction. Server values are synchronization anchors, not render buckets.
+  const derivedDayFactor = smoothstep(-6, 8, sunElevationDegrees);
+  const derivedNightFactor = 1 - smoothstep(-12, -4, sunElevationDegrees);
+  const twilightRise = smoothstep(-18, -6, sunElevationDegrees);
+  const twilightFall = 1 - smoothstep(-2, 12, sunElevationDegrees);
+  const derivedTwilightFactor = clamp01(twilightRise * twilightFall);
+  // Live scenes always consume the continuously interpolated Sun. Authored
+  // factors remain a compatibility fallback only for headless snapshots that
+  // contain no authoritative celestial object.
   const authoredNight = Number(world.nightFactor);
-  const dayFactor = Number.isFinite(authoredNight) ? 1 - clamp01(authoredNight) : geometricDay;
-  const nightFactor = 1 - dayFactor;
   const authoredTwilight = Number(world.twilightFactor);
-  const twilightFactor = Number.isFinite(authoredTwilight)
-    ? clamp01(authoredTwilight)
-    : clamp01(1 - smoothstep(0.08, 0.52, Math.abs(sunDirection[1])));
+  const dayFactor = sunObject
+    ? derivedDayFactor
+    : Number.isFinite(authoredNight) ? 1 - clamp01(authoredNight) : derivedDayFactor;
+  const nightFactor = sunObject
+    ? derivedNightFactor
+    : Number.isFinite(authoredNight) ? clamp01(authoredNight) : derivedNightFactor;
+  const twilightFactor = sunObject
+    ? derivedTwilightFactor
+    : Number.isFinite(authoredTwilight) ? clamp01(authoredTwilight) : derivedTwilightFactor;
   const cloudCoverage = clamp01(settings.cloudCoverage ?? worldClouds.coverage ?? 0.1);
   const cloudDensity = clamp01(settings.cloudDensity ?? worldClouds.density ?? 0.28);
   const starIntensity = Math.max(0, Number(settings.starIntensity ?? worldSky.starIntensity ?? 1));
@@ -87,10 +101,13 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
   const windDirection = settings.windDirection ?? worldWeather.windDirection;
   const planetEnabled = Boolean(worldSky.planetEnabled);
   const planetDirection = normalize(directionFromAzimuthElevation(worldSky.planetAzimuth ?? 215, worldSky.planetElevation ?? 28));
-  const sunSize = clamp(worldSky.sunSize ?? worldSky.suns?.[0]?.size ?? 1, 0.1, 12);
-  const moonSize = clamp(worldSky.moonSize ?? worldSky.moons?.[0]?.size ?? 1.25, 0.1, 32);
+  const celestialMode = String(worldSky.celestialMode || 'astronomical');
+  const physicalCelestial = celestialMode === 'astronomical';
+  const authoredSunSize = Number(worldSky.sunSize ?? worldSky.suns?.[0]?.size ?? 1);
+  const authoredMoonSize = Number(worldSky.moonSize ?? worldSky.moons?.[0]?.size ?? 1.25);
+  const sunSize = physicalCelestial ? clamp(authoredSunSize, 0.85, 1.15) : clamp(authoredSunSize, 0.1, 12);
+  const moonSize = physicalCelestial ? clamp(authoredMoonSize, 0.85, 1.35) : clamp(authoredMoonSize, 0.1, 32);
   const sunAngularRadius = 0.2666 * sunSize;
-  const sunElevationDegrees = Math.asin(clamp(sunDirection[1], -1, 1)) / DEG;
   const sunVisibility = smoothstep(-sunAngularRadius, sunAngularRadius, sunElevationDegrees);
   const moonBrightness = clamp(worldSky.moonBrightness ?? worldSky.moons?.[0]?.radiance ?? 0.92, 0, 8);
   const moonIllumination = clamp01(moonObject?.properties?.illumination ?? moonObject?.properties?.phase ?? worldSky.moonPhase ?? 0.72);
@@ -106,6 +123,8 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
   return {
     sunDirection,
     moonDirection,
+    celestialMode,
+    physicalCelestial,
     sunColor: Array.isArray(lights.color) ? lights.color.map(Number) : [1, 0.94, 0.78],
     moonColor: color(worldSky.moonColor ?? settings.moonColor, '#c9d4e4'),
     zenithColor: color(settings.skyTop, '#1f65b7'),
@@ -131,12 +150,18 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
     starBrightness: clamp(worldSky.starBrightness ?? 0.82, 0, 8),
     starTwinkleAmount: clamp01(worldSky.starTwinkleAmount ?? 0.42),
     starTwinkleSpeed: clamp(worldSky.starTwinkleSpeed ?? 0.85, 0, 12),
-    starSizeMin: clamp(worldSky.starSizeMin ?? 0.18, 0.02, 4),
-    starSizeMax: clamp(worldSky.starSizeMax ?? 1.35, 0.02, 8),
+    starSizeMin: physicalCelestial
+      ? clamp(worldSky.starSizeMin ?? 0.18, 0.05, 0.35)
+      : clamp(worldSky.starSizeMin ?? 0.18, 0.02, 4),
+    starSizeMax: physicalCelestial
+      ? clamp(worldSky.starSizeMax ?? 0.9, 0.2, 1.1)
+      : clamp(worldSky.starSizeMax ?? 1.35, 0.02, 8),
     starColorVariation: clamp01(worldSky.starColorVariation ?? 0.72),
     starRayStrength: clamp(worldSky.starRayStrength ?? 0.24, 0, 2),
     starRayLength: clamp(worldSky.starRayLength ?? 1.15, 0.1, 4),
-    starHeroFraction: clamp01(worldSky.starHeroFraction ?? 0.035),
+    starHeroFraction: physicalCelestial
+      ? clamp(worldSky.starHeroFraction ?? 0.004, 0.001, 0.008)
+      : clamp01(worldSky.starHeroFraction ?? 0.035),
     starSeed: Number(worldSky.starSeed ?? 1337),
     starDaylightExtinction: starExtinction,
     milkyWayIntensity: Math.max(0, Number(worldSky.milkyWayIntensity ?? 0.22)) * nightFactor * daylightSuppression,

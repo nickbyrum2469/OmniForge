@@ -130,3 +130,15 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Preserves the visible Moon independently from its daytime world-light contribution and removes an unnecessary second linear phase-darkening term.
 - Caps ordinary stellar point-spread footprints, reserves larger halos and glints for rare hero stars, and strengthens bounded hero-star rays without restoring square or dash artifacts.
 - Adds behavior and shader-contract tests. Exact packaged visual approval is still required.
+
+## Celestial compositor recovery gate
+
+- Removed the ray-level horizon guillotine that visibly sliced Sun and Moon discs.
+- Composed stars, hero glints, planets, and Milky Way behind one geometric Moon occluder.
+- Composited the opaque lunar surface after the masked astronomical background.
+- Added lunar-map highlight compression and capped micro/medium/hero star optics.
+- Derived day, night, and twilight continuously from interpolated solar elevation.
+- Added predictive spherical interpolation across compact runtime snapshot intervals.
+- Preserved wide manual Custom ranges while constraining astronomical Physical mode.
+
+The branch remains blocked pending exact packaged Windows visual validation.

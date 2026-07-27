@@ -14,12 +14,14 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /vec2 ndcPixel=max\(fwidth\(vNdc\),vec2\(0\.000001\)\)/);
   assert.match(sky, /vec2 starNdc=vec2\(/);
   assert.match(sky, /vec2 pixelDelta=\(vNdc-starNdc\)\/ndcPixel/);
-  assert.match(sky, /float microRadius=mix\(clamp\(authoredMin\*0\.36,0\.12,0\.32\)/);
-  assert.match(sky, /float heroRadius=clamp\(microRadius\*\(1\.45\+sizeRandom\*0\.65\),0\.72,2\.05\)/);
+  assert.match(sky, /float heroProbability=clamp\(uStarHeroFraction,0\.001,0\.008\)/);
+  assert.match(sky, /float mediumProbability=/);
+  assert.match(sky, /float microRadius=mix\(clamp\(authoredMin\*0\.22,0\.07,0\.16\)/);
+  assert.match(sky, /float heroRadius=clamp\(.+0\.68,1\.45\)/);
   assert.match(sky, /float psf=exp\(-0\.5\*pow\(pixelDistance\/sigmaPixels,2\.0\)\)/);
-  assert.match(sky, /float core=psf\*mix\(0\.76,0\.94,hero\)/);
-  assert.match(sky, /float halo=exp\(-0\.5\*pow\(pixelDistance\/haloSigma,2\.0\)\)\*hero\*0\.16/);
-  assert.match(sky, /hero\*uStarRayStrength\*0\.045/);
+  assert.match(sky, /float core=psf\*mix\(0\.7,0\.96,medium\*0\.45\+hero\)/);
+  assert.match(sky, /medium\*0\.025\+hero\*0\.1/);
+  assert.match(sky, /hero\*uStarRayStrength\*0\.028/);
   assert.doesNotMatch(sky, /float disc=max\(core,psf/);
   assert.doesNotMatch(sky, /angularDistance=sqrt/);
   assert.match(sky, /uStarDensity\*0\.13/);
@@ -46,9 +48,10 @@ test('stellar projection is upper-hemisphere angular space rather than cube-face
   assert.match(sky, /eclipseStarVisibility=smoothstep\(0\.975,1\.0,uSolarEclipse\)\*uDayFactor\*0\.09/);
   assert.match(sky, /float stellarAirMass=1\.0\/max\(0\.12,ray\.y\+0\.09\)/);
   assert.match(sky, /float stellarTransmission=exp\(-stellarOpticalDepth\)/);
-  assert.match(sky, /float moonStellarOcclusion=clamp\(moonDisc\*independentMoonVisibility,0\.0,1\.0\)/);
-  assert.match(sky, /float stellarCelestialMask=\(1\.0-eclipseSilhouette\)\*\(1\.0-moonStellarOcclusion\)/);
+  assert.match(sky, /float moonOcclusionDisc=1\.0-smoothstep\(0\.94,1\.045,moonRadius\)/);
+  assert.match(sky, /float stellarCelestialMask=\(1\.0-eclipseSilhouette\)\*\(1\.0-moonOcclusionDisc\)/);
   assert.match(sky, /milkyWay\(ray,starHorizon\*stellarTransmission\)\*stellarCelestialMask/);
+  assert.match(sky, /sky=mix\(sky,moonComposite,clamp\(moonDisc,0\.0,1\.0\)\)/);
   assert.match(sky, /milkyWay\(ray,starHorizon\*stellarTransmission\)/);
   assert.match(sky, /horizonTwinkle/);
   assert.doesNotMatch(sky, /vec3 cubeProjection/);
@@ -118,9 +121,10 @@ test('cloud and twilight lighting remain Sun-directed rather than full-screen co
 test('solar-eclipse silhouette is constrained to daylight and no longer blacks out a free-floating sky disc', () => {
   assert.match(sky, /float eclipseActive=step\(0\.001,uSolarEclipse\)/);
   assert.match(sky, /eclipseOcclusion=eclipseDisc\*eclipseActive/);
-  assert.match(sky, /float eclipsePresentationVisibility=uSunVisibility\*celestialHorizonMask/);
+  assert.match(sky, /float eclipsePresentationVisibility=uSunVisibility/);
   assert.match(sky, /eclipseSilhouette=eclipseDisc\*eclipseActive\*eclipsePresentationVisibility/);
   assert.match(sky, /independentMoonVisibility=uMoonVisibility\*\(1\.0-eclipseActive\)/);
+  assert.doesNotMatch(sky, /celestialHorizonMask/);
   assert.match(sky, /sky=mix\(sky,vec3\(0\.00001\),eclipseSilhouette\)/);
   assert.doesNotMatch(sky, /sky\*=1\.0-eclipseOcclusion/);
 });

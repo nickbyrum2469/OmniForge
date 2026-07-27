@@ -84,9 +84,11 @@ REQUIRED = {
         "mode: 'continuous-predictive'",
     ],
     'app/environment-runtime.js': [
-        'const dayFactor = smoothstep(-6, 8, sunElevationDegrees)',
-        'const nightFactor = 1 - smoothstep(-12, -4, sunElevationDegrees)',
+        'const derivedDayFactor = smoothstep(-6, 8, sunElevationDegrees)',
+        'const derivedNightFactor = 1 - smoothstep(-12, -4, sunElevationDegrees)',
         'const twilightRise = smoothstep(-18, -6, sunElevationDegrees)',
+        'const dayFactor = sunObject',
+        'const twilightFactor = sunObject',
         "const physicalCelestial = celestialMode === 'astronomical'",
         'starHeroFraction: physicalCelestial',
         'sunVisibility,',

@@ -42,7 +42,7 @@ test('Celestial Studio settings normalize and create authoritative Sun and Moon 
 test('renderer environment exposes adjustable discs, detailed moon, planet, moonlight, and volumetric cloud inputs', () => {
   const target = scene();
   const world = defaultWorldSettings({
-    sky: { sunSize: 2, moonSize: 3, moonPhase: 0.5, moonPhaseMode: 'manual', moonBrightness: 1.5, moonDetail: 2, planetEnabled: true, planetAzimuth: 210, planetElevation: 25 },
+    sky: { celestialMode: 'manual', sunSize: 2, moonSize: 3, moonPhase: 0.5, moonPhaseMode: 'manual', moonBrightness: 1.5, moonDetail: 2, planetEnabled: true, planetAzimuth: 210, planetElevation: 25 },
     clouds: { quality: 'balanced', altitude: 1800, thickness: 1200 },
     lighting: { moonIntensity: 0.2 }
   });
