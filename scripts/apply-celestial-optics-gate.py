@@ -8,6 +8,7 @@ from celestial_recovery_runtime import apply as apply_runtime
 from celestial_recovery_sky import apply as apply_sky
 from celestial_recovery_tests import apply as apply_tests
 from celestial_recovery_twilight import apply as apply_twilight
+from celestial_recovery_twilight_followup import apply as apply_twilight_followup
 
 ROOT = Path(__file__).resolve().parents[1]
 CHANGED: list[str] = []
@@ -102,6 +103,7 @@ else:
 
 # Follow-up quality and evidence migrations are independently idempotent.
 apply_twilight(ROOT, CHANGED)
+apply_twilight_followup(ROOT, CHANGED)
 apply_capture(ROOT, CHANGED)
 
 progress = ROOT / 'progress.md'
