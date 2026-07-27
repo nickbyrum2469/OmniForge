@@ -12,7 +12,7 @@ from celestial_recovery_tests import apply as apply_tests
 from celestial_recovery_twilight import apply as apply_twilight
 from celestial_recovery_twilight_final import apply as apply_twilight_final
 from celestial_recovery_twilight_followup import apply as apply_twilight_followup
-from target_pc_terrain_recovery import apply as apply_target_pc_terrain
+from target_pc_terrain_recovery_v2 import apply as apply_target_pc_terrain
 
 ROOT = Path(__file__).resolve().parents[1]
 CHANGED: list[str] = []
@@ -90,9 +90,6 @@ def final_contract_failures() -> list[str]:
     return failures
 
 
-# The original authoring migration owns the baseline regression file. Temporarily
-# remove only known later extensions, validate the baseline, then restore them.
-# The complete second pass remains byte-identical.
 prepare_base_test(ROOT, CHANGED)
 apply_authoring(ROOT, CHANGED)
 apply_authoring_capture_profiles(ROOT, CHANGED)
@@ -114,8 +111,6 @@ if initial_failures:
 else:
     print('Celestial recovery final source contract already present; no source migration required.')
 
-# Apply only the exact next twilight migration. Historical migrations are never
-# replayed over a later calibrated block, so the second validation pass is a no-op.
 sky_source = source('app/sky-pass.js')
 environment_source = source('app/environment-runtime.js')
 if 'const stellarEmergence =' not in environment_source or 'float civilTwilightLift=' not in sky_source:
