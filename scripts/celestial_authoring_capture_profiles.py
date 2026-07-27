@@ -26,6 +26,24 @@ test('packaged visual profiles declare artistic body scale explicitly', () => {
 '''
 
 
+def prepare_base_test(root: Path, changed: list[str]) -> None:
+    """Temporarily restore the base helper-owned test file before validation.
+
+    The original authoring migration validates its baseline file exactly. Later
+    guarded migrations may append tests, so remove only this known extension
+    before the base migration and restore it afterward. The complete second pass
+    remains byte-identical.
+    """
+    test_path = root / 'tests/phase1h-celestial-authoring-controls.test.mjs'
+    test_source = test_path.read_text(encoding='utf-8')
+    suffix = '\n\n' + TEST_BLOCK.strip() + '\n'
+    if TEST_MARKER in test_source:
+        if not test_source.endswith(suffix):
+            raise RuntimeError('Celestial authoring capture-profile test extension has unexpected placement.')
+        test_path.write_text(test_source[:-len(suffix)].rstrip() + '\n', encoding='utf-8')
+        changed.append('tests/phase1h-celestial-authoring-controls.test.mjs')
+
+
 def apply(root: Path, changed: list[str]) -> None:
     capture_path = root / 'scripts/run-phase1c-visual-captures.ps1'
     capture_source = capture_path.read_text(encoding='utf-8')
