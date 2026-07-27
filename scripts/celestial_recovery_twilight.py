@@ -55,20 +55,20 @@ def apply(root: Path, changed: list[str]) -> None:
     )
 
     sky = root / 'app/sky-pass.js'
-    replace_once(
-        sky,
-        """  physicalScatter+=twilightScatter*(uOzone*uTwilightFactor*horizon)*0.06;""",
-        """  physicalScatter+=twilightScatter*(uOzone*uTwilightFactor*horizon)*0.06;
+    sky_text = sky.read_text(encoding='utf-8')
+    if 'float civilTwilightLift=' not in sky_text:
+        original = "  physicalScatter+=twilightScatter*(uOzone*uTwilightFactor*horizon)*0.06;"
+        initial = """  physicalScatter+=twilightScatter*(uOzone*uTwilightFactor*horizon)*0.06;
   // Preserve readable civil twilight without a bucketed exposure jump. This
   // continuous lift is strongest along the sunward horizon and fades as either
   // daylight or full night takes authority.
   float civilTwilightLift=uTwilightFactor*(1.0-uDayFactor)*(1.0-uNightFactor);
   vec3 civilTwilightColor=mix(vec3(0.025,0.035,0.09),vec3(0.24,0.075,0.018),twilightSunward);
-  sky+=civilTwilightColor*civilTwilightLift*(0.12+0.28*horizon);""",
-        changed,
-        root,
-        'continuous civil twilight luminance',
-    )
+  sky+=civilTwilightColor*civilTwilightLift*(0.12+0.28*horizon);"""
+        if original not in sky_text:
+            raise RuntimeError('Expected twilight contract was not found for continuous civil twilight luminance.')
+        sky.write_text(sky_text.replace(original, initial, 1), encoding='utf-8')
+        changed.append(sky.relative_to(root).as_posix())
 
     tests = root / 'tests/phase1g-celestial-optics.test.mjs'
     append_once(
