@@ -75,6 +75,7 @@ export function defaultWorldSettings(existing = {}) {
     },
     sky: {
       celestialMode: 'astronomical',
+      celestialScaleMode: 'physical',
       sunAzimuth: -90,
       sunElevation: 45,
       sunSize: 1,

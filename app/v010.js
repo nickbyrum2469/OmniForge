@@ -28,6 +28,9 @@ let lastFoliageTransaction = null;
 let timeTimer = null;
 let celestialAnimationFrame = null;
 let timeStepInFlight = false;
+let liveWorldApplyTimer = null;
+let liveWorldApplyInFlight = false;
+let liveWorldApplyQueued = false;
 let previewTimeInEditor = sessionStorage.getItem('omniforge.previewTimeInEditor') === '1';
 
 function synchronizeAuthoritativeEditor() {
@@ -113,15 +116,16 @@ function installWorldPanel() {
       <p class="v010-section-note">Automatic time advances in Play mode. Editor preview is opt-in so lighting updates cannot interrupt viewport input or rebuild the entire workspace while authoring.</p>
     </div>
 
-    <div class="v010-card">
+    <div class="v010-card" data-v010-live-world>
       <header><b>Celestial Studio</b><span id="v010CelestialReadout" class="v010-chip">SUN + MOON</span></header>
       <div class="v010-grid">
         <label>Positioning<select id="v010CelestialMode"><option value="astronomical">Time-driven orbit</option><option value="manual">Manual azimuth/elevation</option></select></label>
-        <label>Sun size<input id="v010SunSize" type="range" min="0.1" max="8" step="0.05"></label>
+        <label>Body size authority<select id="v010CelestialScaleMode"><option value="physical">Physical angular scale</option><option value="artistic">Artistic full-range scale</option></select></label>
+        <label><span class="v010-label-row"><span>Sun size</span><output id="v010SunSizeValue" class="v010-control-value">1.00×</output></span><input id="v010SunSize" type="range" min="0.1" max="12" step="0.05"></label>
         <label>Sun glow<input id="v010SunGlow" type="range" min="0" max="5" step="0.05"></label>
         <label>Sun azimuth<input id="v010SunAzimuth" type="number" min="-720" max="720" step="1"></label>
         <label>Sun elevation<input id="v010SunElevation" type="number" min="-90" max="90" step="1"></label>
-        <label>Moon size<input id="v010MoonSize" type="range" min="0.1" max="32" step="0.05"></label>
+        <label><span class="v010-label-row"><span>Moon size</span><output id="v010MoonSizeValue" class="v010-control-value">1.25×</output></span><input id="v010MoonSize" type="range" min="0.1" max="32" step="0.05"></label>
         <label>Phase authority<select id="v010MoonPhaseMode"><option value="sun-relative">Computed from Sun–Moon geometry</option><option value="manual">Manual artistic phase</option></select></label>
         <label>Moon age (days)<input id="v010MoonAge" type="range" min="0" max="29.530588" step="0.02"></label>
         <label>Manual phase<input id="v010MoonPhase" type="range" min="0" max="1" step="0.005"></label>
@@ -143,16 +147,17 @@ function installWorldPanel() {
         <label>Moon azimuth<input id="v010MoonAzimuth" type="number" min="-720" max="720" step="1"></label>
         <label>Moon elevation<input id="v010MoonElevation" type="number" min="-90" max="90" step="1"></label>
         <label>Show planet<input id="v010PlanetEnabled" type="checkbox"></label>
-        <label>Planet size<input id="v010PlanetSize" type="range" min="0.1" max="18" step="0.1"></label>
+        <label><span class="v010-label-row"><span>Planet size</span><output id="v010PlanetSizeValue" class="v010-control-value">4.50×</output></span><input id="v010PlanetSize" type="range" min="0.1" max="18" step="0.1"></label>
         <label>Planet azimuth<input id="v010PlanetAzimuth" type="number" min="-720" max="720" step="1"></label>
         <label>Planet elevation<input id="v010PlanetElevation" type="number" min="-90" max="90" step="1"></label>
         <label>Planet rings<input id="v010PlanetRings" type="range" min="0" max="1" step="0.01"></label>
       </div>
-      <p class="v010-section-note">Time-driven mode follows world time. Manual mode preserves the exact Sun, Moon, and planet positions entered here.</p>
+      <div id="v010ScaleHint" class="v010-section-note v010-scale-hint">Physical scale preserves realistic angular sizes. Choose Artistic scale to honor the full sliders while keeping either orbit mode.</div>
+      <p class="v010-section-note">Time-driven mode follows world time. Manual mode preserves the exact Sun, Moon, and planet positions entered here. Positioning and body scale are independent.</p>
       <div id="v010EnvironmentDiagnostics" class="v010-status">Celestial authority loading…</div>
     </div>
 
-    <div class="v010-card">
+    <div class="v010-card" data-v010-live-world>
       <header><b>Atmosphere Studio</b><span class="v010-chip">SCATTERING + AERIAL PERSPECTIVE</span></header>
       <div class="v010-grid">
         <label>Quality<select id="v010AtmosphereQuality"><option value="compatibility">Compatibility LUT</option><option value="balanced">Balanced LUT</option><option value="quality">Quality volumetrics</option><option value="reference">Reference</option></select></label>
@@ -177,8 +182,8 @@ function installWorldPanel() {
         <label>Star brightness<input id="v010StarBrightness" type="range" min="0" max="8" step="0.05"></label>
         <label>Twinkle amount<input id="v010StarTwinkle" type="range" min="0" max="1" step="0.01"></label>
         <label>Twinkle speed<input id="v010StarTwinkleSpeed" type="range" min="0" max="12" step="0.05"></label>
-        <label>Minimum star size<input id="v010StarSizeMin" type="range" min="0.05" max="4" step="0.05"></label>
-        <label>Maximum star size<input id="v010StarSizeMax" type="range" min="0.05" max="8" step="0.05"></label>
+        <label><span class="v010-label-row"><span>Minimum star size</span><output id="v010StarSizeMinValue" class="v010-control-value">0.18 px</output></span><input id="v010StarSizeMin" type="range" min="0.05" max="4" step="0.05"></label>
+        <label><span class="v010-label-row"><span>Maximum star size</span><output id="v010StarSizeMaxValue" class="v010-control-value">1.35 px</output></span><input id="v010StarSizeMax" type="range" min="0.05" max="8" step="0.05"></label>
         <label>Star color variation<input id="v010StarColorVariation" type="range" min="0" max="1" step="0.01"></label>
         <label>Star ray strength<input id="v010StarRays" type="range" min="0" max="2" step="0.01"></label>
         <label>Star ray length<input id="v010StarRayLength" type="range" min="0.1" max="4" step="0.02"></label>
@@ -186,7 +191,7 @@ function installWorldPanel() {
         <label>Star seed<input id="v010StarSeed" type="number" step="1"></label>
         <label>Daylight star extinction<input id="v010StarExtinction" type="range" min="0.1" max="8" step="0.05"></label>
         <label>Milky Way brightness<input id="v010MilkyWay" type="range" min="0" max="3" step="0.05"></label>
-        <label>Milky Way width<input id="v010MilkyWayWidth" type="range" min="0.02" max="0.8" step="0.01"></label>
+        <label><span class="v010-label-row"><span>Milky Way width</span><output id="v010MilkyWayWidthValue" class="v010-control-value">0.22</output></span><input id="v010MilkyWayWidth" type="range" min="0.02" max="0.8" step="0.01"></label>
         <label>Milky Way detail<input id="v010MilkyWayDetail" type="range" min="0" max="3" step="0.05"></label>
         <label>Milky Way orientation<input id="v010MilkyWayOrientation" type="range" min="-180" max="180" step="1"></label>
         <label>Milky Way dust lanes<input id="v010MilkyWayDust" type="range" min="0" max="1" step="0.01"></label>
@@ -286,6 +291,7 @@ function populate(options = {}) {
   field('v010Vibrance').value = world.atmosphere.vibrance ?? 0.1;
   field('v010ToneMapper').value = world.atmosphere.toneMapper || 'neutral';
   field('v010CelestialMode').value = world.sky.celestialMode || 'astronomical';
+  field('v010CelestialScaleMode').value = world.sky.celestialScaleMode || 'physical';
   field('v010SunSize').value = world.sky.sunSize ?? 1;
   field('v010SunGlow').value = world.sky.sunGlow ?? 1;
   field('v010SunAzimuth').value = world.sky.sunAzimuth ?? -90;
@@ -348,6 +354,7 @@ function populate(options = {}) {
   field('v010CloudWindSpeed').value = world.clouds.windSpeed ?? 12;
   field('v010Fog').value = world.weather.fog;
   field('v010Weather').value = world.weather.preset;
+  updateCelestialControlState();
   const celestialReadout = snapshot.scene?.settings?.environmentV010?.celestial;
   field('v010CelestialReadout').textContent = (world.sky.celestialMode === 'manual' ? 'MANUAL' : formatTime(world.time.hours)) + ' · ' + (celestialReadout?.moon?.phaseName || 'Moon') + ' ' + (Number(celestialReadout?.moon?.illumination ?? world.sky.moonPhase ?? 0.72) * 100).toFixed(0) + '%' + (celestialReadout?.event?.type && celestialReadout.event.type !== 'none' ? ' · ' + celestialReadout.event.type.replace('-', ' ').toUpperCase() : '');
   const environment = snapshot.scene?.settings?.environmentV010 || snapshot.state?.scenes?.find(item => item.id === snapshot.state?.activeSceneId)?.settings?.environmentV010 || {};
@@ -404,6 +411,7 @@ async function applyWorld(extra = {}, options = {}) {
     },
     sky: {
       celestialMode: field('v010CelestialMode').value,
+      celestialScaleMode: field('v010CelestialScaleMode').value,
       sunSize: numeric('v010SunSize', 1), sunGlow: numeric('v010SunGlow', 1),
       sunAzimuth: numeric('v010SunAzimuth', -90), sunElevation: numeric('v010SunElevation', 45),
       moonSize: numeric('v010MoonSize', 1.45), moonPhase: numeric('v010MoonPhase', 0.72), moonPhaseMode: field('v010MoonPhaseMode').value,
@@ -431,14 +439,91 @@ async function applyWorld(extra = {}, options = {}) {
     },
     weather: { preset: field('v010Weather').value, fog: numeric('v010Fog', 0.04) }
   };
-  snapshot = await api('/api/v010/world', { method: 'PATCH', body: JSON.stringify(payload) });
-  synchronizeAuthoritativeEditor();
-  populate();
+  const nextSnapshot = await api('/api/v010/world', { method: 'PATCH', body: JSON.stringify(payload) });
+  snapshot = {
+    ...snapshot,
+    ...nextSnapshot,
+    scene: nextSnapshot.runtime?.settings
+      ? { ...(snapshot?.scene || {}), id: nextSnapshot.runtime.sceneId, settings: nextSnapshot.runtime.settings }
+      : (nextSnapshot.scene || snapshot?.scene)
+  };
+  if (options.runtimeOnly && nextSnapshot.runtime) {
+    synchronizeRuntimeOnly();
+    populate({ runtimeOnly: true });
+    updateCelestialControlState();
+  } else {
+    synchronizeAuthoritativeEditor();
+    populate();
+  }
+  return snapshot;
+}
+
+const clampControl = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, Number(value) || 0));
+
+function setControlReadout(id, text) {
+  const output = field(id);
+  if (!output) return;
+  output.value = text;
+  output.textContent = text;
+}
+
+function updateCelestialControlState() {
+  const scaleMode = field('v010CelestialScaleMode')?.value || 'physical';
+  const physical = scaleMode === 'physical';
+  const authoredSun = numeric('v010SunSize', 1);
+  const authoredMoon = numeric('v010MoonSize', 1.25);
+  const authoredStarMin = numeric('v010StarSizeMin', 0.18);
+  const authoredStarMax = numeric('v010StarSizeMax', 1.35);
+  const renderedSun = physical ? clampControl(authoredSun, 0.85, 1.15) : clampControl(authoredSun, 0.1, 12);
+  const renderedMoon = physical ? clampControl(authoredMoon, 0.85, 1.35) : clampControl(authoredMoon, 0.1, 32);
+  const renderedStarMin = physical ? clampControl(authoredStarMin, 0.05, 0.35) : clampControl(authoredStarMin, 0.02, 4);
+  const renderedStarMax = physical ? clampControl(authoredStarMax, 0.2, 1.1) : clampControl(authoredStarMax, 0.02, 8);
+  const formatted = (authored, rendered, suffix) => Math.abs(authored - rendered) > 0.0001
+    ? `${authored.toFixed(2)}${suffix} → ${rendered.toFixed(2)}${suffix}`
+    : `${rendered.toFixed(2)}${suffix}`;
+  setControlReadout('v010SunSizeValue', formatted(authoredSun, renderedSun, '×'));
+  setControlReadout('v010MoonSizeValue', formatted(authoredMoon, renderedMoon, '×'));
+  setControlReadout('v010PlanetSizeValue', `${numeric('v010PlanetSize', 4.5).toFixed(2)}×`);
+  setControlReadout('v010StarSizeMinValue', formatted(authoredStarMin, renderedStarMin, ' px'));
+  setControlReadout('v010StarSizeMaxValue', formatted(authoredStarMax, renderedStarMax, ' px'));
+  setControlReadout('v010MilkyWayWidthValue', numeric('v010MilkyWayWidth', 0.22).toFixed(2));
+  const hint = field('v010ScaleHint');
+  if (hint) hint.textContent = physical
+    ? 'Physical scale is active: Sun, Moon, and star footprints are safely clamped. The readouts show authored → rendered values whenever a clamp is active.'
+    : 'Artistic scale is active: the full Sun, Moon, and star-size sliders are honored while orbit positioning remains independently time-driven or manual.';
+}
+
+async function flushLiveWorldApply() {
+  if (!snapshot?.world) return;
+  if (liveWorldApplyInFlight) {
+    liveWorldApplyQueued = true;
+    return;
+  }
+  liveWorldApplyInFlight = true;
+  try {
+    await applyWorld({}, { runtimeOnly: true });
+    setStatus('Live world preview applied and persisted without replacing the editor workspace.');
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    liveWorldApplyInFlight = false;
+    if (liveWorldApplyQueued) {
+      liveWorldApplyQueued = false;
+      liveWorldApplyTimer = window.setTimeout(flushLiveWorldApply, 0);
+    }
+  }
+}
+
+function scheduleLiveWorldApply() {
+  updateCelestialControlState();
+  if (liveWorldApplyTimer) window.clearTimeout(liveWorldApplyTimer);
+  liveWorldApplyTimer = window.setTimeout(flushLiveWorldApply, 140);
 }
 
 function bindControls() {
   field('v010ApplyWorld').addEventListener('click', async () => {
     try {
+      if (liveWorldApplyTimer) window.clearTimeout(liveWorldApplyTimer);
       await applyWorld();
       setStatus('World settings were applied to the authoritative scene and renderer inputs.');
     } catch (error) {
@@ -446,6 +531,12 @@ function bindControls() {
     }
   });
 
+
+  document.querySelectorAll('[data-v010-live-world] input, [data-v010-live-world] select').forEach(control => {
+    const eventName = control.type === 'range' || control.type === 'color' ? 'input' : 'change';
+    control.addEventListener(eventName, scheduleLiveWorldApply);
+  });
+  updateCelestialControlState();
 
   field('v010ApplyPreset').addEventListener('click', async () => {
     try {
@@ -628,6 +719,7 @@ function bindControls() {
 
 window.addEventListener('beforeunload', () => {
   if (timeTimer) window.clearInterval(timeTimer);
+  if (liveWorldApplyTimer) window.clearTimeout(liveWorldApplyTimer);
   if (celestialAnimationFrame !== null) window.cancelAnimationFrame(celestialAnimationFrame);
 });
 

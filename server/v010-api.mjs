@@ -172,7 +172,7 @@ export async function handleV010Request(req, res) {
         addActivity(state, 'world', 'Updated connected time, lighting, atmosphere, sky, clouds, or weather.', { derived, celestial: repaired.diagnostics });
         return { world: state.worldV010, derived };
       });
-      json(res, 200, { ...result.result, state: result.state });
+      json(res, 200, { ...result.result, state: result.state, runtime: compactWorldRuntime(result.state) });
       return true;
     }
 

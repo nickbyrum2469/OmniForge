@@ -106,7 +106,8 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
   const planetEnabled = Boolean(worldSky.planetEnabled);
   const planetDirection = normalize(directionFromAzimuthElevation(worldSky.planetAzimuth ?? 215, worldSky.planetElevation ?? 28));
   const celestialMode = String(worldSky.celestialMode || 'astronomical');
-  const physicalCelestial = celestialMode === 'astronomical';
+  const celestialScaleMode = String(worldSky.celestialScaleMode || 'physical') === 'artistic' ? 'artistic' : 'physical';
+  const physicalCelestial = celestialScaleMode === 'physical';
   const authoredSunSize = Number(worldSky.sunSize ?? worldSky.suns?.[0]?.size ?? 1);
   const authoredMoonSize = Number(worldSky.moonSize ?? worldSky.moons?.[0]?.size ?? 1.25);
   const sunSize = physicalCelestial ? clamp(authoredSunSize, 0.85, 1.15) : clamp(authoredSunSize, 0.1, 12);
@@ -128,6 +129,7 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
     sunDirection,
     moonDirection,
     celestialMode,
+    celestialScaleMode,
     physicalCelestial,
     sunColor: Array.isArray(lights.color) ? lights.color.map(Number) : [1, 0.94, 0.78],
     moonColor: color(worldSky.moonColor ?? settings.moonColor, '#c9d4e4'),

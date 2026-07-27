@@ -142,3 +142,13 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Preserved wide manual Custom ranges while constraining astronomical Physical mode.
 
 The branch remains blocked pending exact packaged Windows visual validation.
+
+## Celestial authoring controls
+
+- Decoupled orbital positioning from visual body scale.
+- Physical mode retains safe angular-size clamps; Artistic mode honors full Sun, Moon, and star sliders while time-driven orbits continue normally.
+- Added numeric authored/rendered readouts so clamping is explicit instead of silent.
+- Added debounced runtime-only preview and persistence for celestial, atmospheric, star, Milky Way, cloud, and weather controls.
+- Added server runtime responses and regression coverage for persistence, scale authority, and UI wiring.
+
+The PR remains draft pending exact packaged Windows and target-PC interaction validation.

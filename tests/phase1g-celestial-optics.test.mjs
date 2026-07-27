@@ -46,12 +46,13 @@ test('solar, night, and twilight factors are continuous functions of interpolate
   assert.ok(partialDisc.sunVisibility > 0 && partialDisc.sunVisibility < 1);
 });
 
-test('astronomical mode constrains destructive presentation without mutating manual Custom ranges', () => {
+test('scale authority constrains physical presentation without coupling it to orbit positioning', () => {
   const lights = { dir: [0, -1, 0], color: [1, 1, 1], exposure: 1 };
   const physical = normalizeEnvironmentState(sceneAtSunElevation(20, {
-    sunSize: 8, moonSize: 24, starSizeMin: 4, starSizeMax: 8, starHeroFraction: 0.8
+    celestialScaleMode: 'physical', sunSize: 8, moonSize: 24, starSizeMin: 4, starSizeMax: 8, starHeroFraction: 0.8
   }), lights, 0);
   assert.equal(physical.celestialMode, 'astronomical');
+  assert.equal(physical.celestialScaleMode, 'physical');
   assert.equal(physical.physicalCelestial, true);
   assert.ok(physical.sunAngularRadius <= 0.2666 * 1.15 + 1e-9);
   assert.ok(physical.moonAngularRadius <= 0.259 * 1.35 + 1e-9);
@@ -59,8 +60,10 @@ test('astronomical mode constrains destructive presentation without mutating man
   assert.ok(physical.starHeroFraction <= 0.008);
 
   const artistic = normalizeEnvironmentState(sceneAtSunElevation(20, {
-    celestialMode: 'manual', sunSize: 8, moonSize: 24, starSizeMax: 8, starHeroFraction: 0.8
+    celestialMode: 'astronomical', celestialScaleMode: 'artistic', sunSize: 8, moonSize: 24, starSizeMax: 8, starHeroFraction: 0.8
   }), lights, 0);
+  assert.equal(artistic.celestialMode, 'astronomical');
+  assert.equal(artistic.celestialScaleMode, 'artistic');
   assert.equal(artistic.physicalCelestial, false);
   assert.ok(artistic.sunAngularRadius > physical.sunAngularRadius);
   assert.ok(artistic.moonAngularRadius > physical.moonAngularRadius);
