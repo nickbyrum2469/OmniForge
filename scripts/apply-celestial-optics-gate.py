@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from celestial_authoring_capture_profiles import apply as apply_authoring_capture_profiles
 from celestial_authoring_controls import apply as apply_authoring
 from celestial_recovery_capture import apply as apply_capture
 from celestial_recovery_followup import apply as apply_followup
@@ -88,9 +89,10 @@ def final_contract_failures() -> list[str]:
     return failures
 
 
-# Install the authoring repair before validating the final renderer/runtime
-# contract so the new independent scale authority is the only accepted state.
+# Install authoring and its exact evidence profiles before validating the final
+# renderer/runtime contract. Both migrations are independently idempotent.
 apply_authoring(ROOT, CHANGED)
+apply_authoring_capture_profiles(ROOT, CHANGED)
 
 initial_failures = final_contract_failures()
 if initial_failures:
