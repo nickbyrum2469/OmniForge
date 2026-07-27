@@ -500,6 +500,12 @@ void main(){
   float twilightSunward=pow(max(dot(horizonDirection,sunHorizonDirection),0.0),3.1);
   vec3 twilightScatter=mix(vec3(0.045,0.07,0.24),vec3(0.72,0.28,0.065),twilightSunward);
   physicalScatter+=twilightScatter*(uOzone*uTwilightFactor*horizon)*0.06;
+  // Preserve readable civil twilight without a bucketed exposure jump. This
+  // continuous lift is strongest along the sunward horizon and fades as either
+  // daylight or full night takes authority.
+  float civilTwilightLift=uTwilightFactor*(1.0-uDayFactor)*(1.0-uNightFactor);
+  vec3 civilTwilightColor=mix(vec3(0.025,0.035,0.09),vec3(0.24,0.075,0.018),twilightSunward);
+  sky+=civilTwilightColor*civilTwilightLift*(0.12+0.28*horizon);
   float lowSunWindow=1.0-smoothstep(0.1,0.46,abs(uSunDirection.y));
   float belowHorizon=clamp(-uSunDirection.y/0.12,0.0,1.0);
   float lowSunAzimuth=exp(-pow(acos(clamp(dot(horizonDirection,sunHorizonDirection),-1.0,1.0))/0.72,2.0));

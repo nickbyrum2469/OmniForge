@@ -120,3 +120,18 @@ test('celestial interpolation predicts continuously across snapshot boundaries',
   assert.ok(predicted > 180 && predicted < 198);
   assert.equal(runtimeInterpolationDiagnostics('predictive-scene').mode, 'continuous-predictive');
 });
+
+test('civil twilight reveals bright stars continuously before full night', () => {
+  const lights = { dir: [0, -1, 0], color: [1, 0.94, 0.78], exposure: 1 };
+  const early = normalizeEnvironmentState(sceneAtSunElevation(-1), lights, 0);
+  const civil = normalizeEnvironmentState(sceneAtSunElevation(-4), lights, 0);
+  const nautical = normalizeEnvironmentState(sceneAtSunElevation(-9), lights, 0);
+  assert.equal(early.starVisibility, 0);
+  assert.ok(civil.starVisibility > 0 && civil.starVisibility < nautical.starVisibility);
+  assert.ok(civil.milkyWayIntensity <= 1e-9);
+  assert.ok(nautical.milkyWayIntensity > civil.milkyWayIntensity);
+
+  const sky = fs.readFileSync(path.join(ROOT, 'app', 'sky-pass.js'), 'utf8');
+  assert.match(sky, /float civilTwilightLift=uTwilightFactor\*\(1\.0-uDayFactor\)\*\(1\.0-uNightFactor\)/);
+  assert.match(sky, /sky\+=civilTwilightColor\*civilTwilightLift\*\(0\.12\+0\.28\*horizon\)/);
+});

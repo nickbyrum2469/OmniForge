@@ -96,6 +96,10 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
   const starDensity = clamp(settings.starDensity ?? worldSky.starDensity ?? 0.55, 0.01, 2);
   const starExtinction = clamp(worldSky.starDaylightExtinction ?? 1.8, 0.1, 8);
   const daylightSuppression = Math.pow(Math.max(0, 1 - dayFactor), starExtinction * 3.2);
+  // Bright stars emerge gradually during civil twilight. The galactic band
+  // remains delayed until nautical twilight so dusk never jumps to full night.
+  const stellarEmergence = 1 - smoothstep(-10, -2, sunElevationDegrees);
+  const galacticEmergence = 1 - smoothstep(-14, -6, sunElevationDegrees);
   const weather = String(settings.weatherPreset || worldWeather.preset || 'clear');
   const weatherDarkening = ({ overcast: 0.18, rain: 0.26, storm: 0.44, snow: 0.1, fog: 0.14 })[weather] || 0;
   const windDirection = settings.windDirection ?? worldWeather.windDirection;
@@ -145,7 +149,7 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
     weatherFog,
     dayFogMultiplier: clamp(worldAtmosphere.dayFogMultiplier ?? 0.12, 0, 2),
     nightFogMultiplier: clamp(worldAtmosphere.nightFogMultiplier ?? 0.3, 0, 2),
-    starVisibility: clamp01(nightFactor * starIntensity * daylightSuppression),
+    starVisibility: clamp01(stellarEmergence * starIntensity * daylightSuppression),
     starDensity,
     starBrightness: clamp(worldSky.starBrightness ?? 0.82, 0, 8),
     starTwinkleAmount: clamp01(worldSky.starTwinkleAmount ?? 0.42),
@@ -164,7 +168,7 @@ export function normalizeEnvironmentState(scene = {}, lights = {}, timeSeconds =
       : clamp01(worldSky.starHeroFraction ?? 0.035),
     starSeed: Number(worldSky.starSeed ?? 1337),
     starDaylightExtinction: starExtinction,
-    milkyWayIntensity: Math.max(0, Number(worldSky.milkyWayIntensity ?? 0.22)) * nightFactor * daylightSuppression,
+    milkyWayIntensity: Math.max(0, Number(worldSky.milkyWayIntensity ?? 0.22)) * galacticEmergence * daylightSuppression,
     milkyWayWidth: clamp(worldSky.milkyWayWidth ?? 0.22, 0.02, 0.8),
     milkyWayDetail: clamp(worldSky.milkyWayDetail ?? 1.15, 0, 3),
     milkyWayOrientation: Number(worldSky.milkyWayOrientation ?? 22),
