@@ -12,6 +12,7 @@ from celestial_recovery_tests import apply as apply_tests
 from celestial_recovery_twilight import apply as apply_twilight
 from celestial_recovery_twilight_final import apply as apply_twilight_final
 from celestial_recovery_twilight_followup import apply as apply_twilight_followup
+from target_pc_terrain_recovery import apply as apply_target_pc_terrain
 
 ROOT = Path(__file__).resolve().parents[1]
 CHANGED: list[str] = []
@@ -58,7 +59,7 @@ def final_contract_failures() -> list[str]:
             "test('celestial interpolation predicts continuously across snapshot boundaries'",
         ],
         'tests/phase1c-visual-projection.test.mjs': [
-            'float moonOcclusionDisc=1\\.0-smoothstep\\(0\\.94,1\\.045,moonRadius\\)',
+            'float moonOcclusionDisc=1\.0-smoothstep\(0\.94,1\.045,moonRadius\)',
             'assert.doesNotMatch(sky, /celestialHorizonMask/);',
         ],
         'tests/phase1-1-world-authoring.test.mjs': [
@@ -95,6 +96,7 @@ def final_contract_failures() -> list[str]:
 prepare_base_test(ROOT, CHANGED)
 apply_authoring(ROOT, CHANGED)
 apply_authoring_capture_profiles(ROOT, CHANGED)
+apply_target_pc_terrain(ROOT, CHANGED)
 
 initial_failures = final_contract_failures()
 if initial_failures:
@@ -150,9 +152,26 @@ if marker not in progress_text:
     )
     CHANGED.append('progress.md')
 
+terrain_marker = '## Target-PC terrain and path surface recovery'
+progress_text = progress.read_text(encoding='utf-8')
+if terrain_marker not in progress_text:
+    progress.write_text(
+        progress_text.rstrip()
+        + '\n\n'
+        + terrain_marker
+        + '\n\n'
+        + '- Added a dense terrain-conforming road surface independent of the capped terrain vertex grid.\n'
+        + '- Preserved analytic terrain cut/fill, picking, physics, and saved spline coordinates.\n'
+        + '- Added target-PC diagnostics when terrain vertex spacing is too coarse for path blending.\n'
+        + '- Kept spline guides as editor overlays while the actual road renders in the opaque world pass.\n\n'
+        + 'The branch remains blocked until the user validates the saved terrain and path on the RX 7900 XTX package.\n',
+        encoding='utf-8',
+    )
+    CHANGED.append('progress.md')
+
 if CHANGED:
-    print('Celestial recovery repair applied.')
+    print('Celestial and target-PC terrain recovery repair applied.')
     for relative in dict.fromkeys(CHANGED):
         print(f'  - {relative}')
 else:
-    print('Celestial recovery repair is idempotent; second pass changed no files.')
+    print('Celestial and target-PC terrain recovery repair is idempotent; second pass changed no files.')
