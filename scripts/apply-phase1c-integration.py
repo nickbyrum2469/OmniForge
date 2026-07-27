@@ -30,10 +30,12 @@ REQUIRED = {
     'server/v010-api.mjs': [
         'visualDurationMs: 1100',
         '.filter(object => Boolean(object.properties?.celestialRole))',
+        'runtime: compactWorldRuntime(result.state)',
     ],
     'server/v010-systems.mjs': [
         "lookPreset: existing.lookPreset || 'clear-day'",
         "celestialMode: 'astronomical'",
+        "celestialScaleMode: 'physical'",
         'moonOrbitPeriodDays: 29.530588',
         "eclipseMode: 'automatic'",
         'dayFogMultiplier:',
@@ -47,7 +49,14 @@ REQUIRED = {
         'v010Haze',
         'v010StarRays',
         'v010MilkyWayWarp',
+        'id="v010CelestialScaleMode"',
+        'id="v010SunSizeValue"',
+        'id="v010MoonSizeValue"',
         'id="v010MoonSize" type="range" min="0.1" max="32"',
+        'data-v010-live-world',
+        'scheduleLiveWorldApply',
+        'runtimeOnly: true',
+        "celestialScaleMode: field('v010CelestialScaleMode').value",
         "lookPreset: options.preservePreset ?",
         "body: JSON.stringify({ seconds: 1 })",
     ],
@@ -89,7 +98,9 @@ REQUIRED = {
         'const twilightRise = smoothstep(-18, -6, sunElevationDegrees)',
         'const dayFactor = sunObject',
         'const twilightFactor = sunObject',
-        "const physicalCelestial = celestialMode === 'astronomical'",
+        "const celestialScaleMode = String(worldSky.celestialScaleMode || 'physical') === 'artistic' ? 'artistic' : 'physical'",
+        "const physicalCelestial = celestialScaleMode === 'physical'",
+        'celestialScaleMode,',
         'starHeroFraction: physicalCelestial',
         'sunVisibility,',
         'moonCraterStrength',
@@ -112,10 +123,15 @@ REQUIRED = {
     ],
     'tests/phase1g-celestial-optics.test.mjs': [
         'solar, night, and twilight factors are continuous functions',
-        'astronomical mode constrains destructive presentation',
+        'scale authority constrains physical presentation',
         'sky compositor removes ray-level slicing',
         'star optics use capped micro, medium, and rare hero classes',
         'celestial interpolation predicts continuously across snapshot boundaries',
+    ],
+    'tests/phase1h-celestial-authoring-controls.test.mjs': [
+        'celestial scale authority is independent from orbital positioning',
+        'world defaults and persistence retain explicit body scale authority',
+        'World panel exposes readable live size controls without replacing the workspace',
     ],
 }
 
@@ -125,8 +141,12 @@ FORBIDDEN = {
         'moonStellarOcclusion=clamp(moonDisc*independentMoonVisibility',
         'float heroRadius=clamp(microRadius*(1.45+sizeRandom*0.65),0.72,2.05)',
     ],
+    'app/environment-runtime.js': [
+        "const physicalCelestial = celestialMode === 'astronomical'",
+    ],
     'tests/phase1g-celestial-optics.test.mjs': [
         'sunDisc=.*uSunVisibility\\*celestialHorizonMask',
+        'astronomical mode constrains destructive presentation',
     ],
 }
 
