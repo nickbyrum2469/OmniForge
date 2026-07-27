@@ -133,5 +133,5 @@ test('civil twilight reveals bright stars continuously before full night', () =>
 
   const sky = fs.readFileSync(path.join(ROOT, 'app', 'sky-pass.js'), 'utf8');
   assert.match(sky, /float civilTwilightLift=uTwilightFactor\*\(1\.0-uDayFactor\)\*\(1\.0-uNightFactor\)/);
-  assert.match(sky, /sky\+=civilTwilightColor\*civilTwilightLift\*\(0\.12\+0\.28\*horizon\)/);
+  assert.match(sky, /sky\+=civilTwilightColor\*civilTwilightLift\*\(0\.14\+0\.36\*horizon\)/);
 });
