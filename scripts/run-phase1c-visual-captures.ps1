@@ -97,7 +97,11 @@ function Get-StateHash([hashtable]$Body){
 }
 
 $captureSkyDefaults=@{
+  # These deterministic evidence profiles intentionally enlarge celestial bodies
+  # for Moon/eclipses and therefore declare Artistic scale explicitly. Runtime
+  # product defaults remain Physical unless the author selects Artistic mode.
   celestialMode='manual'
+  celestialScaleMode='artistic'
   sunAzimuth=-90;sunElevation=45;sunSize=1;sunGlow=.38
   moonAzimuth=90;moonElevation=32;moonSize=1.25;moonPhase=.72;moonPhaseMode='sun-relative'
   moonBrightness=.92;moonGlow=.22;moonDetail=1.45;moonColor='#c9d4e4';moonEarthshine=.08

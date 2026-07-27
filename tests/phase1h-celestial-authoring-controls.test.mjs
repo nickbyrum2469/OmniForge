@@ -74,3 +74,10 @@ test('World panel exposes readable live size controls without replacing the work
   assert.match(css, /\.v010-control-value/);
   assert.match(api, /runtime: compactWorldRuntime\(result\.state\)/);
 });
+
+test('packaged visual profiles declare artistic body scale explicitly', () => {
+  const capture = fs.readFileSync(path.join(ROOT, 'scripts', 'run-phase1c-visual-captures.ps1'), 'utf8');
+  assert.match(capture, /\$captureSkyDefaults=@\{[\s\S]*celestialMode='manual'[\s\S]*celestialScaleMode='artistic'/);
+  assert.match(capture, /moonSize=1\.25/);
+  assert.match(capture, /starSizeMin=\.36;starSizeMax=1\.55/);
+});
