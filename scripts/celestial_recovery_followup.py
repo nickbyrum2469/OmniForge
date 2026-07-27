@@ -85,3 +85,19 @@ def apply(root: Path, changed: list[str]) -> None:
         root,
         'single-line hero-radius regex',
     )
+
+    integration = root / 'scripts/apply-phase1c-integration.py'
+    _replace_once(
+        integration,
+        """        'const dayFactor = smoothstep(-6, 8, sunElevationDegrees)',
+        'const nightFactor = 1 - smoothstep(-12, -4, sunElevationDegrees)',
+        'const twilightRise = smoothstep(-18, -6, sunElevationDegrees)',""",
+        """        'const derivedDayFactor = smoothstep(-6, 8, sunElevationDegrees)',
+        'const derivedNightFactor = 1 - smoothstep(-12, -4, sunElevationDegrees)',
+        'const twilightRise = smoothstep(-18, -6, sunElevationDegrees)',
+        'const dayFactor = sunObject',
+        'const twilightFactor = sunObject',""",
+        changed,
+        root,
+        'continuous-factor source validator',
+    )
