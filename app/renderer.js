@@ -4,7 +4,7 @@ import {
   transformPoint, modelMatrix, normalMatrix3, hexToRgb, cameraForward
 } from './math.js';
 import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, samplePathSpline, normalizeTerrainProperties, normalizePathProperties, terrainBounds } from './worldgen.js';
-import { buildPathGuideSegments } from './path-visuals.js';
+import { buildPathGuideSegments, buildTerrainConformingPathSurface, terrainPathSamplingDiagnostics } from './path-visuals.js';
 import { resolveViewportLighting } from './world-runtime.js';
 import { normalizeEnvironmentState } from './environment-runtime.js';
 import { SkyPass } from './sky-pass.js';
@@ -494,7 +494,7 @@ export class Renderer3D{
     canvas.addEventListener('webglcontextlost',this.boundContextLost,false);canvas.addEventListener('webglcontextrestored',this.boundContextRestored,false);
     this.meshProgram=program(gl,meshVS,meshFS);this.depthProgram=program(gl,depthVS,depthFS);this.lineProgram=program(gl,lineVS,lineFS);this.skyPass=null;try{this.skyPass=new SkyPass(gl);}catch(error){console.error('Renderer-owned sky initialization failed; using the opaque environment fallback.',error);window.__omniforgeDiagnostics?.warn?.('sky-pass-initialization-failed',{message:error.message});}
     this.staticMeshes={cube:createBufferMesh(gl,cubeMesh()),plane:createBufferMesh(gl,planeMesh()),sphere:createBufferMesh(gl,sphereMesh()),cylinder:createBufferMesh(gl,cylinderMesh())};
-    this.dynamic=new Map();this.pathLines=new Map();this.textureCache=new Map();this.instanceBuffers=new Set();this.renderStart=performance.now();this.assets=[];this.modelMeshes=new Map();this.modelLoads=new Map();this.modelRevisions=new Map();this.modelLoadRevisions=new Map();this.grid=null;this.gridKey='';this.selectionBox=createLineBuffer(gl,this.boxLines());this.whiteTexture=this.createSolidTexture([255,255,255,255]);this.flatNormalTexture=this.createSolidTexture([128,128,255,255]);
+    this.dynamic=new Map();this.pathLines=new Map();this.pathSurfaces=new Map();this.lastTerrainSamplingDiagnostics=null;this.terrainSamplingWarningSignature='';this.textureCache=new Map();this.instanceBuffers=new Set();this.renderStart=performance.now();this.assets=[];this.modelMeshes=new Map();this.modelLoads=new Map();this.modelRevisions=new Map();this.modelLoadRevisions=new Map();this.grid=null;this.gridKey='';this.selectionBox=createLineBuffer(gl,this.boxLines());this.whiteTexture=this.createSolidTexture([255,255,255,255]);this.flatNormalTexture=this.createSolidTexture([128,128,255,255]);
     this.createShadowResources(2048);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.disable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     this.renderGraph=this.createRenderGraph();
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(canvas);this.resize();
@@ -583,6 +583,22 @@ export class Renderer3D{
     if(cached){for(const item of [cached.center,cached.edges])if(item){this.gl.deleteVertexArray(item.vao);this.gl.deleteBuffer(item.buffer);}}
     const data=pathLineData(pathObject,terrain,scene.objects.filter(object=>object.type==='path'&&object.visible!==false)),next={signature,center:createLineBuffer(this.gl,data.center),edges:createLineBuffer(this.gl,data.edges)};this.pathLines.set(pathObject.id,next);return next;
   }
+  pathSurfaceFor(pathObject,scene){
+    const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false),paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);
+    if(!terrain)return null;
+    const signature=JSON.stringify([pathObject.properties,pathObject.transform,terrain.properties,terrain.transform,paths.map(path=>[path.id,path.properties,path.transform])]),cached=this.pathSurfaces.get(pathObject.id);
+    if(cached?.signature===signature)return cached.mesh;
+    if(cached){for(const buffer of cached.mesh.buffers||[])this.gl.deleteBuffer(buffer);this.gl.deleteVertexArray(cached.mesh.vao);}
+    const data=buildTerrainConformingPathSurface(pathObject,terrain,paths);if(!data.indices.length)return null;
+    const mesh=createBufferMesh(this.gl,data);this.pathSurfaces.set(pathObject.id,{signature,mesh});return mesh;
+  }
+  updateTerrainSamplingDiagnostics(scene){
+    const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false),paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);
+    const diagnostics=terrainPathSamplingDiagnostics(terrain,paths);this.lastTerrainSamplingDiagnostics=diagnostics;
+    const signature=JSON.stringify(diagnostics);
+    if(diagnostics.undersampled&&signature!==this.terrainSamplingWarningSignature){this.terrainSamplingWarningSignature=signature;window.__omniforgeDiagnostics?.warn?.('terrain-path-grid-undersampled',diagnostics);}
+    return diagnostics;
+  }
   cameraMatrices(camera){const forward=cameraForward(camera),target=add(camera.position,forward),view=mat4LookAt(camera.position,target),proj=mat4Perspective((camera.fov||62)*DEG,this.canvas.width/this.canvas.height,.08,12000),viewProj=mat4Multiply(proj,view);return {view,proj,viewProj,inverse:mat4Invert(viewProj)};}
   worldToScreen(camera,point){const rect=this.canvas.getBoundingClientRect(),{viewProj}=this.cameraMatrices(camera),x=point[0],y=point[1],z=point[2],cx=viewProj[0]*x+viewProj[4]*y+viewProj[8]*z+viewProj[12],cy=viewProj[1]*x+viewProj[5]*y+viewProj[9]*z+viewProj[13],cz=viewProj[2]*x+viewProj[6]*y+viewProj[10]*z+viewProj[14],cw=viewProj[3]*x+viewProj[7]*y+viewProj[11]*z+viewProj[15];if(cw<=.001)return {visible:false,x:0,y:0};const nx=cx/cw,ny=cy/cw;return {visible:cz/cw>=-1&&cz/cw<=1&&nx>=-1.2&&nx<=1.2&&ny>=-1.2&&ny<=1.2,x:(nx*.5+.5)*rect.width,y:(1-(ny*.5+.5))*rect.height};}
   terrainHeightForScene(scene,x,z){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false),paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);return terrainHeight(terrain,x,z,paths);}
@@ -607,9 +623,9 @@ export class Renderer3D{
     for(const object of scene.objects){if(!object.visible||['empty','path','directionalLight','pointLight'].includes(object.type)||object.properties?.castsShadows===false||(options.hideEditorReferences&&isEditorReference(object)))continue;const mesh=this.meshFor(object,scene);if(!mesh)continue;gl.bindVertexArray(mesh.vao);gl.uniformMatrix4fv(gl.getUniformLocation(this.depthProgram,'uModel'),false,modelMatrix(object.transform));gl.drawElements(gl.TRIANGLES,mesh.count,mesh.indexType,0);}
     gl.bindVertexArray(null);gl.cullFace(gl.BACK);gl.colorMask(true,true,true,true);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);
   }
-  drawMesh(object,mesh,viewProj,lightViewProj,scene,selected,camera,lights,instances=null){
+  drawMesh(object,mesh,viewProj,lightViewProj,scene,selected,camera,lights,instances=null,materialPath=null){
     const gl=this.gl,p=this.meshProgram;gl.useProgram(p);gl.bindVertexArray(mesh.vao);const instanced=Array.isArray(instances)&&instances.length>0;let transform=object.transform;if(object.type==='directionalLight'||object.type==='pointLight')transform={...object.transform,scale:[.7,.7,.7]};const model=instanced?mat4Identity():modelMatrix(transform);
-    const firstPath=scene.objects.find(o=>o.type==='path'&&o.visible),baseAsset=this.materialAsset(object.properties?.materialId),pathAsset=this.materialAsset(firstPath?.properties?.materialId),baseRecipe=this.surfaceRecipeForMaterial(baseAsset),pathRecipe=this.surfaceRecipeForMaterial(pathAsset);
+    const firstPath=materialPath||scene.objects.find(o=>o.type==='path'&&o.visible),baseAsset=this.materialAsset(materialPath?.properties?.materialId||object.properties?.materialId),pathAsset=this.materialAsset(firstPath?.properties?.materialId),baseRecipe=this.surfaceRecipeForMaterial(baseAsset),pathRecipe=this.surfaceRecipeForMaterial(pathAsset);
     const baseMaps={baseColor:this.textureFor(baseAsset,'baseColor'),normal:this.textureFor(baseAsset,'normal'),roughness:this.textureFor(baseAsset,'roughness'),ao:this.textureFor(baseAsset,'ambientOcclusion'),height:this.textureFor(baseAsset,'height')};
     const pathMaps={baseColor:this.textureFor(pathAsset,'baseColor'),normal:this.textureFor(pathAsset,'normal'),roughness:this.textureFor(pathAsset,'roughness'),ao:this.textureFor(pathAsset,'ambientOcclusion'),height:this.textureFor(pathAsset,'height')};
     const setM4=(name,value)=>gl.uniformMatrix4fv(gl.getUniformLocation(p,name),false,value),set3=(name,value)=>gl.uniform3fv(gl.getUniformLocation(p,name),value),set1=(name,value)=>gl.uniform1f(gl.getUniformLocation(p,name),value);
@@ -716,10 +732,19 @@ export class Renderer3D{
       if(transparent){gl.enable(gl.BLEND);gl.depthMask(false);}
       if(object.type==='decal'){gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);}
       this.drawMesh(object,mesh,viewProj,lightViewProj,scene,object.id===selectedId,camera,lights);
+      if(object.type==='terrain')this.renderPathSurfacePass(frame);
       if(object.type==='decal'){gl.disable(gl.POLYGON_OFFSET_FILL);gl.enable(gl.CULL_FACE);}
       if(transparent){gl.disable(gl.BLEND);gl.depthMask(true);}
     }
     for(const instances of foliageGroups.values()){const object=instances[0],mesh=this.meshFor(object,scene);if(mesh)this.drawMesh(object,mesh,viewProj,lightViewProj,scene,false,camera,lights,instances);}
+  }
+  renderPathSurfacePass(frame){
+    const {gl,scene,camera,viewProj,lightViewProj,lights}=frame;
+    const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return;
+    const paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);if(!paths.length)return;
+    gl.disable(gl.BLEND);gl.depthMask(true);gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-1,-1);
+    for(const pathObject of paths){const mesh=this.pathSurfaceFor(pathObject,scene);if(!mesh)continue;const proxy={id:`path-surface:${pathObject.id}`,type:'terrain',visible:true,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},properties:{...pathObject.properties,color:pathObject.properties?.color||'#73573d',opacity:1,castsShadows:false}};this.drawMesh(proxy,mesh,viewProj,lightViewProj,scene,false,camera,lights,null,pathObject);}
+    gl.disable(gl.POLYGON_OFFSET_FILL);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
   }
   renderEditorOverlayPass(frame){
     const {gl,scene,camera,selectedId,viewProj}=frame;
@@ -755,7 +780,7 @@ export class Renderer3D{
     window.__omniforgeDiagnostics?.event?.('webgl-context-restored',{recoveryMode:this.capabilities.contextRecoveryMode,contextGeneration:this.frameResources.contextGeneration});
     setTimeout(()=>globalThis.location?.reload?.(),0);
   }
-  getRenderDiagnostics(){return {capabilities:this.capabilities,frameResources:this.frameResources.snapshot(),hdrPipeline:this.hdrPipeline.snapshot(),renderGraph:this.renderGraph.diagnosticsSnapshot(),lastFrameReport:this.lastFrameReport};}
+  getRenderDiagnostics(){return {capabilities:this.capabilities,frameResources:this.frameResources.snapshot(),hdrPipeline:this.hdrPipeline.snapshot(),renderGraph:this.renderGraph.diagnosticsSnapshot(),lastFrameReport:this.lastFrameReport,terrainSampling:this.lastTerrainSamplingDiagnostics,pathSurfaceCount:this.pathSurfaces.size};}
   dispose(){
     this.resizeObserver?.disconnect?.();this.canvas.removeEventListener('webglcontextlost',this.boundContextLost,false);this.canvas.removeEventListener('webglcontextrestored',this.boundContextRestored,false);this.renderGraph?.dispose?.();this.hdrPipeline?.dispose?.();
   }
@@ -765,6 +790,7 @@ export class Renderer3D{
     this.resize();this.frameCounter+=1;
     const gl=this.gl,{viewProj}=this.cameraMatrices(camera),lights=this.lightState(scene,options.editorMode||'edit',options.hideEditorReferences?'game-accurate':options.viewportLightingMode),lightViewProj=this.lightMatrix(scene,lights);
     const environment=normalizeEnvironmentState(scene,lights,(performance.now()-this.renderStart)/1000);
+    this.updateTerrainSamplingDiagnostics(scene);
     lights.environment=environment;lights.moonDir=environment.moonDirection;lights.moonColor=environment.moonColor;lights.moonIntensity=environment.moonLightIntensity;
     const foliageGroups=this.foliageGroups(scene,camera),foliageIds=new Set([...foliageGroups.values()].flat().map(item=>item.id));
     const frameResources=this.frameResources.beginFrame(this.frameCounter);

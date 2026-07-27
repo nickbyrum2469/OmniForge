@@ -152,3 +152,12 @@ The branch remains blocked pending exact packaged Windows visual validation.
 - Added server runtime responses and regression coverage for persistence, scale authority, and UI wiring.
 
 The PR remains draft pending exact packaged Windows and target-PC interaction validation.
+
+## Target-PC terrain and path surface recovery
+
+- Added a dense terrain-conforming road surface independent of the capped terrain vertex grid.
+- Preserved analytic terrain cut/fill, picking, physics, and saved spline coordinates.
+- Added target-PC diagnostics when terrain vertex spacing is too coarse for path blending.
+- Kept spline guides as editor overlays while the actual road renders in the opaque world pass.
+
+The branch remains blocked until the user validates the saved terrain and path on the RX 7900 XTX package.
