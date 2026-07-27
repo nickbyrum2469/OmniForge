@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from celestial_recovery_followup import apply as apply_followup
 from celestial_recovery_runtime import apply as apply_runtime
 from celestial_recovery_sky import apply as apply_sky
 from celestial_recovery_tests import apply as apply_tests
@@ -12,6 +13,7 @@ CHANGED: list[str] = []
 apply_runtime(ROOT, CHANGED)
 apply_sky(ROOT, CHANGED)
 apply_tests(ROOT, CHANGED)
+apply_followup(ROOT, CHANGED)
 
 progress = ROOT / 'progress.md'
 progress_text = progress.read_text(encoding='utf-8')
