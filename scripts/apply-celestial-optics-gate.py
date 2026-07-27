@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from celestial_authoring_controls import apply as apply_authoring
 from celestial_recovery_capture import apply as apply_capture
 from celestial_recovery_followup import apply as apply_followup
 from celestial_recovery_runtime import apply as apply_runtime
@@ -42,7 +43,8 @@ def final_contract_failures() -> list[str]:
             'const derivedNightFactor = 1 - smoothstep(-12, -4, sunElevationDegrees);',
             'const derivedTwilightFactor = clamp01(twilightRise * twilightFall);',
             "const celestialMode = String(worldSky.celestialMode || 'astronomical');",
-            'const physicalCelestial = celestialMode === \'astronomical\';',
+            "const celestialScaleMode = String(worldSky.celestialScaleMode || 'physical') === 'artistic' ? 'artistic' : 'physical';",
+            "const physicalCelestial = celestialScaleMode === 'physical';",
         ],
         'app/world-runtime.js': [
             'const predictiveAmount = value => Math.max(0, Math.min(2.25, Number(value) || 0));',
@@ -85,6 +87,10 @@ def final_contract_failures() -> list[str]:
                 failures.append(f'{relative_path}: rejected marker remains: {marker}')
     return failures
 
+
+# Install the authoring repair before validating the final renderer/runtime
+# contract so the new independent scale authority is the only accepted state.
+apply_authoring(ROOT, CHANGED)
 
 initial_failures = final_contract_failures()
 if initial_failures:
