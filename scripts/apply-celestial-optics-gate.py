@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from celestial_authoring_capture_profiles import apply as apply_authoring_capture_profiles
+from celestial_authoring_capture_profiles import apply as apply_authoring_capture_profiles, prepare_base_test
 from celestial_authoring_controls import apply as apply_authoring
 from celestial_recovery_capture import apply as apply_capture
 from celestial_recovery_followup import apply as apply_followup
@@ -89,8 +89,10 @@ def final_contract_failures() -> list[str]:
     return failures
 
 
-# Install authoring and its exact evidence profiles before validating the final
-# renderer/runtime contract. Both migrations are independently idempotent.
+# The original authoring migration owns the baseline regression file. Temporarily
+# remove only known later extensions, validate the baseline, then restore them.
+# The complete second pass remains byte-identical.
+prepare_base_test(ROOT, CHANGED)
 apply_authoring(ROOT, CHANGED)
 apply_authoring_capture_profiles(ROOT, CHANGED)
 
