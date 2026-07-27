@@ -102,10 +102,19 @@ if initial_failures:
 else:
     print('Celestial recovery final source contract already present; no source migration required.')
 
-# Follow-up quality and evidence migrations are independently idempotent.
-apply_twilight(ROOT, CHANGED)
-apply_twilight_followup(ROOT, CHANGED)
-apply_twilight_final(ROOT, CHANGED)
+# Apply only the exact next twilight migration. Historical migrations are never
+# replayed over a later calibrated block, so the second validation pass is a no-op.
+sky_source = source('app/sky-pass.js')
+environment_source = source('app/environment-runtime.js')
+if 'const stellarEmergence =' not in environment_source or 'float civilTwilightLift=' not in sky_source:
+    apply_twilight(ROOT, CHANGED)
+    sky_source = source('app/sky-pass.js')
+if 'sky+=civilTwilightColor*civilTwilightLift*(0.12+0.28*horizon);' in sky_source:
+    apply_twilight_followup(ROOT, CHANGED)
+    sky_source = source('app/sky-pass.js')
+if 'sky+=civilTwilightColor*civilTwilightLift*(0.14+0.36*horizon);' in sky_source:
+    apply_twilight_final(ROOT, CHANGED)
+
 apply_capture(ROOT, CHANGED)
 
 progress = ROOT / 'progress.md'
