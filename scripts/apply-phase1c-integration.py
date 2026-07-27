@@ -121,6 +121,12 @@ REQUIRED = {
         "'total-eclipse-realistic'",
         "id: 'custom'",
     ],
+    'scripts/run-phase1c-visual-captures.ps1': [
+        "celestialMode='manual'",
+        "celestialScaleMode='artistic'",
+        "moonSize=1.25",
+        "starSizeMin=.36;starSizeMax=1.55",
+    ],
     'tests/phase1g-celestial-optics.test.mjs': [
         'solar, night, and twilight factors are continuous functions',
         'scale authority constrains physical presentation',
@@ -132,6 +138,7 @@ REQUIRED = {
         'celestial scale authority is independent from orbital positioning',
         'world defaults and persistence retain explicit body scale authority',
         'World panel exposes readable live size controls without replacing the workspace',
+        'packaged visual profiles declare artistic body scale explicitly',
     ],
 }
 
