@@ -7,6 +7,7 @@ from celestial_recovery_followup import apply as apply_followup
 from celestial_recovery_runtime import apply as apply_runtime
 from celestial_recovery_sky import apply as apply_sky
 from celestial_recovery_tests import apply as apply_tests
+from celestial_recovery_twilight import apply as apply_twilight
 
 ROOT = Path(__file__).resolve().parents[1]
 CHANGED: list[str] = []
@@ -99,8 +100,8 @@ if initial_failures:
 else:
     print('Celestial recovery final source contract already present; no source migration required.')
 
-# The packaged evidence harness is part of the gate and must also be idempotent.
-# It does not alter renderer behavior or relax visual acceptance metrics.
+# Follow-up quality and evidence migrations are independently idempotent.
+apply_twilight(ROOT, CHANGED)
 apply_capture(ROOT, CHANGED)
 
 progress = ROOT / 'progress.md'
@@ -119,6 +120,7 @@ if marker not in progress_text:
         + '- Derived day, night, and twilight continuously from interpolated solar elevation.\n'
         + '- Added predictive spherical interpolation across compact runtime snapshot intervals.\n'
         + '- Preserved wide manual Custom ranges while constraining astronomical Physical mode.\n'
+        + '- Added gradual civil-twilight star emergence and delayed Milky Way emergence.\n'
         + '- Added bounded capture retries and health checks for exact packaged evidence.\n\n'
         + 'The branch remains blocked pending exact packaged Windows visual validation.\n',
         encoding='utf-8',
