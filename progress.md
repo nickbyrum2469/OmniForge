@@ -161,3 +161,13 @@ The PR remains draft pending exact packaged Windows and target-PC interaction va
 - Kept spline guides as editor overlays while the actual road renders in the opaque world pass.
 
 The branch remains blocked until the user validates the saved terrain and path on the RX 7900 XTX package.
+
+## Pathway Studio engineering corridor gate
+
+- Replaced the two-edge ribbon with a nine-band crowned roadbed, shoulders, drainage, side slopes, and terrain seams.
+- Added grade limits, vertical smoothing, banking, curve-radius diagnostics, and scale-aware depth lift.
+- Added trail, dirt, gravel, paved, mountain, highway, and fantasy-stone presets.
+- Added live Pathway Studio controls and bridge, tunnel, and retaining-wall recommendations.
+- Added route telemetry for target-PC proof instead of relying on editor spline visibility.
+
+The branch remains blocked until the exact Windows package is tested against the user's saved terrain on the RX 7900 XTX.

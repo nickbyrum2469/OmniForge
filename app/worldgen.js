@@ -271,11 +271,39 @@ export function normalizePathProperties(properties = {}, transform = {}) {
     width: clamp(properties.width ?? 3, 0.1, 200),
     blendDistance: clamp(properties.blendDistance ?? 2.5, 0.05, 200),
     edgeNoise: clamp(properties.edgeNoise ?? 0.45, 0, 5),
-    carveTerrain: Boolean(properties.carveTerrain),
+    carveTerrain: properties.carveTerrain !== false,
+    conformToTerrain: properties.conformToTerrain !== false,
+    collider: properties.collider !== false,
+    navigation: properties.navigation !== false,
+    pathPreset: String(properties.pathPreset || 'dirtRoad'),
+    roadClass: String(properties.roadClass || 'rural'),
+    laneCount: Math.round(clamp(properties.laneCount ?? 2, 1, 12)),
+    laneWidth: clamp(properties.laneWidth ?? 2.4, 0.5, 8),
+    shoulderWidth: clamp(properties.shoulderWidth ?? 0.9, 0, 20),
+    shoulderDrop: clamp(properties.shoulderDrop ?? 0.08, 0, 2),
+    crownHeight: clamp(properties.crownHeight ?? 0.08, -1, 2),
     maxGradePercent: clamp(properties.maxGradePercent ?? 12, 0.1, 100),
+    profileSmoothingPasses: Math.round(clamp(properties.profileSmoothingPasses ?? 4, 0, 16)),
+    verticalCurveStrength: clamp(properties.verticalCurveStrength ?? 0.62, 0, 1),
+    minimumCurveRadius: clamp(properties.minimumCurveRadius ?? 10, 0.5, 10000),
+    designSpeedKph: clamp(properties.designSpeedKph ?? 30, 1, 250),
+    bankMode: ['auto', 'manual', 'none'].includes(properties.bankMode) ? properties.bankMode : 'auto',
+    bankStrength: clamp(properties.bankStrength ?? 0.55, 0, 1.5),
+    maxBankDegrees: clamp(properties.maxBankDegrees ?? 7, 0, 30),
+    manualBankDegrees: clamp(properties.manualBankDegrees ?? 0, -30, 30),
     maxCutDepth: clamp(properties.maxCutDepth ?? 6, 0, 1000),
     maxFillDepth: clamp(properties.maxFillDepth ?? 2.5, 0, 1000),
     cutShoulder: clamp(properties.cutShoulder ?? properties.blendDistance ?? 3, 0.1, 200),
+    sideSlopeWidth: clamp(properties.sideSlopeWidth ?? properties.cutShoulder ?? 3.4, 0.2, 200),
+    drainageEnabled: properties.drainageEnabled !== false,
+    ditchDepth: clamp(properties.ditchDepth ?? 0.22, 0, 5),
+    bridgeThreshold: clamp(properties.bridgeThreshold ?? 5, 0, 1000),
+    tunnelThreshold: clamp(properties.tunnelThreshold ?? 8, 0, 1000),
+    retainingWallThreshold: clamp(properties.retainingWallThreshold ?? 3.5, 0, 1000),
+    meshSpacing: clamp(properties.meshSpacing ?? 0.55, 0.15, 5),
+    textureRepeatLength: clamp(properties.textureRepeatLength ?? 5, 0.25, 100),
+    renderLiftMode: properties.renderLiftMode === 'manual' ? 'manual' : 'auto',
+    renderLift: clamp(properties.renderLift ?? 0.028, 0.006, 0.25),
     surfaceOffset: Number(properties.surfaceOffset ?? 0.03),
     profileRevision: Number(properties.profileRevision || 1)
   };
@@ -342,7 +370,25 @@ const profileCache = new WeakMap();
 function profileSignature(pathObject, terrain) {
   const p = normalizePathProperties(pathObject.properties || {}, pathObject.transform || {});
   const t = normalizeTerrainProperties(terrain.properties || {}, terrain.transform || {});
-  return JSON.stringify([p.points, p.spline, p.splineTension, p.samplesPerSegment, p.maxGradePercent, p.surfaceOffset, p.profileRevision, t.seed, t.height, t.macroScale, t.detailScale, t.bounds, t.generatedRevision]);
+  return JSON.stringify([
+    p.points, p.spline, p.splineTension, p.samplesPerSegment, p.meshSpacing,
+    p.maxGradePercent, p.profileSmoothingPasses, p.verticalCurveStrength,
+    p.maxCutDepth, p.maxFillDepth, p.surfaceOffset, p.profileRevision,
+    t.seed, t.height, t.macroScale, t.detailScale, t.bounds, t.generatedRevision
+  ]);
+}
+
+function enforceProfileGrade(profile, maximumGrade) {
+  for (let index = 1; index < profile.length; index += 1) {
+    const previous = profile[index - 1], current = profile[index];
+    const distance = Math.max(EPSILON, Math.hypot(current.x - previous.x, current.z - previous.z));
+    current.y = clamp(current.y, previous.y - distance * maximumGrade, previous.y + distance * maximumGrade);
+  }
+  for (let index = profile.length - 2; index >= 0; index -= 1) {
+    const next = profile[index + 1], current = profile[index];
+    const distance = Math.max(EPSILON, Math.hypot(current.x - next.x, current.z - next.z));
+    current.y = clamp(current.y, next.y - distance * maximumGrade, next.y + distance * maximumGrade);
+  }
 }
 
 export function compilePathProfile(pathObject, terrain) {
@@ -351,18 +397,28 @@ export function compilePathProfile(pathObject, terrain) {
   const cached = profileCache.get(pathObject);
   if (cached?.signature === signature) return cached.profile;
   const properties = normalizePathProperties(pathObject.properties || {}, pathObject.transform || {});
-  const samples = samplePathSpline(pathObject, { spacing: Math.max(0.5, Number(properties.width || 3) * 0.32) });
-  const profile = samples.map(sample => ({ ...sample, y: terrainBaseHeightAt(terrain, sample.x, sample.z) + properties.surfaceOffset }));
-  const grade = properties.maxGradePercent / 100;
-  for (let index = 1; index < profile.length; index += 1) {
-    const previous = profile[index - 1], current = profile[index];
-    const distance = Math.max(EPSILON, Math.hypot(current.x - previous.x, current.z - previous.z));
-    current.y = clamp(current.y, previous.y - distance * grade, previous.y + distance * grade);
+  const samples = samplePathSpline(pathObject, { spacing: properties.meshSpacing });
+  let accumulatedDistance = 0;
+  const profile = samples.map((sample, index) => {
+    if (index > 0) accumulatedDistance += Math.hypot(sample.x - samples[index - 1].x, sample.z - samples[index - 1].z);
+    const baseY = terrainBaseHeightAt(terrain, sample.x, sample.z);
+    return { ...sample, distance: accumulatedDistance, baseY, y: baseY + properties.surfaceOffset };
+  });
+  const maximumGrade = properties.maxGradePercent / 100;
+  enforceProfileGrade(profile, maximumGrade);
+  for (let pass = 0; pass < properties.profileSmoothingPasses; pass += 1) {
+    const source = profile.map(point => point.y);
+    for (let index = 1; index < profile.length - 1; index += 1) {
+      const target = (source[index - 1] + source[index] * 2 + source[index + 1]) * 0.25;
+      const smoothed = lerp(source[index], target, properties.verticalCurveStrength);
+      profile[index].y = clamp(smoothed, profile[index].baseY - properties.maxCutDepth, profile[index].baseY + properties.maxFillDepth);
+    }
+    enforceProfileGrade(profile, maximumGrade);
   }
-  for (let index = profile.length - 2; index >= 0; index -= 1) {
-    const next = profile[index + 1], current = profile[index];
-    const distance = Math.max(EPSILON, Math.hypot(current.x - next.x, current.z - next.z));
-    current.y = clamp(current.y, next.y - distance * grade, next.y + distance * grade);
+  for (let index = 0; index < profile.length; index += 1) {
+    const previous = profile[Math.max(0, index - 1)], next = profile[Math.min(profile.length - 1, index + 1)];
+    const horizontal = Math.max(EPSILON, Math.hypot(next.x - previous.x, next.z - previous.z));
+    profile[index].gradePercent = ((next.y - previous.y) / horizontal) * 100;
   }
   profileCache.set(pathObject, { signature, profile });
   return profile;
@@ -384,10 +440,11 @@ export function pathBlendAt(paths, x, z) {
     const properties = normalizePathProperties(pathObject.properties || {}, pathObject.transform || {});
     const nearest = nearestPathPoint(pathObject, x, z);
     const width = Math.max(0.1, Number(properties.width || 3));
+    const roadAndShoulder = width * 0.5 + Math.max(0, Number(properties.shoulderWidth || 0));
     const shoulder = Math.max(0.05, Number(properties.blendDistance ?? 2.5));
     const irregularity = Number(properties.edgeNoise ?? 0.45);
     const noise = valueNoise(x * 0.19, z * 0.19, Number(properties.seed || 17)) * irregularity * 0.34;
-    const blend = 1 - smoothstep(width * 0.5 + noise, width * 0.5 + shoulder + noise, nearest.distance);
+    const blend = 1 - smoothstep(roadAndShoulder + noise, roadAndShoulder + shoulder + noise, nearest.distance);
     result = Math.max(result, blend);
   }
   return clamp(result, 0, 1);
@@ -412,7 +469,11 @@ export function terrainHeightAt(terrain, x, z, paths = []) {
     const profile = compilePathProfile(pathObject, terrain);
     const nearest = nearestProfilePoint(profile, x, z);
     const width = Math.max(0.1, Number(properties.width || 3));
-    const shoulder = Math.max(0.1, Number(properties.cutShoulder || properties.blendDistance || 3));
+    const shoulder = Math.max(
+      0.1,
+      Number(properties.cutShoulder || properties.blendDistance || 3),
+      Number(properties.shoulderWidth || 0) + Number(properties.sideSlopeWidth || 0)
+    );
     const influence = 1 - smoothstep(width * 0.5, width * 0.5 + shoulder, nearest.distance);
     if (influence <= 0) continue;
     const target = clamp(nearest.y, height - properties.maxCutDepth, height + properties.maxFillDepth);

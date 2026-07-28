@@ -3,6 +3,7 @@ import { add, sub, scale, length, normalize, clamp, cameraForward, cameraRight }
 import { cloneCamera, shouldPreserveViewportCamera } from './viewport-state.js';
 import { createLookInputState, beginLookInputSession, endLookInputSession, applyLookDelta } from './viewport-navigation.js';
 import { RenderCrashGuard, sanitizeCameraState } from './render-crash-guard.js';
+import { applyPathwayPreset, renderPathwayInspector } from './pathway-studio.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -503,7 +504,7 @@ function objectPropertiesHtml(object) {
   const p=object.properties || {};
   if (['box','sphere','cylinder','plane'].includes(object.type)) return materialSelect(p.materialId)+propColor('Material color','color',p.color)+propNumber('Metallic','metallic',p.metallic||0,'0.01',0,1)+propNumber('Roughness','roughness',p.roughness??.7,'0.01',0,1)+propCheck('Cast shadows','castsShadows',p.castsShadows!==false)+propCheck('Receive shadows','receivesShadows',p.receivesShadows!==false)+propCheck('Collision','collider',p.collider!==false);
   if (object.type==='terrain') return materialSelect(p.materialId)+propColor('Fallback color','color',p.color)+propNumber('Mesh resolution','resolution',p.resolution||128,'1',8,256)+propCheck('Receive shadows','receivesShadows',p.receivesShadows!==false)+propCheck('Collision','collider',p.collider!==false)+`<div class="surface-blend-callout"><strong>Stable world bounds</strong><p>Terrain scale is locked. Use the v0.11 Terrain Generator below to change landforms or expand north, south, east, west, or all directions without stretching paths.</p></div>`;
-  if (object.type==='path') return materialSelect(p.materialId)+propColor('Fallback color','color',p.color)+propNumber('Path width','width',p.width||3,'0.1',.2,50)+propNumber('Blend shoulder','blendDistance',p.blendDistance??2.5,'0.1',.1,30)+propNumber('Edge irregularity','edgeNoise',p.edgeNoise??.5,'0.05',0,4)+propCheck('Conform to terrain','conformToTerrain',p.conformToTerrain!==false)+propCheck('Collision','collider',p.collider!==false)+propCheck('Navigation','navigation',p.navigation!==false)+propNumber('Nature clearance','vegetationExclusion',p.vegetationExclusion||0,'0.1',0,20)+`<div class="surface-blend-callout">The terrain remains authoritative. This path paints a soft, noise-broken material mask into the terrain instead of floating a hard-edged mesh above it.</div>`;
+  if (object.type==='path') return renderPathwayInspector(object,scene?.objects.find(item=>item.type==='terrain'&&item.visible!==false),scene?.objects.filter(item=>item.type==='path'&&item.visible!==false)||[],{materialSelect,propColor,propNumber,propCheck,escapeHtml});
   if (object.type==='decal') return materialSelect(p.materialId)+propColor('Tint','color',p.color)+propNumber('Opacity','opacity',p.opacity??.85,'0.05',0,1)+propNumber('Projection depth','projectionDepth',p.projectionDepth??.25,'0.05',.001,20)+propNumber('Sort order','sortOrder',p.sortOrder||0,'1',-1000,1000)+`<div class="surface-blend-callout">This is an authored surface decal. Keep projection depth narrow and inspect nearby geometry before approval.</div>`;
   if (p.celestialProxy) { const role=String(p.celestialRole||'celestial'); return `<div class="surface-blend-callout celestial-proxy-callout"><strong>Authoritative ${escapeHtml(role === 'sun' ? 'Sun' : 'Moon')} proxy</strong><p>This hierarchy entry is a protected view of the shared Celestial Studio authority. It cannot be duplicated or deleted, and it survives save/reload with a stable identity.</p><div class="property-row"><label>Azimuth</label><span>${Number(p.azimuth ?? 0).toFixed(2)}°</span></div><div class="property-row"><label>Elevation</label><span>${Number(p.elevation ?? 0).toFixed(2)}°</span></div><div class="property-row"><label>Angular size</label><span>${Number(p.angularSize ?? 1).toFixed(2)}×</span></div><button id="openCelestialStudioButton" class="button primary" type="button">Open Celestial Studio</button></div>`; }
   if (object.type==='directionalLight') return propColor('Light color','color',p.color)+propNumber('Intensity','intensity',p.intensity||1,'0.05',0,12)+propCheck('Cast shadows','castsShadows',p.castsShadows!==false);
@@ -547,6 +548,26 @@ function renderInspector() {
 function setNested(arrayRoot,index,value){ arrayRoot[Number(index)] = Number(value); }
 function bindInspector(object) {
   if(object.properties?.celestialProxy)return;
+  if(object.type==='path'){
+    $$('[data-pathway-live]').forEach(input=>input.addEventListener('input',()=>{
+      const key=input.dataset.propertyKey;if(!key)return;
+      object.properties[key]=input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value;
+      markLocalMutation();
+    }));
+    $('#applyPathwayPresetButton')?.addEventListener('click',()=>{
+      const preset=$('[data-pathway-preset]')?.value||'dirtRoad';
+      patchObject(object.id,{properties:applyPathwayPreset(object.properties,preset)});
+    });
+    $('#fitPathwayLanesButton')?.addEventListener('click',()=>{
+      const laneCount=Math.max(1,Number(object.properties.laneCount||2)),laneWidth=Math.max(.5,Number(object.properties.laneWidth||2.4));
+      patchObject(object.id,{properties:{width:laneCount*laneWidth,profileRevision:Number(object.properties.profileRevision||1)+1}});
+    });
+    $('#reversePathwayButton')?.addEventListener('click',()=>{
+      const points=deepClone(object.properties.points||[]).reverse();
+      patchObject(object.id,{properties:{points,profileRevision:Number(object.properties.profileRevision||1)+1}});
+    });
+    $('#rebuildPathwayButton')?.addEventListener('click',()=>patchObject(object.id,{properties:{profileRevision:Number(object.properties.profileRevision||1)+1}}));
+  }
   $('#objectNameInput')?.addEventListener('change',event=>patchObject(object.id,{name:event.target.value.trim()||object.name}));
   $$('[data-number-path]').forEach(input=>input.addEventListener('change',event=>{
     const [root,index]=input.dataset.numberPath.split('.');
