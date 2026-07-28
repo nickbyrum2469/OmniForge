@@ -14,7 +14,7 @@ from celestial_recovery_twilight_final import apply as apply_twilight_final
 from celestial_recovery_twilight_followup import apply as apply_twilight_followup
 from pathway_studio_followup import apply as apply_pathway_studio_followup
 from pathway_studio_recovery import apply as apply_pathway_studio
-from target_pc_terrain_recovery_v2 import apply as apply_target_pc_terrain
+from target_pc_terrain_recovery_guarded import apply as apply_target_pc_terrain
 
 ROOT = Path(__file__).resolve().parents[1]
 CHANGED: list[str] = []
@@ -25,14 +25,14 @@ def source(relative_path: str) -> str:
 
 
 def final_contract_failures() -> list[str]:
-    sky = source('app/sky-pass.js')
-    environment = source('app/environment-runtime.js')
-    runtime = source('app/world-runtime.js')
-    optics_tests = source('tests/phase1g-celestial-optics.test.mjs')
-    projection_tests = source('tests/phase1c-visual-projection.test.mjs')
-    world_tests = source('tests/phase1-1-world-authoring.test.mjs')
-
-    failures: list[str] = []
+    values = {
+        'app/sky-pass.js': source('app/sky-pass.js'),
+        'app/environment-runtime.js': source('app/environment-runtime.js'),
+        'app/world-runtime.js': source('app/world-runtime.js'),
+        'tests/phase1g-celestial-optics.test.mjs': source('tests/phase1g-celestial-optics.test.mjs'),
+        'tests/phase1c-visual-projection.test.mjs': source('tests/phase1c-visual-projection.test.mjs'),
+        'tests/phase1-1-world-authoring.test.mjs': source('tests/phase1-1-world-authoring.test.mjs'),
+    }
     required = {
         'app/sky-pass.js': [
             'float heroProbability=clamp(uStarHeroFraction,0.001,0.008)',
@@ -61,35 +61,37 @@ def final_contract_failures() -> list[str]:
             "test('celestial interpolation predicts continuously across snapshot boundaries'",
         ],
         'tests/phase1c-visual-projection.test.mjs': [
-            'float moonOcclusionDisc=1\.0-smoothstep\(0\.94,1\.045,moonRadius\)',
+            'float moonOcclusionDisc=1\\.0-smoothstep\\(0\\.94,1\\.045,moonRadius\\)',
             'assert.doesNotMatch(sky, /celestialHorizonMask/);',
         ],
         'tests/phase1-1-world-authoring.test.mjs': [
             "sky: { celestialMode: 'manual', sunSize: 2, moonSize: 3",
         ],
     }
-    values = {
-        'app/sky-pass.js': sky,
-        'app/environment-runtime.js': environment,
-        'app/world-runtime.js': runtime,
-        'tests/phase1g-celestial-optics.test.mjs': optics_tests,
-        'tests/phase1c-visual-projection.test.mjs': projection_tests,
-        'tests/phase1-1-world-authoring.test.mjs': world_tests,
-    }
-    for relative_path, markers in required.items():
-        for marker in markers:
-            if marker not in values[relative_path]:
-                failures.append(f'{relative_path}: missing {marker}')
-
     forbidden = {
         'app/sky-pass.js': ['celestialHorizonMask'],
         'app/world-runtime.js': ["mode: 'continuous-linear'"],
     }
+    failures: list[str] = []
+    for relative_path, markers in required.items():
+        for marker in markers:
+            if marker not in values[relative_path]:
+                failures.append(f'{relative_path}: missing {marker}')
     for relative_path, markers in forbidden.items():
         for marker in markers:
             if marker in values[relative_path]:
                 failures.append(f'{relative_path}: rejected marker remains: {marker}')
     return failures
+
+
+def append_progress(marker: str, lines: list[str], final_line: str) -> None:
+    progress = ROOT / 'progress.md'
+    text = progress.read_text(encoding='utf-8')
+    if marker in text:
+        return
+    block = '\n\n' + marker + '\n\n' + ''.join(f'- {line}\n' for line in lines) + '\n' + final_line + '\n'
+    progress.write_text(text.rstrip() + block, encoding='utf-8')
+    CHANGED.append('progress.md')
 
 
 prepare_base_test(ROOT, CHANGED)
@@ -105,7 +107,6 @@ if initial_failures:
     apply_sky(ROOT, CHANGED)
     apply_tests(ROOT, CHANGED)
     apply_followup(ROOT, CHANGED)
-
     remaining = final_contract_failures()
     if remaining:
         print('Celestial recovery failed to reach the final source contract:')
@@ -128,63 +129,42 @@ if 'sky+=civilTwilightColor*civilTwilightLift*(0.14+0.36*horizon);' in sky_sourc
 
 apply_capture(ROOT, CHANGED)
 
-progress = ROOT / 'progress.md'
-progress_text = progress.read_text(encoding='utf-8')
-marker = '## Celestial compositor recovery gate'
-if marker not in progress_text:
-    progress.write_text(
-        progress_text.rstrip()
-        + '\n\n'
-        + marker
-        + '\n\n'
-        + '- Removed the ray-level horizon guillotine that visibly sliced Sun and Moon discs.\n'
-        + '- Composed stars, hero glints, planets, and Milky Way behind one geometric Moon occluder.\n'
-        + '- Composited the opaque lunar surface after the masked astronomical background.\n'
-        + '- Added lunar-map highlight compression and capped micro/medium/hero star optics.\n'
-        + '- Derived day, night, and twilight continuously from interpolated solar elevation.\n'
-        + '- Added predictive spherical interpolation across compact runtime snapshot intervals.\n'
-        + '- Preserved wide manual Custom ranges while constraining astronomical Physical mode.\n'
-        + '- Added gradual civil-twilight star emergence and delayed Milky Way emergence.\n'
-        + '- Added bounded capture retries and health checks for exact packaged evidence.\n\n'
-        + 'The branch remains blocked pending exact packaged Windows visual validation.\n',
-        encoding='utf-8',
-    )
-    CHANGED.append('progress.md')
-
-terrain_marker = '## Target-PC terrain and path surface recovery'
-progress_text = progress.read_text(encoding='utf-8')
-if terrain_marker not in progress_text:
-    progress.write_text(
-        progress_text.rstrip()
-        + '\n\n'
-        + terrain_marker
-        + '\n\n'
-        + '- Added a dense terrain-conforming road surface independent of the capped terrain vertex grid.\n'
-        + '- Preserved analytic terrain cut/fill, picking, physics, and saved spline coordinates.\n'
-        + '- Added target-PC diagnostics when terrain vertex spacing is too coarse for path blending.\n'
-        + '- Kept spline guides as editor overlays while the actual road renders in the opaque world pass.\n\n'
-        + 'The branch remains blocked until the user validates the saved terrain and path on the RX 7900 XTX package.\n',
-        encoding='utf-8',
-    )
-    CHANGED.append('progress.md')
-
-pathway_marker = '## Pathway Studio engineering corridor gate'
-progress_text = progress.read_text(encoding='utf-8')
-if pathway_marker not in progress_text:
-    progress.write_text(
-        progress_text.rstrip()
-        + '\n\n'
-        + pathway_marker
-        + '\n\n'
-        + '- Replaced the two-edge ribbon with a nine-band crowned roadbed, shoulders, drainage, side slopes, and terrain seams.\n'
-        + '- Added grade limits, vertical smoothing, banking, curve-radius diagnostics, and scale-aware depth lift.\n'
-        + '- Added trail, dirt, gravel, paved, mountain, highway, and fantasy-stone presets.\n'
-        + '- Added live Pathway Studio controls and bridge, tunnel, and retaining-wall recommendations.\n'
-        + '- Added route telemetry for target-PC proof instead of relying on editor spline visibility.\n\n'
-        + 'The branch remains blocked until the exact Windows package is tested against the user\'s saved terrain on the RX 7900 XTX.\n',
-        encoding='utf-8',
-    )
-    CHANGED.append('progress.md')
+append_progress(
+    '## Celestial compositor recovery gate',
+    [
+        'Removed the ray-level horizon guillotine that visibly sliced Sun and Moon discs.',
+        'Composed stars, hero glints, planets, and Milky Way behind one geometric Moon occluder.',
+        'Composited the opaque lunar surface after the masked astronomical background.',
+        'Added lunar-map highlight compression and capped micro/medium/hero star optics.',
+        'Derived day, night, and twilight continuously from interpolated solar elevation.',
+        'Added predictive spherical interpolation across compact runtime snapshot intervals.',
+        'Preserved wide manual Custom ranges while constraining astronomical Physical mode.',
+        'Added gradual civil-twilight star emergence and delayed Milky Way emergence.',
+        'Added bounded capture retries and health checks for exact packaged evidence.',
+    ],
+    'The branch remains blocked pending exact packaged Windows visual validation.',
+)
+append_progress(
+    '## Target-PC terrain and path surface recovery',
+    [
+        'Added a dense terrain-conforming road surface independent of the capped terrain vertex grid.',
+        'Preserved analytic terrain cut/fill, picking, physics, and saved spline coordinates.',
+        'Added target-PC diagnostics when terrain vertex spacing is too coarse for path blending.',
+        'Kept spline guides as editor overlays while the actual road renders in the opaque world pass.',
+    ],
+    'The branch remains blocked until the user validates the saved terrain and path on the RX 7900 XTX package.',
+)
+append_progress(
+    '## Pathway Studio engineering corridor gate',
+    [
+        'Replaced the two-edge ribbon with a nine-band crowned roadbed, shoulders, drainage, side slopes, and terrain seams.',
+        'Added grade limits, vertical smoothing, banking, curve-radius diagnostics, and scale-aware depth lift.',
+        'Added trail, dirt, gravel, paved, mountain, highway, and fantasy-stone presets.',
+        'Added live Pathway Studio controls and bridge, tunnel, and retaining-wall recommendations.',
+        'Added route telemetry for target-PC proof instead of relying on editor spline visibility.',
+    ],
+    "The branch remains blocked until the exact Windows package is tested against the user's saved terrain on the RX 7900 XTX.",
+)
 
 if CHANGED:
     print('Celestial, terrain, and Pathway Studio recovery repair applied.')
