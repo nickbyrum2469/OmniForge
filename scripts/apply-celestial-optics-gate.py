@@ -12,6 +12,7 @@ from celestial_recovery_tests import apply as apply_tests
 from celestial_recovery_twilight import apply as apply_twilight
 from celestial_recovery_twilight_final import apply as apply_twilight_final
 from celestial_recovery_twilight_followup import apply as apply_twilight_followup
+from pathway_studio_recovery import apply as apply_pathway_studio
 from target_pc_terrain_recovery_v2 import apply as apply_target_pc_terrain
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +95,7 @@ prepare_base_test(ROOT, CHANGED)
 apply_authoring(ROOT, CHANGED)
 apply_authoring_capture_profiles(ROOT, CHANGED)
 apply_target_pc_terrain(ROOT, CHANGED)
+apply_pathway_studio(ROOT, CHANGED)
 
 initial_failures = final_contract_failures()
 if initial_failures:
@@ -164,9 +166,27 @@ if terrain_marker not in progress_text:
     )
     CHANGED.append('progress.md')
 
+pathway_marker = '## Pathway Studio engineering corridor gate'
+progress_text = progress.read_text(encoding='utf-8')
+if pathway_marker not in progress_text:
+    progress.write_text(
+        progress_text.rstrip()
+        + '\n\n'
+        + pathway_marker
+        + '\n\n'
+        + '- Replaced the two-edge ribbon with a nine-band crowned roadbed, shoulders, drainage, side slopes, and terrain seams.\n'
+        + '- Added grade limits, vertical smoothing, banking, curve-radius diagnostics, and scale-aware depth lift.\n'
+        + '- Added trail, dirt, gravel, paved, mountain, highway, and fantasy-stone presets.\n'
+        + '- Added live Pathway Studio controls and bridge, tunnel, and retaining-wall recommendations.\n'
+        + '- Added route telemetry for target-PC proof instead of relying on editor spline visibility.\n\n'
+        + 'The branch remains blocked until the exact Windows package is tested against the user\'s saved terrain on the RX 7900 XTX.\n',
+        encoding='utf-8',
+    )
+    CHANGED.append('progress.md')
+
 if CHANGED:
-    print('Celestial and target-PC terrain recovery repair applied.')
+    print('Celestial, terrain, and Pathway Studio recovery repair applied.')
     for relative in dict.fromkeys(CHANGED):
         print(f'  - {relative}')
 else:
-    print('Celestial and target-PC terrain recovery repair is idempotent; second pass changed no files.')
+    print('Celestial, terrain, and Pathway Studio recovery repair is idempotent; second pass changed no files.')
