@@ -12,6 +12,7 @@ from celestial_recovery_tests import apply as apply_tests
 from celestial_recovery_twilight import apply as apply_twilight
 from celestial_recovery_twilight_final import apply as apply_twilight_final
 from celestial_recovery_twilight_followup import apply as apply_twilight_followup
+from pathway_studio_followup import apply as apply_pathway_studio_followup
 from pathway_studio_recovery import apply as apply_pathway_studio
 from target_pc_terrain_recovery_v2 import apply as apply_target_pc_terrain
 
@@ -96,6 +97,7 @@ apply_authoring(ROOT, CHANGED)
 apply_authoring_capture_profiles(ROOT, CHANGED)
 apply_target_pc_terrain(ROOT, CHANGED)
 apply_pathway_studio(ROOT, CHANGED)
+apply_pathway_studio_followup(ROOT, CHANGED)
 
 initial_failures = final_contract_failures()
 if initial_failures:
