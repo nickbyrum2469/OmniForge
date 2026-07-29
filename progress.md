@@ -8,6 +8,7 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Exact immutable failure fixture remains at `C:\Users\nickb\Documents\OmniForge-TargetPC-Pathway-Test\20260728-192556`; project state SHA-256 is `3C3548710AEF8D732E493A2553ED50469182F3E158874A7309C24E101B07B134`.
 - Gate 1 adds the versioned graph, deterministic legacy migration, validation, and atomic transaction foundation without changing rendering.
 - Gate 2 adds the standalone authoritative compiler: adaptive Hermite curves, arc-length stations, height-mode resolution, bounded vertical profiles, parallel-transport frames, junction discovery, nearest-point queries, and deterministic Civil Assist decisions.
+- Gate 3 begins the replacement geometry: road core and shoulders share compiled stations, true dead ends alone receive caps, and multi-arm intersections use cleaned filleted portal polygons with validated Earcut triangulation instead of radial discs.
 
 ## Live-project visual regression gate
 
