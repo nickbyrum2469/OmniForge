@@ -6,6 +6,11 @@ import {
   trailCandidateToPathNetwork
 } from '../app/path-network/trail-solver.js';
 import { applyPathNetworkTransaction, replacePathNetwork } from '../app/path-network/transactions.js';
+import { compilePathNetwork } from '../app/path-network/compiler.js';
+import {
+  compilePathTerrainModifier,
+  samplePathTerrainModifier
+} from '../app/path-network/terrain-modifier.js';
 
 function terrainFixture() {
   return {
@@ -101,6 +106,7 @@ test('solved trail stays authoritative through serialization and transactional u
   assert.deepEqual(serialized, network);
   assert.equal(network.pathClass, 'human-footpath');
   assert.equal(network.generation.solver, 'terrain-aware-trail-v1');
+  assert.equal(network.segments[0].crossSectionProfile.terrainModificationEnabled, false);
   const moved = applyPathNetworkTransaction(network, {
     id: 'move-generated-node',
     operations: [{
@@ -112,6 +118,34 @@ test('solved trail stays authoritative through serialization and transactional u
   assert.notDeepEqual(moved.network, network);
   const undone = replacePathNetwork(moved.network, moved.inverse.replaceNetwork);
   assert.deepEqual(undone.network, network);
+});
+
+test('first-pass generated trails remain non-destructive terrain overlays', () => {
+  const terrain = new TerrainQueryService({ terrain: terrainFixture() });
+  const solved = solveTerrainAwareTrails({
+    terrain,
+    start: [-22, -8],
+    end: [24, 16],
+    archetype: 'human-footpath',
+    candidatePolicies: ['balanced'],
+    routeStep: 6,
+    seed: 34
+  });
+  const network = trailCandidateToPathNetwork(solved.candidates[0], {
+    id: 'nondestructive-trail',
+    terrainRevision: solved.terrainRevision
+  });
+  const compiled = compilePathNetwork(network, {
+    terrainHeightAt: (x, z) => terrain.elevationAt(x, z, { view: 'authored-natural' })
+  });
+  const modifier = compilePathTerrainModifier(compiled, {
+    baseHeightAt: (x, z) => terrain.elevationAt(x, z, { view: 'authored-natural' })
+  });
+  const stations = compiled.segments[0].samples;
+  const station = stations[Math.floor(stations.length / 2)];
+  const sample = samplePathTerrainModifier(modifier, station.position[0], station.position[2]);
+  assert.equal(sample.terrainApplied, false);
+  assert.equal(sample.height, sample.baseHeight);
 });
 
 test('trail solve observes cancellation before stale work can be accepted', () => {

@@ -68,7 +68,8 @@ function profileExtents(profile) {
   };
 }
 
-function terrainModeApplies(mode) {
+function terrainModeApplies(mode, profile) {
+  if (profile?.terrainModificationEnabled === false) return false;
   return !['bridge', 'tunnel', 'invalid'].includes(mode);
 }
 
@@ -146,7 +147,7 @@ function sampleEntry(entry, x, z, baseHeight, engineering) {
   }
 
   const mode = entry.construction.mode;
-  const applies = terrainModeApplies(mode);
+  const applies = terrainModeApplies(mode, profile);
   const maxCut = Math.max(0, finite(engineering.maxCutDepth, 6));
   const maxFill = Math.max(0, finite(engineering.maxFillDepth, 2.5));
   const boundedTarget = clamp(targetHeight, baseHeight - maxCut, baseHeight + maxFill);

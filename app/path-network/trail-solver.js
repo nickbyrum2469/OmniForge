@@ -490,7 +490,8 @@ export function trailCandidateToPathNetwork(candidate, options = {}) {
         shoulderWidth: Math.max(0.1, profile.width * 0.18),
         drainageEnabled: profile.drainageRequired,
         ditchDepth: profile.drainageRequired ? 0.08 : 0,
-        blendDistance: Math.max(0.4, profile.width * 0.8)
+        blendDistance: Math.max(0.4, profile.width * 0.8),
+        terrainModificationEnabled: false
       },
       gameplayRules: {
         vehicleClass: profile.trafficType,

@@ -52,7 +52,8 @@ function defaultCrossSection(source = {}) {
     drainageEnabled: source.drainageEnabled !== false,
     cutSlopeRatio: clamp(source.cutSlopeRatio ?? 1.5, 0.25, 10),
     fillSlopeRatio: clamp(source.fillSlopeRatio ?? 2, 0.25, 10),
-    blendDistance: clamp(source.blendDistance ?? 2.5, 0.05, 200)
+    blendDistance: clamp(source.blendDistance ?? 2.5, 0.05, 200),
+    terrainModificationEnabled: source.terrainModificationEnabled !== false
   };
 }
 

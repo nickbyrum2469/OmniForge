@@ -205,3 +205,6 @@ The branch remains blocked until the exact Windows package is tested against the
 - Exact packaged commit `2595a05` removed the giant slab and duplicate terrain mask at the identical saved camera. The invalid branch is withheld from production rendering, and its Pathway Studio inspector reports 119% maximum grade with route state `BLOCKED`.
 - Manual UI inspection found the conflict badge inherited the green success styling. A permanent red failure state was added before further package acceptance.
 - Live node editing exposed an additional inspector defect: coordinate/insert/delete/split buttons referenced render-local node variables and threw `ReferenceError`. Node selection is now a shared inspector value, and spline-edit/selection state participates in the inspector render signature.
+- Added a revision-aware multicore generation pool that reserves one logical processor for editor/render input and rejects or cancels stale route work.
+- Added deterministic terrain-aware trail solving with nonlinear grade costs, hard route limits, adaptive edge sampling, multiple candidate policies, and Path Network v2 serialization.
+- Generated trail candidates explicitly opt out of terrain deformation; first-pass routing is a non-destructive rendered corridor over authored-natural terrain.
