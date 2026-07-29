@@ -1,6 +1,7 @@
 import { PathGenerationWorkerPool } from './path-network/generation-pool.js';
 import { trailArchetypes } from './path-network/archetypes.js';
 import { trailCandidateToPathNetwork } from './path-network/trail-solver.js';
+import { nearestCompiledStation } from './path-network/compiler.js';
 import { clearPathRuntimeCache } from './path-network/runtime.js';
 import { routeRestrictionsFromScene } from './path-network/world-constraints.js';
 
@@ -900,21 +901,6 @@ async function finishNodeDrag(event) {
   });
 }
 
-function nearestNetworkSegment(network, x, z) {
-  const nodes = new Map((network?.nodes || []).map(node => [node.id, node]));
-  let best = null;
-  for (const segment of network?.segments || []) {
-    const a = nodes.get(segment.fromNode)?.position;
-    const b = nodes.get(segment.toNode)?.position;
-    if (!a || !b) continue;
-    const dx = b[0] - a[0], dz = b[2] - a[2], denominator = dx * dx + dz * dz;
-    const t = denominator > 1e-9 ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[2]) * dz) / denominator)) : 0;
-    const px = a[0] + dx * t, pz = a[2] + dz * t, distance = Math.hypot(x - px, z - pz);
-    if (!best || distance < best.distance) best = { segment, distance, t };
-  }
-  return best;
-}
-
 function installViewportEditing() {
   const canvas = $('#viewport');
   if (!canvas || canvas.dataset.v011EditingBound) return;
@@ -946,7 +932,7 @@ function installViewportEditing() {
     const point = bridge()?.renderer?.()?.terrainPointFromScreen?.(snapshot.scene, snapshot.camera, event.clientX, event.clientY);
     if (!point) return bridge()?.showToast?.('The cursor did not hit terrain.', 'error');
     const path = snapshot.scene.objects.find(object => object.id === splineEditPathId);
-    const nearest = nearestNetworkSegment(path?.properties?.pathNetwork, point[0], point[2]);
+    const nearest = nearestCompiledStation(activePathRuntime(path)?.compiled, point);
     if (!nearest) return bridge()?.showToast?.('No compiled path segment was found.', 'error');
     const nodeId = `${path.id}:node:${Date.now().toString(36)}`;
     selectedPathNodeId = nodeId;
@@ -954,7 +940,7 @@ function installViewportEditing() {
       label: 'Insert path node',
       operations: [{
         type: 'insert-node',
-        segmentId: nearest.segment.id,
+        segmentId: nearest.segmentId,
         node: { id: nodeId, position: [point[0], point[1], point[2]], heightMode: 'terrain' }
       }]
     });

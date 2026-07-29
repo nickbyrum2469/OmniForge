@@ -205,3 +205,41 @@ test('branch nodes become deterministic junctions and nearest queries use compil
   assert.equal(nearest.segmentId, 'e');
   assert.ok(nearest.distance < 1.1);
 });
+
+test('nearest compiled station follows a handled hairpin instead of its control-point chord', () => {
+  const input = normalizePathNetwork({
+    id: 'handled-hairpin-insertion',
+    nodes: [
+      {
+        id: 'curve-start',
+        position: [0, 0, 0],
+        heightMode: 'absolute',
+        handleMode: 'free',
+        outgoingHandle: [0, 0, 10]
+      },
+      {
+        id: 'curve-end',
+        position: [20, 0, 0],
+        heightMode: 'absolute',
+        handleMode: 'free',
+        incomingHandle: [0, 0, 10]
+      },
+      { id: 'straight-start', position: [0, 0, 6], heightMode: 'absolute' },
+      { id: 'straight-end', position: [20, 0, 6], heightMode: 'absolute' }
+    ],
+    segments: [
+      { id: 'curved', fromNode: 'curve-start', toNode: 'curve-end', curveType: 'hermite' },
+      { id: 'straight', fromNode: 'straight-start', toNode: 'straight-end', curveType: 'linear' }
+    ],
+    engineering: { maxGradePercent: 100 }
+  });
+  const compiled = compilePathNetwork(input, {
+    terrainHeightAt: flatHeight,
+    terrainNormalAt: flatNormal,
+    spacing: 0.15
+  });
+  const nearest = nearestCompiledStation(compiled, [10, 0, 7.4]);
+  assert.equal(nearest.segmentId, 'curved');
+  assert.ok(nearest.distance < 0.15);
+  assert.ok(Math.abs(nearest.curveT - 0.5) < 0.03);
+});
