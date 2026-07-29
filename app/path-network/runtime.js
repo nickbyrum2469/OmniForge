@@ -5,7 +5,7 @@ import {
   compilePathTerrainModifier,
   samplePathTerrainModifier
 } from './terrain-modifier.js';
-import { terrainBaseHeightAt, terrainNormalAt } from '../worldgen.js';
+import { createTerrainQueryService } from '../world/terrain-query-service.js';
 
 const objectCache = new WeakMap();
 
@@ -43,8 +43,9 @@ export function compilePathObjectRuntime(pathObject, terrain, options = {}) {
   const cached = objectCache.get(pathObject);
   if (cached?.signature === signature) return cached.runtime;
 
-  const baseHeightAt = (x, z) => terrainBaseHeightAt(terrain, x, z);
-  const baseNormalAt = (x, z) => terrainNormalAt(terrain, x, z, []);
+  const terrainService = options.terrainService || createTerrainQueryService({ terrain });
+  const baseHeightAt = (x, z) => terrainService.elevationAt(x, z, { view: 'authored-natural' });
+  const baseNormalAt = (x, z) => terrainService.normalAt(x, z, { view: 'authored-natural' });
   const migration = migrateLegacyPathObject(pathObject, { terrainHeightAt: baseHeightAt });
   const compiled = compilePathNetwork(migration.network, {
     terrainHeightAt: baseHeightAt,
@@ -72,6 +73,7 @@ export function compilePathObjectRuntime(pathObject, terrain, options = {}) {
     network: migration.network,
     compiled,
     terrainModifier,
+    terrainService,
     geometry,
     diagnostics: {
       valid: compiled.diagnostics.valid && geometry.validation.valid,
@@ -87,10 +89,12 @@ export function compilePathObjectRuntime(pathObject, terrain, options = {}) {
 export function compileScenePathRuntimes(scene, options = {}) {
   const terrain = scene?.objects?.find(object => object.type === 'terrain' && object.visible !== false);
   if (!terrain) return [];
+  const terrainService = options.terrainService || createTerrainQueryService({ terrain });
   return (scene.objects || [])
     .filter(object => object.type === 'path' && object.visible !== false)
     .map(pathObject => compilePathObjectRuntime(pathObject, terrain, {
       ...options,
+      terrainService,
       chunkSize: options.chunkSize ?? scene.settings?.worldChunkSize ?? terrain.properties?.chunkSize
     }));
 }
