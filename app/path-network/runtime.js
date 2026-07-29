@@ -7,7 +7,9 @@ import {
 } from './terrain-modifier.js';
 import { createTerrainQueryService } from '../world/terrain-query-service.js';
 
-const objectCache = new WeakMap();
+let objectCache = new WeakMap();
+const stableRuntimeCache = new Map();
+const MAXIMUM_STABLE_RUNTIMES = 96;
 
 function runtimeSignature(pathObject, terrain, options) {
   return JSON.stringify({
@@ -27,12 +29,36 @@ function runtimeSignature(pathObject, terrain, options) {
       transform: terrain?.transform
     },
     generationRevision: options.generationRevision || 0,
-    quality: options.quality || 'editor'
+    quality: options.quality || 'editor',
+    compiler: {
+      spacing: options.spacing,
+      tolerance: options.tolerance,
+      maximumAngleDegrees: options.maximumAngleDegrees
+    },
+    geometry: {
+      chunkSize: options.chunkSize,
+      junctionFilletSegments: options.junctionFilletSegments
+    }
   });
 }
 
-function disposeStaleCache(pathObject, signature, runtime) {
+function stableCachedRuntime(signature) {
+  const runtime = stableRuntimeCache.get(signature);
+  if (!runtime) return null;
+  stableRuntimeCache.delete(signature);
+  stableRuntimeCache.set(signature, runtime);
+  return runtime;
+}
+
+function cacheRuntime(pathObject, signature, runtime, useStableCache) {
   objectCache.set(pathObject, { signature, runtime });
+  if (useStableCache) {
+    stableRuntimeCache.delete(signature);
+    stableRuntimeCache.set(signature, runtime);
+    while (stableRuntimeCache.size > MAXIMUM_STABLE_RUNTIMES) {
+      stableRuntimeCache.delete(stableRuntimeCache.keys().next().value);
+    }
+  }
   return runtime;
 }
 
@@ -42,6 +68,14 @@ export function compilePathObjectRuntime(pathObject, terrain, options = {}) {
   const signature = runtimeSignature(pathObject, terrain, options);
   const cached = objectCache.get(pathObject);
   if (cached?.signature === signature) return cached.runtime;
+  const useStableCache = options.useStableCache === true || !options.terrainService;
+  if (useStableCache) {
+    const stable = stableCachedRuntime(signature);
+    if (stable) {
+      objectCache.set(pathObject, { signature, runtime: stable });
+      return stable;
+    }
+  }
 
   const terrainService = options.terrainService || createTerrainQueryService({ terrain });
   const baseHeightAt = (x, z) => terrainService.elevationAt(x, z, { view: 'authored-natural' });
@@ -83,18 +117,20 @@ export function compilePathObjectRuntime(pathObject, terrain, options = {}) {
       construction: compiled.constructionIntervals
     }
   };
-  return disposeStaleCache(pathObject, signature, runtime);
+  return cacheRuntime(pathObject, signature, runtime, useStableCache);
 }
 
 export function compileScenePathRuntimes(scene, options = {}) {
   const terrain = scene?.objects?.find(object => object.type === 'terrain' && object.visible !== false);
   if (!terrain) return [];
+  const externalTerrainService = Boolean(options.terrainService);
   const terrainService = options.terrainService || createTerrainQueryService({ terrain });
   return (scene.objects || [])
     .filter(object => object.type === 'path' && object.visible !== false)
     .map(pathObject => compilePathObjectRuntime(pathObject, terrain, {
       ...options,
       terrainService,
+      useStableCache: options.useStableCache ?? !externalTerrainService,
       chunkSize: options.chunkSize ?? scene.settings?.worldChunkSize ?? terrain.properties?.chunkSize
     }));
 }
@@ -125,5 +161,13 @@ export function sampleScenePathTerrain(runtimes, baseHeight, x, z) {
 }
 
 export function clearPathRuntimeCache(pathObject = null) {
-  if (pathObject) objectCache.delete(pathObject);
+  if (pathObject) {
+    objectCache.delete(pathObject);
+    for (const [signature, runtime] of stableRuntimeCache) {
+      if (runtime.pathObjectId === pathObject.id) stableRuntimeCache.delete(signature);
+    }
+    return;
+  }
+  objectCache = new WeakMap();
+  stableRuntimeCache.clear();
 }

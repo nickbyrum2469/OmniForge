@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compilePathObjectRuntime, compileScenePathRuntimes, sampleScenePathTerrain } from '../app/path-network/runtime.js';
+import {
+  clearPathRuntimeCache,
+  compilePathObjectRuntime,
+  compileScenePathRuntimes,
+  sampleScenePathTerrain
+} from '../app/path-network/runtime.js';
 import {
   connectPathRuntimeConsumers,
   pathFoliageExcluded,
@@ -47,6 +52,7 @@ function sceneFixture() {
 }
 
 test('one cached runtime bundle owns compile, terrain, geometry, and diagnostics', () => {
+  clearPathRuntimeCache();
   const scene = sceneFixture();
   const first = compilePathObjectRuntime(scene.objects[1], scene.objects[0]);
   const second = compilePathObjectRuntime(scene.objects[1], scene.objects[0]);
@@ -55,6 +61,48 @@ test('one cached runtime bundle owns compile, terrain, geometry, and diagnostics
   assert.strictEqual(first.terrainModifier.sourceNetworkId, first.compiled.sourceNetworkId);
   assert.equal(first.diagnostics.valid, true);
   assert.equal(first.migratedFromLegacy, true);
+});
+
+test('state replacement reuses unchanged path runtimes and recompiles only the edited network', () => {
+  clearPathRuntimeCache();
+  const scene = sceneFixture();
+  const secondPath = structuredClone(scene.objects[1]);
+  secondPath.id = 'path-secondary';
+  secondPath.properties.points = [[-20, 12], [0, 12], [20, 12]];
+  scene.objects.push(secondPath);
+  const first = compileScenePathRuntimes(scene);
+
+  const replacedScene = structuredClone(scene);
+  replacedScene.objects.find(object => object.id === 'path').properties.points[1] = [0, 5];
+  const second = compileScenePathRuntimes(replacedScene);
+
+  assert.notStrictEqual(second.find(runtime => runtime.pathObjectId === 'path'), first.find(runtime => runtime.pathObjectId === 'path'));
+  assert.strictEqual(
+    second.find(runtime => runtime.pathObjectId === 'path-secondary'),
+    first.find(runtime => runtime.pathObjectId === 'path-secondary')
+  );
+});
+
+test('custom terrain query services remain isolated unless stable caching is explicitly enabled', () => {
+  clearPathRuntimeCache();
+  const firstScene = sceneFixture();
+  const secondScene = structuredClone(firstScene);
+  delete firstScene.objects[1].properties.nodeElevations;
+  delete secondScene.objects[1].properties.nodeElevations;
+  const first = compilePathObjectRuntime(firstScene.objects[1], firstScene.objects[0], {
+    terrainService: {
+      elevationAt: () => 2,
+      normalAt: () => [0, 1, 0]
+    }
+  });
+  const second = compilePathObjectRuntime(secondScene.objects[1], secondScene.objects[0], {
+    terrainService: {
+      elevationAt: () => 8,
+      normalAt: () => [0, 1, 0]
+    }
+  });
+  assert.notStrictEqual(first, second);
+  assert.notEqual(first.compiled.nodes[0].resolvedPosition[1], second.compiled.nodes[0].resolvedPosition[1]);
 });
 
 test('renderer, collision, navigation, foliage, grounding, and streaming share one generation', () => {
