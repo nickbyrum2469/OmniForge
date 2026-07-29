@@ -1,3 +1,5 @@
+import { attachPathNetwork } from './path-network/model.js';
+
 const EPSILON = 1e-6;
 
 export const TERRAIN_PRESETS = Object.freeze({
@@ -603,6 +605,7 @@ export function clearTerrainSculpt(terrain) {
 export function migrateSceneWorldFoundation(scene) {
   if (!scene || !Array.isArray(scene.objects)) return scene;
   scene.settings = { ...(scene.settings || {}), splinesVisible: scene.settings?.splinesVisible !== false, worldChunkSize: Number(scene.settings?.worldChunkSize || 64) };
+  const terrain = scene.objects.find(object => object.type === 'terrain') || null;
   for (const object of scene.objects) {
     if (object.type === 'terrain') {
       object.properties = normalizeTerrainProperties(object.properties || {}, object.transform || {});
@@ -611,6 +614,9 @@ export function migrateSceneWorldFoundation(scene) {
     }
     if (object.type === 'path') {
       object.properties = normalizePathProperties(object.properties || {}, object.transform || {});
+      attachPathNetwork(object, {
+        terrainHeightAt: (x, z) => terrain ? terrainBaseHeightAt(terrain, x, z) : Number(object.transform?.position?.[1] || 0)
+      });
       object.transform.position = [0, 0, 0];
       object.transform.scale = [1, 1, 1];
     }

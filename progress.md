@@ -1,5 +1,13 @@
 Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cloud, lighting, eclipse, biome-lighting, performance, and packaged visual-evidence plan against the 14 supplied reference images on phase1c/crash-celestial-atmosphere-stabilization.
 
+## Path Network v2 replacement
+
+- New request: replace the legacy path runtime with one authoritative 3D graph, compiler, terrain modifier, construction system, worker pipeline, editor, API, and packaged verification path.
+- Preserved the previous 1,003-line unverified path experiment on local-only branch `backup/pathway-experiment-20260729` at commit `eacc958`.
+- Clean implementation branch: `feature/v012-path-network-replacement`, based on `c982e4b88e5c378931b8c72fcdc00c88aa693025`.
+- Exact immutable failure fixture remains at `C:\Users\nickb\Documents\OmniForge-TargetPC-Pathway-Test\20260728-192556`; project state SHA-256 is `3C3548710AEF8D732E493A2553ED50469182F3E158874A7309C24E101B07B134`.
+- Gate 1 adds the versioned graph, deterministic legacy migration, validation, and atomic transaction foundation without changing rendering.
+
 ## Live-project visual regression gate
 
 - The exact packaged `04fa2169e98c966eb62910055b9528e9b865c0eb` build was confirmed running from the authoritative repository.
