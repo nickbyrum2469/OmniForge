@@ -116,11 +116,13 @@ test('mesh validation rejects non-finite, degenerate, and excessive vertical geo
 test('renderer and editor expose Pathway Studio authority and telemetry',()=>{
   const renderer=fs.readFileSync(path.join(ROOT,'app','renderer.js'),'utf8');
   const app=fs.readFileSync(path.join(ROOT,'app','app.js'),'utf8');
+  const styles=fs.readFileSync(path.join(ROOT,'app','styles.css'),'utf8');
   assert.match(renderer,/pathwayCorridors:/);
   assert.match(renderer,/materialId:terrain\.properties\?\.materialId/);
   assert.match(renderer,/gl\.polygonOffset\(-2,-2\)/);
   assert.match(app,/renderPathwayInspector/);
   assert.match(app,/applyPathwayPreset/);
   assert.match(app,/fitPathwayLanesButton/);
+  assert.match(styles,/\.pathway-status\.bad/);
   assert.doesNotMatch(app,/paints a soft, noise-broken material mask into the terrain instead of floating/);
 });
