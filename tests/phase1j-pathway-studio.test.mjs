@@ -116,6 +116,7 @@ test('mesh validation rejects non-finite, degenerate, and excessive vertical geo
 test('renderer and editor expose Pathway Studio authority and telemetry',()=>{
   const renderer=fs.readFileSync(path.join(ROOT,'app','renderer.js'),'utf8');
   const app=fs.readFileSync(path.join(ROOT,'app','app.js'),'utf8');
+  const v011=fs.readFileSync(path.join(ROOT,'app','v011.js'),'utf8');
   const styles=fs.readFileSync(path.join(ROOT,'app','styles.css'),'utf8');
   assert.match(renderer,/pathwayCorridors:/);
   assert.match(renderer,/materialId:terrain\.properties\?\.materialId/);
@@ -124,5 +125,10 @@ test('renderer and editor expose Pathway Studio authority and telemetry',()=>{
   assert.match(app,/applyPathwayPreset/);
   assert.match(app,/fitPathwayLanesButton/);
   assert.match(styles,/\.pathway-status\.bad/);
+  assert.match(v011,/function pathNodeSelection\(object\)/);
+  assert.match(v011,/const selectedNode = pathNodeSelection\(object\)/);
+  assert.match(v011,/updatePathNode\(object\.id, selectedNode\.index/);
+  assert.match(v011,/insertPathNode\(object\.id, selectedNode\.index \+ 1, selectedNode\.point\)/);
+  assert.doesNotMatch(v011,/updatePathNode\(object\.id, selectedIndex/);
   assert.doesNotMatch(app,/paints a soft, noise-broken material mask into the terrain instead of floating/);
 });

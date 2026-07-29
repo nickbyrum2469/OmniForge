@@ -89,6 +89,13 @@ function activePath() {
   return object?.type === 'path' ? object : null;
 }
 
+function pathNodeSelection(object) {
+  const points = object?.properties?.points || [];
+  const middle = Math.max(1, Math.floor((points.length || 2) / 2));
+  const index = Math.max(0, Math.min(Math.max(0, points.length - 1), Number(selectedSplineNodeIndex ?? middle)));
+  return { index, point: points[index] || [0, 0] };
+}
+
 function numberControl(label, key, value, options = {}) {
   return `<label class="v011-field"><span>${escapeHtml(label)}</span><input data-v011-property="${escapeHtml(key)}" type="number" value="${Number(value ?? 0)}" step="${options.step ?? 0.1}" ${options.min !== undefined ? `min="${options.min}"` : ''} ${options.max !== undefined ? `max="${options.max}"` : ''}></label>`;
 }
@@ -154,9 +161,7 @@ function terrainPanel(object) {
 function pathPanel(object) {
   const properties = object.properties || {};
   const diagnostics = foundation?.pathDiagnostics?.find(item => item.pathId === object.id);
-  const middle = Math.max(1, Math.floor((properties.points?.length || 2) / 2));
-  const selectedIndex = Math.max(0, Math.min((properties.points?.length || 1) - 1, Number(selectedSplineNodeIndex ?? middle)));
-  const selectedPoint = properties.points?.[selectedIndex] || [0, 0];
+  const { index: selectedIndex, point: selectedPoint } = pathNodeSelection(object);
   return `<section class="v011-authoring-panel" data-v011-panel="path">
     <div class="v011-panel-title"><div><small>SPLINE + GRADE v0.11</small><strong>Path engineering</strong></div><span>${properties.points?.length || 0} nodes</span></div>
     <button id="v011SplineEdit" class="button ${splineEditPathId === object.id ? 'primary' : 'subtle'}" type="button">${splineEditPathId === object.id ? 'Finish spline editing' : 'Edit nodes in viewport'}</button>
@@ -198,8 +203,9 @@ function enhanceInspector() {
   const container = $('#inspectorContent');
   const object = selectedObject();
   if (!container || !object) return;
-  const signature = `${object.id}:${currentSnapshot()?.state?.engine?.revision || 0}:${foundation?.terrainDiagnostics?.checkedAt || ''}`;
+  const signature = `${object.id}:${currentSnapshot()?.state?.engine?.revision || 0}:${foundation?.terrainDiagnostics?.checkedAt || ''}:${splineEditPathId || ''}:${selectedSplineNodeIndex ?? ''}:${terrainSculptMode?.terrainId || ''}`;
   if (container.dataset.v011Signature === signature && container.querySelector('[data-v011-panel]')) return;
+  const selectedNode = pathNodeSelection(object);
   container.dataset.v011Signature = signature;
   container.querySelectorAll('[data-v011-panel]').forEach(node => node.remove());
   const reference = referencePanel(object);
@@ -239,11 +245,11 @@ function enhanceInspector() {
   container.querySelectorAll('[data-v011-panel="path"] [data-v011-property]').forEach(input => input.addEventListener('change', () => updatePath(object.id, { [input.dataset.v011Property]: Number(input.value) })));
   container.querySelectorAll('[data-v011-path-check]').forEach(input => input.addEventListener('change', () => updatePath(object.id, { [input.dataset.v011PathCheck]: input.checked })));
   $('#v011ReversePath')?.addEventListener('click', () => pathAction(object.id, 'reverse'));
-  $('#v011ApplyNode')?.addEventListener('click', () => updatePathNode(object.id, selectedIndex, Number($('#v011NodeX')?.value || 0), Number($('#v011NodeZ')?.value || 0)));
-  $('#v011InsertBefore')?.addEventListener('click', () => insertPathNode(object.id, selectedIndex, selectedPoint));
-  $('#v011InsertAfter')?.addEventListener('click', () => insertPathNode(object.id, selectedIndex + 1, selectedPoint));
-  $('#v011DeleteNode')?.addEventListener('click', () => deletePathNode(object.id, selectedIndex));
-  $('#v011SplitPath')?.addEventListener('click', () => pathAction(object.id, 'split', { index: selectedIndex }));
+  $('#v011ApplyNode')?.addEventListener('click', () => updatePathNode(object.id, selectedNode.index, Number($('#v011NodeX')?.value || 0), Number($('#v011NodeZ')?.value || 0)));
+  $('#v011InsertBefore')?.addEventListener('click', () => insertPathNode(object.id, selectedNode.index, selectedNode.point));
+  $('#v011InsertAfter')?.addEventListener('click', () => insertPathNode(object.id, selectedNode.index + 1, selectedNode.point));
+  $('#v011DeleteNode')?.addEventListener('click', () => deletePathNode(object.id, selectedNode.index));
+  $('#v011SplitPath')?.addEventListener('click', () => pathAction(object.id, 'split', { index: selectedNode.index }));
 }
 
 async function updateTerrain(id, properties) {

@@ -187,3 +187,4 @@ The branch remains blocked until the exact Windows package is tested against the
 - Source tests and repository verification pass with 162 tests. Exact packaged target-PC visual acceptance is still required; merge recommendation remains `BLOCKED`.
 - Exact packaged commit `2595a05` removed the giant slab and duplicate terrain mask at the identical saved camera. The invalid branch is withheld from production rendering, and its Pathway Studio inspector reports 119% maximum grade with route state `BLOCKED`.
 - Manual UI inspection found the conflict badge inherited the green success styling. A permanent red failure state was added before further package acceptance.
+- Live node editing exposed an additional inspector defect: coordinate/insert/delete/split buttons referenced render-local node variables and threw `ReferenceError`. Node selection is now a shared inspector value, and spline-edit/selection state participates in the inspector render signature.
