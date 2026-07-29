@@ -7,6 +7,7 @@ import {
   pathNodeFromDragPreview,
   updatePathNodeDragPreview
 } from './path-network/editor-drag-preview.js';
+import { suggestPathNodeHandles } from './path-network/transactions.js';
 import { routeRestrictionsFromScene } from './path-network/world-constraints.js';
 
 const $ = selector => document.querySelector(selector);
@@ -185,6 +186,10 @@ function numberControl(label, key, value, options = {}) {
   return `<label class="v011-field"><span>${escapeHtml(label)}</span><input data-v011-property="${escapeHtml(key)}" type="number" value="${Number(value ?? 0)}" step="${options.step ?? 0.1}" ${options.min !== undefined ? `min="${options.min}"` : ''} ${options.max !== undefined ? `max="${options.max}"` : ''}></label>`;
 }
 
+function compactNumber(value, precision = 3) {
+  return Number(Number(value || 0).toFixed(precision));
+}
+
 function terrainPanel(object) {
   const properties = object.properties || {};
   const presets = foundation?.presets || [];
@@ -270,6 +275,12 @@ function pathPanel(object) {
   const archetypeOptions = trailArchetypes().map(item => `<option value="${escapeHtml(item.id)}" ${item.id === draft.archetype ? 'selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
   const constructionOptions = ['auto', 'conform', 'cut-fill', 'retaining-wall', 'bridge', 'tunnel', 'stairs']
     .map(mode => `<option value="${mode}" ${mode === selectedSegment?.constructionMode ? 'selected' : ''}>${mode}</option>`).join('');
+  const suggestedHandles = suggestPathNodeHandles(network, selectedNode.id);
+  const incomingHandle = selectedNode.incomingHandle || suggestedHandles.incomingHandle;
+  const outgoingHandle = selectedNode.outgoingHandle || suggestedHandles.outgoingHandle;
+  const manualHandlesAllowed = suggestedHandles.degree <= 2;
+  const handleOptions = ['automatic', 'aligned', 'free']
+    .map(mode => `<option value="${mode}" ${mode === selectedNode.handleMode ? 'selected' : ''} ${mode !== 'automatic' && !manualHandlesAllowed ? 'disabled' : ''}>${mode}</option>`).join('');
   return `<section class="v011-authoring-panel" data-v011-panel="path">
     <div class="v011-panel-title"><div><small>PATH NETWORK v2</small><strong>3D corridor authoring</strong></div><span>r${network.revision} · ${network.nodes.length} nodes</span></div>
     <div class="v012-runtime-status ${runtimeState}" data-v012-runtime-status="${runtimeState}">
@@ -297,6 +308,23 @@ function pathPanel(object) {
         <label class="v011-field"><span>Terrain offset</span><input id="v012HeightOffset" type="number" step="0.1" value="${Number(selectedNode.heightOffset || 0)}"></label>
       </div>
       <div class="v011-actions v012-action-row"><button id="v012ApplyNode" class="primary" type="button">Apply 3D node</button><button id="v012SnapTerrain" type="button">Snap to terrain</button><button id="v012DeleteNode" type="button">Delete node</button><button id="v012UndoPath" type="button">Undo path edit</button><button id="v012RedoPath" type="button">Redo path edit</button></div>
+      <div class="v012-handle-editor">
+        <div class="v011-panel-title"><div><small>SPLINE HANDLES</small><strong>Curve direction and reach</strong></div><span>${escapeHtml(selectedNode.handleMode)}</span></div>
+        <div class="v011-grid">
+          <label class="v011-field"><span>Handle mode</span><select id="v012HandleMode">${handleOptions}</select></label>
+          <label class="v011-field"><span>Aligned direction</span><select id="v012HandleAuthority"><option value="outgoing">Outgoing handle</option><option value="incoming">Incoming handle</option></select></label>
+          <label class="v011-field"><span>Incoming X</span><input id="v012IncomingHandleX" data-v012-handle-vector type="number" step="0.1" value="${compactNumber(incomingHandle[0])}"></label>
+          <label class="v011-field"><span>Incoming Y</span><input id="v012IncomingHandleY" data-v012-handle-vector type="number" step="0.1" value="${compactNumber(incomingHandle[1])}"></label>
+          <label class="v011-field"><span>Incoming Z</span><input id="v012IncomingHandleZ" data-v012-handle-vector type="number" step="0.1" value="${compactNumber(incomingHandle[2])}"></label>
+          <label class="v011-field"><span>Outgoing X</span><input id="v012OutgoingHandleX" data-v012-handle-vector type="number" step="0.1" value="${compactNumber(outgoingHandle[0])}"></label>
+          <label class="v011-field"><span>Outgoing Y</span><input id="v012OutgoingHandleY" data-v012-handle-vector type="number" step="0.1" value="${compactNumber(outgoingHandle[1])}"></label>
+          <label class="v011-field"><span>Outgoing Z</span><input id="v012OutgoingHandleZ" data-v012-handle-vector type="number" step="0.1" value="${compactNumber(outgoingHandle[2])}"></label>
+        </div>
+        <div class="v011-actions"><button id="v012ApplyHandles" type="button">Apply spline handles</button></div>
+        <p class="v011-note">${manualHandlesAllowed
+          ? 'Automatic derives a smooth tangent from neighboring nodes. Aligned keeps both handles collinear; choose which side controls direction. Free keeps both vectors independent.'
+          : 'This is a junction node. Its shared approach geometry remains automatic; edit the connected approach nodes for predictable intersections.'}</p>
+      </div>
     </div>
     <div class="v011-actions"><button id="v012ReverseNetwork" type="button">Reverse segment directions</button></div>
     <div class="v012-route-generator">
@@ -389,6 +417,9 @@ function enhanceInspector() {
     engineering: { ...object.properties.pathNetwork.engineering, civilAssist: event.target.checked }
   }, 'Update Civil Assist'));
   $('#v012ApplyNode')?.addEventListener('click', () => applySelectedNode(object, selectedNode.node));
+  $('#v012HandleMode')?.addEventListener('change', updateHandleInputState);
+  $('#v012ApplyHandles')?.addEventListener('click', () => applySelectedNodeHandles(object, selectedNode.node));
+  updateHandleInputState();
   $('#v012SnapTerrain')?.addEventListener('click', () => transactPathNetwork(object, {
     label: 'Snap node to terrain',
     operations: [{ type: 'set-node-height', nodeId: selectedNode.node.id, heightMode: 'terrain', heightOffset: 0 }]
@@ -515,6 +546,38 @@ function applySelectedNode(object, node) {
       ],
       heightMode: $('#v012HeightMode')?.value || node.heightMode,
       heightOffset: Number($('#v012HeightOffset')?.value || 0)
+    }]
+  });
+}
+
+function updateHandleInputState() {
+  const mode = $('#v012HandleMode')?.value || 'automatic';
+  const disabled = mode === 'automatic';
+  document.querySelectorAll('[data-v012-handle-vector]').forEach(input => {
+    input.disabled = disabled;
+  });
+  const authority = $('#v012HandleAuthority');
+  if (authority) authority.disabled = mode !== 'aligned';
+}
+
+function applySelectedNodeHandles(object, node) {
+  return transactPathNetwork(object, {
+    label: 'Update spline handles',
+    operations: [{
+      type: 'set-node-handles',
+      nodeId: node.id,
+      handleMode: $('#v012HandleMode')?.value || node.handleMode,
+      primaryHandle: $('#v012HandleAuthority')?.value || 'outgoing',
+      incomingHandle: [
+        Number($('#v012IncomingHandleX')?.value || 0),
+        Number($('#v012IncomingHandleY')?.value || 0),
+        Number($('#v012IncomingHandleZ')?.value || 0)
+      ],
+      outgoingHandle: [
+        Number($('#v012OutgoingHandleX')?.value || 0),
+        Number($('#v012OutgoingHandleY')?.value || 0),
+        Number($('#v012OutgoingHandleZ')?.value || 0)
+      ]
     }]
   });
 }

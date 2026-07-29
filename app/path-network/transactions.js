@@ -1,5 +1,6 @@
 import {
   PATH_CONSTRUCTION_MODES,
+  PATH_HANDLE_MODES,
   PATH_HEIGHT_MODES,
   clonePathNetwork,
   normalizePathNetwork,
@@ -7,8 +8,26 @@ import {
   validatePathNetwork
 } from './model.js';
 
+const HANDLE_EPSILON = 1e-4;
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const cleanId = value => String(value || '').replace(/[^a-zA-Z0-9:_-]+/g, '-').slice(0, 160);
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const scale3 = (value, amount) => [value[0] * amount, value[1] * amount, value[2] * amount];
+const length3 = value => Math.hypot(value[0], value[1], value[2]);
+
+function vec3(value, fallback) {
+  const source = Array.isArray(value) && value.length >= 3 ? value : fallback;
+  return [
+    finite(source?.[0], fallback?.[0] || 0),
+    finite(source?.[1], fallback?.[1] || 0),
+    finite(source?.[2], fallback?.[2] || 0)
+  ];
+}
+
+function normalized(value) {
+  const length = length3(value);
+  return length > HANDLE_EPSILON ? scale3(value, 1 / length) : null;
+}
 
 function nextId(network, kind) {
   const collection = kind === 'node' ? network.nodes : network.segments;
@@ -31,6 +50,31 @@ function ensureSegment(network, segmentId) {
   return segment;
 }
 
+export function suggestPathNodeHandles(network, nodeId) {
+  const node = ensureNode(network, cleanId(nodeId));
+  const incomingSegment = network.segments.find(segment => segment.toNode === node.id);
+  const outgoingSegment = network.segments.find(segment => segment.fromNode === node.id);
+  const connected = network.segments.filter(segment => segment.fromNode === node.id || segment.toNode === node.id);
+  const neighborVector = segment => {
+    if (!segment) return null;
+    const neighborId = segment.fromNode === node.id ? segment.toNode : segment.fromNode;
+    const neighbor = ensureNode(network, neighborId);
+    return scale3(sub3(neighbor.position, node.position), 1 / 3);
+  };
+  let incomingHandle = neighborVector(incomingSegment);
+  let outgoingHandle = neighborVector(outgoingSegment);
+  const unused = connected.find(segment => segment !== incomingSegment && segment !== outgoingSegment);
+  if (!incomingHandle) incomingHandle = neighborVector(unused || outgoingSegment);
+  if (!outgoingHandle) outgoingHandle = neighborVector(unused || incomingSegment);
+  if (incomingHandle && !outgoingSegment) outgoingHandle = scale3(incomingHandle, -1);
+  if (outgoingHandle && !incomingSegment) incomingHandle = scale3(outgoingHandle, -1);
+  return {
+    incomingHandle: incomingHandle || [-1, 0, 0],
+    outgoingHandle: outgoingHandle || [1, 0, 0],
+    degree: connected.length
+  };
+}
+
 function applyOperation(network, operation) {
   switch (operation?.type) {
     case 'move-node': {
@@ -51,6 +95,39 @@ function applyOperation(network, operation) {
       node.heightMode = operation.heightMode;
       if (operation.y !== undefined) node.position[1] = finite(operation.y, node.position[1]);
       if (operation.heightOffset !== undefined) node.heightOffset = finite(operation.heightOffset, node.heightOffset);
+      break;
+    }
+    case 'set-node-handles': {
+      const node = ensureNode(network, cleanId(operation.nodeId));
+      const handleMode = String(operation.handleMode || '');
+      if (!PATH_HANDLE_MODES.includes(handleMode)) throw new Error(`Unknown node handle mode ${operation.handleMode}.`);
+      if (handleMode === 'automatic') {
+        node.handleMode = 'automatic';
+        node.incomingHandle = null;
+        node.outgoingHandle = null;
+        break;
+      }
+      const suggested = suggestPathNodeHandles(network, node.id);
+      if (suggested.degree > 2) {
+        throw new Error('Manual spline handles are unavailable on junction nodes. Keep the junction automatic or edit its connected approach nodes.');
+      }
+      let incomingHandle = vec3(operation.incomingHandle, node.incomingHandle || suggested.incomingHandle);
+      let outgoingHandle = vec3(operation.outgoingHandle, node.outgoingHandle || suggested.outgoingHandle);
+      const incomingLength = length3(incomingHandle);
+      const outgoingLength = length3(outgoingHandle);
+      if (incomingLength <= HANDLE_EPSILON || outgoingLength <= HANDLE_EPSILON) {
+        throw new Error('Manual spline handles must have a non-zero length.');
+      }
+      if (handleMode === 'aligned') {
+        if (operation.primaryHandle === 'incoming') {
+          outgoingHandle = scale3(normalized(incomingHandle), -outgoingLength);
+        } else {
+          incomingHandle = scale3(normalized(outgoingHandle), -incomingLength);
+        }
+      }
+      node.handleMode = handleMode;
+      node.incomingHandle = incomingHandle;
+      node.outgoingHandle = outgoingHandle;
       break;
     }
     case 'insert-node': {

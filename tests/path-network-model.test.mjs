@@ -7,7 +7,7 @@ import {
   normalizePathNetwork,
   validatePathNetwork
 } from '../app/path-network/model.js';
-import { applyPathNetworkTransaction } from '../app/path-network/transactions.js';
+import { applyPathNetworkTransaction, suggestPathNodeHandles } from '../app/path-network/transactions.js';
 import { migrateSceneWorldFoundation } from '../app/worldgen.js';
 
 function legacyPath(overrides = {}) {
@@ -142,4 +142,96 @@ test('path transactions move, split, classify, and undo without mutating the inp
   assert.equal(result.network.segments[0].constructionMode, 'bridge');
   assert.equal(result.network.segments[0].constructionLocked, true);
   assert.deepEqual(result.inverse.replaceNetwork, original);
+});
+
+test('path transactions author free, aligned, and automatic spline handles', () => {
+  const original = migrateLegacyPathObject(legacyPath({ worldSpacePoints: true }), { terrainHeightAt: () => 0 }).network;
+  const node = original.nodes[1];
+  const suggested = suggestPathNodeHandles(original, node.id);
+  assert.ok(Math.abs(suggested.incomingHandle[0] + 10 / 3) < 1e-9);
+  assert.deepEqual(suggested.incomingHandle.slice(1), [0, 0]);
+  assert.ok(Math.abs(suggested.outgoingHandle[0] - 10 / 3) < 1e-9);
+  assert.ok(Math.abs(suggested.outgoingHandle[2] - 8 / 3) < 1e-9);
+  assert.equal(suggested.degree, 2);
+
+  const free = applyPathNetworkTransaction(original, {
+    label: 'Free handles',
+    operations: [{
+      type: 'set-node-handles',
+      nodeId: node.id,
+      handleMode: 'free',
+      incomingHandle: [-4, 1, 0],
+      outgoingHandle: [2, 3, 5]
+    }]
+  }).network;
+  assert.equal(free.nodes[1].handleMode, 'free');
+  assert.deepEqual(free.nodes[1].incomingHandle, [-4, 1, 0]);
+  assert.deepEqual(free.nodes[1].outgoingHandle, [2, 3, 5]);
+
+  const aligned = applyPathNetworkTransaction(free, {
+    label: 'Align handles from outgoing',
+    operations: [{
+      type: 'set-node-handles',
+      nodeId: node.id,
+      handleMode: 'aligned',
+      primaryHandle: 'outgoing',
+      incomingHandle: [-6, 0, 0],
+      outgoingHandle: [0, 0, 3]
+    }]
+  }).network;
+  assert.ok(Math.abs(aligned.nodes[1].incomingHandle[0]) < 1e-9);
+  assert.ok(Math.abs(aligned.nodes[1].incomingHandle[1]) < 1e-9);
+  assert.equal(aligned.nodes[1].incomingHandle[2], -6);
+  assert.deepEqual(aligned.nodes[1].outgoingHandle, [0, 0, 3]);
+
+  const automatic = applyPathNetworkTransaction(aligned, {
+    label: 'Restore automatic handles',
+    operations: [{
+      type: 'set-node-handles',
+      nodeId: node.id,
+      handleMode: 'automatic'
+    }]
+  }).network;
+  assert.equal(automatic.nodes[1].handleMode, 'automatic');
+  assert.equal(automatic.nodes[1].incomingHandle, null);
+  assert.equal(automatic.nodes[1].outgoingHandle, null);
+});
+
+test('manual handles reject junction ambiguity and zero-length vectors', () => {
+  const original = migrateLegacyPathObject(legacyPath({ worldSpacePoints: true }), { terrainHeightAt: () => 0 }).network;
+  const middle = original.nodes[1];
+  const junction = applyPathNetworkTransaction(original, {
+    label: 'Create branch',
+    operations: [
+      {
+        type: 'insert-node',
+        segmentId: original.segments[1].id,
+        node: { id: 'branch-end', position: [10, 0, 20] }
+      },
+      {
+        type: 'connect-nodes',
+        fromNode: middle.id,
+        toNode: 'branch-end',
+        segmentId: 'branch'
+      }
+    ]
+  }).network;
+  assert.throws(() => applyPathNetworkTransaction(junction, {
+    operations: [{
+      type: 'set-node-handles',
+      nodeId: middle.id,
+      handleMode: 'free',
+      incomingHandle: [-1, 0, 0],
+      outgoingHandle: [1, 0, 0]
+    }]
+  }), /junction nodes/);
+  assert.throws(() => applyPathNetworkTransaction(original, {
+    operations: [{
+      type: 'set-node-handles',
+      nodeId: middle.id,
+      handleMode: 'free',
+      incomingHandle: [0, 0, 0],
+      outgoingHandle: [1, 0, 0]
+    }]
+  }), /non-zero length/);
 });
