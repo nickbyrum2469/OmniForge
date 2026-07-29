@@ -177,9 +177,20 @@ test('unavoidable vehicle grade is reported invalid instead of silently violatin
     engineering: { maxGradePercent: 10 }
   });
   const compiled = compilePathNetwork(input, { terrainHeightAt: flatHeight, terrainNormalAt: flatNormal });
-  assert.equal(compiled.segments[0].construction.mode, 'invalid');
+  const segment = compiled.segments[0];
+  assert.equal(segment.construction.mode, 'invalid');
   assert.equal(compiled.diagnostics.valid, false);
-  assert.ok(compiled.diagnostics.maximumGradePercent > 10);
+  assert.ok(segment.metrics.unavoidableGradePercent > 190);
+  assert.ok(Math.abs(segment.metrics.maximumGradePercent - segment.metrics.unavoidableGradePercent) < 1e-6);
+  assert.ok(segment.samples.slice(1).every((sample, index) => {
+    const previous = segment.samples[index];
+    const horizontal = Math.hypot(
+      sample.position[0] - previous.position[0],
+      sample.position[2] - previous.position[2]
+    );
+    const grade = Math.abs(sample.position[1] - previous.position[1]) / horizontal * 100;
+    return Math.abs(grade - segment.metrics.unavoidableGradePercent) < 1e-5;
+  }));
 });
 
 test('branch nodes become deterministic junctions and nearest queries use compiled geometry', () => {

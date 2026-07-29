@@ -199,11 +199,17 @@ function enforceVerticalLimits(samples, engineering, endpoints) {
     const fraction = horizontalDistance > EPSILON ? cumulative[index] / horizontalDistance : 0;
     const anchorLine = startY + (endY - startY) * fraction;
     const preferred = samples[index].position[1];
-    const smooth = anchorLine + (preferred - anchorLine) * Math.sin(Math.PI * fraction) * 0.35;
+    // An infeasible endpoint pair has no profile that can satisfy both hard
+    // anchors and the configured grade. Keep its diagnostic guide monotone and
+    // honest instead of clamping the interior and creating a fake cliff beside
+    // a re-snapped endpoint.
+    const smooth = feasible
+      ? anchorLine + (preferred - anchorLine) * Math.sin(Math.PI * fraction) * 0.35
+      : anchorLine;
     samples[index].position[1] = index === 0 ? startY : index === samples.length - 1 ? endY : smooth;
   }
 
-  for (let pass = 0; pass < 4; pass += 1) {
+  for (let pass = 0; feasible && pass < 4; pass += 1) {
     for (let index = 1; index < samples.length; index += 1) {
       const horizontal = Math.max(EPSILON, cumulative[index] - cumulative[index - 1]);
       const limit = horizontal * maximumGrade;
