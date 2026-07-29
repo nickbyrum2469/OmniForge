@@ -7,6 +7,7 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Clean implementation branch: `feature/v012-path-network-replacement`, based on `c982e4b88e5c378931b8c72fcdc00c88aa693025`.
 - Exact immutable failure fixture remains at `C:\Users\nickb\Documents\OmniForge-TargetPC-Pathway-Test\20260728-192556`; project state SHA-256 is `3C3548710AEF8D732E493A2553ED50469182F3E158874A7309C24E101B07B134`.
 - Gate 1 adds the versioned graph, deterministic legacy migration, validation, and atomic transaction foundation without changing rendering.
+- Gate 2 adds the standalone authoritative compiler: adaptive Hermite curves, arc-length stations, height-mode resolution, bounded vertical profiles, parallel-transport frames, junction discovery, nearest-point queries, and deterministic Civil Assist decisions.
 
 ## Live-project visual regression gate
 
