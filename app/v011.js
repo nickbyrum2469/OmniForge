@@ -2,7 +2,11 @@ import { PathGenerationWorkerPool } from './path-network/generation-pool.js';
 import { trailArchetypes } from './path-network/archetypes.js';
 import { trailCandidateToPathNetwork } from './path-network/trail-solver.js';
 import { nearestCompiledStation } from './path-network/compiler.js';
-import { clearPathRuntimeCache } from './path-network/runtime.js';
+import {
+  createPathNodeDragPreview,
+  pathNodeFromDragPreview,
+  updatePathNodeDragPreview
+} from './path-network/editor-drag-preview.js';
 import { routeRestrictionsFromScene } from './path-network/world-constraints.js';
 
 const $ = selector => document.querySelector(selector);
@@ -21,6 +25,7 @@ let foundationSignature = '';
 let selectedPathNodeId = null;
 let routeGenerationRevision = 0;
 let routeGenerationPool = null;
+let pathDragPreviewFrame = 0;
 let routeGenerationState = {
   status: 'idle',
   pathId: null,
@@ -801,7 +806,10 @@ function renderNodeOverlay() {
     if (overlay) overlay.replaceChildren();
     return;
   }
-  const path = snapshot.scene.objects.find(object => object.id === splineEditPathId && object.type === 'path');
+  const authoritativePath = snapshot.scene.objects.find(object => object.id === splineEditPathId && object.type === 'path');
+  const path = draggingNode?.pathId === splineEditPathId
+    ? draggingNode.previewPath
+    : authoritativePath;
   if (!path?.properties?.pathNetwork) { overlay.replaceChildren(); return; }
   const nodes = path.properties.pathNetwork.nodes || [];
   const existing = new Map([...overlay.querySelectorAll('[data-spline-node]')].map(node => [Number(node.dataset.splineNode), node]));
@@ -839,6 +847,7 @@ function beginNodeDrag(event) {
   const node = path.properties?.pathNetwork?.nodes?.[selectedSplineNodeIndex];
   if (!node) return;
   selectedPathNodeId = node.id;
+  const renderer = bridge()?.renderer?.();
   draggingNode = {
     pathId: path.id,
     nodeId: node.id,
@@ -848,7 +857,9 @@ function beginNodeDrag(event) {
     startPosition: [...node.position],
     startHeightMode: node.heightMode,
     startHeightOffset: node.heightOffset,
-    vertical: event.shiftKey === true
+    vertical: event.shiftKey === true,
+    previewPath: createPathNodeDragPreview(path, node.id),
+    restorePreview: renderer?.pathPreview ? structuredClone(renderer.pathPreview) : null
   };
   enhanceInspector();
   event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -856,26 +867,38 @@ function beginNodeDrag(event) {
   window.addEventListener('pointerup', finishNodeDrag, true);
 }
 
+function flushNodeDragPreview() {
+  pathDragPreviewFrame = 0;
+  if (!draggingNode?.previewPath) return;
+  bridge()?.renderer?.()?.setPathPreview(draggingNode.previewPath);
+}
+
+function scheduleNodeDragPreview() {
+  if (!pathDragPreviewFrame) pathDragPreviewFrame = requestAnimationFrame(flushNodeDragPreview);
+}
+
 function dragNode(event) {
   if (!draggingNode) return;
   event.preventDefault();
   const snapshot = currentSnapshot();
   const renderer = bridge()?.renderer?.();
-  const path = snapshot?.scene?.objects?.find(object => object.id === draggingNode.pathId);
-  const node = path?.properties?.pathNetwork?.nodes?.find(item => item.id === draggingNode.nodeId);
+  const node = pathNodeFromDragPreview(draggingNode.previewPath, draggingNode.nodeId);
   if (!node) return;
   if (draggingNode.vertical || event.shiftKey) {
     draggingNode.vertical = true;
-    node.position = [node.position[0], draggingNode.startPosition[1] - (event.clientY - draggingNode.startClientY) * 0.15, node.position[2]];
-    node.heightMode = 'absolute';
-    node.heightOffset = 0;
+    updatePathNodeDragPreview(draggingNode.previewPath, draggingNode.nodeId, {
+      position: [node.position[0], draggingNode.startPosition[1] - (event.clientY - draggingNode.startClientY) * 0.15, node.position[2]],
+      heightMode: 'absolute',
+      heightOffset: 0
+    });
   } else {
     const point = renderer?.terrainPointFromScreen?.(snapshot.scene, snapshot.camera, event.clientX, event.clientY);
     if (!point) return;
-    node.position = [point[0], node.heightMode === 'absolute' ? node.position[1] : point[1], point[2]];
+    updatePathNodeDragPreview(draggingNode.previewPath, draggingNode.nodeId, {
+      position: [point[0], node.heightMode === 'absolute' ? node.position[1] : point[1], point[2]]
+    });
   }
-  path.properties.previewRevision = Number(path.properties.previewRevision || 0) + 1;
-  clearPathRuntimeCache(path);
+  scheduleNodeDragPreview();
 }
 
 async function finishNodeDrag(event) {
@@ -885,9 +908,14 @@ async function finishNodeDrag(event) {
   window.removeEventListener('pointerup', finishNodeDrag, true);
   const snapshot = currentSnapshot();
   const path = snapshot?.scene?.objects?.find(object => object.id === draggingNode.pathId);
-  const node = path?.properties?.pathNetwork?.nodes?.find(item => item.id === draggingNode.nodeId);
   const drag = draggingNode;
+  const node = pathNodeFromDragPreview(drag.previewPath, drag.nodeId);
+  if (pathDragPreviewFrame) {
+    cancelAnimationFrame(pathDragPreviewFrame);
+    pathDragPreviewFrame = 0;
+  }
   draggingNode = null;
+  bridge()?.renderer?.()?.setPathPreview(drag.restorePreview);
   if (!node) return;
   await transactPathNetwork(path, {
     label: drag.vertical ? 'Raise or lower path node' : 'Move path node',

@@ -131,6 +131,10 @@ test('renderer and editor expose Pathway Studio authority and telemetry',()=>{
   assert.match(v011,/type: 'insert-node'/);
   assert.match(v011,/nearestCompiledStation/);
   assert.doesNotMatch(v011,/function nearestNetworkSegment/);
+  assert.match(v011,/createPathNodeDragPreview/);
+  assert.match(v011,/scheduleNodeDragPreview/);
+  assert.match(v011,/setPathPreview\(draggingNode\.previewPath\)/);
+  assert.doesNotMatch(v011,/clearPathRuntimeCache/);
   assert.match(v011,/type: 'delete-node'/);
   assert.match(v011,/\/api\/v012\/path\//);
   assert.match(v011,/routeRestrictionsFromScene/);
