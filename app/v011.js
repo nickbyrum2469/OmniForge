@@ -2,6 +2,7 @@ import { PathGenerationWorkerPool } from './path-network/generation-pool.js';
 import { trailArchetypes } from './path-network/archetypes.js';
 import { trailCandidateToPathNetwork } from './path-network/trail-solver.js';
 import { clearPathRuntimeCache } from './path-network/runtime.js';
+import { routeRestrictionsFromScene } from './path-network/world-constraints.js';
 
 const $ = selector => document.querySelector(selector);
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -155,6 +156,17 @@ function routeCandidateLength(candidate) {
   return length;
 }
 
+function routeCandidateCost(candidate) {
+  const keys = ['distance', 'grade', 'crossSlope', 'roughness', 'earthwork', 'scenic', 'diversity', 'total'];
+  return Object.fromEntries(keys.map(key => [
+    key,
+    (candidate?.segmentCosts || []).reduce(
+      (sum, segment) => sum + Number(segment?.breakdown?.[key] || 0),
+      0
+    )
+  ]));
+}
+
 function numberControl(label, key, value, options = {}) {
   return `<label class="v011-field"><span>${escapeHtml(label)}</span><input data-v011-property="${escapeHtml(key)}" type="number" value="${Number(value ?? 0)}" step="${options.step ?? 0.1}" ${options.min !== undefined ? `min="${options.min}"` : ''} ${options.max !== undefined ? `max="${options.max}"` : ''}></label>`;
 }
@@ -228,6 +240,7 @@ function pathPanel(object) {
   const draft = routeDraft(object);
   const generation = routeGenerationState.pathId === object.id ? routeGenerationState : { status: 'idle', candidates: [], selectedCandidate: 0, durationMs: 0, error: '' };
   const candidate = generation.candidates[generation.selectedCandidate];
+  const cost = routeCandidateCost(candidate);
   const archetypeOptions = trailArchetypes().map(item => `<option value="${escapeHtml(item.id)}" ${item.id === draft.archetype ? 'selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
   const constructionOptions = ['auto', 'conform', 'cut-fill', 'retaining-wall', 'bridge', 'tunnel', 'stairs']
     .map(mode => `<option value="${mode}" ${mode === selectedSegment?.constructionMode ? 'selected' : ''}>${mode}</option>`).join('');
@@ -270,7 +283,7 @@ function pathPanel(object) {
       </div>
       <div class="v011-actions v012-action-row"><button id="v012GenerateRoutes" class="primary" type="button" ${generation.status==='solving'?'disabled':''}>${generation.status==='solving'?'Solving on worker pool…':'Generate alternatives'}</button><button id="v012CancelRoutes" type="button">Cancel preview</button></div>
       ${generation.candidates.length?`<label class="v011-field"><span>Candidate</span><select id="v012RouteCandidate">${generation.candidates.map((item,index)=>`<option value="${index}" ${index===generation.selectedCandidate?'selected':''}>${escapeHtml(item.policy)} · ${item.points.length} points · ${Number(item.totalCost).toFixed(1)} cost</option>`).join('')}</select></label>`:''}
-      ${candidate?`<div class="v012-cost-grid"><span>Length <strong>${routeCandidateLength(candidate).toFixed(1)} m</strong></span><span>Max grade <strong>${Number(candidate.diagnostics?.maximumGradePercent||0).toFixed(1)}%</strong></span><span>Solve wall <strong>${Number(generation.durationMs).toFixed(0)} ms</strong></span></div><div class="v011-actions"><button id="v012CommitRoute" class="primary" type="button">Commit selected route</button></div>`:''}
+      ${candidate?`<div class="v012-cost-grid"><span>Length <strong>${routeCandidateLength(candidate).toFixed(1)} m</strong></span><span>Max grade <strong>${Number(candidate.diagnostics?.maximumGradePercent||0).toFixed(1)}%</strong></span><span>Solve wall <strong>${Number(generation.durationMs).toFixed(0)} ms</strong></span><span>Distance cost <strong>${cost.distance.toFixed(1)}</strong></span><span>Grade cost <strong>${cost.grade.toFixed(1)}</strong></span><span>Cross-slope cost <strong>${cost.crossSlope.toFixed(1)}</strong></span><span>Earthwork cost <strong>${cost.earthwork.toFixed(1)}</strong></span><span>Scenic cost <strong>${cost.scenic.toFixed(1)}</strong></span><span>Total cost <strong>${Number(candidate.totalCost||cost.total).toFixed(1)}</strong></span></div><div class="v011-readout"><span>Protected scene footprints</span><code>${generation.automaticRestrictionCount || 0}</code></div><div class="v011-readout"><span>Rejected search edges</span><code>${Number(candidate.diagnostics?.rejectedByRestriction||0)} restricted · ${Number(candidate.diagnostics?.rejectedByGrade||0)} grade</code></div><div class="v011-actions"><button id="v012CommitRoute" class="primary" type="button">Commit selected route</button></div>`:''}
       ${generation.error?`<p class="v012-error">${escapeHtml(generation.error)}</p>`:''}
       <p class="v011-note">Alternatives use the authored-natural terrain view, validate full segment grades, and remain previews until committed. First-pass trails do not deform terrain.</p>
     </div>
@@ -568,13 +581,30 @@ async function generateRouteAlternatives(object) {
   cancelRoutePreview(object.id);
   const revision = ++routeGenerationRevision;
   const policies = ['balanced', 'shortest', 'lowest-grade', 'scenic'];
-  const restrictions = draft.useRestriction ? [{
+  const snapshot = currentSnapshot();
+  const profile = trailArchetypes().find(item => item.id === draft.archetype);
+  const automaticRestrictions = routeRestrictionsFromScene({
+    scene: snapshot?.scene,
+    assets: snapshot?.state?.assets,
+    excludeObjectIds: [object.id],
+    clearance: Math.max(0.5, Number(profile?.clearance || profile?.width || 1) * 0.5)
+  });
+  const manualRestrictions = draft.useRestriction ? [{
     minX: Math.min(draft.restrictionMinX, draft.restrictionMaxX),
     maxX: Math.max(draft.restrictionMinX, draft.restrictionMaxX),
     minZ: Math.min(draft.restrictionMinZ, draft.restrictionMaxZ),
     maxZ: Math.max(draft.restrictionMinZ, draft.restrictionMaxZ)
   }] : [];
-  routeGenerationState = { status: 'solving', pathId: object.id, candidates: [], selectedCandidate: 0, durationMs: 0, error: '' };
+  const restrictions = [...automaticRestrictions, ...manualRestrictions];
+  routeGenerationState = {
+    status: 'solving',
+    pathId: object.id,
+    candidates: [],
+    selectedCandidate: 0,
+    durationMs: 0,
+    error: '',
+    automaticRestrictionCount: automaticRestrictions.length
+  };
   enhanceInspector();
   const startedAt = performance.now();
   try {
@@ -616,14 +646,23 @@ async function generateRouteAlternatives(object) {
       selectedCandidate: 0,
       durationMs: performance.now() - startedAt,
       error: '',
-      solveResult: successful[0].result
+      solveResult: successful[0].result,
+      automaticRestrictionCount: automaticRestrictions.length
     };
     routeGenerationRevision += 1;
     showRouteCandidate(object);
     bridge()?.showToast?.(`Generated ${candidates.length} terrain-aware alternatives`, 'success');
   } catch (error) {
     if (error?.name === 'AbortError') return;
-    routeGenerationState = { status: 'failed', pathId: object.id, candidates: [], selectedCandidate: 0, durationMs: performance.now() - startedAt, error: error.message };
+    routeGenerationState = {
+      status: 'failed',
+      pathId: object.id,
+      candidates: [],
+      selectedCandidate: 0,
+      durationMs: performance.now() - startedAt,
+      error: error.message,
+      automaticRestrictionCount: automaticRestrictions.length
+    };
     routeGenerationRevision += 1;
     bridge()?.showToast?.(error.message, 'error');
   }

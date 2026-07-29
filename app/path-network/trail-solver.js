@@ -381,6 +381,27 @@ export function solveTerrainAwareTrails({
   const origin = toHorizontalPoint(start);
   const destination = toHorizontalPoint(end);
   if (distance2(origin, destination) < Math.max(1, routeStep)) throw new Error('Trail endpoints are too close together.');
+  const constraintSources = restrictions
+    .filter(restriction => restriction && typeof restriction !== 'function')
+    .map(restriction => ({
+      source: String(restriction.source || 'authored-restriction'),
+      sourceObjectId: restriction.sourceObjectId ? String(restriction.sourceObjectId) : null,
+      reason: String(restriction.reason || 'forbidden-region'),
+      bounds: restriction.type === 'circle'
+        ? {
+            type: 'circle',
+            x: finite(restriction.x),
+            z: finite(restriction.z),
+            radius: Math.max(0, finite(restriction.radius))
+          }
+        : {
+            type: 'rectangle',
+            minX: Math.min(finite(restriction.minX), finite(restriction.maxX)),
+            maxX: Math.max(finite(restriction.minX), finite(restriction.maxX)),
+            minZ: Math.min(finite(restriction.minZ), finite(restriction.maxZ)),
+            maxZ: Math.max(finite(restriction.minZ), finite(restriction.maxZ))
+          }
+    }));
   const candidates = [];
   const failures = [];
   for (let index = 0; index < candidatePolicies.length; index += 1) {
@@ -426,6 +447,7 @@ export function solveTerrainAwareTrails({
       policy,
       seed,
       archetype: profile.id,
+      constraintSources,
       points: result.points,
       segmentCosts: result.segments.map((segment, segmentIndex) => ({
         segmentIndex,
@@ -450,6 +472,7 @@ export function solveTerrainAwareTrails({
     diagnostics: {
       candidateCount: candidates.length,
       failureCount: failures.length,
+      constraintCount: constraintSources.length,
       deterministicSeed: seed
     }
   };
@@ -475,7 +498,8 @@ export function trailCandidateToPathNetwork(candidate, options = {}) {
       solver: 'terrain-aware-trail-v1',
       seed: candidate.seed,
       policy: candidate.policy,
-      totalCost: candidate.totalCost
+      totalCost: candidate.totalCost,
+      constraintSources: structuredClone(candidate.constraintSources || [])
     },
     nodes,
     segments: nodes.slice(0, -1).map((node, index) => ({
