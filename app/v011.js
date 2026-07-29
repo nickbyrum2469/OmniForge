@@ -170,7 +170,7 @@ function pathPanel(object) {
       ${numberControl('Edge noise', 'edgeNoise', properties.edgeNoise ?? 0.45, { step: 0.05, min: 0, max: 5 })}
       ${numberControl('Spline tension', 'splineTension', properties.splineTension, { step: 0.05, min: 0, max: 1 })}
       ${numberControl('Samples/segment', 'samplesPerSegment', properties.samplesPerSegment, { step: 1, min: 2, max: 64 })}
-      <label class="v011-field"><span>Cut/fill terrain</span><input data-v011-path-check="carveTerrain" type="checkbox" ${properties.carveTerrain ? 'checked' : ''}></label>
+      <label class="v011-field"><span>Engineer corridor</span><input data-v011-path-check="carveTerrain" type="checkbox" ${properties.carveTerrain ? 'checked' : ''}></label>
       ${numberControl('Maximum grade %', 'maxGradePercent', properties.maxGradePercent, { step: 0.5, min: 0.1, max: 100 })}
       ${numberControl('Maximum cut', 'maxCutDepth', properties.maxCutDepth, { step: 0.25, min: 0, max: 1000 })}
       ${numberControl('Maximum fill', 'maxFillDepth', properties.maxFillDepth, { step: 0.25, min: 0, max: 1000 })}

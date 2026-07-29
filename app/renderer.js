@@ -3,8 +3,8 @@ import {
   mat4Identity, mat4Multiply, mat4Perspective, mat4Ortho, mat4LookAt, mat4Invert,
   transformPoint, modelMatrix, normalMatrix3, hexToRgb, cameraForward
 } from './math.js';
-import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, samplePathSpline, normalizeTerrainProperties, normalizePathProperties, terrainBounds } from './worldgen.js';
-import { buildPathGuideSegments, buildTerrainConformingPathSurface, terrainPathSamplingDiagnostics } from './path-visuals.js';
+import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, normalizeTerrainProperties, terrainBounds } from './worldgen.js';
+import { buildPathGuideSegmentsFromCorridor, buildTerrainConformingPathSurface, terrainPathSamplingDiagnostics } from './path-visuals.js';
 import { resolveViewportLighting } from './world-runtime.js';
 import { normalizeEnvironmentState } from './environment-runtime.js';
 import { SkyPass } from './sky-pass.js';
@@ -463,8 +463,8 @@ export function terrainMesh(object,paths){
   return {positions:new Float32Array(p),normals,indices:new Uint32Array(idx),uvs:new Float32Array(uv),blends:new Float32Array(blends)};
 }
 function pathLineData(object,terrain,paths){
-  const properties=normalizePathProperties(object.properties||{},object.transform||{}),width=Number(properties.width||3),dense=samplePathSpline(object,{spacing:Math.max(.25,width*.16)}),offset=Number(properties.surfaceOffset||.03)+.08;
-  return buildPathGuideSegments(dense,width,(x,z)=>terrainHeight(terrain,x,z,paths),offset);
+  const corridor=buildTerrainConformingPathSurface(object,terrain,paths);
+  return buildPathGuideSegmentsFromCorridor(corridor);
 }
 function createBufferMesh(gl,data){
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);const buffers=[];
@@ -588,9 +588,15 @@ export class Renderer3D{
     if(!terrain)return null;
     const signature=JSON.stringify([pathObject.properties,pathObject.transform,terrain.properties,terrain.transform,paths.map(path=>[path.id,path.properties,path.transform])]),cached=this.pathSurfaces.get(pathObject.id);
     if(cached?.signature===signature)return cached.mesh;
-    if(cached){for(const buffer of cached.mesh.buffers||[])this.gl.deleteBuffer(buffer);this.gl.deleteVertexArray(cached.mesh.vao);}
-    const data=buildTerrainConformingPathSurface(pathObject,terrain,paths);if(!data.indices.length)return null;
-    const mesh=createBufferMesh(this.gl,data);mesh.pathwayDiagnostics=data.diagnostics||null;this.pathSurfaces.set(pathObject.id,{signature,mesh,diagnostics:data.diagnostics||null});return mesh;
+    if(cached?.mesh){for(const buffer of cached.mesh.buffers||[])this.gl.deleteBuffer(buffer);this.gl.deleteVertexArray(cached.mesh.vao);}
+    const data=buildTerrainConformingPathSurface(pathObject,terrain,paths);
+    const diagnostics=data.diagnostics||null;
+    if(!data.indices.length||diagnostics?.meshValid===false){
+      this.pathSurfaces.set(pathObject.id,{signature,mesh:null,diagnostics});
+      window.__omniforgeDiagnostics?.warn?.('pathway-corridor-blocked',{pathId:pathObject.id,diagnostics});
+      return null;
+    }
+    const mesh=createBufferMesh(this.gl,data);mesh.pathwayDiagnostics=diagnostics;this.pathSurfaces.set(pathObject.id,{signature,mesh,diagnostics});return mesh;
   }
   updateTerrainSamplingDiagnostics(scene){
     const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false),paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);

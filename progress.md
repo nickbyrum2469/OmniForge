@@ -171,3 +171,17 @@ The branch remains blocked until the user validates the saved terrain and path o
 - Added route telemetry for target-PC proof instead of relying on editor spline visibility.
 
 The branch remains blocked until the exact Windows package is tested against the user's saved terrain on the RX 7900 XTX.
+
+## Target-PC pathway authority and feasibility repair
+
+- Baseline captured from the exact packaged commit `20805d70ef556b26d0a08eed75896f6d8aaf58ca` using the real saved project. The visible failure contained a suspended road slab, vertical terrain bands, a folded underside, and a second older terrain-painted path.
+- The saved project was copied without mutation to `C:\Users\nickb\Documents\OmniForge-TargetPC-Pathway-Test\20260728-181917\OmniForge`; its state hash matches the original.
+- Root cause: the vertical-profile compiler enforced grade after clamping cut/fill. The final grade pass could move stations outside their local cut/fill bounds. The server summed fill over all stations and then declared the route valid using grade alone.
+- Additional root cause: the production terrain shader still painted every path through the legacy terrain mask while Pathway Studio separately rendered a dedicated corridor.
+- The corridor is now the default surface and terrain-engineering authority. Legacy terrain painting/deformation remains available only through explicit compatibility authority values.
+- Grade, cut, and fill are solved as one bounded feasibility problem. Infeasible routes stay within local cut/fill bounds and are marked `BLOCKED` instead of being presented as gameplay-ready.
+- Adaptive cut/fill joins search outward for terrain intersection using configurable cut/fill slope ratios.
+- Corridor meshes now report finite/index/degenerate/vertical-edge/frame validation. Unsafe terrain joins are blocked from production rendering.
+- Editor spline guides now come from the exact final corridor rows rather than independently resampling raw terrain.
+- The exact saved branch fixture now reports `blocked-infeasible-profile`; it no longer activates the old terrain material/deformation authority.
+- Source tests and repository verification pass with 162 tests. Exact packaged target-PC visual acceptance is still required; merge recommendation remains `BLOCKED`.

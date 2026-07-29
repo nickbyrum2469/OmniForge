@@ -272,6 +272,8 @@ export function normalizePathProperties(properties = {}, transform = {}) {
     blendDistance: clamp(properties.blendDistance ?? 2.5, 0.05, 200),
     edgeNoise: clamp(properties.edgeNoise ?? 0.45, 0, 5),
     carveTerrain: properties.carveTerrain !== false,
+    surfaceAuthority: properties.surfaceAuthority === 'legacy-terrain' ? 'legacy-terrain' : 'corridor',
+    terrainModificationAuthority: properties.terrainModificationAuthority === 'legacy-terrain' ? 'legacy-terrain' : 'corridor',
     conformToTerrain: properties.conformToTerrain !== false,
     collider: properties.collider !== false,
     navigation: properties.navigation !== false,
@@ -295,6 +297,9 @@ export function normalizePathProperties(properties = {}, transform = {}) {
     maxFillDepth: clamp(properties.maxFillDepth ?? 2.5, 0, 1000),
     cutShoulder: clamp(properties.cutShoulder ?? properties.blendDistance ?? 3, 0.1, 200),
     sideSlopeWidth: clamp(properties.sideSlopeWidth ?? properties.cutShoulder ?? 3.4, 0.2, 200),
+    cutSlopeRatio: clamp(properties.cutSlopeRatio ?? 1.5, 0.25, 10),
+    fillSlopeRatio: clamp(properties.fillSlopeRatio ?? 2, 0.25, 10),
+    maxSideSlopeSearchWidth: clamp(properties.maxSideSlopeSearchWidth ?? Math.max(24, Number(properties.sideSlopeWidth ?? properties.cutShoulder ?? 3.4) * 5), 1, 500),
     drainageEnabled: properties.drainageEnabled !== false,
     ditchDepth: clamp(properties.ditchDepth ?? 0.22, 0, 5),
     bridgeThreshold: clamp(properties.bridgeThreshold ?? 5, 0, 1000),
@@ -378,17 +383,49 @@ function profileSignature(pathObject, terrain) {
   ]);
 }
 
-function enforceProfileGrade(profile, maximumGrade) {
-  for (let index = 1; index < profile.length; index += 1) {
-    const previous = profile[index - 1], current = profile[index];
-    const distance = Math.max(EPSILON, Math.hypot(current.x - previous.x, current.z - previous.z));
-    current.y = clamp(current.y, previous.y - distance * maximumGrade, previous.y + distance * maximumGrade);
+function solveBoundedProfile(profile, properties) {
+  const maximumGrade = properties.maxGradePercent / 100;
+  const minimum = profile.map(point => point.baseY - properties.maxCutDepth);
+  const maximum = profile.map(point => point.baseY + properties.maxFillDepth);
+  const preferred = profile.map(point => clamp(point.y, point.baseY - properties.maxCutDepth, point.baseY + properties.maxFillDepth));
+  const distance = index => Math.max(EPSILON, Math.hypot(
+    profile[index].x - profile[index - 1].x,
+    profile[index].z - profile[index - 1].z
+  ));
+
+  for (let pass = 0; pass < 2; pass += 1) {
+    for (let index = 1; index < profile.length; index += 1) {
+      const limit = distance(index) * maximumGrade;
+      minimum[index] = Math.max(minimum[index], minimum[index - 1] - limit);
+      maximum[index] = Math.min(maximum[index], maximum[index - 1] + limit);
+    }
+    for (let index = profile.length - 2; index >= 0; index -= 1) {
+      const limit = distance(index + 1) * maximumGrade;
+      minimum[index] = Math.max(minimum[index], minimum[index + 1] - limit);
+      maximum[index] = Math.min(maximum[index], maximum[index + 1] + limit);
+    }
   }
-  for (let index = profile.length - 2; index >= 0; index -= 1) {
-    const next = profile[index + 1], current = profile[index];
-    const distance = Math.max(EPSILON, Math.hypot(current.x - next.x, current.z - next.z));
-    current.y = clamp(current.y, next.y - distance * maximumGrade, next.y + distance * maximumGrade);
+
+  const infeasibleStations = [];
+  for (let index = 0; index < profile.length; index += 1) {
+    if (minimum[index] > maximum[index] + 1e-5) infeasibleStations.push(index);
   }
+  if (infeasibleStations.length) {
+    for (let index = 0; index < profile.length; index += 1) profile[index].y = preferred[index];
+    return { feasible: false, infeasibleStations };
+  }
+
+  const anchor = Math.floor(profile.length * 0.5);
+  profile[anchor].y = clamp(preferred[anchor], minimum[anchor], maximum[anchor]);
+  for (let index = anchor + 1; index < profile.length; index += 1) {
+    const limit = distance(index) * maximumGrade;
+    profile[index].y = clamp(preferred[index], Math.max(minimum[index], profile[index - 1].y - limit), Math.min(maximum[index], profile[index - 1].y + limit));
+  }
+  for (let index = anchor - 1; index >= 0; index -= 1) {
+    const limit = distance(index + 1) * maximumGrade;
+    profile[index].y = clamp(preferred[index], Math.max(minimum[index], profile[index + 1].y - limit), Math.min(maximum[index], profile[index + 1].y + limit));
+  }
+  return { feasible: true, infeasibleStations: [] };
 }
 
 export function compilePathProfile(pathObject, terrain) {
@@ -404,8 +441,6 @@ export function compilePathProfile(pathObject, terrain) {
     const baseY = terrainBaseHeightAt(terrain, sample.x, sample.z);
     return { ...sample, distance: accumulatedDistance, baseY, y: baseY + properties.surfaceOffset };
   });
-  const maximumGrade = properties.maxGradePercent / 100;
-  enforceProfileGrade(profile, maximumGrade);
   for (let pass = 0; pass < properties.profileSmoothingPasses; pass += 1) {
     const source = profile.map(point => point.y);
     for (let index = 1; index < profile.length - 1; index += 1) {
@@ -413,13 +448,35 @@ export function compilePathProfile(pathObject, terrain) {
       const smoothed = lerp(source[index], target, properties.verticalCurveStrength);
       profile[index].y = clamp(smoothed, profile[index].baseY - properties.maxCutDepth, profile[index].baseY + properties.maxFillDepth);
     }
-    enforceProfileGrade(profile, maximumGrade);
   }
+  const constraintResult = solveBoundedProfile(profile, properties);
+  let maximumGradePercent = 0;
+  let maximumCut = 0;
+  let maximumFill = 0;
   for (let index = 0; index < profile.length; index += 1) {
     const previous = profile[Math.max(0, index - 1)], next = profile[Math.min(profile.length - 1, index + 1)];
     const horizontal = Math.max(EPSILON, Math.hypot(next.x - previous.x, next.z - previous.z));
     profile[index].gradePercent = ((next.y - previous.y) / horizontal) * 100;
+    maximumCut = Math.max(maximumCut, profile[index].baseY - profile[index].y);
+    maximumFill = Math.max(maximumFill, profile[index].y - profile[index].baseY);
   }
+  for (let index = 1; index < profile.length; index += 1) {
+    const previous = profile[index - 1], current = profile[index];
+    const horizontal = Math.max(EPSILON, Math.hypot(current.x - previous.x, current.z - previous.z));
+    maximumGradePercent = Math.max(maximumGradePercent, Math.abs(current.y - previous.y) / horizontal * 100);
+  }
+  profile.diagnostics = {
+    feasible: constraintResult.feasible,
+    infeasibleStationCount: constraintResult.infeasibleStations.length,
+    infeasibleStations: constraintResult.infeasibleStations,
+    maximumGradePercent,
+    maximumCut,
+    maximumFill,
+    gameplayReady: constraintResult.feasible
+      && maximumGradePercent <= properties.maxGradePercent + 0.05
+      && maximumCut <= properties.maxCutDepth + 1e-4
+      && maximumFill <= properties.maxFillDepth + 1e-4
+  };
   profileCache.set(pathObject, { signature, profile });
   return profile;
 }
@@ -438,6 +495,7 @@ export function pathBlendAt(paths, x, z) {
   for (const pathObject of paths || []) {
     if (pathObject.visible === false) continue;
     const properties = normalizePathProperties(pathObject.properties || {}, pathObject.transform || {});
+    if (properties.surfaceAuthority !== 'legacy-terrain') continue;
     const nearest = nearestPathPoint(pathObject, x, z);
     const width = Math.max(0.1, Number(properties.width || 3));
     const roadAndShoulder = width * 0.5 + Math.max(0, Number(properties.shoulderWidth || 0));
@@ -465,7 +523,7 @@ export function terrainHeightAt(terrain, x, z, paths = []) {
   for (const pathObject of paths || []) {
     if (pathObject.visible === false) continue;
     const properties = normalizePathProperties(pathObject.properties || {}, pathObject.transform || {});
-    if (!properties.carveTerrain) continue;
+    if (!properties.carveTerrain || properties.terrainModificationAuthority !== 'legacy-terrain') continue;
     const profile = compilePathProfile(pathObject, terrain);
     const nearest = nearestProfilePoint(profile, x, z);
     const width = Math.max(0.1, Number(properties.width || 3));

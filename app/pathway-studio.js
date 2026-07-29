@@ -114,14 +114,14 @@ export function renderPathwayInspector(pathObject, terrain, allPaths, helpers) {
   const diagnostics = analyzePathwayCorridor(pathObject, terrain, allPaths);
   const presetKey = PATHWAY_PRESETS[p.pathPreset] ? p.pathPreset : 'dirtRoad';
   const warnings = diagnostics.warnings || [];
-  const gradeStatus = diagnostics.maximumGradePercent > Number(p.maxGradePercent || 12) + 0.05 ? 'bad' : 'good';
+  const gradeStatus = diagnostics.gameplayReady === false || diagnostics.maximumGradePercent > Number(p.maxGradePercent || 12) + 0.05 ? 'bad' : 'good';
   const radiusStatus = diagnostics.minimumCurveRadius && diagnostics.minimumCurveRadius < Number(p.minimumCurveRadius || 10) ? 'warn' : 'good';
   const material = helpers.materialSelect(p.materialId);
   const fallbackColor = helpers.propColor('Fallback road color', 'color', p.color || '#73573d');
   return `<div class="pathway-studio">
     <div class="pathway-hero">
       <div><span class="pathway-kicker">PATHWAY STUDIO</span><strong>Grade-aware terrain corridor</strong><p>The spline is the authority. Roadbed, crown, banking, shoulders, drainage, cut/fill slopes, materials, collision and navigation derive from it.</p></div>
-      <span class="pathway-status ${warnings.length ? 'warn' : 'good'}">${warnings.length ? `${warnings.length} review item${warnings.length === 1 ? '' : 's'}` : 'Corridor healthy'}</span>
+      <span class="pathway-status ${diagnostics.gameplayReady === false ? 'bad' : warnings.length ? 'warn' : 'good'}">${diagnostics.gameplayReady === false ? 'Engineering limits conflict' : warnings.length ? `${warnings.length} review item${warnings.length === 1 ? '' : 's'}` : 'Corridor healthy'}</span>
     </div>
     <div class="pathway-preset-row">
       <select data-pathway-preset>${Object.entries(PATHWAY_PRESETS).map(([key, preset]) => option(key, preset.label, presetKey)).join('')}</select>
@@ -135,6 +135,7 @@ export function renderPathwayInspector(pathObject, terrain, allPaths, helpers) {
       ${metric('minimum radius', diagnostics.minimumCurveRadius ? `${format(diagnostics.minimumCurveRadius)} m` : 'straight', radiusStatus)}
       ${metric('maximum cut', `${format(diagnostics.maximumCut)} m`, diagnostics.tunnelRecommended ? 'warn' : '')}
       ${metric('maximum fill', `${format(diagnostics.maximumFill)} m`, diagnostics.bridgeRecommended ? 'warn' : '')}
+      ${metric('route state', diagnostics.gameplayReady === false ? 'BLOCKED' : 'READY', diagnostics.gameplayReady === false ? 'bad' : 'good')}
       ${metric('triangles', Math.round(diagnostics.triangleCount || 0).toLocaleString())}
     </div>
     ${warnings.length ? `<div class="pathway-warnings">${warnings.map(item => `<p>${helpers.escapeHtml(item)}</p>`).join('')}</div>` : ''}
@@ -165,6 +166,9 @@ export function renderPathwayInspector(pathObject, terrain, allPaths, helpers) {
     <details class="pathway-group" open><summary>Terrain engineering</summary><div class="pathway-grid">
       ${numberControl('Cut/fill shoulder', 'cutShoulder', p.cutShoulder ?? 3, 0.1, 0.1, 100, 'm')}
       ${numberControl('Side-slope width', 'sideSlopeWidth', p.sideSlopeWidth ?? 3.4, 0.1, 0.2, 100, 'm')}
+      ${numberControl('Cut slope ratio', 'cutSlopeRatio', p.cutSlopeRatio ?? 1.5, 0.1, 0.25, 10, 'H:V')}
+      ${numberControl('Fill slope ratio', 'fillSlopeRatio', p.fillSlopeRatio ?? 2, 0.1, 0.25, 10, 'H:V')}
+      ${numberControl('Maximum terrain-join search', 'maxSideSlopeSearchWidth', p.maxSideSlopeSearchWidth ?? 24, 0.5, 1, 500, 'm')}
       ${numberControl('Maximum cut', 'maxCutDepth', p.maxCutDepth ?? 5, 0.1, 0, 1000, 'm')}
       ${numberControl('Maximum fill', 'maxFillDepth', p.maxFillDepth ?? 3, 0.1, 0, 1000, 'm')}
       ${numberControl('Bridge review threshold', 'bridgeThreshold', p.bridgeThreshold ?? 5, 0.25, 0, 1000, 'm')}
@@ -173,7 +177,7 @@ export function renderPathwayInspector(pathObject, terrain, allPaths, helpers) {
       ${selectControl('Render lift', 'renderLiftMode', p.renderLiftMode || 'auto', [{value:'auto',label:'Automatic for world scale and depth precision'},{value:'manual',label:'Manual'}])}
       ${numberControl('Manual render lift', 'renderLift', p.renderLift ?? 0.028, 0.005, 0.006, 0.25, 'm')}
     </div><div class="pathway-checks">
-      ${checkControl('Carve terrain', 'carveTerrain', p.carveTerrain !== false, 'Compile the vertical profile into terrain height queries.')}
+      ${checkControl('Engineer terrain corridor', 'carveTerrain', p.carveTerrain !== false, 'The Pathway Studio corridor owns roadbed, shoulders and terrain joins. Legacy terrain deformation stays disabled.')}
       ${checkControl('Conform to terrain', 'conformToTerrain', p.conformToTerrain !== false, 'Keep the corridor attached to the authoritative world terrain.')}
       ${checkControl('Drainage ditches', 'drainageEnabled', p.drainageEnabled !== false, 'Lower side bands to create visible drainage transitions.')}
     </div><div class="pathway-grid">${numberControl('Ditch depth', 'ditchDepth', p.ditchDepth ?? 0.22, 0.02, 0, 5, 'm')}${numberControl('Blend shoulder', 'blendDistance', p.blendDistance ?? 2.5, 0.1, 0.05, 100, 'm')}${numberControl('Edge irregularity', 'edgeNoise', p.edgeNoise ?? 0.6, 0.05, 0, 5)}</div></details>

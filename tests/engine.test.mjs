@@ -152,8 +152,8 @@ test('path defaults preserve terrain-conforming system relationships',()=>{
   assert.ok(pathObject.properties.points.length>=2);
 });
 
-test('terrain path mask produces a soft shoulder instead of a hard ribbon',()=>{
-  const pathObject=createSceneObject('path',{position:[0,0,0],properties:{width:4,blendDistance:3,edgeNoise:0,points:[[-10,0],[10,0]]}});
+test('legacy terrain path mask remains available only through explicit compatibility authority',()=>{
+  const pathObject=createSceneObject('path',{position:[0,0,0],properties:{width:4,blendDistance:3,edgeNoise:0,points:[[-10,0],[10,0]],surfaceAuthority:'legacy-terrain'}});
   const center=pathBlendAt([pathObject],0,0),shoulder=pathBlendAt([pathObject],0,3.5),outside=pathBlendAt([pathObject],0,8);
   assert.ok(center>.99);
   assert.ok(shoulder>0&&shoulder<1);

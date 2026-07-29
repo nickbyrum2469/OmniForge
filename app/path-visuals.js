@@ -39,3 +39,24 @@ export function buildPathGuideSegments(samples, width, heightAt, surfaceOffset =
   }
   return { center, edges };
 }
+
+export function buildPathGuideSegmentsFromCorridor(corridor, surfaceOffset = 0.035) {
+  const center = [];
+  const edges = [];
+  const positions = corridor?.positions || [];
+  const rowSize = Number(corridor?.rowSize || 9);
+  const rowCount = Math.floor(positions.length / 3 / rowSize);
+  if (rowSize < 6 || rowCount < 2) return { center, edges };
+  const point = (row, band) => {
+    const offset = (row * rowSize + band) * 3;
+    return [positions[offset], positions[offset + 1] + surfaceOffset, positions[offset + 2]];
+  };
+  for (let row = 0; row < rowCount - 1; row += 1) {
+    center.push(...point(row, 4), ...point(row + 1, 4));
+    edges.push(
+      ...point(row, 3), ...point(row + 1, 3),
+      ...point(row, 5), ...point(row + 1, 5)
+    );
+  }
+  return { center, edges };
+}
