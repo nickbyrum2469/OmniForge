@@ -12,6 +12,8 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Gate 4 begins explicit terrain ownership: the unchanged procedural terrain is queried through a chunk-indexed signed-distance modifier field with distinct road, shoulder, drainage, blend, bridge, and tunnel behavior. No live renderer cutover has occurred yet.
 - Construction geometry now derives from the same compiled stations and terrain boundary registry: cut/fill earthworks, retaining faces, bridge girders/piers, swept tunnel lining, and bounded pedestrian stairs are structural submeshes rather than cosmetic junction patches.
 - A cached runtime bundle now owns the graph, compiled stations, terrain modifier, geometry, and generation diagnostics. Collision, navigation, foliage, grounding, streaming, and rendering adapters reference that same bundle instead of resampling the route independently.
+- The live WebGL renderer now consumes the v2 runtime for terrain heights/material masks, road and construction meshes, editor center/edge/junction guides, terrain picking, and path shadow submission. Legacy source remains only as a temporary rollback target until packaged visual approval.
+- The first live v2 browser cutover defects are corrected: the browser uses a vendored, licensed Earcut module; minor sub-drainage profile corrections stay conforming instead of generating broad earthwork; and two-arm spline nodes share exact cross-section frames. The regenerated saved scene at `output/path-network-v2-live-3` has no prior brown wedge and no browser console errors; generated evidence remains untracked.
 
 ## Live-project visual regression gate
 

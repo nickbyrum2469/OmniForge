@@ -304,10 +304,55 @@ function civilAssistMode(segment, metrics, engineering) {
   ) {
     return { mode: 'retaining-wall', reason: 'side-slope-requires-structure', automatic: true };
   }
-  if (metrics.maximumCut > 0.15 || metrics.maximumFill > 0.15) {
+  const profile = segment.crossSectionProfile || {};
+  const surfaceTolerance = Math.max(
+    0.25,
+    Math.min(0.75, (
+      finite(profile.shoulderDrop, 0.08)
+      + (profile.drainageEnabled === false ? 0 : finite(profile.ditchDepth, 0.2))
+    ) * 1.25)
+  );
+  if (metrics.maximumCut > surfaceTolerance || metrics.maximumFill > surfaceTolerance) {
     return { mode: 'cut-fill', reason: 'vertical-profile-requires-earthwork', automatic: true };
   }
   return { mode: 'conform', reason: 'terrain-and-grade-within-limits', automatic: true };
+}
+
+function harmonizeTwoArmFrames(network, compiledSegments) {
+  const endpoints = new Map(network.nodes.map(node => [node.id, []]));
+  for (const segment of compiledSegments) {
+    if (!segment.samples.length) continue;
+    endpoints.get(segment.fromNode)?.push({
+      segmentId: segment.id,
+      sample: segment.samples[0]
+    });
+    endpoints.get(segment.toNode)?.push({
+      segmentId: segment.id,
+      sample: segment.samples.at(-1)
+    });
+  }
+
+  let connectionCount = 0;
+  for (const entries of endpoints.values()) {
+    if (entries.length !== 2) continue;
+    const first = entries[0].sample;
+    const second = entries[1].sample;
+    const alignedSecondSide = dot3(first.side, second.side) < 0
+      ? scale3(second.side, -1)
+      : second.side;
+    const sharedSide = normalize3(add3(first.side, alignedSecondSide), first.side);
+    const alignedSecondNormal = dot3(first.normal, second.normal) < 0
+      ? scale3(second.normal, -1)
+      : second.normal;
+    let sharedNormal = normalize3(add3(first.normal, alignedSecondNormal), [0, 1, 0]);
+    if (sharedNormal[1] < 0) sharedNormal = scale3(sharedNormal, -1);
+    first.side = [...sharedSide];
+    second.side = [...sharedSide];
+    first.normal = [...sharedNormal];
+    second.normal = [...sharedNormal];
+    connectionCount += 1;
+  }
+  return connectionCount;
 }
 
 function curvatureAt(samples, index) {
@@ -417,6 +462,7 @@ export function compilePathNetwork(input, options = {}) {
     nodeMap,
     options
   ));
+  const twoArmConnectionCount = harmonizeTwoArmFrames(network, segments);
   const stations = [];
   let networkDistance = 0;
   for (const segment of segments) {
@@ -450,6 +496,7 @@ export function compilePathNetwork(input, options = {}) {
       nodeCount: network.nodes.length,
       segmentCount: segments.length,
       junctionCount: junctions.length,
+      twoArmConnectionCount,
       stationCount: stations.length,
       invalidSegmentIds: invalidSegments.map(segment => segment.id),
       totalLength: segments.reduce((sum, segment) => sum + segment.metrics.length, 0),

@@ -56,6 +56,7 @@ test('road core and shoulders follow the same compiled stations without degenera
   assert.ok(geometry.meshes.shoulder.indices.length > 0);
   assert.equal(geometry.guides.center.length / 6, compiled.stations.length - compiled.segments.length);
   assert.ok(geometry.meshes.road.roles.includes('dead-end-cap'));
+  assert.equal(geometry.meshes.earthwork.indices.length, 0);
 });
 
 for (const armCount of [3, 4, 5]) {

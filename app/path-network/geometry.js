@@ -1,4 +1,4 @@
-import earcut, { deviation as earcutDeviation } from 'earcut';
+import earcut, { deviation as earcutDeviation } from '../vendor/earcut.js';
 
 const EPSILON = 1e-6;
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -354,7 +354,10 @@ function crossSectionsBySegment(terrainModifier) {
 }
 
 function appendEarthwork(builder, segment, sections) {
-  if (!sections.length || ['bridge', 'tunnel', 'invalid'].includes(segment.construction.mode)) return;
+  if (
+    !sections.length
+    || !['cut-fill', 'retaining-wall', 'stairs'].includes(segment.construction.mode)
+  ) return;
   const repeat = Math.max(0.25, segment.crossSectionProfile.textureRepeatLength || 5);
   appendStrip(builder, sections.map(section => ({
     distance: section.distance,

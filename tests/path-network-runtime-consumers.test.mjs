@@ -6,6 +6,7 @@ import {
   pathFoliageExcluded,
   pathGroundingSample
 } from '../app/path-network/consumers.js';
+import { terrainMesh } from '../app/renderer.js';
 
 function sceneFixture() {
   return {
@@ -88,4 +89,15 @@ test('scene terrain sampling resolves overlap from runtime influence without leg
   assert.ok(inside.influence > 0);
   assert.equal(outside.influence, 0);
   assert.equal(outside.height, 0);
+});
+
+test('live terrain mesh consumes the v2 modifier bundle and its material field', () => {
+  const scene = sceneFixture();
+  const runtimes = compileScenePathRuntimes(scene);
+  const mesh = terrainMesh(scene.objects[0], [scene.objects[1]], runtimes);
+  const rowSize = Number(scene.objects[0].properties.resolutionX) + 1;
+  const centerIndex = 32 * rowSize + 32;
+  assert.ok(mesh.positions[centerIndex * 3 + 1] > 1.9);
+  assert.ok(mesh.blends[centerIndex] > 0.99);
+  assert.equal(mesh.positions.every(Number.isFinite), true);
 });

@@ -66,6 +66,52 @@ test('parallel-transport side frames remain finite and never flip', () => {
   }
 });
 
+test('ordinary two-arm nodes share one exact road cross-section frame', () => {
+  const compiled = compilePathNetwork(network(), {
+    terrainHeightAt: flatHeight,
+    terrainNormalAt: flatNormal,
+    spacing: 0.35
+  });
+  const incoming = compiled.segments[0].samples.at(-1);
+  const outgoing = compiled.segments[1].samples[0];
+  assert.deepEqual(incoming.position, outgoing.position);
+  assert.deepEqual(incoming.side, outgoing.side);
+  assert.deepEqual(incoming.normal, outgoing.normal);
+  assert.equal(compiled.diagnostics.twoArmConnectionCount, 1);
+  const halfWidth = compiled.segments[0].crossSectionProfile.width * 0.5;
+  for (const sign of [-1, 1]) {
+    const firstEdge = incoming.position.map((value, index) => value + incoming.side[index] * halfWidth * sign);
+    const secondEdge = outgoing.position.map((value, index) => value + outgoing.side[index] * halfWidth * sign);
+    assert.ok(Math.hypot(...firstEdge.map((value, index) => value - secondEdge[index])) < 0.01);
+  }
+});
+
+test('Civil Assist does not turn sub-drainage profile correction into broad earthwork', () => {
+  const input = normalizePathNetwork({
+    id: 'minor-profile-correction',
+    nodes: [
+      { id: 'a', position: [0, 0, 0], heightMode: 'absolute' },
+      { id: 'b', position: [30, 0, 0], heightMode: 'absolute' }
+    ],
+    segments: [{
+      id: 'road',
+      fromNode: 'a',
+      toNode: 'b',
+      crossSectionProfile: { shoulderDrop: 0.08, ditchDepth: 0.2 }
+    }]
+  });
+  const compiled = compilePathNetwork(input, {
+    terrainHeightAt: x => 0.2 * Math.sin(x / 5),
+    terrainNormalAt: flatNormal,
+    spacing: 0.35
+  });
+  assert.ok(Math.max(
+    compiled.segments[0].metrics.maximumCut,
+    compiled.segments[0].metrics.maximumFill
+  ) > 0.15);
+  assert.equal(compiled.segments[0].construction.mode, 'conform');
+});
+
 test('terrain, offset, and absolute nodes resolve through one compiler', () => {
   const input = normalizePathNetwork({
     id: 'height-modes',
