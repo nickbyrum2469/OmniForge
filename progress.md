@@ -11,6 +11,7 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Gate 3 begins the replacement geometry: road core and shoulders share compiled stations, true dead ends alone receive caps, and multi-arm intersections use cleaned filleted portal polygons with validated Earcut triangulation instead of radial discs.
 - Gate 4 begins explicit terrain ownership: the unchanged procedural terrain is queried through a chunk-indexed signed-distance modifier field with distinct road, shoulder, drainage, blend, bridge, and tunnel behavior. No live renderer cutover has occurred yet.
 - Construction geometry now derives from the same compiled stations and terrain boundary registry: cut/fill earthworks, retaining faces, bridge girders/piers, swept tunnel lining, and bounded pedestrian stairs are structural submeshes rather than cosmetic junction patches.
+- A cached runtime bundle now owns the graph, compiled stations, terrain modifier, geometry, and generation diagnostics. Collision, navigation, foliage, grounding, streaming, and rendering adapters reference that same bundle instead of resampling the route independently.
 
 ## Live-project visual regression gate
 

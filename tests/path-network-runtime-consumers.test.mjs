@@ -1,0 +1,91 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { compilePathObjectRuntime, compileScenePathRuntimes, sampleScenePathTerrain } from '../app/path-network/runtime.js';
+import {
+  connectPathRuntimeConsumers,
+  pathFoliageExcluded,
+  pathGroundingSample
+} from '../app/path-network/consumers.js';
+
+function sceneFixture() {
+  return {
+    settings: { worldChunkSize: 16 },
+    objects: [
+      {
+        id: 'terrain',
+        type: 'terrain',
+        visible: true,
+        transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+        properties: {
+          preset: 'plains',
+          seed: 7,
+          height: 0,
+          baseHeight: 0,
+          bounds: { minX: -50, maxX: 50, minZ: -50, maxZ: 50 },
+          resolutionX: 64,
+          resolutionZ: 64,
+          chunkSize: 16
+        }
+      },
+      {
+        id: 'path',
+        type: 'path',
+        visible: true,
+        transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+        properties: {
+          points: [[-20, 0], [0, 0], [20, 0]],
+          nodeElevations: [2, 2, 2],
+          spline: true,
+          width: 5,
+          shoulderWidth: 1,
+          carveTerrain: true
+        }
+      }
+    ]
+  };
+}
+
+test('one cached runtime bundle owns compile, terrain, geometry, and diagnostics', () => {
+  const scene = sceneFixture();
+  const first = compilePathObjectRuntime(scene.objects[1], scene.objects[0]);
+  const second = compilePathObjectRuntime(scene.objects[1], scene.objects[0]);
+  assert.strictEqual(first, second);
+  assert.strictEqual(first.geometry.sourceNetworkId, first.compiled.sourceNetworkId);
+  assert.strictEqual(first.terrainModifier.sourceNetworkId, first.compiled.sourceNetworkId);
+  assert.equal(first.diagnostics.valid, true);
+  assert.equal(first.migratedFromLegacy, true);
+});
+
+test('renderer, collision, navigation, foliage, grounding, and streaming share one generation', () => {
+  const [runtime] = compileScenePathRuntimes(sceneFixture());
+  const consumers = connectPathRuntimeConsumers(runtime);
+  assert.equal(consumers.generationRevision, runtime.generationRevision);
+  assert.strictEqual(consumers.render.road, consumers.collision.roadMesh);
+  assert.strictEqual(consumers.render.road, consumers.navigation.surfaceMesh);
+  assert.strictEqual(consumers.foliage.dirtyChunkKeys, consumers.streaming.dirtyChunkKeys);
+  assert.strictEqual(consumers.foliage.terrainModifier, consumers.grounding.terrainModifier);
+  assert.ok(consumers.collision.segmentIds.length > 0);
+  assert.ok(consumers.navigation.segmentIds.length > 0);
+});
+
+test('foliage exclusion and grounding query the same signed-distance construction field', () => {
+  const [runtime] = compileScenePathRuntimes(sceneFixture());
+  const consumers = connectPathRuntimeConsumers(runtime);
+  assert.equal(pathFoliageExcluded(consumers, 0, 0), true);
+  assert.equal(pathFoliageExcluded(consumers, 0, 30), false);
+  const path = pathGroundingSample(consumers, 0, 0);
+  const terrain = pathGroundingSample(consumers, 0, 30);
+  assert.equal(path.source, 'path-surface');
+  assert.equal(terrain.source, 'terrain');
+  assert.ok(path.height > terrain.height);
+});
+
+test('scene terrain sampling resolves overlap from runtime influence without legacy resampling', () => {
+  const scene = sceneFixture();
+  const runtimes = compileScenePathRuntimes(scene);
+  const inside = sampleScenePathTerrain(runtimes, 0, 0, 0);
+  const outside = sampleScenePathTerrain(runtimes, 0, 0, 30);
+  assert.ok(inside.influence > 0);
+  assert.equal(outside.influence, 0);
+  assert.equal(outside.height, 0);
+});
