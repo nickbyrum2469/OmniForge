@@ -118,13 +118,19 @@ export function normalizePathNetwork(input = {}, options = {}) {
       shoulderMaterialId: source?.materialProfile?.shoulderMaterialId ?? input.defaults?.materialProfile?.shoulderMaterialId ?? null,
       structureMaterialId: source?.materialProfile?.structureMaterialId ?? input.defaults?.materialProfile?.structureMaterialId ?? null
     },
-    gameplayRules: defaultGameplayRules(source?.gameplayRules || input.defaults?.gameplayRules)
+    gameplayRules: defaultGameplayRules(source?.gameplayRules || input.defaults?.gameplayRules),
+    costBreakdown: source?.costBreakdown ? structuredClone(source.costBreakdown) : null
   }));
 
   return {
     schemaVersion: PATH_NETWORK_SCHEMA_VERSION,
     id: pathId,
     revision: Math.max(1, Math.floor(finite(input.revision, 1))),
+    purpose: String(input.purpose || 'authored corridor').slice(0, 240),
+    pathClass: String(input.pathClass || 'dirt-road').slice(0, 80),
+    designRules: input.designRules ? structuredClone(input.designRules) : {},
+    sourceRevisions: input.sourceRevisions ? structuredClone(input.sourceRevisions) : {},
+    generation: input.generation ? structuredClone(input.generation) : null,
     nodes,
     segments,
     defaults: {
