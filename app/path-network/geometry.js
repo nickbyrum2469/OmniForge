@@ -2,6 +2,8 @@ import earcut, { deviation as earcutDeviation } from 'earcut';
 
 const EPSILON = 1e-6;
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, finite(value, minimum)));
+const lerp = (a, b, t) => a + (b - a) * t;
 const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const scale3 = (value, amount) => [value[0] * amount, value[1] * amount, value[2] * amount];
@@ -317,6 +319,182 @@ function appendEndCap(builder, row, role) {
   }
 }
 
+function appendQuad(builder, a, b, c, d, role, uvScale = 1) {
+  const base = builder.positions.length / 3;
+  pushVertex(builder, a, [0, 0], 1, role);
+  pushVertex(builder, b, [uvScale, 0], 1, role);
+  pushVertex(builder, c, [0, 1], 1, role);
+  pushVertex(builder, d, [uvScale, 1], 1, role);
+  pushTriangle(builder, base, base + 1, base + 2);
+  pushTriangle(builder, base + 1, base + 3, base + 2);
+}
+
+function appendBox(builder, center, size, role) {
+  const [cx, cy, cz] = center;
+  const [sx, sy, sz] = size.map(value => Math.max(0.02, value * 0.5));
+  const points = [
+    [cx - sx, cy - sy, cz - sz], [cx + sx, cy - sy, cz - sz],
+    [cx - sx, cy + sy, cz - sz], [cx + sx, cy + sy, cz - sz],
+    [cx - sx, cy - sy, cz + sz], [cx + sx, cy - sy, cz + sz],
+    [cx - sx, cy + sy, cz + sz], [cx + sx, cy + sy, cz + sz]
+  ];
+  for (const [a, b, c, d] of [
+    [0, 1, 2, 3], [5, 4, 7, 6], [4, 0, 6, 2],
+    [1, 5, 3, 7], [2, 3, 6, 7], [4, 5, 0, 1]
+  ]) appendQuad(builder, points[a], points[b], points[c], points[d], role);
+}
+
+function crossSectionsBySegment(terrainModifier) {
+  const result = new Map();
+  for (const section of terrainModifier?.crossSections || []) {
+    if (!result.has(section.segmentId)) result.set(section.segmentId, []);
+    result.get(section.segmentId).push(section);
+  }
+  return result;
+}
+
+function appendEarthwork(builder, segment, sections) {
+  if (!sections.length || ['bridge', 'tunnel', 'invalid'].includes(segment.construction.mode)) return;
+  const repeat = Math.max(0.25, segment.crossSectionProfile.textureRepeatLength || 5);
+  appendStrip(builder, sections.map(section => ({
+    distance: section.distance,
+    textureRepeatLength: repeat,
+    positions: [section.outerLeft, section.shoulderLeft]
+  })), 'left-earthwork', [0, 0.45]);
+  appendStrip(builder, sections.map(section => ({
+    distance: section.distance,
+    textureRepeatLength: repeat,
+    positions: [section.shoulderRight, section.outerRight]
+  })), 'right-earthwork', [0.45, 0]);
+}
+
+function appendRetainingWalls(builder, segment, sections) {
+  if (segment.construction.mode !== 'retaining-wall' || sections.length < 2) return;
+  for (const side of ['Left', 'Right']) {
+    const topKey = `shoulder${side}`;
+    const terrainKey = `terrainShoulder${side}`;
+    const rows = sections.map(section => ({
+      distance: section.distance,
+      textureRepeatLength: 3,
+      positions: [
+        section[topKey],
+        [
+          section[terrainKey][0],
+          Math.min(section[terrainKey][1], section[topKey][1] - 0.05),
+          section[terrainKey][2]
+        ]
+      ]
+    }));
+    appendStrip(builder, rows, `retaining-wall-${side.toLowerCase()}`, [1, 1]);
+  }
+}
+
+function appendBridge(builder, segment, sections, baseHeightAt) {
+  if (segment.construction.mode !== 'bridge' || sections.length < 2) return;
+  const girderDepth = Math.max(0.35, segment.crossSectionProfile.width * 0.08);
+  for (const side of ['Left', 'Right']) {
+    const key = `road${side}`;
+    const rows = sections.map(section => {
+      const top = section[key];
+      return {
+        distance: section.distance,
+        textureRepeatLength: 5,
+        positions: [top, [top[0], top[1] - girderDepth, top[2]]]
+      };
+    });
+    appendStrip(builder, rows, `bridge-${side.toLowerCase()}-girder`, [1, 1]);
+  }
+  const length = sections.at(-1).distance - sections[0].distance;
+  const pierSpacing = Math.max(8, Math.min(24, segment.crossSectionProfile.width * 2.5));
+  const pierCount = Math.max(0, Math.floor(length / pierSpacing) - 1);
+  for (let index = 1; index <= pierCount; index += 1) {
+    const target = sections[0].distance + length * index / (pierCount + 1);
+    const section = sections.reduce((best, candidate) => (
+      Math.abs(candidate.distance - target) < Math.abs(best.distance - target) ? candidate : best
+    ), sections[0]);
+    const baseY = finite(baseHeightAt(section.center[0], section.center[2]), section.center[1] - 1);
+    const topY = section.center[1] - girderDepth;
+    const height = Math.max(0.25, topY - baseY);
+    appendBox(
+      builder,
+      [section.center[0], baseY + height * 0.5, section.center[2]],
+      [Math.max(0.65, segment.crossSectionProfile.width * 0.16), height, Math.max(0.65, segment.crossSectionProfile.width * 0.16)],
+      'bridge-pier'
+    );
+  }
+}
+
+function appendTunnel(builder, segment) {
+  if (segment.construction.mode !== 'tunnel' || segment.samples.length < 2) return;
+  const halfWidth = segment.crossSectionProfile.width * 0.5 + Math.max(0.5, segment.crossSectionProfile.shoulderWidth);
+  const clearance = Math.max(3, segment.crossSectionProfile.width * 0.65);
+  const archSegments = 10;
+  const rows = segment.samples.map(sample => ({
+    distance: sample.distance,
+    textureRepeatLength: 4,
+    positions: Array.from({ length: archSegments + 1 }, (_, index) => {
+      const angle = Math.PI - Math.PI * index / archSegments;
+      const lateral = Math.cos(angle) * halfWidth;
+      const vertical = Math.sin(angle) * clearance;
+      return add3(
+        add3(sample.position, scale3(sample.side, lateral)),
+        scale3(sample.normal, vertical)
+      );
+    })
+  }));
+  appendStrip(builder, rows, 'tunnel-lining', [1, 1]);
+}
+
+function sampleAtDistance(samples, target) {
+  let index = 1;
+  while (index < samples.length - 1 && samples[index].distance < target) index += 1;
+  const start = samples[index - 1];
+  const end = samples[index];
+  const t = clamp((target - start.distance) / Math.max(EPSILON, end.distance - start.distance), 0, 1);
+  return {
+    position: add3(start.position, scale3(sub3(end.position, start.position), t)),
+    side: normalize3(add3(start.side, scale3(sub3(end.side, start.side), t))),
+    distance: target
+  };
+}
+
+function appendStairs(builder, segment, engineering) {
+  if (segment.construction.mode !== 'stairs' || segment.samples.length < 2) return false;
+  const samples = segment.samples;
+  const totalLength = samples.at(-1).distance;
+  const rise = samples.at(-1).position[1] - samples[0].position[1];
+  const maximumRise = Math.max(0.05, finite(engineering?.stairMaximumRise, 0.19));
+  const minimumRun = Math.max(0.15, finite(engineering?.stairMinimumRun, 0.28));
+  const neededForRise = Math.max(1, Math.ceil(Math.abs(rise) / maximumRise));
+  const possibleByRun = Math.max(1, Math.floor(totalLength / minimumRun));
+  const stepCount = Math.min(4096, Math.max(1, Math.min(neededForRise, possibleByRun)));
+  const halfWidth = segment.crossSectionProfile.width * 0.5;
+  let previousEnd = null;
+  for (let index = 0; index < stepCount; index += 1) {
+    const start = sampleAtDistance(samples, totalLength * index / stepCount);
+    const end = sampleAtDistance(samples, totalLength * (index + 1) / stepCount);
+    const y = lerp(samples[0].position[1], samples.at(-1).position[1], index / stepCount);
+    const nextY = lerp(samples[0].position[1], samples.at(-1).position[1], (index + 1) / stepCount);
+    const leftStart = add3([start.position[0], y, start.position[2]], scale3(start.side, -halfWidth));
+    const rightStart = add3([start.position[0], y, start.position[2]], scale3(start.side, halfWidth));
+    const leftEnd = add3([end.position[0], y, end.position[2]], scale3(end.side, -halfWidth));
+    const rightEnd = add3([end.position[0], y, end.position[2]], scale3(end.side, halfWidth));
+    appendQuad(builder, leftStart, rightStart, leftEnd, rightEnd, 'stair-tread');
+    if (index < stepCount - 1 && Math.abs(nextY - y) > EPSILON) {
+      appendQuad(
+        builder,
+        leftEnd,
+        rightEnd,
+        [leftEnd[0], nextY, leftEnd[2]],
+        [rightEnd[0], nextY, rightEnd[2]],
+        'stair-riser'
+      );
+    }
+    previousEnd = [leftEnd, rightEnd];
+  }
+  return Boolean(previousEnd);
+}
+
 export function validatePathNetworkGeometry(meshes) {
   const errors = [];
   const meshReports = {};
@@ -359,6 +537,8 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
   const structure = createMeshBuilder('structure');
   const guides = { center: [], edges: [], construction: [] };
   const degree = degreeMap(compiled);
+  const sectionsBySegment = crossSectionsBySegment(options.terrainModifier);
+  const baseHeightAt = options.terrainModifier?.baseHeightAt || (() => 0);
   const portalsByNode = new Map((compiled.nodes || []).map(node => [node.id, []]));
   const preparedSegments = [];
 
@@ -372,9 +552,15 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
   for (const prepared of preparedSegments) {
     const { segment, samples } = prepared;
     const rows = roadRows(segment, samples);
-    appendStrip(road, rows, 'road-core', [1, 1, 1]);
+    const generatedStairs = appendStairs(road, segment, compiled.engineering);
+    if (!generatedStairs) appendStrip(road, rows, 'road-core', [1, 1, 1]);
     appendStrip(shoulder, shoulderRows(segment, samples, -1), 'left-shoulder', [1, 0.45]);
     appendStrip(shoulder, shoulderRows(segment, samples, 1), 'right-shoulder', [1, 0.45]);
+    const constructionSections = sectionsBySegment.get(segment.id) || [];
+    appendEarthwork(earthwork, segment, constructionSections);
+    appendRetainingWalls(structure, segment, constructionSections);
+    appendBridge(structure, segment, constructionSections, baseHeightAt);
+    appendTunnel(structure, segment);
     const isFromDeadEnd = (degree.get(segment.fromNode) || 0) === 1;
     const isToDeadEnd = (degree.get(segment.toNode) || 0) === 1;
     if (isFromDeadEnd) appendEndCap(road, rows[0], 'dead-end-cap');

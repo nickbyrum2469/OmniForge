@@ -211,6 +211,16 @@ function crossSectionForSample(segment, sample, baseHeightAt) {
   const shoulderRight = point(extents.shoulderEdge);
   shoulderLeft[1] -= finite(profile.shoulderDrop, 0.08);
   shoulderRight[1] -= finite(profile.shoulderDrop, 0.08);
+  const terrainShoulderLeft = [
+    shoulderLeft[0],
+    finite(baseHeightAt(shoulderLeft[0], shoulderLeft[2]), shoulderLeft[1]),
+    shoulderLeft[2]
+  ];
+  const terrainShoulderRight = [
+    shoulderRight[0],
+    finite(baseHeightAt(shoulderRight[0], shoulderRight[2]), shoulderRight[1]),
+    shoulderRight[2]
+  ];
   const outerLeft = point(-extents.outerEdge);
   const outerRight = point(extents.outerEdge);
   outerLeft[1] = finite(baseHeightAt(outerLeft[0], outerLeft[2]), outerLeft[1]);
@@ -223,6 +233,8 @@ function crossSectionForSample(segment, sample, baseHeightAt) {
     roadRight,
     shoulderLeft,
     shoulderRight,
+    terrainShoulderLeft,
+    terrainShoulderRight,
     outerLeft,
     outerRight,
     outerBoundaryKeys: [
