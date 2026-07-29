@@ -51,4 +51,12 @@
 .v012-cost-legend .low { background:#35e669; }
 .v012-cost-legend .medium { background:#f2e122; }
 .v012-cost-legend .high { background:#f42e20; color:white; }
+.v012-runtime-status { display:flex; flex-direction:column; gap:3px; margin:8px 0 10px; padding:8px 9px; border:1px solid #33445e; border-radius:6px; background:#101b2b; font-size:10px; line-height:1.4; }
+.v012-runtime-status strong { color:#dce8ff; }
+.v012-runtime-status span { color:#93a6c1; }
+.v012-runtime-status.ready { border-color:rgba(53,230,105,.42); background:rgba(13,69,38,.34); }
+.v012-runtime-status.ready strong { color:#8ff5ad; }
+.v012-runtime-status.blocked { border-color:rgba(244,46,32,.58); background:rgba(97,20,22,.45); }
+.v012-runtime-status.blocked strong { color:#ffaaa4; }
+.v012-runtime-status.blocked span { color:#ffc0bb; }
 .v012-error { color:#ff9caa; background:rgba(93,18,34,.32); border:1px solid rgba(255,98,123,.28); border-radius:5px; padding:8px; font-size:10px; line-height:1.45; }

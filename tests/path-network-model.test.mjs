@@ -45,6 +45,14 @@ test('legacy path migration creates stable 3D nodes and connected segments', () 
   assert.equal(result.validation.valid, true);
 });
 
+test('legacy carve flags do not bypass unlocked Civil Assist construction', () => {
+  const migrated = migrateLegacyPathObject(legacyPath({ carveTerrain: false }), {
+    terrainHeightAt: () => 0
+  });
+  assert.ok(migrated.network.segments.every(segment => segment.constructionMode === 'auto'));
+  assert.ok(migrated.network.segments.every(segment => segment.constructionLocked === false));
+});
+
 test('authored legacy elevations become absolute height anchors', () => {
   const result = migrateLegacyPathObject(legacyPath({
     worldSpacePoints: true,

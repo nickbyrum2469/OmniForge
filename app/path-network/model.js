@@ -238,7 +238,7 @@ export function migrateLegacyPathObject(pathObject, options = {}) {
     fromNode: node.id,
     toNode: nodes[index + 1].id,
     curveType: properties.spline === false ? 'linear' : 'hermite',
-    constructionMode: properties.carveTerrain === false ? 'conform' : 'auto',
+    constructionMode: 'auto',
     constructionLocked: false,
     crossSectionProfile: defaultCrossSection(properties),
     materialProfile: {

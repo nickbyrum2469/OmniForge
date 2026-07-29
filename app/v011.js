@@ -111,6 +111,14 @@ function activePath() {
   return object?.type === 'path' ? object : null;
 }
 
+function activePathRuntime(object) {
+  const snapshot = currentSnapshot();
+  const renderer = bridge()?.renderer?.();
+  if (!snapshot?.scene || !renderer?.scenePathRuntimes) return null;
+  return renderer.scenePathRuntimes(snapshot.scene)
+    .find(runtime => runtime.pathObjectId === object?.id) || null;
+}
+
 function pathNodeSelection(object) {
   const nodes = object?.properties?.pathNetwork?.nodes || [];
   const middle = Math.max(0, Math.floor((nodes.length || 1) / 2));
@@ -236,6 +244,18 @@ function pathPanel(object) {
     return `<section class="v011-authoring-panel" data-v011-panel="path"><div class="v011-panel-title"><div><small>PATH NETWORK</small><strong>Migration required</strong></div></div><p class="v011-note">This path has not been migrated to the authoritative 3D Path Network. Save and reopen the project before editing it.</p></section>`;
   }
   const { index: selectedIndex, node: selectedNode } = pathNodeSelection(object);
+  const runtime = activePathRuntime(object);
+  const compilerDiagnostics = runtime?.compiled?.diagnostics;
+  const invalidSegments = runtime?.compiled?.segments?.filter(segment => segment.construction.mode === 'invalid') || [];
+  const runtimeState = !runtime ? 'compiling' : runtime.diagnostics.valid ? 'ready' : 'blocked';
+  const constructionSummary = runtime?.compiled?.segments
+    ?.map(segment => segment.construction.mode)
+    .filter((mode, index, modes) => modes.indexOf(mode) === index)
+    .join(' · ') || 'pending';
+  const failureReasons = invalidSegments
+    .map(segment => segment.construction.reason)
+    .filter((reason, index, reasons) => reasons.indexOf(reason) === index)
+    .join(' · ');
   const selectedSegment = network.segments.find(segment => segment.fromNode === selectedNode.id || segment.toNode === selectedNode.id) || network.segments[0];
   const draft = routeDraft(object);
   const generation = routeGenerationState.pathId === object.id ? routeGenerationState : { status: 'idle', candidates: [], selectedCandidate: 0, durationMs: 0, error: '' };
@@ -246,6 +266,12 @@ function pathPanel(object) {
     .map(mode => `<option value="${mode}" ${mode === selectedSegment?.constructionMode ? 'selected' : ''}>${mode}</option>`).join('');
   return `<section class="v011-authoring-panel" data-v011-panel="path">
     <div class="v011-panel-title"><div><small>PATH NETWORK v2</small><strong>3D corridor authoring</strong></div><span>r${network.revision} · ${network.nodes.length} nodes</span></div>
+    <div class="v012-runtime-status ${runtimeState}" data-v012-runtime-status="${runtimeState}">
+      <strong>${runtimeState === 'ready' ? 'Compiled and usable' : runtimeState === 'blocked' ? 'Blocked — route is not gameplay-safe' : 'Compiling route diagnostics'}</strong>
+      <span>${runtimeState === 'blocked'
+        ? `${invalidSegments.length} invalid segment${invalidSegments.length === 1 ? '' : 's'} · ${escapeHtml(failureReasons || 'construction validation failed')}`
+        : `${escapeHtml(constructionSummary)}${compilerDiagnostics ? ` · max grade ${Number(compilerDiagnostics.maximumGradePercent || 0).toFixed(1)}%` : ''}`}</span>
+    </div>
     <button id="v011SplineEdit" class="button ${splineEditPathId === object.id ? 'primary' : 'subtle'}" type="button">${splineEditPathId === object.id ? 'Finish spline editing' : 'Edit nodes in viewport'}</button>
     <p class="v011-note"><strong>Viewport:</strong> left-drag moves a node over terrain. Shift-drag raises or lowers it. Right-click inserts a node into the nearest compiled segment.</p>
     <div class="v011-grid">

@@ -1,0 +1,145 @@
+{
+  "sourceStateSha256": "3C3548710AEF8D732E493A2553ED50469182F3E158874A7309C24E101B07B134",
+  "sourceProjectId": "untitled-game",
+  "sourceSceneId": "scene-main",
+  "terrain": {
+    "id": "terrain-main",
+    "name": "Terrain",
+    "type": "terrain",
+    "visible": true,
+    "transform": {
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    },
+    "properties": {
+      "schemaVersion": 2,
+      "preset": "archipelago",
+      "sizeX": 1000,
+      "sizeZ": 1000,
+      "bounds": {
+        "minX": -500,
+        "maxX": 500,
+        "minZ": -500,
+        "maxZ": 500
+      },
+      "resolutionX": 118,
+      "resolutionZ": 118,
+      "height": 31,
+      "baseElevation": 0,
+      "macroScale": 145,
+      "detailScale": 26,
+      "octaves": 10,
+      "lacunarity": 2.03,
+      "gain": 0.5,
+      "warpStrength": 38,
+      "ridgeStrength": 0.46,
+      "plateauStrength": 0.02,
+      "plateauSteps": 7,
+      "valleyStrength": 0.05,
+      "valleyRadius": 120,
+      "canyonDepth": 0,
+      "canyonWidth": 48,
+      "canyonFloorWidth": 10,
+      "canyonMeander": 32,
+      "canyonDirection": 18,
+      "islandStrength": 1,
+      "islandRadius": 168,
+      "coastDirection": 0,
+      "seaLevel": 0,
+      "shapeOrigin": [0, 0],
+      "expandStep": 100,
+      "chunkSize": 64,
+      "generatedRevision": 45
+    }
+  },
+  "paths": [
+    {
+      "id": "path-main",
+      "name": "Terrain Path",
+      "type": "path",
+      "visible": true,
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "properties": {
+        "schemaVersion": 2,
+        "worldSpacePoints": true,
+        "points": [
+          [-24.4, -28],
+          [-20.4, -12],
+          [3.1, -17.5],
+          [5.6, -2]
+        ],
+        "width": 2,
+        "materialId": "material-packed-earth",
+        "blendDistance": 1.6,
+        "spline": true,
+        "splineTension": 0,
+        "samplesPerSegment": 14,
+        "showSpline": true,
+        "carveTerrain": false,
+        "maxGradePercent": 56.1,
+        "maxCutDepth": 6.25,
+        "maxFillDepth": 2.5,
+        "minimumCurveRadius": 10,
+        "shoulderWidth": 0.9,
+        "shoulderDrop": 0.08,
+        "crownHeight": 0.08,
+        "sideSlopeWidth": 1.6,
+        "drainageEnabled": true,
+        "ditchDepth": 0.22,
+        "bridgeThreshold": 5,
+        "tunnelThreshold": 8,
+        "retainingWallThreshold": 3.5,
+        "cutSlopeRatio": 1.5,
+        "fillSlopeRatio": 2
+      }
+    },
+    {
+      "id": "path-mrzucwx0-175c6e",
+      "name": "Terrain Path Branch",
+      "type": "path",
+      "visible": true,
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "properties": {
+        "schemaVersion": 2,
+        "worldSpacePoints": true,
+        "points": [
+          [5.6, -2],
+          [17.6, 9],
+          [30.6, 16]
+        ],
+        "width": 4.8,
+        "materialId": "material-packed-earth",
+        "blendDistance": 1.6,
+        "spline": true,
+        "splineTension": 0.5,
+        "samplesPerSegment": 14,
+        "showSpline": true,
+        "carveTerrain": false,
+        "maxGradePercent": 14,
+        "maxCutDepth": 5,
+        "maxFillDepth": 3,
+        "minimumCurveRadius": 10,
+        "shoulderWidth": 0.9,
+        "shoulderDrop": 0.08,
+        "crownHeight": 0.08,
+        "sideSlopeWidth": 3.4,
+        "drainageEnabled": true,
+        "ditchDepth": 0.22,
+        "bridgeThreshold": 6,
+        "tunnelThreshold": 10,
+        "retainingWallThreshold": 4,
+        "cutSlopeRatio": 1.5,
+        "fillSlopeRatio": 2
+      }
+    }
+  ]
+}
