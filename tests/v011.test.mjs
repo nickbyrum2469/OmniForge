@@ -129,7 +129,10 @@ test('v0.11 editor, renderer, runtime, desktop, and MCP expose the connected wor
   assert.match(html,/id="splineToggle"/);
   assert.match(html,/v011\.css/);
   assert.match(html,/v011\.js/);
-  assert.match(editor,/Right-click terrain to insert a node/);
+  assert.match(editor,/Shift-drag raises or lowers it/);
+  assert.match(editor,/Right-click inserts a node into the nearest compiled segment/);
+  assert.match(editor,/PathGenerationWorkerPool/);
+  assert.match(editor,/\/api\/v012\/path\//);
   assert.match(editor,/terrainPointFromScreen/);
   assert.match(editor,/data-v011-expand/);
   assert.match(renderer,/buildPathGuideSegmentsFromCorridor/);
@@ -137,6 +140,8 @@ test('v0.11 editor, renderer, runtime, desktop, and MCP expose the connected wor
   assert.match(renderer,/Spline guides are editor overlays, not world geometry/);
   assert.match(renderer,/if\(scene\.settings\.splinesVisible!==false\)\{\s*\/\/[\s\S]*?gl\.disable\(gl\.DEPTH_TEST\)/);
   assert.match(renderer,/terrainPointFromScreen/);
+  assert.match(renderer,/setPathPreview/);
+  assert.match(renderer,/pathRuntimeFrameCache/);
   assert.match(app,/__omniforgeV011Bridge/);
   assert.match(mcp,/v011Tools, callV011Tool/);
   assert.equal(packageJson.version,'0.11.0');
@@ -168,6 +173,52 @@ test('v0.11 bootstrap persists terrain expansion and spline node editing through
     assert.equal(grade.body.diagnostics.validation,grade.body.diagnostics.gameplayReady?'passed':'failed');
     if(grade.body.diagnostics.gameplayReady)assert.ok(grade.body.diagnostics.compiledMaxGradePercent<=6.15);
     else assert.equal(grade.body.diagnostics.constraintStatus,'blocked-infeasible-profile');
+    const v2Initial=await requestJson(port,`/api/v012/path/${pathId}/network`);
+    assert.equal(v2Initial.status,200);
+    assert.equal(v2Initial.body.network.schemaVersion,2);
+    const networkRevision=v2Initial.body.network.revision;
+    const node=v2Initial.body.network.nodes[1];
+    const v2Moved=await requestJson(port,`/api/v012/path/${pathId}/transaction`,{
+      method:'POST',
+      body:JSON.stringify({
+        expectedRevision:networkRevision,
+        label:'Raise trail node',
+        operations:[{
+          type:'move-node',
+          nodeId:node.id,
+          position:[node.position[0],node.position[1]+4,node.position[2]],
+          heightMode:'absolute'
+        }]
+      })
+    });
+    assert.equal(v2Moved.status,200);
+    assert.equal(v2Moved.body.network.revision,networkRevision+1);
+    assert.equal(v2Moved.body.network.nodes.find(item=>item.id===node.id).position[1],node.position[1]+4);
+    assert.equal(v2Moved.body.network.nodes.find(item=>item.id===node.id).heightMode,'absolute');
+    const conflict=await requestJson(port,`/api/v012/path/${pathId}/transaction`,{
+      method:'POST',
+      body:JSON.stringify({
+        expectedRevision:networkRevision,
+        operations:[{type:'move-node',nodeId:node.id,position:node.position}]
+      })
+    });
+    assert.equal(conflict.status,400);
+    assert.match(conflict.body.error,/revision conflict/);
+    const undone=await requestJson(port,`/api/v012/path/${pathId}/undo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+1})
+    });
+    assert.equal(undone.status,200);
+    assert.deepEqual(undone.body.network.nodes.find(item=>item.id===node.id).position,node.position);
+    assert.equal(undone.body.redoDepth,1);
+    const redone=await requestJson(port,`/api/v012/path/${pathId}/redo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+2})
+    });
+    assert.equal(redone.status,200);
+    assert.equal(redone.body.network.revision,networkRevision+3);
+    assert.equal(redone.body.network.nodes.find(item=>item.id===node.id).position[1],node.position[1]+4);
+    assert.equal(redone.body.redoDepth,0);
     const settings=await requestJson(port,'/api/v011/scene-settings',{method:'PATCH',body:JSON.stringify({splinesVisible:false})});
     assert.equal(settings.status,200);assert.equal(settings.body.settings.splinesVisible,false);
     const persisted=JSON.parse(fs.readFileSync(path.join(runtime,'data','engine-state.json'),'utf8'));

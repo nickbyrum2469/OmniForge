@@ -45,6 +45,7 @@ test('worker pool reserves one logical processor and distributes queued work', a
     }
   });
   assert.equal(pool.workerCount, 7);
+  assert.equal(workers.length, 0, 'workers should be created only when work is submitted');
   const results = await Promise.all(Array.from({ length: 9 }, (_, index) => pool.submit({
     key: `route-${index}`,
     revision: 1,
@@ -53,6 +54,28 @@ test('worker pool reserves one logical processor and distributes queued work', a
   assert.equal(results.length, 9);
   assert.equal(pool.diagnostics().metrics.completed, 9);
   assert.equal(workers.length, 7);
+  pool.close();
+});
+
+test('worker pool grows only to the queued workload instead of spawning idle workers', async () => {
+  const workers = [];
+  const pool = new PathGenerationWorkerPool({
+    hardwareConcurrency: 32,
+    workerFactory() {
+      const worker = new FakeWorker();
+      workers.push(worker);
+      return worker;
+    }
+  });
+  assert.equal(pool.workerCount, 31);
+  const results = await Promise.all(Array.from({ length: 4 }, (_, index) => pool.submit({
+    key: `alternative-${index}`,
+    revision: 1,
+    payload: { index }
+  })));
+  assert.equal(results.length, 4);
+  assert.equal(workers.length, 4);
+  assert.equal(pool.diagnostics().running, 0);
   pool.close();
 });
 

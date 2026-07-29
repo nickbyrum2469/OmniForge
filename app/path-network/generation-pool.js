@@ -41,7 +41,6 @@ export class PathGenerationWorkerPool {
       failed: 0,
       totalWorkerMs: 0
     };
-    for (let index = 0; index < this.workerCount; index += 1) this.slots.push(this.createSlot(index));
   }
 
   createSlot(index) {
@@ -95,6 +94,13 @@ export class PathGenerationWorkerPool {
 
   dispatch() {
     if (this.closed) return;
+    const desiredWorkers = Math.min(
+      this.workerCount,
+      this.slots.filter(slot => slot.busyJobId).length + this.queue.length
+    );
+    while (this.slots.length < desiredWorkers) {
+      this.slots.push(this.createSlot(this.slots.length));
+    }
     for (const slot of this.slots) {
       if (slot.busyJobId || !this.queue.length) continue;
       const job = this.queue.shift();

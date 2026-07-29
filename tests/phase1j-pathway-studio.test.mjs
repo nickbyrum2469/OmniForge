@@ -126,9 +126,10 @@ test('renderer and editor expose Pathway Studio authority and telemetry',()=>{
   assert.match(app,/fitPathwayLanesButton/);
   assert.match(styles,/\.pathway-status\.bad/);
   assert.match(v011,/function pathNodeSelection\(object\)/);
-  assert.match(v011,/const selectedNode = pathNodeSelection\(object\)/);
-  assert.match(v011,/updatePathNode\(object\.id, selectedNode\.index/);
-  assert.match(v011,/insertPathNode\(object\.id, selectedNode\.index \+ 1, selectedNode\.point\)/);
-  assert.doesNotMatch(v011,/updatePathNode\(object\.id, selectedIndex/);
+  assert.match(v011,/selectedPathNodeId/);
+  assert.match(v011,/type: 'move-node'/);
+  assert.match(v011,/type: 'insert-node'/);
+  assert.match(v011,/type: 'delete-node'/);
+  assert.match(v011,/\/api\/v012\/path\//);
   assert.doesNotMatch(app,/paints a soft, noise-broken material mask into the terrain instead of floating/);
 });

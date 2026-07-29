@@ -39,3 +39,11 @@
 .spline-node-handle { width:30px; height:30px; margin:-15px 0 0 -15px; font-size:10px; }
 .spline-node-handle.selected { background:#f0a8ff; border-color:#ffffff; box-shadow:0 0 0 5px rgba(156,82,230,.42),0 5px 18px rgba(0,0,0,.58); }
 .v011-readout code { max-width:65%; overflow-wrap:anywhere; }
+.v012-action-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.v012-route-generator { margin-top:14px; padding:12px; border:1px solid rgba(44,203,225,.28); border-radius:8px; background:linear-gradient(160deg,rgba(10,33,43,.88),rgba(10,17,29,.92)); box-shadow:inset 0 1px rgba(154,244,255,.04); }
+.v012-route-generator button.primary { background:linear-gradient(180deg,#25677b,#19495a); border-color:#3caac3; color:#effeff; }
+.v012-route-generator button:disabled { opacity:.58; cursor:progress; }
+.v012-cost-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:10px; }
+.v012-cost-grid span { padding:7px; border:1px solid rgba(73,147,164,.22); border-radius:5px; background:#09151f; color:#8fabb3; font-size:9px; }
+.v012-cost-grid strong { display:block; color:#dffbff; font:10px ui-monospace,monospace; margin-top:3px; }
+.v012-error { color:#ff9caa; background:rgba(93,18,34,.32); border:1px solid rgba(255,98,123,.28); border-radius:5px; padding:8px; font-size:10px; line-height:1.45; }

@@ -1,3 +1,8 @@
+import { PathGenerationWorkerPool } from './path-network/generation-pool.js';
+import { trailArchetypes } from './path-network/archetypes.js';
+import { trailCandidateToPathNetwork } from './path-network/trail-solver.js';
+import { clearPathRuntimeCache } from './path-network/runtime.js';
+
 const $ = selector => document.querySelector(selector);
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 
@@ -11,6 +16,18 @@ let inspectorEnhanceQueued = false;
 let overlayFrame = 0;
 let foundationRefreshPromise = null;
 let foundationSignature = '';
+let selectedPathNodeId = null;
+let routeGenerationRevision = 0;
+let routeGenerationPool = null;
+let routeGenerationState = {
+  status: 'idle',
+  pathId: null,
+  candidates: [],
+  selectedCandidate: 0,
+  durationMs: 0,
+  error: ''
+};
+const routeDrafts = new Map();
 
 
 function bridge() {
@@ -54,7 +71,11 @@ function currentFoundationSignature() {
     terrain?.properties?.generatedRevision || 0,
     terrain?.properties?.seed || 0,
     terrain?.properties?.bounds || null,
-    paths.map(path => [path.id, path.visible !== false, path.properties?.profileRevision || 0, path.properties?.points || []])
+    paths.map(path => [
+      path.id,
+      path.visible !== false,
+      path.properties?.pathNetwork?.revision || path.properties?.profileRevision || 0
+    ])
   ]);
 }
 
@@ -90,10 +111,48 @@ function activePath() {
 }
 
 function pathNodeSelection(object) {
-  const points = object?.properties?.points || [];
-  const middle = Math.max(1, Math.floor((points.length || 2) / 2));
-  const index = Math.max(0, Math.min(Math.max(0, points.length - 1), Number(selectedSplineNodeIndex ?? middle)));
-  return { index, point: points[index] || [0, 0] };
+  const nodes = object?.properties?.pathNetwork?.nodes || [];
+  const middle = Math.max(0, Math.floor((nodes.length || 1) / 2));
+  let index = selectedPathNodeId ? nodes.findIndex(node => node.id === selectedPathNodeId) : -1;
+  if (index < 0) index = Math.max(0, Math.min(Math.max(0, nodes.length - 1), Number(selectedSplineNodeIndex ?? middle)));
+  const node = nodes[index] || { id: null, position: [0, 0, 0], heightMode: 'terrain', heightOffset: 0 };
+  selectedPathNodeId = node.id;
+  return { index, node, point: node.position };
+}
+
+function routeDraft(object) {
+  const network = object?.properties?.pathNetwork;
+  const nodes = network?.nodes || [];
+  const first = nodes[0]?.position || [-20, 0, -20];
+  const last = nodes.at(-1)?.position || [20, 0, 20];
+  if (!routeDrafts.has(object.id)) {
+    routeDrafts.set(object.id, {
+      archetype: 'human-footpath',
+      startX: first[0],
+      startZ: first[2],
+      endX: last[0],
+      endZ: last[2],
+      seed: 1,
+      useRestriction: false,
+      restrictionMinX: Math.min(first[0], last[0]) * 0.2,
+      restrictionMaxX: Math.max(first[0], last[0]) * 0.2,
+      restrictionMinZ: Math.min(first[2], last[2]) * 0.2,
+      restrictionMaxZ: Math.max(first[2], last[2]) * 0.2
+    });
+  }
+  return routeDrafts.get(object.id);
+}
+
+function routeCandidateLength(candidate) {
+  const points = Array.isArray(candidate?.points) ? candidate.points : [];
+  let length = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    length += Math.hypot(
+      Number(points[index]?.[0] || 0) - Number(points[index - 1]?.[0] || 0),
+      Number(points[index]?.[1] || 0) - Number(points[index - 1]?.[1] || 0)
+    );
+  }
+  return length;
 }
 
 function numberControl(label, key, value, options = {}) {
@@ -160,37 +219,64 @@ function terrainPanel(object) {
 
 function pathPanel(object) {
   const properties = object.properties || {};
-  const diagnostics = foundation?.pathDiagnostics?.find(item => item.pathId === object.id);
-  const { index: selectedIndex, point: selectedPoint } = pathNodeSelection(object);
+  const network = properties.pathNetwork;
+  if (network?.schemaVersion !== 2) {
+    return `<section class="v011-authoring-panel" data-v011-panel="path"><div class="v011-panel-title"><div><small>PATH NETWORK</small><strong>Migration required</strong></div></div><p class="v011-note">This path has not been migrated to the authoritative 3D Path Network. Save and reopen the project before editing it.</p></section>`;
+  }
+  const { index: selectedIndex, node: selectedNode } = pathNodeSelection(object);
+  const selectedSegment = network.segments.find(segment => segment.fromNode === selectedNode.id || segment.toNode === selectedNode.id) || network.segments[0];
+  const draft = routeDraft(object);
+  const generation = routeGenerationState.pathId === object.id ? routeGenerationState : { status: 'idle', candidates: [], selectedCandidate: 0, durationMs: 0, error: '' };
+  const candidate = generation.candidates[generation.selectedCandidate];
+  const archetypeOptions = trailArchetypes().map(item => `<option value="${escapeHtml(item.id)}" ${item.id === draft.archetype ? 'selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
+  const constructionOptions = ['auto', 'conform', 'cut-fill', 'retaining-wall', 'bridge', 'tunnel', 'stairs']
+    .map(mode => `<option value="${mode}" ${mode === selectedSegment?.constructionMode ? 'selected' : ''}>${mode}</option>`).join('');
   return `<section class="v011-authoring-panel" data-v011-panel="path">
-    <div class="v011-panel-title"><div><small>SPLINE + GRADE v0.11</small><strong>Path engineering</strong></div><span>${properties.points?.length || 0} nodes</span></div>
+    <div class="v011-panel-title"><div><small>PATH NETWORK v2</small><strong>3D corridor authoring</strong></div><span>r${network.revision} · ${network.nodes.length} nodes</span></div>
     <button id="v011SplineEdit" class="button ${splineEditPathId === object.id ? 'primary' : 'subtle'}" type="button">${splineEditPathId === object.id ? 'Finish spline editing' : 'Edit nodes in viewport'}</button>
-    <p class="v011-note"><strong>Viewport:</strong> drag a node with the left mouse button. Right-click terrain to insert a node into the nearest spline segment.</p>
+    <p class="v011-note"><strong>Viewport:</strong> left-drag moves a node over terrain. Shift-drag raises or lowers it. Right-click inserts a node into the nearest compiled segment.</p>
     <div class="v011-grid">
-      <label class="v011-field"><span>Spline path</span><input data-v011-path-check="spline" type="checkbox" ${properties.spline !== false ? 'checked' : ''}></label>
-      <label class="v011-field"><span>Show this spline</span><input data-v011-path-check="showSpline" type="checkbox" ${properties.showSpline !== false ? 'checked' : ''}></label>
-      ${numberControl('Width', 'width', properties.width ?? 3, { step: 0.25, min: 0.1, max: 200 })}
-      ${numberControl('Blend shoulder', 'blendDistance', properties.blendDistance ?? 2.5, { step: 0.25, min: 0.05, max: 200 })}
-      ${numberControl('Surface offset', 'surfaceOffset', properties.surfaceOffset ?? 0.03, { step: 0.01, min: -10, max: 10 })}
-      ${numberControl('Edge noise', 'edgeNoise', properties.edgeNoise ?? 0.45, { step: 0.05, min: 0, max: 5 })}
-      ${numberControl('Spline tension', 'splineTension', properties.splineTension, { step: 0.05, min: 0, max: 1 })}
-      ${numberControl('Samples/segment', 'samplesPerSegment', properties.samplesPerSegment, { step: 1, min: 2, max: 64 })}
-      <label class="v011-field"><span>Engineer corridor</span><input data-v011-path-check="carveTerrain" type="checkbox" ${properties.carveTerrain ? 'checked' : ''}></label>
-      ${numberControl('Maximum grade %', 'maxGradePercent', properties.maxGradePercent, { step: 0.5, min: 0.1, max: 100 })}
-      ${numberControl('Maximum cut', 'maxCutDepth', properties.maxCutDepth, { step: 0.25, min: 0, max: 1000 })}
-      ${numberControl('Maximum fill', 'maxFillDepth', properties.maxFillDepth, { step: 0.25, min: 0, max: 1000 })}
-      ${numberControl('Cut shoulder', 'cutShoulder', properties.cutShoulder, { step: 0.25, min: 0.1, max: 200 })}
+      <label class="v011-field"><span>Show this spline</span><input id="v012ShowSpline" type="checkbox" ${network.editor?.showSpline !== false ? 'checked' : ''}></label>
+      <label class="v011-field"><span>Construction mode</span><select id="v012ConstructionMode">${constructionOptions}</select></label>
+      <label class="v011-field"><span>Lock construction</span><input id="v012ConstructionLocked" type="checkbox" ${selectedSegment?.constructionLocked ? 'checked' : ''}></label>
+      <label class="v011-field"><span>Civil Assist</span><input id="v012CivilAssist" type="checkbox" ${network.engineering?.civilAssist !== false ? 'checked' : ''}></label>
     </div>
     <div class="v011-node-editor">
-      <div class="v011-panel-title"><div><small>SELECTED NODE</small><strong>Node ${selectedIndex + 1}</strong></div><span>X/Z</span></div>
-      <div class="v011-grid"><label class="v011-field"><span>X</span><input id="v011NodeX" type="number" step="0.1" value="${Number(selectedPoint[0] || 0)}"></label><label class="v011-field"><span>Z</span><input id="v011NodeZ" type="number" step="0.1" value="${Number(selectedPoint[1] || 0)}"></label></div>
-      <div class="v011-actions"><button id="v011ApplyNode" type="button">Apply coordinates</button><button id="v011InsertBefore" type="button">Insert before</button><button id="v011InsertAfter" type="button">Insert after</button><button id="v011DeleteNode" type="button">Delete node</button><button id="v011SplitPath" type="button">Split selected node</button></div>
+      <div class="v011-panel-title"><div><small>SELECTED 3D NODE</small><strong>Node ${selectedIndex + 1}</strong></div><span>${escapeHtml(selectedNode.heightMode)}</span></div>
+      <div class="v011-grid">
+        <label class="v011-field"><span>X</span><input id="v012NodeX" type="number" step="0.1" value="${Number(selectedNode.position[0] || 0)}"></label>
+        <label class="v011-field"><span>Y</span><input id="v012NodeY" type="number" step="0.1" value="${Number(selectedNode.position[1] || 0)}"></label>
+        <label class="v011-field"><span>Z</span><input id="v012NodeZ" type="number" step="0.1" value="${Number(selectedNode.position[2] || 0)}"></label>
+        <label class="v011-field"><span>Height mode</span><select id="v012HeightMode">${['terrain','offset','absolute'].map(mode=>`<option value="${mode}" ${mode===selectedNode.heightMode?'selected':''}>${mode}</option>`).join('')}</select></label>
+        <label class="v011-field"><span>Terrain offset</span><input id="v012HeightOffset" type="number" step="0.1" value="${Number(selectedNode.heightOffset || 0)}"></label>
+      </div>
+      <div class="v011-actions v012-action-row"><button id="v012ApplyNode" class="primary" type="button">Apply 3D node</button><button id="v012SnapTerrain" type="button">Snap to terrain</button><button id="v012DeleteNode" type="button">Delete node</button><button id="v012UndoPath" type="button">Undo path edit</button><button id="v012RedoPath" type="button">Redo path edit</button></div>
     </div>
-    <div class="v011-actions"><button id="v011ReversePath" type="button">Reverse direction</button></div>
-    <div class="v011-readout"><span>Raw maximum grade</span><code>${diagnostics ? diagnostics.rawMaxGradePercent.toFixed(1) : '—'}%</code></div>
-    <div class="v011-readout"><span>Compiled grade</span><code>${diagnostics ? diagnostics.compiledMaxGradePercent.toFixed(1) : '—'}%</code></div>
-    <div class="v011-readout"><span>Grade validation</span><code>${escapeHtml(diagnostics?.validation || '—')}</code></div>
-    <p class="v011-note">Cut/fill is bounded by maximum cut, fill, and grade. The terrain remains authoritative; the path cannot flatten or rescale the whole world.</p>
+    <div class="v011-actions"><button id="v012ReverseNetwork" type="button">Reverse segment directions</button></div>
+    <div class="v012-route-generator">
+      <div class="v011-panel-title"><div><small>TERRAIN-AWARE TRAIL SOLVER</small><strong>Generate non-destructive route</strong></div><span>${escapeHtml(generation.status)}</span></div>
+      <div class="v011-grid">
+        <label class="v011-field"><span>Archetype</span><select id="v012RouteArchetype">${archetypeOptions}</select></label>
+        <label class="v011-field"><span>Seed</span><input id="v012RouteSeed" type="number" step="1" value="${Number(draft.seed)}"></label>
+        <label class="v011-field"><span>Start X</span><input id="v012RouteStartX" type="number" step="1" value="${Number(draft.startX)}"></label>
+        <label class="v011-field"><span>Start Z</span><input id="v012RouteStartZ" type="number" step="1" value="${Number(draft.startZ)}"></label>
+        <label class="v011-field"><span>Destination X</span><input id="v012RouteEndX" type="number" step="1" value="${Number(draft.endX)}"></label>
+        <label class="v011-field"><span>Destination Z</span><input id="v012RouteEndZ" type="number" step="1" value="${Number(draft.endZ)}"></label>
+        <label class="v011-field"><span>Forbidden rectangle</span><input id="v012UseRestriction" type="checkbox" ${draft.useRestriction?'checked':''}></label>
+        <label class="v011-field"><span>Forbidden min X</span><input id="v012RestrictionMinX" type="number" step="1" value="${Number(draft.restrictionMinX)}"></label>
+        <label class="v011-field"><span>Forbidden max X</span><input id="v012RestrictionMaxX" type="number" step="1" value="${Number(draft.restrictionMaxX)}"></label>
+        <label class="v011-field"><span>Forbidden min Z</span><input id="v012RestrictionMinZ" type="number" step="1" value="${Number(draft.restrictionMinZ)}"></label>
+        <label class="v011-field"><span>Forbidden max Z</span><input id="v012RestrictionMaxZ" type="number" step="1" value="${Number(draft.restrictionMaxZ)}"></label>
+      </div>
+      <div class="v011-actions v012-action-row"><button id="v012GenerateRoutes" class="primary" type="button" ${generation.status==='solving'?'disabled':''}>${generation.status==='solving'?'Solving on worker pool…':'Generate alternatives'}</button><button id="v012CancelRoutes" type="button">Cancel preview</button></div>
+      ${generation.candidates.length?`<label class="v011-field"><span>Candidate</span><select id="v012RouteCandidate">${generation.candidates.map((item,index)=>`<option value="${index}" ${index===generation.selectedCandidate?'selected':''}>${escapeHtml(item.policy)} · ${item.points.length} points · ${Number(item.totalCost).toFixed(1)} cost</option>`).join('')}</select></label>`:''}
+      ${candidate?`<div class="v012-cost-grid"><span>Length <strong>${routeCandidateLength(candidate).toFixed(1)} m</strong></span><span>Max grade <strong>${Number(candidate.diagnostics?.maximumGradePercent||0).toFixed(1)}%</strong></span><span>Solve wall <strong>${Number(generation.durationMs).toFixed(0)} ms</strong></span></div><div class="v011-actions"><button id="v012CommitRoute" class="primary" type="button">Commit selected route</button></div>`:''}
+      ${generation.error?`<p class="v012-error">${escapeHtml(generation.error)}</p>`:''}
+      <p class="v011-note">Alternatives use the authored-natural terrain view, validate full segment grades, and remain previews until committed. First-pass trails do not deform terrain.</p>
+    </div>
+    <div class="v011-readout"><span>Network purpose</span><code>${escapeHtml(network.purpose)}</code></div>
+    <div class="v011-readout"><span>Path class</span><code>${escapeHtml(network.pathClass)}</code></div>
+    <div class="v011-readout"><span>History</span><code>${properties.pathNetworkUndo?.length || 0} undo · ${properties.pathNetworkRedo?.length || 0} redo</code></div>
   </section>`;
 }
 
@@ -203,7 +289,7 @@ function enhanceInspector() {
   const container = $('#inspectorContent');
   const object = selectedObject();
   if (!container || !object) return;
-  const signature = `${object.id}:${currentSnapshot()?.state?.engine?.revision || 0}:${foundation?.terrainDiagnostics?.checkedAt || ''}:${splineEditPathId || ''}:${selectedSplineNodeIndex ?? ''}:${terrainSculptMode?.terrainId || ''}`;
+  const signature = `${object.id}:${currentSnapshot()?.state?.engine?.revision || 0}:${foundation?.terrainDiagnostics?.checkedAt || ''}:${splineEditPathId || ''}:${selectedPathNodeId || ''}:${terrainSculptMode?.terrainId || ''}:${routeGenerationRevision}:${routeGenerationState.status}:${routeGenerationState.selectedCandidate}`;
   if (container.dataset.v011Signature === signature && container.querySelector('[data-v011-panel]')) return;
   const selectedNode = pathNodeSelection(object);
   container.dataset.v011Signature = signature;
@@ -242,14 +328,38 @@ function enhanceInspector() {
     document.body.classList.toggle('v011-spline-editing', Boolean(splineEditPathId));
     enhanceInspector();
   });
-  container.querySelectorAll('[data-v011-panel="path"] [data-v011-property]').forEach(input => input.addEventListener('change', () => updatePath(object.id, { [input.dataset.v011Property]: Number(input.value) })));
-  container.querySelectorAll('[data-v011-path-check]').forEach(input => input.addEventListener('change', () => updatePath(object.id, { [input.dataset.v011PathCheck]: input.checked })));
-  $('#v011ReversePath')?.addEventListener('click', () => pathAction(object.id, 'reverse'));
-  $('#v011ApplyNode')?.addEventListener('click', () => updatePathNode(object.id, selectedNode.index, Number($('#v011NodeX')?.value || 0), Number($('#v011NodeZ')?.value || 0)));
-  $('#v011InsertBefore')?.addEventListener('click', () => insertPathNode(object.id, selectedNode.index, selectedNode.point));
-  $('#v011InsertAfter')?.addEventListener('click', () => insertPathNode(object.id, selectedNode.index + 1, selectedNode.point));
-  $('#v011DeleteNode')?.addEventListener('click', () => deletePathNode(object.id, selectedNode.index));
-  $('#v011SplitPath')?.addEventListener('click', () => pathAction(object.id, 'split', { index: selectedNode.index }));
+  $('#v012ShowSpline')?.addEventListener('change', event => replacePathNetwork(object, {
+    ...object.properties.pathNetwork,
+    editor: { ...object.properties.pathNetwork.editor, showSpline: event.target.checked }
+  }, 'Toggle spline visibility'));
+  $('#v012ConstructionMode')?.addEventListener('change', () => updateSelectedConstruction(object, selectedNode.node));
+  $('#v012ConstructionLocked')?.addEventListener('change', () => updateSelectedConstruction(object, selectedNode.node));
+  $('#v012CivilAssist')?.addEventListener('change', event => replacePathNetwork(object, {
+    ...object.properties.pathNetwork,
+    engineering: { ...object.properties.pathNetwork.engineering, civilAssist: event.target.checked }
+  }, 'Update Civil Assist'));
+  $('#v012ApplyNode')?.addEventListener('click', () => applySelectedNode(object, selectedNode.node));
+  $('#v012SnapTerrain')?.addEventListener('click', () => transactPathNetwork(object, {
+    label: 'Snap node to terrain',
+    operations: [{ type: 'set-node-height', nodeId: selectedNode.node.id, heightMode: 'terrain', heightOffset: 0 }]
+  }));
+  $('#v012DeleteNode')?.addEventListener('click', () => transactPathNetwork(object, {
+    label: 'Delete path node',
+    operations: [{ type: 'delete-node', nodeId: selectedNode.node.id }]
+  }));
+  $('#v012UndoPath')?.addEventListener('click', () => undoPathNetwork(object));
+  $('#v012RedoPath')?.addEventListener('click', () => redoPathNetwork(object));
+  $('#v012ReverseNetwork')?.addEventListener('click', () => transactPathNetwork(object, {
+    label: 'Reverse path directions',
+    operations: object.properties.pathNetwork.segments.map(segment => ({ type: 'reverse-segment', segmentId: segment.id }))
+  }));
+  for (const id of ['v012RouteArchetype','v012RouteSeed','v012RouteStartX','v012RouteStartZ','v012RouteEndX','v012RouteEndZ','v012UseRestriction','v012RestrictionMinX','v012RestrictionMaxX','v012RestrictionMinZ','v012RestrictionMaxZ']) {
+    $(`#${id}`)?.addEventListener('change', () => captureRouteDraft(object));
+  }
+  $('#v012GenerateRoutes')?.addEventListener('click', () => generateRouteAlternatives(object));
+  $('#v012CancelRoutes')?.addEventListener('click', () => cancelRoutePreview(object.id));
+  $('#v012RouteCandidate')?.addEventListener('change', event => selectRouteCandidate(object, Number(event.target.value)));
+  $('#v012CommitRoute')?.addEventListener('click', () => commitRoutePreview(object));
 }
 
 async function updateTerrain(id, properties) {
@@ -274,6 +384,268 @@ async function terrainSculptAction(id, action) {
     await applyMutation(await api(route, options), true);
     bridge()?.showToast?.(action === 'undo' ? 'Undid the last terrain sculpt stamp' : 'Cleared local terrain sculpt edits', 'success');
   } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
+}
+
+async function replacePathNetwork(object, network, label) {
+  try {
+    const payload = await api(`/api/v012/path/${encodeURIComponent(object.id)}/network`, {
+      method: 'PUT',
+      body: {
+        expectedRevision: object.properties.pathNetwork.revision,
+        label,
+        network
+      }
+    });
+    await applyMutation(payload, true);
+    bridge()?.showToast?.(`${label} · Path Network r${payload.network.revision}`, 'success');
+    return payload;
+  } catch (error) {
+    bridge()?.showToast?.(error.message, 'error');
+    return null;
+  }
+}
+
+async function transactPathNetwork(object, transaction) {
+  try {
+    const payload = await api(`/api/v012/path/${encodeURIComponent(object.id)}/transaction`, {
+      method: 'POST',
+      body: {
+        ...transaction,
+        expectedRevision: object.properties.pathNetwork.revision
+      }
+    });
+    await applyMutation(payload, true);
+    if (selectedPathNodeId && !payload.network.nodes.some(node => node.id === selectedPathNodeId)) {
+      selectedPathNodeId = payload.network.nodes[Math.max(0, payload.network.nodes.length - 1)]?.id || null;
+    }
+    bridge()?.showToast?.(`${transaction.label || 'Path edit'} · r${payload.network.revision}`, 'success');
+    return payload;
+  } catch (error) {
+    bridge()?.showToast?.(error.message, 'error');
+    return null;
+  }
+}
+
+async function undoPathNetwork(object) {
+  try {
+    const payload = await api(`/api/v012/path/${encodeURIComponent(object.id)}/undo`, {
+      method: 'POST',
+      body: { expectedRevision: object.properties.pathNetwork.revision }
+    });
+    await applyMutation(payload, true);
+    bridge()?.showToast?.(`Undid path edit · r${payload.network.revision}`, 'success');
+  } catch (error) {
+    bridge()?.showToast?.(error.message, 'error');
+  }
+}
+
+async function redoPathNetwork(object) {
+  try {
+    const payload = await api(`/api/v012/path/${encodeURIComponent(object.id)}/redo`, {
+      method: 'POST',
+      body: { expectedRevision: object.properties.pathNetwork.revision }
+    });
+    await applyMutation(payload, true);
+    bridge()?.showToast?.(`Redid path edit · r${payload.network.revision}`, 'success');
+  } catch (error) {
+    bridge()?.showToast?.(error.message, 'error');
+  }
+}
+
+function applySelectedNode(object, node) {
+  return transactPathNetwork(object, {
+    label: 'Update 3D path node',
+    operations: [{
+      type: 'move-node',
+      nodeId: node.id,
+      position: [
+        Number($('#v012NodeX')?.value || 0),
+        Number($('#v012NodeY')?.value || 0),
+        Number($('#v012NodeZ')?.value || 0)
+      ],
+      heightMode: $('#v012HeightMode')?.value || node.heightMode,
+      heightOffset: Number($('#v012HeightOffset')?.value || 0)
+    }]
+  });
+}
+
+function updateSelectedConstruction(object, node) {
+  const segment = object.properties.pathNetwork.segments.find(item => item.fromNode === node.id || item.toNode === node.id)
+    || object.properties.pathNetwork.segments[0];
+  if (!segment) return;
+  return transactPathNetwork(object, {
+    label: 'Update construction mode',
+    operations: [{
+      type: 'set-segment-construction',
+      segmentId: segment.id,
+      constructionMode: $('#v012ConstructionMode')?.value || segment.constructionMode,
+      locked: $('#v012ConstructionLocked')?.checked === true
+    }]
+  });
+}
+
+function captureRouteDraft(object) {
+  const draft = routeDraft(object);
+  Object.assign(draft, {
+    archetype: $('#v012RouteArchetype')?.value || draft.archetype,
+    seed: Number($('#v012RouteSeed')?.value || 1),
+    startX: Number($('#v012RouteStartX')?.value || 0),
+    startZ: Number($('#v012RouteStartZ')?.value || 0),
+    endX: Number($('#v012RouteEndX')?.value || 0),
+    endZ: Number($('#v012RouteEndZ')?.value || 0),
+    useRestriction: $('#v012UseRestriction')?.checked === true,
+    restrictionMinX: Number($('#v012RestrictionMinX')?.value || 0),
+    restrictionMaxX: Number($('#v012RestrictionMaxX')?.value || 0),
+    restrictionMinZ: Number($('#v012RestrictionMinZ')?.value || 0),
+    restrictionMaxZ: Number($('#v012RestrictionMaxZ')?.value || 0)
+  });
+  return draft;
+}
+
+function pathGenerationPool() {
+  if (!routeGenerationPool) {
+    const logicalProcessors = Math.max(2, Number(navigator.hardwareConcurrency || 4));
+    routeGenerationPool = new PathGenerationWorkerPool({
+      workerCount: Math.min(4, logicalProcessors - 1)
+    });
+  }
+  return routeGenerationPool;
+}
+
+function previewPathObject(object, candidate, previewRevision) {
+  const solved = routeGenerationState.solveResult;
+  const network = trailCandidateToPathNetwork(candidate, {
+    id: '__path-network-preview__',
+    purpose: `${object.name} terrain-aware route preview`,
+    terrainRevision: solved?.terrainRevision
+  });
+  return {
+    id: '__path-network-preview__',
+    type: 'path',
+    name: 'Route Preview',
+    visible: true,
+    locked: true,
+    transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+    properties: {
+      ...object.properties,
+      color: '#20c8e8',
+      showSpline: true,
+      previewOnly: true,
+      previewRevision,
+      pathNetwork: network
+    }
+  };
+}
+
+function showRouteCandidate(object) {
+  const candidate = routeGenerationState.candidates[routeGenerationState.selectedCandidate];
+  bridge()?.renderer?.()?.setPathPreview(candidate ? previewPathObject(object, candidate, routeGenerationRevision) : null);
+}
+
+function selectRouteCandidate(object, index) {
+  routeGenerationState.selectedCandidate = Math.max(0, Math.min(routeGenerationState.candidates.length - 1, Number(index || 0)));
+  routeGenerationRevision += 1;
+  showRouteCandidate(object);
+  enhanceInspector();
+}
+
+function cancelRoutePreview(pathId) {
+  if (routeGenerationPool) {
+    for (const policy of ['balanced', 'shortest', 'lowest-grade', 'scenic']) {
+      routeGenerationPool.cancel(`${pathId}:route:${policy}`);
+    }
+  }
+  bridge()?.renderer?.()?.setPathPreview(null);
+  routeGenerationState = { status: 'idle', pathId: null, candidates: [], selectedCandidate: 0, durationMs: 0, error: '' };
+  routeGenerationRevision += 1;
+  enhanceInspector();
+}
+
+async function generateRouteAlternatives(object) {
+  const draft = captureRouteDraft(object);
+  const terrain = terrainObject();
+  if (!terrain) return bridge()?.showToast?.('A visible authoritative terrain is required.', 'error');
+  cancelRoutePreview(object.id);
+  const revision = ++routeGenerationRevision;
+  const policies = ['balanced', 'shortest', 'lowest-grade', 'scenic'];
+  const restrictions = draft.useRestriction ? [{
+    minX: Math.min(draft.restrictionMinX, draft.restrictionMaxX),
+    maxX: Math.max(draft.restrictionMinX, draft.restrictionMaxX),
+    minZ: Math.min(draft.restrictionMinZ, draft.restrictionMaxZ),
+    maxZ: Math.max(draft.restrictionMinZ, draft.restrictionMaxZ)
+  }] : [];
+  routeGenerationState = { status: 'solving', pathId: object.id, candidates: [], selectedCandidate: 0, durationMs: 0, error: '' };
+  enhanceInspector();
+  const startedAt = performance.now();
+  try {
+    const settled = await Promise.allSettled(policies.map((policy, index) => pathGenerationPool().submit({
+      key: `${object.id}:route:${policy}`,
+      revision,
+      priority: policies.length - index,
+      payload: {
+        terrain,
+        tileSize: terrain.properties?.chunkSize,
+        halo: 1,
+        options: {
+          start: [draft.startX, draft.startZ],
+          end: [draft.endX, draft.endZ],
+          archetype: draft.archetype,
+          candidatePolicies: [policy],
+          candidateCount: 1,
+          restrictions,
+          seed: draft.seed + index * 7919
+        }
+      }
+    })));
+    if (revision !== routeGenerationRevision) return;
+    const successful = settled
+      .filter(result => result.status === 'fulfilled')
+      .map(result => result.value)
+      .filter(result => result.result?.candidates?.length);
+    const candidates = successful.map(result => result.result.candidates[0]);
+    if (!candidates.length) {
+      const reasons = settled.map(result => result.status === 'rejected'
+        ? result.reason?.message
+        : result.value?.result?.failures?.[0]?.reason).filter(Boolean);
+      throw new Error(`No feasible route was found. ${reasons.join(' · ')}`);
+    }
+    routeGenerationState = {
+      status: 'preview',
+      pathId: object.id,
+      candidates,
+      selectedCandidate: 0,
+      durationMs: performance.now() - startedAt,
+      error: '',
+      solveResult: successful[0].result
+    };
+    routeGenerationRevision += 1;
+    showRouteCandidate(object);
+    bridge()?.showToast?.(`Generated ${candidates.length} terrain-aware alternatives`, 'success');
+  } catch (error) {
+    if (error?.name === 'AbortError') return;
+    routeGenerationState = { status: 'failed', pathId: object.id, candidates: [], selectedCandidate: 0, durationMs: performance.now() - startedAt, error: error.message };
+    routeGenerationRevision += 1;
+    bridge()?.showToast?.(error.message, 'error');
+  }
+  enhanceInspector();
+}
+
+async function commitRoutePreview(object) {
+  const candidate = routeGenerationState.pathId === object.id
+    ? routeGenerationState.candidates[routeGenerationState.selectedCandidate]
+    : null;
+  if (!candidate) return;
+  const network = trailCandidateToPathNetwork(candidate, {
+    id: object.id,
+    purpose: `${object.name} terrain-aware ${candidate.archetype}`,
+    terrainRevision: routeGenerationState.solveResult?.terrainRevision
+  });
+  bridge()?.renderer?.()?.setPathPreview(null);
+  const result = await replacePathNetwork(object, network, `Commit ${candidate.policy} route`);
+  if (result) {
+    routeGenerationState = { status: 'idle', pathId: null, candidates: [], selectedCandidate: 0, durationMs: 0, error: '' };
+    routeGenerationRevision += 1;
+  } else showRouteCandidate(object);
 }
 
 async function updatePathNode(id, index, x, z) {
@@ -359,13 +731,13 @@ function renderNodeOverlay() {
     return;
   }
   const path = snapshot.scene.objects.find(object => object.id === splineEditPathId && object.type === 'path');
-  const terrain = snapshot.scene.objects.find(object => object.type === 'terrain');
-  if (!path || !terrain) { overlay.replaceChildren(); return; }
-  const points = path.properties?.points || [];
+  if (!path?.properties?.pathNetwork) { overlay.replaceChildren(); return; }
+  const nodes = path.properties.pathNetwork.nodes || [];
   const existing = new Map([...overlay.querySelectorAll('[data-spline-node]')].map(node => [Number(node.dataset.splineNode), node]));
-  points.forEach((point, index) => {
-    const y = renderer.terrainHeightForScene?.(snapshot.scene, point[0], point[1]) ?? 0;
-    const screen = renderer.worldToScreen?.(snapshot.camera, [point[0], y + 0.55, point[1]]);
+  nodes.forEach((node, index) => {
+    const terrainY = renderer.terrainHeightForScene?.(snapshot.scene, node.position[0], node.position[2]) ?? 0;
+    const y = node.heightMode === 'absolute' ? node.position[1] : terrainY + (node.heightMode === 'offset' ? Number(node.heightOffset || 0) : 0);
+    const screen = renderer.worldToScreen?.(snapshot.camera, [node.position[0], y + 0.55, node.position[2]]);
     let handle = existing.get(index);
     if (!handle) {
       handle = document.createElement('button');
@@ -378,7 +750,8 @@ function renderNodeOverlay() {
     existing.delete(index);
     if (!screen?.visible) { handle.hidden = true; return; }
     handle.hidden = false;
-    handle.classList.toggle('selected', index === Number(selectedSplineNodeIndex));
+    handle.classList.toggle('selected', node.id === selectedPathNodeId);
+    handle.title = `Node ${index + 1} · ${node.heightMode} · ${y.toFixed(2)} m`;
     handle.style.transform = `translate(${screen.x}px, ${screen.y}px)`;
     handle.textContent = String(index + 1);
   });
@@ -392,7 +765,20 @@ function beginNodeDrag(event) {
   const path = snapshot?.scene?.objects?.find(object => object.id === splineEditPathId);
   if (!path) return;
   selectedSplineNodeIndex = Number(event.currentTarget.dataset.splineNode);
-  draggingNode = { pathId: path.id, index: selectedSplineNodeIndex, pointerId: event.pointerId };
+  const node = path.properties?.pathNetwork?.nodes?.[selectedSplineNodeIndex];
+  if (!node) return;
+  selectedPathNodeId = node.id;
+  draggingNode = {
+    pathId: path.id,
+    nodeId: node.id,
+    index: selectedSplineNodeIndex,
+    pointerId: event.pointerId,
+    startClientY: event.clientY,
+    startPosition: [...node.position],
+    startHeightMode: node.heightMode,
+    startHeightOffset: node.heightOffset,
+    vertical: event.shiftKey === true
+  };
   enhanceInspector();
   event.currentTarget.setPointerCapture?.(event.pointerId);
   window.addEventListener('pointermove', dragNode, true);
@@ -404,11 +790,21 @@ function dragNode(event) {
   event.preventDefault();
   const snapshot = currentSnapshot();
   const renderer = bridge()?.renderer?.();
-  const point = renderer?.terrainPointFromScreen?.(snapshot.scene, snapshot.camera, event.clientX, event.clientY);
   const path = snapshot?.scene?.objects?.find(object => object.id === draggingNode.pathId);
-  if (!point || !path?.properties?.points?.[draggingNode.index]) return;
-  path.properties.points[draggingNode.index] = [point[0], point[2]];
-  path.properties.profileRevision = Number(path.properties.profileRevision || 0) + 1;
+  const node = path?.properties?.pathNetwork?.nodes?.find(item => item.id === draggingNode.nodeId);
+  if (!node) return;
+  if (draggingNode.vertical || event.shiftKey) {
+    draggingNode.vertical = true;
+    node.position = [node.position[0], draggingNode.startPosition[1] - (event.clientY - draggingNode.startClientY) * 0.15, node.position[2]];
+    node.heightMode = 'absolute';
+    node.heightOffset = 0;
+  } else {
+    const point = renderer?.terrainPointFromScreen?.(snapshot.scene, snapshot.camera, event.clientX, event.clientY);
+    if (!point) return;
+    node.position = [point[0], node.heightMode === 'absolute' ? node.position[1] : point[1], point[2]];
+  }
+  path.properties.previewRevision = Number(path.properties.previewRevision || 0) + 1;
+  clearPathRuntimeCache(path);
 }
 
 async function finishNodeDrag(event) {
@@ -418,13 +814,35 @@ async function finishNodeDrag(event) {
   window.removeEventListener('pointerup', finishNodeDrag, true);
   const snapshot = currentSnapshot();
   const path = snapshot?.scene?.objects?.find(object => object.id === draggingNode.pathId);
-  const point = path?.properties?.points?.[draggingNode.index];
+  const node = path?.properties?.pathNetwork?.nodes?.find(item => item.id === draggingNode.nodeId);
   const drag = draggingNode;
   draggingNode = null;
-  if (!point) return;
-  try {
-    await applyMutation(await api(`/api/v011/path/${encodeURIComponent(drag.pathId)}/node/${drag.index}`, { method: 'PATCH', body: { x: point[0], z: point[1] } }), true);
-  } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
+  if (!node) return;
+  await transactPathNetwork(path, {
+    label: drag.vertical ? 'Raise or lower path node' : 'Move path node',
+    operations: [{
+      type: 'move-node',
+      nodeId: drag.nodeId,
+      position: [...node.position],
+      heightMode: node.heightMode,
+      heightOffset: node.heightOffset
+    }]
+  });
+}
+
+function nearestNetworkSegment(network, x, z) {
+  const nodes = new Map((network?.nodes || []).map(node => [node.id, node]));
+  let best = null;
+  for (const segment of network?.segments || []) {
+    const a = nodes.get(segment.fromNode)?.position;
+    const b = nodes.get(segment.toNode)?.position;
+    if (!a || !b) continue;
+    const dx = b[0] - a[0], dz = b[2] - a[2], denominator = dx * dx + dz * dz;
+    const t = denominator > 1e-9 ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[2]) * dz) / denominator)) : 0;
+    const px = a[0] + dx * t, pz = a[2] + dz * t, distance = Math.hypot(x - px, z - pz);
+    if (!best || distance < best.distance) best = { segment, distance, t };
+  }
+  return best;
 }
 
 function installViewportEditing() {
@@ -457,10 +875,19 @@ function installViewportEditing() {
     const snapshot = currentSnapshot();
     const point = bridge()?.renderer?.()?.terrainPointFromScreen?.(snapshot.scene, snapshot.camera, event.clientX, event.clientY);
     if (!point) return bridge()?.showToast?.('The cursor did not hit terrain.', 'error');
-    try {
-      await applyMutation(await api(`/api/v011/path/${encodeURIComponent(splineEditPathId)}/node`, { method: 'POST', body: { x: point[0], z: point[2] } }), true);
-      bridge()?.showToast?.('Spline node inserted', 'success');
-    } catch (error) { bridge()?.showToast?.(error.message, 'error'); }
+    const path = snapshot.scene.objects.find(object => object.id === splineEditPathId);
+    const nearest = nearestNetworkSegment(path?.properties?.pathNetwork, point[0], point[2]);
+    if (!nearest) return bridge()?.showToast?.('No compiled path segment was found.', 'error');
+    const nodeId = `${path.id}:node:${Date.now().toString(36)}`;
+    selectedPathNodeId = nodeId;
+    await transactPathNetwork(path, {
+      label: 'Insert path node',
+      operations: [{
+        type: 'insert-node',
+        segmentId: nearest.segment.id,
+        node: { id: nodeId, position: [point[0], point[1], point[2]], heightMode: 'terrain' }
+      }]
+    });
   }, true);
 }
 

@@ -23,6 +23,14 @@ import {
   migrateSceneWorldFoundation
 } from './v011-systems.mjs';
 import { TERRAIN_PRESETS } from '../app/worldgen.js';
+import {
+  attachPathNetwork,
+  clonePathNetwork
+} from '../app/path-network/model.js';
+import {
+  applyPathNetworkTransaction,
+  replacePathNetwork
+} from '../app/path-network/transactions.js';
 
 function json(res, status, payload) {
   const body = JSON.stringify(payload, null, 2);
@@ -80,6 +88,35 @@ function requirePath(state, pathId) {
   return path;
 }
 
+function authoritativePathNetwork(path) {
+  return attachPathNetwork(path).network;
+}
+
+function requireExpectedRevision(network, value) {
+  if (value === undefined || value === null) return;
+  const expected = Number(value);
+  if (!Number.isInteger(expected) || expected !== network.revision) {
+    throw new Error(`Path Network revision conflict: expected ${value}, current ${network.revision}.`);
+  }
+}
+
+function pushPathHistory(path, key, network, label) {
+  const history = Array.isArray(path.properties?.[key])
+    ? path.properties[key].slice(-15)
+    : [];
+  history.push({
+    label: String(label || 'Path edit').slice(0, 120),
+    network: clonePathNetwork(network),
+    recordedAt: new Date().toISOString()
+  });
+  path.properties[key] = history;
+}
+
+function recordPathEdit(path, network, label) {
+  pushPathHistory(path, 'pathNetworkUndo', network, label);
+  path.properties.pathNetworkRedo = [];
+}
+
 async function handleGround(req, res, url) {
   if (req.method !== 'POST' || url.pathname !== '/api/object/ground') return false;
   const input = await readJsonBody(req);
@@ -104,7 +141,159 @@ export async function handleV011Request(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1');
   try {
     if (await handleGround(req, res, url)) return true;
-    if (!url.pathname.startsWith('/api/v011/')) return false;
+    if (!url.pathname.startsWith('/api/v011/') && !url.pathname.startsWith('/api/v012/')) return false;
+
+    let ids = match(url.pathname, /^\/api\/v012\/path\/([^/]+)\/network$/);
+    if (ids && req.method === 'GET') {
+      const state = readState();
+      ensureWorldFoundationState(state);
+      const path = requirePath(state, ids[0]);
+      const network = authoritativePathNetwork(path);
+      json(res, 200, {
+        pathId: path.id,
+        network,
+        undoDepth: path.properties.pathNetworkUndo?.length || 0,
+        redoDepth: path.properties.pathNetworkRedo?.length || 0
+      });
+      return true;
+    }
+
+    if (ids && req.method === 'PUT') {
+      const input = await readJsonBody(req);
+      const result = mutateState(state => {
+        ensureWorldFoundationState(state);
+        const path = requirePath(state, ids[0]);
+        const current = authoritativePathNetwork(path);
+        requireExpectedRevision(current, input.expectedRevision);
+        const replacement = replacePathNetwork(current, {
+          ...(input.network || {}),
+          id: current.id,
+          revision: current.revision + 1
+        });
+        recordPathEdit(path, current, input.label || 'Replace generated route');
+        path.properties.pathNetwork = replacement.network;
+        path.properties.pathNetworkSchemaVersion = replacement.network.schemaVersion;
+        state.selection.objectId = path.id;
+        addActivity(state, 'path-network', `Replaced ${path.name} with Path Network revision ${replacement.network.revision}.`, {
+          pathId: path.id,
+          revision: replacement.network.revision,
+          generation: replacement.network.generation
+        });
+        return {
+          path,
+          network: replacement.network,
+          validation: replacement.validation,
+          undoDepth: path.properties.pathNetworkUndo.length,
+          redoDepth: 0
+        };
+      });
+      json(res, 200, { ...result.result, state: result.state });
+      return true;
+    }
+
+    ids = match(url.pathname, /^\/api\/v012\/path\/([^/]+)\/transaction$/);
+    if (ids && req.method === 'POST') {
+      const input = await readJsonBody(req);
+      const result = mutateState(state => {
+        ensureWorldFoundationState(state);
+        const path = requirePath(state, ids[0]);
+        const current = authoritativePathNetwork(path);
+        requireExpectedRevision(current, input.expectedRevision);
+        const transaction = applyPathNetworkTransaction(current, input);
+        recordPathEdit(path, current, input.label || 'Edit path network');
+        path.properties.pathNetwork = transaction.network;
+        path.properties.pathNetworkSchemaVersion = transaction.network.schemaVersion;
+        state.selection.objectId = path.id;
+        addActivity(state, 'path-network', `${input.label || 'Edited path network'} on ${path.name}.`, {
+          pathId: path.id,
+          revision: transaction.network.revision,
+          operationCount: Array.isArray(input.operations) ? input.operations.length : 0
+        });
+        return {
+          path,
+          network: transaction.network,
+          validation: transaction.validation,
+          undoDepth: path.properties.pathNetworkUndo.length,
+          redoDepth: 0
+        };
+      });
+      json(res, 200, { ...result.result, state: result.state });
+      return true;
+    }
+
+    ids = match(url.pathname, /^\/api\/v012\/path\/([^/]+)\/undo$/);
+    if (ids && req.method === 'POST') {
+      const input = await readJsonBody(req);
+      const result = mutateState(state => {
+        ensureWorldFoundationState(state);
+        const path = requirePath(state, ids[0]);
+        const current = authoritativePathNetwork(path);
+        requireExpectedRevision(current, input.expectedRevision);
+        const history = Array.isArray(path.properties.pathNetworkUndo) ? path.properties.pathNetworkUndo : [];
+        const entry = history.pop();
+        if (!entry?.network) throw new Error('No Path Network edit is available to undo.');
+        pushPathHistory(path, 'pathNetworkRedo', current, entry.label);
+        const restored = replacePathNetwork(current, {
+          ...entry.network,
+          id: current.id,
+          revision: current.revision + 1
+        });
+        path.properties.pathNetwork = restored.network;
+        path.properties.pathNetworkSchemaVersion = restored.network.schemaVersion;
+        path.properties.pathNetworkUndo = history;
+        state.selection.objectId = path.id;
+        addActivity(state, 'path-network', `Undid ${entry.label} on ${path.name}.`, {
+          pathId: path.id,
+          revision: restored.network.revision
+        });
+        return {
+          path,
+          network: restored.network,
+          validation: restored.validation,
+          undoDepth: history.length,
+          redoDepth: path.properties.pathNetworkRedo.length
+        };
+      });
+      json(res, 200, { ...result.result, state: result.state });
+      return true;
+    }
+
+    ids = match(url.pathname, /^\/api\/v012\/path\/([^/]+)\/redo$/);
+    if (ids && req.method === 'POST') {
+      const input = await readJsonBody(req);
+      const result = mutateState(state => {
+        ensureWorldFoundationState(state);
+        const path = requirePath(state, ids[0]);
+        const current = authoritativePathNetwork(path);
+        requireExpectedRevision(current, input.expectedRevision);
+        const history = Array.isArray(path.properties.pathNetworkRedo) ? path.properties.pathNetworkRedo : [];
+        const entry = history.pop();
+        if (!entry?.network) throw new Error('No Path Network edit is available to redo.');
+        pushPathHistory(path, 'pathNetworkUndo', current, entry.label);
+        const restored = replacePathNetwork(current, {
+          ...entry.network,
+          id: current.id,
+          revision: current.revision + 1
+        });
+        path.properties.pathNetwork = restored.network;
+        path.properties.pathNetworkSchemaVersion = restored.network.schemaVersion;
+        path.properties.pathNetworkRedo = history;
+        state.selection.objectId = path.id;
+        addActivity(state, 'path-network', `Redid ${entry.label} on ${path.name}.`, {
+          pathId: path.id,
+          revision: restored.network.revision
+        });
+        return {
+          path,
+          network: restored.network,
+          validation: restored.validation,
+          undoDepth: path.properties.pathNetworkUndo.length,
+          redoDepth: history.length
+        };
+      });
+      json(res, 200, { ...result.result, state: result.state });
+      return true;
+    }
 
     if (req.method === 'GET' && url.pathname === '/api/v011/worldgen') {
       const state = readState();
@@ -137,7 +326,7 @@ export async function handleV011Request(req, res) {
       return true;
     }
 
-    let ids = match(url.pathname, /^\/api\/v011\/terrain\/([^/]+)$/);
+    ids = match(url.pathname, /^\/api\/v011\/terrain\/([^/]+)$/);
     if (ids && req.method === 'PATCH') {
       const input = await readJsonBody(req);
       const result = mutateState(state => {
@@ -319,7 +508,7 @@ export async function handleV011Request(req, res) {
       return true;
     }
 
-    json(res, 404, { error: 'Unknown v0.11 world foundation route.' });
+    json(res, 404, { error: 'Unknown OmniForge world-foundation or Path Network route.' });
     return true;
   } catch (error) {
     json(res, 400, { error: error.message, stack: error.stack });
