@@ -6,6 +6,7 @@ import {
 import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, terrainBaseHeightAt, normalizeTerrainProperties, terrainBounds } from './worldgen.js';
 import { buildPathGuideSegmentsFromCorridor, buildTerrainConformingPathSurface, terrainPathSamplingDiagnostics } from './path-visuals.js';
 import { compileScenePathRuntimes, sampleScenePathTerrain } from './path-network/runtime.js';
+import { buildPathCostGuideData } from './path-network/debug-visualization.js';
 import { resolveViewportLighting } from './world-runtime.js';
 import { normalizeEnvironmentState } from './environment-runtime.js';
 import { SkyPass } from './sky-pass.js';
@@ -584,8 +585,8 @@ export class Renderer3D{
   pathBuffers(pathObject,scene){
     const runtime=this.scenePathRuntimes(scene).find(item=>item.pathObjectId===pathObject.id);if(!runtime)return {center:null,edges:null};
     const signature=`${runtime.sourceRevision}:${runtime.generationRevision}:${pathObject.properties?.previewRevision||0}:${runtime.geometry.guides.center.length}:${runtime.geometry.guides.edges.length}`,cached=this.pathLines.get(pathObject.id);if(cached?.signature===signature)return cached;
-    if(cached){for(const item of [cached.center,cached.edges,cached.construction])if(item){this.gl.deleteVertexArray(item.vao);this.gl.deleteBuffer(item.buffer);}}
-    const data=runtime.geometry.guides,next={signature,center:createLineBuffer(this.gl,data.center),edges:createLineBuffer(this.gl,data.edges),construction:createLineBuffer(this.gl,data.construction)};this.pathLines.set(pathObject.id,next);return next;
+    if(cached){for(const item of [cached.center,cached.edges,cached.construction,...(cached.costSegments||[]).map(entry=>entry.buffer)])if(item){this.gl.deleteVertexArray(item.vao);this.gl.deleteBuffer(item.buffer);}}
+    const data=runtime.geometry.guides,costSegments=buildPathCostGuideData(runtime).map(entry=>({...entry,buffer:createLineBuffer(this.gl,entry.positions)})),next={signature,center:createLineBuffer(this.gl,data.center),edges:createLineBuffer(this.gl,data.edges),construction:createLineBuffer(this.gl,data.construction),costSegments};this.pathLines.set(pathObject.id,next);return next;
   }
   pathSurfaceFor(pathObject,scene){
     const runtime=this.scenePathRuntimes(scene).find(item=>item.pathObjectId===pathObject.id);if(!runtime)return null;
@@ -812,7 +813,7 @@ export class Renderer3D{
       // v011-spline-editing-only x-ray path left unselected guides depth-tested,
       // making them z-fight with sampled terrain and appear disconnected.
       gl.disable(gl.DEPTH_TEST);
-      for(const pathObject of pathScene.objects.filter(o=>o.type==='path'&&o.visible&&o.properties?.showSpline!==false)){const buffers=this.pathBuffers(pathObject,pathScene),preview=pathObject.id===this.pathPreview?.id,selected=pathObject.id===selectedId;this.drawLines(buffers.edges,mat4Identity(),viewProj,preview?[.2,.9,1,1]:(selected?[.96,.56,1,1]:[.56,.34,.18,.7]),preview?4:(selected?3:2));if(selected||preview){this.drawLines(buffers.center,mat4Identity(),viewProj,preview?[.85,1,1,1]:[1,.9,1,1],3);this.drawLines(buffers.construction,mat4Identity(),viewProj,preview?[.15,1,.7,.95]:[.25,.85,1,.9],2);}}
+      for(const pathObject of pathScene.objects.filter(o=>o.type==='path'&&o.visible&&o.properties?.showSpline!==false)){const buffers=this.pathBuffers(pathObject,pathScene),preview=pathObject.id===this.pathPreview?.id,selected=pathObject.id===selectedId,showCosts=preview||pathObject.properties?.pathNetwork?.editor?.showGrade===true;this.drawLines(buffers.edges,mat4Identity(),viewProj,preview?[.2,.9,1,1]:(selected?[.96,.56,1,1]:[.56,.34,.18,.7]),preview?4:(selected?3:2));if(showCosts)for(const entry of buffers.costSegments||[])this.drawLines(entry.buffer,mat4Identity(),viewProj,entry.color,preview?6:5);if(selected||preview){this.drawLines(buffers.center,mat4Identity(),viewProj,showCosts?[1,1,1,.78]:(preview?[.85,1,1,1]:[1,.9,1,1]),showCosts?1.5:3);this.drawLines(buffers.construction,mat4Identity(),viewProj,preview?[.15,1,.7,.95]:[.25,.85,1,.9],2);}}
       gl.enable(gl.DEPTH_TEST);
     }
     const selected=scene.objects.find(o=>o.id===selectedId);

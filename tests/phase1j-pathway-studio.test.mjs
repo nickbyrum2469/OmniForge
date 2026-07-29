@@ -134,5 +134,7 @@ test('renderer and editor expose Pathway Studio authority and telemetry',()=>{
   assert.match(v011,/routeRestrictionsFromScene/);
   assert.match(v011,/Protected scene footprints/);
   assert.match(v011,/Grade cost/);
+  assert.match(v011,/v012ShowRouteCosts/);
+  assert.match(renderer,/buildPathCostGuideData/);
   assert.doesNotMatch(app,/paints a soft, noise-broken material mask into the terrain instead of floating/);
 });

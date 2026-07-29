@@ -46,4 +46,9 @@
 .v012-cost-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:10px; }
 .v012-cost-grid span { padding:7px; border:1px solid rgba(73,147,164,.22); border-radius:5px; background:#09151f; color:#8fabb3; font-size:9px; }
 .v012-cost-grid strong { display:block; color:#dffbff; font:10px ui-monospace,monospace; margin-top:3px; }
+.v012-cost-legend { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; margin-top:7px; font-size:9px; text-align:center; }
+.v012-cost-legend span { padding:5px 4px; border-radius:5px; color:#071018; font-weight:750; }
+.v012-cost-legend .low { background:#35e669; }
+.v012-cost-legend .medium { background:#f2e122; }
+.v012-cost-legend .high { background:#f42e20; color:white; }
 .v012-error { color:#ff9caa; background:rgba(93,18,34,.32); border:1px solid rgba(255,98,123,.28); border-radius:5px; padding:8px; font-size:10px; line-height:1.45; }
