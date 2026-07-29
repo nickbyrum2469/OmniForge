@@ -2,6 +2,8 @@ import { Renderer3D, terrainHeight } from './renderer.js';
 import { add, sub, scale, length, normalize, clamp, cameraForward, cameraRight } from './math.js';
 import { cloneCamera, shouldPreserveViewportCamera } from './viewport-state.js';
 import { createLookInputState, beginLookInputSession, endLookInputSession, applyLookDelta } from './viewport-navigation.js';
+import { RenderCrashGuard, sanitizeCameraState } from './render-crash-guard.js';
+import { applyPathwayPreset, renderPathwayInspector } from './pathway-studio.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -88,6 +90,23 @@ let interactionActiveUntil = 0;
 let remotePollInFlight = false;
 let viewportNavigationIntentUntil = 0;
 const lookInputState = createLookInputState();
+let renderRecoveryInFlight = false;
+let lastRenderFailureToastAt = 0;
+let visualCaptureHideEditorReferences = false;
+const renderCrashGuard = new RenderCrashGuard({
+  failureWindowMs: 5000,
+  tripThreshold: 3,
+  cooldownMs: 1800,
+  onFailure: ({error,recentFailures,totalFailures}) => {
+    window.__omniforgeDiagnostics?.warn?.('viewport-render-failure',{message:error.message,stack:error.stack||'',recentFailures,totalFailures});
+    const now=Date.now();if(now-lastRenderFailureToastAt>1800){lastRenderFailureToastAt=now;showToast('Viewport renderer recovered from an error. Crash evidence was recorded.','error');}
+  },
+  onTrip: ({error}) => {
+    keys.clear();try{document.exitPointerLock?.();}catch{}
+    rebuildRendererAfterFailure(error);
+  },
+  onRecover: () => window.__omniforgeDiagnostics?.event?.('viewport-render-recovered',{})
+});
 
 async function api(path, options={}) {
   const method=String(options.method||'GET').toUpperCase(),mutating=!['GET','HEAD'].includes(method);
@@ -123,6 +142,53 @@ function showToast(message, type='') {
   ui.viewportToast.className = `viewport-toast show ${type ? `toast-${type}` : ''}`;
   toastTimer = setTimeout(()=>ui.viewportToast.className='viewport-toast',2400);
 }
+
+async function captureVisualTestFrame(options={}) {
+  if(!ui.viewport||!camera||!scene)throw new Error('Viewport is not ready for visual capture.');
+  const originalCamera=cloneCamera(camera);
+  const originalGrid=scene.settings.gridVisible;
+  const originalSplines=scene.settings.splinesVisible;
+  const originalSelectedId=selectedId;
+  try{
+    const minimumRevision=Math.max(0,Number(options.minimumRevision||0));
+    if(minimumRevision>Number(state?.engine?.revision||0)){
+      const deadline=performance.now()+Math.max(1000,Math.min(12000,Number(options.revisionTimeoutMs||8000)));
+      while(performance.now()<deadline){
+        const remote=await api('/api/state');
+        if(Number(remote?.engine?.revision||0)>=minimumRevision){
+          applyState(remote,{forceSelection:false,preserveCamera:true});
+          break;
+        }
+        await sleep(80);
+      }
+      if(Number(state?.engine?.revision||0)<minimumRevision){
+        throw new Error(`Visual capture timed out waiting for authoritative revision ${minimumRevision}; renderer has ${Number(state?.engine?.revision||0)}.`);
+      }
+    }
+    if(options.camera){
+      const next=cloneCamera(camera);
+      if(Array.isArray(options.camera.position)&&options.camera.position.length===3)next.position=options.camera.position.map(Number);
+      for(const key of ['yaw','pitch','fov'])if(Number.isFinite(Number(options.camera[key])))next[key]=Number(options.camera[key]);
+      camera=sanitizeCameraState(next,originalCamera);
+    }
+    if(options.hideGuides!==false){scene.settings.gridVisible=false;scene.settings.splinesVisible=false;selectedId=null;}
+    visualCaptureHideEditorReferences=options.hideEditorReferences!==false;
+    const waitMs=Math.max(80,Math.min(3000,Number(options.waitMs||500)));
+    await sleep(waitMs);
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    return {
+      dataUrl:ui.viewport.toDataURL('image/png'),
+      renderTelemetry:renderer?.getRenderDiagnostics?.()||null
+    };
+  }finally{
+    camera=originalCamera;
+    scene.settings.gridVisible=originalGrid;
+    scene.settings.splinesVisible=originalSplines;
+    selectedId=originalSelectedId;
+    visualCaptureHideEditorReferences=false;
+  }
+}
+window.__omniforgeVisualTestCapture=captureVisualTestFrame;
 
 function objectIcon(type) {
   return ({box:'▣',sphere:'●',cylinder:'⬭',plane:'▱',terrain:'⌁',path:'⌇',model:'◆',decal:'◫',directionalLight:'☀',pointLight:'✦',empty:'＋'})[type] || '◇';
@@ -438,7 +504,7 @@ function objectPropertiesHtml(object) {
   const p=object.properties || {};
   if (['box','sphere','cylinder','plane'].includes(object.type)) return materialSelect(p.materialId)+propColor('Material color','color',p.color)+propNumber('Metallic','metallic',p.metallic||0,'0.01',0,1)+propNumber('Roughness','roughness',p.roughness??.7,'0.01',0,1)+propCheck('Cast shadows','castsShadows',p.castsShadows!==false)+propCheck('Receive shadows','receivesShadows',p.receivesShadows!==false)+propCheck('Collision','collider',p.collider!==false);
   if (object.type==='terrain') return materialSelect(p.materialId)+propColor('Fallback color','color',p.color)+propNumber('Mesh resolution','resolution',p.resolution||128,'1',8,256)+propCheck('Receive shadows','receivesShadows',p.receivesShadows!==false)+propCheck('Collision','collider',p.collider!==false)+`<div class="surface-blend-callout"><strong>Stable world bounds</strong><p>Terrain scale is locked. Use the v0.11 Terrain Generator below to change landforms or expand north, south, east, west, or all directions without stretching paths.</p></div>`;
-  if (object.type==='path') return materialSelect(p.materialId)+propColor('Fallback color','color',p.color)+propNumber('Path width','width',p.width||3,'0.1',.2,50)+propNumber('Blend shoulder','blendDistance',p.blendDistance??2.5,'0.1',.1,30)+propNumber('Edge irregularity','edgeNoise',p.edgeNoise??.5,'0.05',0,4)+propCheck('Conform to terrain','conformToTerrain',p.conformToTerrain!==false)+propCheck('Collision','collider',p.collider!==false)+propCheck('Navigation','navigation',p.navigation!==false)+propNumber('Nature clearance','vegetationExclusion',p.vegetationExclusion||0,'0.1',0,20)+`<div class="surface-blend-callout">The terrain remains authoritative. This path paints a soft, noise-broken material mask into the terrain instead of floating a hard-edged mesh above it.</div>`;
+  if (object.type==='path') return renderPathwayInspector(object,scene?.objects.find(item=>item.type==='terrain'&&item.visible!==false),scene?.objects.filter(item=>item.type==='path'&&item.visible!==false)||[],{materialSelect,propColor,propNumber,propCheck,escapeHtml});
   if (object.type==='decal') return materialSelect(p.materialId)+propColor('Tint','color',p.color)+propNumber('Opacity','opacity',p.opacity??.85,'0.05',0,1)+propNumber('Projection depth','projectionDepth',p.projectionDepth??.25,'0.05',.001,20)+propNumber('Sort order','sortOrder',p.sortOrder||0,'1',-1000,1000)+`<div class="surface-blend-callout">This is an authored surface decal. Keep projection depth narrow and inspect nearby geometry before approval.</div>`;
   if (p.celestialProxy) { const role=String(p.celestialRole||'celestial'); return `<div class="surface-blend-callout celestial-proxy-callout"><strong>Authoritative ${escapeHtml(role === 'sun' ? 'Sun' : 'Moon')} proxy</strong><p>This hierarchy entry is a protected view of the shared Celestial Studio authority. It cannot be duplicated or deleted, and it survives save/reload with a stable identity.</p><div class="property-row"><label>Azimuth</label><span>${Number(p.azimuth ?? 0).toFixed(2)}°</span></div><div class="property-row"><label>Elevation</label><span>${Number(p.elevation ?? 0).toFixed(2)}°</span></div><div class="property-row"><label>Angular size</label><span>${Number(p.angularSize ?? 1).toFixed(2)}×</span></div><button id="openCelestialStudioButton" class="button primary" type="button">Open Celestial Studio</button></div>`; }
   if (object.type==='directionalLight') return propColor('Light color','color',p.color)+propNumber('Intensity','intensity',p.intensity||1,'0.05',0,12)+propCheck('Cast shadows','castsShadows',p.castsShadows!==false);
@@ -482,6 +548,26 @@ function renderInspector() {
 function setNested(arrayRoot,index,value){ arrayRoot[Number(index)] = Number(value); }
 function bindInspector(object) {
   if(object.properties?.celestialProxy)return;
+  if(object.type==='path'){
+    $$('[data-pathway-live]').forEach(input=>input.addEventListener('input',()=>{
+      const key=input.dataset.propertyKey;if(!key)return;
+      object.properties[key]=input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value;
+      markLocalMutation();
+    }));
+    $('#applyPathwayPresetButton')?.addEventListener('click',()=>{
+      const preset=$('[data-pathway-preset]')?.value||'dirtRoad';
+      patchObject(object.id,{properties:applyPathwayPreset(object.properties,preset)});
+    });
+    $('#fitPathwayLanesButton')?.addEventListener('click',()=>{
+      const laneCount=Math.max(1,Number(object.properties.laneCount||2)),laneWidth=Math.max(.5,Number(object.properties.laneWidth||2.4));
+      patchObject(object.id,{properties:{width:laneCount*laneWidth,profileRevision:Number(object.properties.profileRevision||1)+1}});
+    });
+    $('#reversePathwayButton')?.addEventListener('click',()=>{
+      const points=deepClone(object.properties.points||[]).reverse();
+      patchObject(object.id,{properties:{points,profileRevision:Number(object.properties.profileRevision||1)+1}});
+    });
+    $('#rebuildPathwayButton')?.addEventListener('click',()=>patchObject(object.id,{properties:{profileRevision:Number(object.properties.profileRevision||1)+1}}));
+  }
   $('#objectNameInput')?.addEventListener('change',event=>patchObject(object.id,{name:event.target.value.trim()||object.name}));
   $$('[data-number-path]').forEach(input=>input.addEventListener('change',event=>{
     const [root,index]=input.dataset.numberPath.split('.');
@@ -1130,12 +1216,38 @@ function updateCamera(dt) {
   if(length(movement)>.001){camera.position=add(camera.position,scale(normalize(movement),speed*dt));scene.editorCamera=cloneCamera(camera);noteCameraMutation();}
 }
 
+function rebuildRendererAfterFailure(error) {
+  if(renderRecoveryInFlight)return;
+  renderRecoveryInFlight=true;
+  window.__omniforgeDiagnostics?.warn?.('viewport-renderer-rebuild-requested',{message:error?.message||String(error||'unknown')});
+  window.setTimeout(()=>{
+    try{
+      renderer?.dispose?.();
+      renderer=new Renderer3D(ui.viewport);
+      renderer.setAssets(state?.assets||[]);
+      showToast('Viewport renderer restarted without closing OmniForge.','success');
+    }catch(rebuildError){
+      window.__omniforgeDiagnostics?.warn?.('viewport-renderer-rebuild-failed',{message:rebuildError.message,stack:rebuildError.stack||''});
+      showToast('Viewport recovery failed. Reopen OmniForge in Safe Mode and copy the crash details.','error');
+    }finally{renderRecoveryInFlight=false;}
+  },260);
+}
+
 function animationLoop(now) {
   const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('animationLoop',{},20)||(()=>{});
-  const dt=Math.min(.05,(now-lastFrame)/1000);lastFrame=now;updateCamera(dt);if(state?.editor.mode==='play'){behaviorStep(dt);physicsAccumulator=Math.min(.2,physicsAccumulator+dt);while(physicsAccumulator>=1/60){physicsStep(1/60);physicsAccumulator-=1/60;}}if(renderer&&scene)renderer.render(scene,camera,selectedId,{editorMode:state?.editor?.mode||'edit'});
-  frameCounter++;fpsTimer+=dt;if(fpsTimer>=.5){ui.fpsStatus.textContent=`${Math.round(frameCounter/fpsTimer)} FPS`;frameCounter=0;fpsTimer=0;ui.cameraPositionBadge.textContent=`X ${camera.position[0].toFixed(1)} · Y ${camera.position[1].toFixed(1)} · Z ${camera.position[2].toFixed(1)}`;}
-  finishDiagnostic({dtMs:Number((dt*1000).toFixed(3))});
-  requestAnimationFrame(animationLoop);
+  let dt=0;let renderResult={rendered:false};
+  try{
+    dt=Math.min(.05,Math.max(0,(now-lastFrame)/1000));lastFrame=now;
+    if(camera){const safe=sanitizeCameraState(camera,scene?.editorCamera||{});Object.assign(camera,safe);if(scene)scene.editorCamera={...safe,position:[...safe.position]};}
+    updateCamera(dt);
+    if(state?.editor.mode==='play'){behaviorStep(dt);physicsAccumulator=Math.min(.2,physicsAccumulator+dt);while(physicsAccumulator>=1/60){physicsStep(1/60);physicsAccumulator-=1/60;}}
+    renderResult=renderCrashGuard.run(()=>{if(renderer&&scene)renderer.render(scene,camera,selectedId,{editorMode:state?.editor?.mode||'edit',hideEditorReferences:visualCaptureHideEditorReferences});},now);
+    frameCounter++;fpsTimer+=dt;if(fpsTimer>=.5){ui.fpsStatus.textContent=`${Math.round(frameCounter/Math.max(.001,fpsTimer))} FPS`;frameCounter=0;fpsTimer=0;ui.cameraPositionBadge.textContent=`X ${camera.position[0].toFixed(1)} · Y ${camera.position[1].toFixed(1)} · Z ${camera.position[2].toFixed(1)}`;}
+  }catch(error){renderResult=renderCrashGuard.run(()=>{throw error;},now);}
+  finally{
+    finishDiagnostic({dtMs:Number((dt*1000).toFixed(3)),rendered:Boolean(renderResult.rendered),suspended:Boolean(renderResult.suspended)});
+    requestAnimationFrame(animationLoop);
+  }
 }
 
 async function nudgeSelected(code) {
@@ -1298,6 +1410,7 @@ function bindEvents() {
   window.addEventListener('blur',releaseViewportInput);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseViewportInput();});
   document.addEventListener('keydown',event=>{
+    if((event.ctrlKey||event.metaKey)&&event.code==='KeyW')event.preventDefault();
     keys.add(event.code);
     if(viewportNavigationActive()){if(['Space','ControlLeft','ControlRight'].includes(event.code))event.preventDefault();return;}
     const target=event.target,typing=target instanceof HTMLInputElement||target instanceof HTMLTextAreaElement||target instanceof HTMLSelectElement||target?.isContentEditable;
@@ -1345,7 +1458,7 @@ async function bootstrap() {
     renderer=new Renderer3D(ui.viewport);renderer.setAssets(state.assets);applyState(state,{forceSelection:true});bindEvents();renderProjectHub();loading=false;
     window.__omniforgeV011Bridge=Object.freeze({snapshot:()=>({state,scene,camera,selectedId}),renderer:()=>renderer,api,applyState,selectObject,showToast,markLocalMutation,renderInspector});
     window.__omniforgeDebug=Object.freeze({
-      snapshot:()=>deepClone({state,scene,camera,selectedId,playMode:state?.editor?.mode||'edit',projects,layout:state?.editor?.layout}),
+      snapshot:()=>deepClone({state,scene,camera,selectedId,playMode:state?.editor?.mode||'edit',projects,layout:state?.editor?.layout,renderCrashGuard:renderCrashGuard.snapshot()}),
       setCamera:patch=>{if(patch&&typeof patch==='object'){if(Array.isArray(patch.position))camera.position=patch.position.map(Number);for(const key of ['yaw','pitch','fov','moveSpeed'])if(Number.isFinite(Number(patch[key])))camera[key]=Number(patch[key]);scene.editorCamera={...camera,position:[...camera.position]};}},
       select:id=>selectObject(id,false),togglePlay:()=>enterPlayMode(),capture:title=>captureViewport(title||'Automated viewport inspection'),openProjectHub:()=>loadProjects({openHub:true}),applyLayout:patch=>applyLayout(patch,false)
     });

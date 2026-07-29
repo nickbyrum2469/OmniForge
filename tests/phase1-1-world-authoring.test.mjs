@@ -42,7 +42,7 @@ test('Celestial Studio settings normalize and create authoritative Sun and Moon 
 test('renderer environment exposes adjustable discs, detailed moon, planet, moonlight, and volumetric cloud inputs', () => {
   const target = scene();
   const world = defaultWorldSettings({
-    sky: { sunSize: 2, moonSize: 3, moonPhase: 0.5, moonPhaseMode: 'manual', moonBrightness: 1.5, moonDetail: 2, planetEnabled: true, planetAzimuth: 210, planetElevation: 25 },
+    sky: { celestialMode: 'manual', sunSize: 2, moonSize: 3, celestialScaleMode: 'artistic', moonPhase: 0.5, moonPhaseMode: 'manual', moonBrightness: 1.5, moonDetail: 2, planetEnabled: true, planetAzimuth: 210, planetElevation: 25 },
     clouds: { quality: 'balanced', altitude: 1800, thickness: 1200 },
     lighting: { moonIntensity: 0.2 }
   });
@@ -57,6 +57,20 @@ test('renderer environment exposes adjustable discs, detailed moon, planet, moon
   assert.equal(state.cloudAltitude, 1800);
   assert.equal(state.cloudThickness, 1200);
   assert.ok(state.moonLightIntensity >= 0);
+});
+
+test('twilight keeps the shared anti-solar horizon cool while the renderer owns directional warmth', () => {
+  const target = scene();
+  const world = defaultWorldSettings({
+    sky: { celestialMode: 'manual', sunAzimuth: 0, sunElevation: -4 }
+  });
+  applyWorldToScene(target, world);
+  const [red, green, blue] = target.settings.skyBottom
+    .slice(1)
+    .match(/.{2}/g)
+    .map(value => Number.parseInt(value, 16));
+  assert.ok(blue > red, `expected a cool shared horizon, received ${target.settings.skyBottom}`);
+  assert.ok(blue > green, `expected a cool shared horizon, received ${target.settings.skyBottom}`);
 });
 
 test('terrain expansion preserves physical vertex density until the single-mesh safety ceiling', () => {

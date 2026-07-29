@@ -149,13 +149,26 @@ export function pathDiagnostics(pathObject, terrain) {
     const rawA = terrainBaseHeightAt(terrain, a.x, a.z), rawB = terrainBaseHeightAt(terrain, b.x, b.z);
     rawMaxGrade = Math.max(rawMaxGrade, Math.abs(rawB - rawA) / distance * 100);
     compiledMaxGrade = Math.max(compiledMaxGrade, Math.abs(b.y - a.y) / distance * 100);
-    if (b.y < rawB) estimatedCut += rawB - b.y; else estimatedFill += b.y - rawB;
+    if (b.y < rawB) estimatedCut = Math.max(estimatedCut, rawB - b.y);
+    else estimatedFill = Math.max(estimatedFill, b.y - rawB);
   }
+  const constraints = profile.diagnostics || {};
+  const gameplayReady = constraints.gameplayReady === true
+    && compiledMaxGrade <= properties.maxGradePercent + 0.15
+    && estimatedCut <= properties.maxCutDepth + 0.001
+    && estimatedFill <= properties.maxFillDepth + 0.001;
   return {
     schemaVersion: 1, nodeCount: properties.points.length, sampleCount: samples.length, profileSampleCount: profile.length, spline: properties.spline,
     rawMaxGradePercent: rawMaxGrade, compiledMaxGradePercent: compiledMaxGrade, configuredMaxGradePercent: properties.maxGradePercent,
-    estimatedCut, estimatedFill, carveTerrain: properties.carveTerrain,
-    validation: compiledMaxGrade <= properties.maxGradePercent + 0.15 ? 'passed' : 'failed', checkedAt: now()
+    estimatedCut, estimatedFill, configuredMaxCut: properties.maxCutDepth, configuredMaxFill: properties.maxFillDepth,
+    carveTerrain: properties.carveTerrain,
+    surfaceAuthority: properties.surfaceAuthority,
+    terrainModificationAuthority: properties.terrainModificationAuthority,
+    constraintStatus: constraints.feasible === false ? 'blocked-infeasible-profile' : 'passed',
+    infeasibleStationCount: constraints.infeasibleStationCount || 0,
+    gameplayReady,
+    validation: gameplayReady ? 'passed' : 'failed',
+    checkedAt: now()
   };
 }
 

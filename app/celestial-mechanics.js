@@ -33,6 +33,34 @@ function dot(a, b) {
     + Number(a?.[2] || 0) * Number(b?.[2] || 0);
 }
 
+export function solarDiscCoverage(sunRadiusDegrees, moonRadiusDegrees, separationDegrees) {
+  const sunRadius = Math.max(1e-6, Number(sunRadiusDegrees) || 0);
+  const moonRadius = Math.max(1e-6, Number(moonRadiusDegrees) || 0);
+  const separation = Math.max(0, Number(separationDegrees) || 0);
+  if (separation >= sunRadius + moonRadius) return 0;
+  if (separation <= Math.abs(sunRadius - moonRadius)) {
+    return clamp01((Math.min(sunRadius, moonRadius) ** 2) / (sunRadius ** 2));
+  }
+  const sunAngle = Math.acos(clamp(
+    (separation ** 2 + sunRadius ** 2 - moonRadius ** 2) / (2 * separation * sunRadius),
+    -1,
+    1
+  ));
+  const moonAngle = Math.acos(clamp(
+    (separation ** 2 + moonRadius ** 2 - sunRadius ** 2) / (2 * separation * moonRadius),
+    -1,
+    1
+  ));
+  const lens = 0.5 * Math.sqrt(Math.max(0,
+    (-separation + sunRadius + moonRadius)
+    * (separation + sunRadius - moonRadius)
+    * (separation - sunRadius + moonRadius)
+    * (separation + sunRadius + moonRadius)
+  ));
+  const overlapArea = sunRadius ** 2 * sunAngle + moonRadius ** 2 * moonAngle - lens;
+  return clamp01(overlapArea / (Math.PI * sunRadius ** 2));
+}
+
 function eclipticToEquatorial(longitude, latitude = 0) {
   const obliquity = 23.43928 * DEG;
   const cosLatitude = Math.cos(latitude);
@@ -123,11 +151,15 @@ function resolveMoon(world, absoluteDay, sun) {
   const illumination = phaseMode === 'manual' ? manualPhase : geometricIllumination;
   const waxing = ageFraction < 0.5;
   const nodeDistance = Math.abs(eclipticLatitude) * RAD;
-  const solarAlignment = 1 - smoothstep(0.12, 1.45, separation * RAD);
+  const sunAngularRadius = 0.2666 * clamp(sky.sunSize ?? 1, 0.1, 12);
+  const moonAngularRadius = 0.259
+    * clamp(sky.moonSize ?? 1.25, 0.1, 32)
+    * clamp(sky.solarEclipseCoverage ?? 1, 0.5, 2);
+  const geometricSolarCoverage = solarDiscCoverage(sunAngularRadius, moonAngularRadius, separation * RAD);
   const lunarAlignment = 1 - smoothstep(0.15, 1.8, Math.abs(180 - separation * RAD));
-  const nodeAlignment = 1 - smoothstep(0.18, 1.35, nodeDistance);
+  const nodeAlignment = manual ? 1 : 1 - smoothstep(0.18, 1.35, nodeDistance);
   const eclipseMode = String(sky.eclipseMode || 'automatic');
-  let solarEclipse = eclipseMode === 'off' ? 0 : solarAlignment * nodeAlignment;
+  let solarEclipse = eclipseMode === 'off' ? 0 : geometricSolarCoverage * nodeAlignment;
   let lunarEclipse = eclipseMode === 'off' ? 0 : lunarAlignment * nodeAlignment;
   if (eclipseMode === 'force-solar') solarEclipse = 1;
   if (eclipseMode === 'force-lunar') lunarEclipse = 1;
@@ -153,6 +185,9 @@ function resolveMoon(world, absoluteDay, sun) {
     phaseName,
     eclipticLatitudeDegrees: eclipticLatitude * RAD,
     nodeDistanceDegrees: nodeDistance,
+    geometricSolarCoverage,
+    sunAngularRadiusDegrees: sunAngularRadius,
+    moonAngularRadiusDegrees: moonAngularRadius,
     solarEclipse: clamp01(solarEclipse),
     lunarEclipse: clamp01(lunarEclipse),
     visibility,

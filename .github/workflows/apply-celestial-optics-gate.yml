@@ -1,0 +1,63 @@
+name: Apply Celestial Recovery Gate
+
+on:
+  push:
+    branches:
+      - phase1c/crash-celestial-atmosphere-stabilization
+    paths:
+      - scripts/apply-celestial-optics-gate.py
+      - .github/workflows/apply-celestial-optics-gate.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out authoritative branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: phase1c/crash-celestial-atmosphere-stabilization
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply bounded celestial recovery
+        run: python scripts/apply-celestial-optics-gate.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Verify repository
+        run: npm run verify
+
+      - name: Validate diff
+        run: git diff --check
+
+      - name: Commit repaired source
+        shell: bash
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No source changes were required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            app/environment-runtime.js \
+            app/sky-pass.js \
+            app/world-runtime.js \
+            tests/phase1g-celestial-optics.test.mjs \
+            tests/phase1c-visual-projection.test.mjs \
+            progress.md
+          git commit -m "Repair celestial occlusion horizon and transitions"
+          git push origin HEAD:phase1c/crash-celestial-atmosphere-stabilization

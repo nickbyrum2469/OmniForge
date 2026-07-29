@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   phase1c:
-    if: github.actor != 'github-actions[bot]' && github.event_name == 'pull_request' && github.head_ref == 'phase1c/crash-celestial-atmosphere-stabilization'
+    if: (github.event_name == 'pull_request' && github.head_ref == 'phase1c/crash-celestial-atmosphere-stabilization') || (github.event_name == 'workflow_dispatch' && github.ref_name == 'phase1c/crash-celestial-atmosphere-stabilization')
     runs-on: windows-latest
     timeout-minutes: 75
     steps:

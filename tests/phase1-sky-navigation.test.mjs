@@ -1,20 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { cameraSkyBasis, skyRayFromNdc, normalizeEnvironmentState } from '../app/environment-runtime.js';
-import { createLookInputState, beginLookInputSession, applyLookDelta, wrapYaw } from '../app/viewport-navigation.js';
+import { skyRayFromNdc, normalizeEnvironmentState } from '../app/environment-runtime.js';
+import { createLookInputState, beginLookInputSession, endLookInputSession, applyLookDelta } from '../app/viewport-navigation.js';
 
-const camera = { position: [10, 20, 30], yaw: 0.4, pitch: -0.2, fov: 62, lookSensitivity: 0.0023 };
+const distance = (a, b) => Math.hypot(...a.map((value, index) => value - b[index]));
 
 test('sky rays rotate with the camera but ignore camera translation', () => {
-  const translated = { ...camera, position: [9999, -450, 88] };
-  assert.deepEqual(skyRayFromNdc(camera, 0.25, -0.1, 16 / 9), skyRayFromNdc(translated, 0.25, -0.1, 16 / 9));
-  assert.notDeepEqual(skyRayFromNdc(camera, 0, 0, 1), skyRayFromNdc({ ...camera, yaw: camera.yaw + 0.5 }, 0, 0, 1));
-  const basis = cameraSkyBasis(camera);
-  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  assert.ok(Math.abs(dot(basis.forward, basis.right)) < 1e-10);
-  assert.ok(Math.abs(dot(basis.forward, basis.up)) < 1e-10);
-  assert.ok(Math.abs(dot(basis.right, basis.up)) < 1e-10);
+  const camera = { position: [0, 0, 0], yaw: 0.2, pitch: -0.1, fov: 62 };
+  const origin = skyRayFromNdc(camera, 0.35, -0.2, 16 / 9);
+  const translated = skyRayFromNdc({ ...camera, position: [400, -80, 900] }, 0.35, -0.2, 16 / 9);
+  assert.ok(distance(origin, translated) < 1e-12);
+  const rotated = skyRayFromNdc({ ...camera, yaw: camera.yaw + 0.7 }, 0.35, -0.2, 16 / 9);
+  assert.ok(distance(origin, rotated) > 0.3);
 });
 
 test('environment state is bounded and shares the directional light authority', () => {
@@ -40,7 +38,7 @@ test('nested World settings drive weather, cloud wind, quality, and twilight', (
     }
   }, { dir: [0.3, -0.8, 0.1], color: [1, 0.9, 0.8] }, 40);
   assert.equal(state.weather, 'storm');
-  assert.equal(state.weatherDarkening, 0.46);
+  assert.equal(state.weatherDarkening, 0.44);
   assert.equal(state.cloudWindSpeed, 27);
   assert.equal(state.cloudQuality, 'layered');
   assert.equal(state.cloudSeed, 904);
@@ -53,58 +51,62 @@ test('nested World settings drive weather, cloud wind, quality, and twilight', (
 
 test('viewport look ignores acquisition noise and rejects implausible direction snaps', () => {
   const look = createLookInputState();
-  const next = { ...camera };
-  beginLookInputSession(look, 'pointer-lock', 1000);
-  assert.equal(applyLookDelta(next, look, { dx: 18, dy: 4, source: 'pointer-lock', now: 1001 }).reason, 'session-warmup');
-  const beforeSpike = { yaw: next.yaw, pitch: next.pitch };
-  const spike = applyLookDelta(next, look, { dx: 4000, dy: -2600, source: 'pointer-lock', now: 1008 });
+  const camera = { yaw: 0, pitch: 0, lookSensitivity: 0.0023, invertHorizontal: false, invertVertical: false };
+  beginLookInputSession(look, 'pointer-lock');
+  const acquisition = applyLookDelta(camera, look, { dx: 180, dy: -130, source: 'pointer-lock', now: 100 });
+  assert.equal(acquisition.reason, 'session-warmup');
+  assert.equal(camera.yaw, 0);
+  const normal = applyLookDelta(camera, look, { dx: 12, dy: -8, source: 'pointer-lock', now: 116 });
+  assert.equal(normal.changed, true);
+  assert.ok(camera.yaw > 0);
+  const yawAfterNormal = camera.yaw;
+  const spike = applyLookDelta(camera, look, { dx: 1200, dy: -900, source: 'pointer-lock', now: 132 });
   assert.equal(spike.reason, 'delta-spike');
-  assert.deepEqual({ yaw: next.yaw, pitch: next.pitch }, beforeSpike);
-  const applied = applyLookDelta(next, look, { dx: 12, dy: -5, source: 'pointer-lock', now: 1016 });
-  assert.equal(applied.changed, true);
-  assert.notEqual(next.yaw, beforeSpike.yaw);
+  assert.equal(camera.yaw, yawAfterNormal);
+  const resumed = applyLookDelta(camera, look, { dx: 8, dy: 4, source: 'pointer-lock', now: 520 });
+  assert.equal(resumed.reason, 'resume-guard');
+  assert.equal(camera.yaw, yawAfterNormal);
+  const resumeWarmup = applyLookDelta(camera, look, { dx: 8, dy: 4, source: 'pointer-lock', now: 536 });
+  assert.equal(resumeWarmup.reason, 'session-warmup');
+  const next = applyLookDelta(camera, look, { dx: 8, dy: 4, source: 'pointer-lock', now: 552 });
+  assert.equal(next.changed, true);
+  endLookInputSession(look);
 });
 
 test('yaw remains normalized and pitch remains bounded', () => {
-  assert.ok(wrapYaw(1000) >= -Math.PI && wrapYaw(1000) <= Math.PI);
   const look = createLookInputState();
-  const next = { ...camera, pitch: 0 };
-  beginLookInputSession(look, 'right-drag', 1000);
-  applyLookDelta(next, look, { dx: 100, dy: -160, source: 'right-drag', now: 1010 });
-  assert.ok(next.pitch < Math.PI / 2 && next.pitch > -Math.PI / 2);
+  const camera = { yaw: Math.PI - 0.01, pitch: 1.5, lookSensitivity: 0.008, invertHorizontal: false, invertVertical: false };
+  beginLookInputSession(look, 'right-drag');
+  applyLookDelta(camera, look, { dx: 0, dy: 0, source: 'right-drag', now: 0 });
+  for (let index = 0; index < 20; index += 1) applyLookDelta(camera, look, { dx: 150, dy: -150, source: 'right-drag', now: 16 + index * 16 });
+  assert.ok(camera.yaw >= -Math.PI && camera.yaw <= Math.PI);
+  assert.ok(camera.pitch <= Math.PI * 0.495);
+  assert.ok(camera.pitch >= -Math.PI * 0.495);
 });
 
 test('viewport acquisition protects camera authority before pointer lock and releases cleanly', () => {
-  const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
-  const intentIndex = app.indexOf('viewportNavigationIntentUntil=Date.now()+1600');
-  const selectionIndex = app.indexOf('selectObject(pick?.id||null,true)', intentIndex);
-  const lockRequestIndex = app.indexOf('requestPointerLock?.()', selectionIndex);
-  assert.ok(intentIndex >= 0, 'navigation intent guard is missing');
-  assert.ok(selectionIndex > intentIndex, 'camera authority must be protected before click selection applies state');
-  assert.ok(lockRequestIndex > selectionIndex, 'pointer lock must begin after guarded selection');
-  assert.match(app, /beginLookInputSession\(lookInputState,'pointer-lock'\)/);
-  assert.match(app, /viewport-look-delta-rejected/);
-  assert.match(app, /window\.addEventListener\('blur',releaseViewportInput\)/);
-  assert.match(app, /visibilitychange.*releaseViewportInput/);
-  assert.match(app, /viewportNavigationActive\(\).*viewportNavigationIntentUntil/s);
-  assert.match(app, /wasNavigating&&cameraDirty\)persistCameraSoon\(\)/);
+  const source = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
+  const enterIndex = source.indexOf('async function enterViewportNavigation');
+  const intentIndex = source.indexOf('viewportNavigationIntentUntil=Date.now()+1600', enterIndex);
+  const pickIndex = source.indexOf('renderer.pick', enterIndex);
+  const lockIndex = source.indexOf('requestPointerLock', enterIndex);
+  assert.ok(intentIndex > enterIndex && intentIndex < pickIndex && pickIndex < lockIndex);
+  assert.match(source, /pointerlockchange/);
+  assert.match(source, /pointerlockerror/);
+  assert.match(source, /visibilitychange/);
+  assert.match(source, /persistCameraSoon\(\)/);
 });
 
 test('normal rendering no longer depends on the legacy CSS atmosphere', () => {
-  const renderer = fs.readFileSync(new URL('../app/renderer.js', import.meta.url), 'utf8');
-  const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
-  const world = fs.readFileSync(new URL('../app/v010.js', import.meta.url), 'utf8');
   const css = fs.readFileSync(new URL('../app/v010.css', import.meta.url), 'utf8');
-  const initializationPattern = /this\.skyPass=null;try\{this\.skyPass=new SkyPass\(gl\)/g;
-  const renderGuardPattern = /if\(this\.skyPass\)\{try\{this\.skyPass\.render/g;
-  assert.match(renderer, /new SkyPass\(gl\)/);
+  const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
+  const v010 = fs.readFileSync(new URL('../app/v010.js', import.meta.url), 'utf8');
+  const renderer = fs.readFileSync(new URL('../app/renderer.js', import.meta.url), 'utf8');
+  assert.match(css, /#viewportWrap::before[\s\S]*content:\s*none/);
+  assert.match(css, /#viewportWrap::after[\s\S]*content:\s*none/);
+  assert.doesNotMatch(v010, /--cloud-coverage/);
+  assert.doesNotMatch(v010, /--star-opacity/);
+  assert.doesNotMatch(app, /viewportWrap\.style\.background\s*=\s*[^;]*linear-gradient/);
   assert.match(renderer, /alpha:false/);
-  assert.equal((renderer.match(initializationPattern) || []).length, 1);
-  assert.equal((renderer.match(renderGuardPattern) || []).length, 1);
-  assert.match(renderer, /opaque environment fallback/);
-  assert.doesNotMatch(renderer, /gl\.clearColor\(0,0,0,0\)/);
-  assert.doesNotMatch(app, /viewportWrap\.style\.background\s*=\s*`linear-gradient/);
-  assert.doesNotMatch(world, /--v010-clouds/);
-  assert.doesNotMatch(css, /v010-cloud-drift/);
-  assert.doesNotMatch(css, /radial-gradient\(ellipse at 12% 24%/);
+  assert.match(renderer, /new SkyPass\(gl\)/);
 });

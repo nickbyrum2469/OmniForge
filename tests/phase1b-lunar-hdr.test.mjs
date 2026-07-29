@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { evaluateCelestialSystem } from '../app/celestial-mechanics.js';
+import { evaluateCelestialSystem, solarDiscCoverage } from '../app/celestial-mechanics.js';
 import { applyEnvironmentPreset, ENVIRONMENT_PRESETS } from '../app/environment-presets.js';
 
 function worldAt({ absoluteDay = 200, hours = 12, moonAgeDays = 0, latitude = 37.3, eclipseMode = 'automatic' } = {}) {
@@ -55,8 +55,48 @@ test('Forced eclipse modes are deterministic authoring tools', () => {
   assert.equal(lunar.moon.lunarEclipse, 1);
 });
 
+test('manual celestial coordinates produce partial eclipse strength without orbital-node vetoes', () => {
+  const world = worldAt({ moonAgeDays: 3, eclipseMode: 'automatic' });
+  world.sky = {
+    ...world.sky,
+    celestialMode: 'manual',
+    sunAzimuth: 0,
+    sunElevation: 30,
+    moonAzimuth: 0.58,
+    moonElevation: 30,
+    sunSize: 9,
+    moonSize: 9,
+    solarEclipseCoverage: 1,
+    moonOrbitInclination: 45
+  };
+  const partial = evaluateCelestialSystem(world);
+  assert.ok(partial.moon.solarEclipse > 0.05 && partial.moon.solarEclipse < 1);
+  assert.ok(partial.moon.separationDegrees > 0.1);
+});
+
+test('solar eclipse strength follows angular disc overlap for partial and annular events', () => {
+  assert.equal(solarDiscCoverage(1, 1, 2), 0);
+  assert.equal(solarDiscCoverage(1, 1.2, 0), 1);
+  assert.ok(Math.abs(solarDiscCoverage(1, 0.8, 0) - 0.64) < 1e-9);
+  const world = worldAt({ eclipseMode: 'automatic' });
+  world.sky = {
+    ...world.sky,
+    celestialMode: 'manual',
+    sunAzimuth: 0,
+    sunElevation: 16,
+    moonAzimuth: 0,
+    moonElevation: 16,
+    sunSize: 9,
+    moonSize: 7.5,
+    solarEclipseCoverage: 1
+  };
+  const annular = evaluateCelestialSystem(world);
+  assert.ok(annular.moon.solarEclipse > 0.6 && annular.moon.solarEclipse < 0.8);
+  assert.ok(annular.moon.moonAngularRadiusDegrees < annular.moon.sunAngularRadiusDegrees);
+});
+
 test('Environment presets edit the same authoritative world sections', () => {
-  assert.ok(Object.keys(ENVIRONMENT_PRESETS).length >= 6);
+  assert.ok(Object.keys(ENVIRONMENT_PRESETS).length >= 16);
   const source = {
     time: { hours: 12 }, lighting: { profile: 'compatibility' }, atmosphere: { exposure: 1 },
     sky: { moonSize: 2 }, clouds: { coverage: 0 }, weather: { preset: 'clear' }
@@ -67,6 +107,17 @@ test('Environment presets edit the same authoritative world sections', () => {
   assert.ok(result.atmosphere.saturation > 1);
   assert.ok(result.atmosphere.contrast > 1);
   assert.notEqual(result, source);
+  for (const id of [
+    'forest-morning-shafts',
+    'coastal-backlight',
+    'realistic-night-core',
+    'faint-natural-milkyway',
+    'fantasy-violet-galaxy',
+    'total-eclipse-realistic',
+    'annular-eclipse-warm'
+  ]) assert.ok(ENVIRONMENT_PRESETS[id], `missing environment profile ${id}`);
+  assert.equal(ENVIRONMENT_PRESETS['total-eclipse-realistic'].patch.sky.eclipseMode, 'force-solar');
+  assert.equal(ENVIRONMENT_PRESETS['fantasy-violet-galaxy'].patch.sky.milkyWayColor, '#b889e8');
 });
 
 test('Phase 1B renderer source has one HDR display transform and controllable non-aurora star systems', () => {

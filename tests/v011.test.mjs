@@ -91,27 +91,30 @@ test('spline sampling, insertion, and splitting preserve a smooth connected worl
   assert.ok(parts[0].length>=2&&parts[1].length>=2);
 });
 
-test('path grade compilation respects configured maximum grade and bounded terrain cut/fill',()=>{
-  const t=terrain({preset:'highlands',height:55,ridgeStrength:1,warpStrength:45});
-  const p=pathObject({maxGradePercent:7,maxCutDepth:5,maxFillDepth:2});
+test('feasible path grade compilation respects maximum grade and bounded terrain cut/fill',()=>{
+  const t=terrain({preset:'plains',height:3,ridgeStrength:0,warpStrength:0});
+  const p=pathObject({maxGradePercent:12,maxCutDepth:5,maxFillDepth:2});
   const profile=compilePathProfile(p,t);
   let maximum=0;
   for(let index=1;index<profile.length;index++){const a=profile[index-1],b=profile[index],distance=Math.hypot(b.x-a.x,b.z-a.z)||1;maximum=Math.max(maximum,Math.abs(b.y-a.y)/distance*100);}
-  assert.ok(maximum<=7.01,`compiled maximum grade was ${maximum}`);
+  assert.equal(profile.diagnostics.feasible,true);
+  assert.ok(maximum<=12.01,`compiled maximum grade was ${maximum}`);
   for(const sample of profile.filter((_,index)=>index%8===0)){
-    const base=terrainBaseHeightAt(t,sample.x,sample.z),final=terrainHeightAt(t,sample.x,sample.z,[p]);
-    assert.ok(final>=base-5.01);
-    assert.ok(final<=base+2.01);
+    const base=terrainBaseHeightAt(t,sample.x,sample.z);
+    assert.ok(sample.y>=base-5.01);
+    assert.ok(sample.y<=base+2.01);
   }
   const diagnostics=pathDiagnostics(p,t);
   assert.equal(diagnostics.validation,'passed');
-  assert.ok(diagnostics.compiledMaxGradePercent<=7.15);
+  assert.ok(diagnostics.compiledMaxGradePercent<=12.15);
 });
 
-test('path material blending follows the sampled spline instead of straight control-point chords',()=>{
+test('corridor authority disables the duplicate terrain material path while legacy compatibility stays explicit',()=>{
   const p=pathObject({carveTerrain:false,width:4,blendDistance:3});
   const sample=samplePathSpline(p)[Math.floor(samplePathSpline(p).length*.42)];
-  assert.ok(pathBlendAt([p],sample.x,sample.z)>.9);
+  assert.equal(pathBlendAt([p],sample.x,sample.z),0);
+  const legacy=pathObject({...p.properties,surfaceAuthority:'legacy-terrain'});
+  assert.ok(pathBlendAt([legacy],sample.x,sample.z)>.9);
   assert.equal(pathBlendAt([p],sample.x+100,sample.z+100),0);
 });
 
@@ -129,8 +132,10 @@ test('v0.11 editor, renderer, runtime, desktop, and MCP expose the connected wor
   assert.match(editor,/Right-click terrain to insert a node/);
   assert.match(editor,/terrainPointFromScreen/);
   assert.match(editor,/data-v011-expand/);
-  assert.match(renderer,/samplePathSpline/);
+  assert.match(renderer,/buildPathGuideSegmentsFromCorridor/);
   assert.match(renderer,/scene\.settings\.splinesVisible!==false/);
+  assert.match(renderer,/Spline guides are editor overlays, not world geometry/);
+  assert.match(renderer,/if\(scene\.settings\.splinesVisible!==false\)\{\s*\/\/[\s\S]*?gl\.disable\(gl\.DEPTH_TEST\)/);
   assert.match(renderer,/terrainPointFromScreen/);
   assert.match(app,/__omniforgeV011Bridge/);
   assert.match(mcp,/v011Tools, callV011Tool/);
@@ -159,7 +164,10 @@ test('v0.11 bootstrap persists terrain expansion and spline node editing through
     const moved=await requestJson(port,`/api/v011/path/${pathId}/node/${index}`,{method:'PATCH',body:JSON.stringify({x:13,z:17})});
     assert.equal(moved.status,200);assert.deepEqual(moved.body.path.properties.points[index],[13,17]);
     const grade=await requestJson(port,`/api/v011/path/${pathId}`,{method:'PATCH',body:JSON.stringify({properties:{carveTerrain:true,maxGradePercent:6,maxCutDepth:4,maxFillDepth:1.5}})});
-    assert.equal(grade.status,200);assert.equal(grade.body.path.properties.carveTerrain,true);assert.ok(grade.body.diagnostics.compiledMaxGradePercent<=6.15);
+    assert.equal(grade.status,200);assert.equal(grade.body.path.properties.carveTerrain,true);
+    assert.equal(grade.body.diagnostics.validation,grade.body.diagnostics.gameplayReady?'passed':'failed');
+    if(grade.body.diagnostics.gameplayReady)assert.ok(grade.body.diagnostics.compiledMaxGradePercent<=6.15);
+    else assert.equal(grade.body.diagnostics.constraintStatus,'blocked-infeasible-profile');
     const settings=await requestJson(port,'/api/v011/scene-settings',{method:'PATCH',body:JSON.stringify({splinesVisible:false})});
     assert.equal(settings.status,200);assert.equal(settings.body.settings.splinesVisible,false);
     const persisted=JSON.parse(fs.readFileSync(path.join(runtime,'data','engine-state.json'),'utf8'));

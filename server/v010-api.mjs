@@ -36,10 +36,10 @@ function compactWorldRuntime(state) {
     engineRevision: Number(state.engine?.revision || 0),
     sceneId: scene.id,
     sampledAt: Date.now(),
-    visualDurationMs: 2050,
+    visualDurationMs: 1100,
     settings: structuredClone(scene.settings || {}),
     celestialObjects: scene.objects
-      .filter(object => object.type === 'directionalLight' || object.properties?.celestialRole)
+      .filter(object => Boolean(object.properties?.celestialRole))
       .map(object => ({
         id: object.id,
         type: object.type,
@@ -172,7 +172,7 @@ export async function handleV010Request(req, res) {
         addActivity(state, 'world', 'Updated connected time, lighting, atmosphere, sky, clouds, or weather.', { derived, celestial: repaired.diagnostics });
         return { world: state.worldV010, derived };
       });
-      json(res, 200, { ...result.result, state: result.state });
+      json(res, 200, { ...result.result, state: result.state, runtime: compactWorldRuntime(result.state) });
       return true;
     }
 

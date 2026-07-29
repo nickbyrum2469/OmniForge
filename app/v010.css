@@ -114,3 +114,29 @@
   z-index: 1;
   background: transparent;
 }
+
+.v010-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.v010-control-value {
+  color: #a9d5ff;
+  font: 600 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: nowrap;
+}
+
+.v010-scale-hint {
+  margin-top: 9px;
+  padding: 7px 8px;
+  border: 1px solid rgba(98, 164, 220, 0.24);
+  border-radius: 7px;
+  background: rgba(20, 43, 66, 0.32);
+}
+
+.v010-grid input[type='range'] {
+  min-height: 18px;
+  cursor: ew-resize;
+}
