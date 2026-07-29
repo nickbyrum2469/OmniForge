@@ -432,6 +432,7 @@ export function compilePathNetwork(input, options = {}) {
     sourceNetworkId: network.id,
     sourceRevision: network.revision,
     generationRevision: finite(options.generationRevision, network.revision),
+    engineering: { ...network.engineering },
     nodes: network.nodes.map(node => ({ ...node, resolvedPosition: positions.get(node.id) })),
     segments,
     stations,

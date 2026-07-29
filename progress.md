@@ -9,6 +9,7 @@ Original prompt: Implement the attached OmniForge sky, celestial, atmosphere, cl
 - Gate 1 adds the versioned graph, deterministic legacy migration, validation, and atomic transaction foundation without changing rendering.
 - Gate 2 adds the standalone authoritative compiler: adaptive Hermite curves, arc-length stations, height-mode resolution, bounded vertical profiles, parallel-transport frames, junction discovery, nearest-point queries, and deterministic Civil Assist decisions.
 - Gate 3 begins the replacement geometry: road core and shoulders share compiled stations, true dead ends alone receive caps, and multi-arm intersections use cleaned filleted portal polygons with validated Earcut triangulation instead of radial discs.
+- Gate 4 begins explicit terrain ownership: the unchanged procedural terrain is queried through a chunk-indexed signed-distance modifier field with distinct road, shoulder, drainage, blend, bridge, and tunnel behavior. No live renderer cutover has occurred yet.
 
 ## Live-project visual regression gate
 
