@@ -166,7 +166,9 @@ test('live terrain mesh consumes the v2 modifier bundle and its material field',
   assert.equal(mesh.positions.every(Number.isFinite), true);
   assert.equal(terrainMesh.lastPathDetail.strategy, 'watertight-chunks');
   assert.ok(terrainMesh.lastPathDetail.highTileCount > 0);
-  assert.ok(terrainMesh.lastPathDetail.targetSpacing <= 0.35);
+  assert.ok(terrainMesh.lastPathDetail.transitionTileCount > 0);
+  assert.ok(terrainMesh.lastPathDetail.targetSpacing <= 0.625);
+  assert.ok(terrainMesh.lastPathDetail.transitionSpacing <= 2);
   assert.ok(mesh.positions.length > (64 + 1) * (64 + 1) * 3);
   for (const values of edgeHeights.values()) {
     if (values.length < 2) continue;

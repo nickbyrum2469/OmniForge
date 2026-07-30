@@ -462,15 +462,25 @@ function activePathChunkKeys(pathRuntimes,chunkSize){
   }
   return active;
 }
-function coarseTerrainEdgeHeight(object,tile,edge,t){
-  const vertical=edge==='left'||edge==='right',steps=vertical?tile.lowStepsZ:tile.lowStepsX;
+function pathTerrainVertexSample(object,pathRuntimes,x,z){
+  const baseY=terrainBaseHeightAt(object,x,z),pathSample=sampleScenePathTerrain(pathRuntimes,baseY,x,z);
+  return {
+    height:pathSample.height,
+    blend:['road','shoulder'].includes(pathSample.zone)?1-pathSample.materialWeights.terrain:0
+  };
+}
+function coarseTerrainEdgeSample(object,tile,edge,t,steps){
+  steps=Math.max(1,steps);
   const scaled=clamp(t,0,1)*steps,index=Math.min(steps-1,Math.floor(scaled)),local=scaled-index;
   const along0=index/steps,along1=(index+1)/steps;
   const x0=edge==='left'?tile.minX:edge==='right'?tile.maxX:lerp(tile.minX,tile.maxX,along0);
   const x1=edge==='left'?tile.minX:edge==='right'?tile.maxX:lerp(tile.minX,tile.maxX,along1);
   const z0=edge==='bottom'?tile.minZ:edge==='top'?tile.maxZ:lerp(tile.minZ,tile.maxZ,along0);
   const z1=edge==='bottom'?tile.minZ:edge==='top'?tile.maxZ:lerp(tile.minZ,tile.maxZ,along1);
-  return lerp(terrainBaseHeightAt(object,x0,z0),terrainBaseHeightAt(object,x1,z1),local);
+  return {
+    height:lerp(terrainBaseHeightAt(object,x0,z0),terrainBaseHeightAt(object,x1,z1),local),
+    blend:0
+  };
 }
 export function terrainMesh(object,paths,pathRuntimes=[]){
   const props=normalizeTerrainProperties(object.properties||{},object.transform||{}),resX=clamp(Math.round(Number(props.resolutionX||props.resolution||128)),8,256),resZ=clamp(Math.round(Number(props.resolutionZ||props.resolution||128)),8,256),bounds=props.bounds,p=[],n=[],idx=[],uv=[],blends=[];
@@ -482,57 +492,70 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
     }
     for(let z=0;z<resZ;z++)for(let x=0;x<resX;x++){const a=z*(resX+1)+x,b=a+resX+1;idx.push(a,b,a+1,b,b+1,a+1);}
   }else{
-    // Path construction is rendered through complete terrain chunks. Affected
-    // chunks receive local density while untouched chunks keep the authored
-    // world budget. Dense-to-coarse borders are constrained to the exact coarse
-    // edge segments, so no independent patch can float, overlap, or open a hole.
+    // Path construction is rendered through complete terrain chunks. Modifier
+    // chunks use fine geometry, a one-chunk transition ring absorbs the density
+    // change, and untouched chunks keep the authored world budget. Every denser
+    // edge is projected to its path-aware coarser neighbor, so adjacent tiers
+    // describe the same boundary without a floating patch, curtain, or hole.
     const chunkSize=clamp(Number(props.chunkSize||64),8,512);
     const minChunkX=Math.floor(bounds.minX/chunkSize),maxChunkX=Math.ceil(bounds.maxX/chunkSize)-1;
     const minChunkZ=Math.floor(bounds.minZ/chunkSize),maxChunkZ=Math.ceil(bounds.maxZ/chunkSize)-1;
-    const highKeys=activePathChunkKeys(pathRuntimes,chunkSize),tiles=new Map();
+    const highKeys=activePathChunkKeys(pathRuntimes,chunkSize),transitionKeys=new Set(highKeys),tiles=new Map();
+    for(const key of highKeys){
+      const [cx,cz]=key.split(':').map(Number);
+      for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)transitionKeys.add(`${cx+dx}:${cz+dz}`);
+    }
     const baseStepX=(bounds.maxX-bounds.minX)/resX,baseStepZ=(bounds.maxZ-bounds.minZ)/resZ;
     for(let cz=minChunkZ;cz<=maxChunkZ;cz++)for(let cx=minChunkX;cx<=maxChunkX;cx++){
       const minX=Math.max(bounds.minX,cx*chunkSize),maxX=Math.min(bounds.maxX,(cx+1)*chunkSize);
       const minZ=Math.max(bounds.minZ,cz*chunkSize),maxZ=Math.min(bounds.maxZ,(cz+1)*chunkSize);
       if(maxX<=minX||maxZ<=minZ)continue;
-      const high=highKeys.has(`${cx}:${cz}`);
+      const key=`${cx}:${cz}`,tier=highKeys.has(key)?'high':transitionKeys.has(key)?'transition':'base';
       tiles.set(`${cx}:${cz}`,{
-        cx,cz,minX,maxX,minZ,maxZ,high,
+        cx,cz,minX,maxX,minZ,maxZ,tier,
         lowStepsX:Math.max(1,Math.round((maxX-minX)/baseStepX)),
         lowStepsZ:Math.max(1,Math.round((maxZ-minZ)/baseStepZ))
       });
     }
-    let highTileCount=0,maximumBoundaryMismatch=0;
     for(const tile of tiles.values()){
-      // Keep enough samples across a two-metre trail to stop diagonal grid
-      // cells from presenting as stair-stepped excavation edges. Only chunks
-      // touched by the compiled modifier use this density; neighboring chunks
-      // remain on the authored world budget.
-      const targetSpacing=.35;
-      const stepsX=tile.high?clamp(Math.ceil((tile.maxX-tile.minX)/targetSpacing),2,128):tile.lowStepsX;
-      const stepsZ=tile.high?clamp(Math.ceil((tile.maxZ-tile.minZ)/targetSpacing),2,128):tile.lowStepsZ;
-      if(tile.high)highTileCount+=1;
+      const spacing=tile.tier==='high'?.625:tile.tier==='transition'?2:null;
+      tile.stepsX=spacing?clamp(Math.ceil((tile.maxX-tile.minX)/spacing),2,128):tile.lowStepsX;
+      tile.stepsZ=spacing?clamp(Math.ceil((tile.maxZ-tile.minZ)/spacing),2,128):tile.lowStepsZ;
+    }
+    let highTileCount=0,transitionTileCount=0,maximumBoundaryMismatch=0;
+    for(const tile of tiles.values()){
+      const stepsX=tile.stepsX,stepsZ=tile.stepsZ;
+      if(tile.tier==='high')highTileCount+=1;
+      if(tile.tier==='transition')transitionTileCount+=1;
       const offset=p.length/3;
       for(let z=0;z<=stepsZ;z++)for(let x=0;x<=stepsX;x++){
         const tx=x/stepsX,tz=z/stepsZ,wx=lerp(tile.minX,tile.maxX,tx),wz=lerp(tile.minZ,tile.maxZ,tz);
-        const leftTransition=tile.high&&x===0&&!tiles.get(`${tile.cx-1}:${tile.cz}`)?.high;
-        const rightTransition=tile.high&&x===stepsX&&!tiles.get(`${tile.cx+1}:${tile.cz}`)?.high;
-        const bottomTransition=tile.high&&z===0&&!tiles.get(`${tile.cx}:${tile.cz-1}`)?.high;
-        const topTransition=tile.high&&z===stepsZ&&!tiles.get(`${tile.cx}:${tile.cz+1}`)?.high;
+        const leftNeighbor=tiles.get(`${tile.cx-1}:${tile.cz}`),rightNeighbor=tiles.get(`${tile.cx+1}:${tile.cz}`);
+        const bottomNeighbor=tiles.get(`${tile.cx}:${tile.cz-1}`),topNeighbor=tiles.get(`${tile.cx}:${tile.cz+1}`);
+        const leftTransition=x===0&&leftNeighbor&&leftNeighbor.stepsZ<stepsZ;
+        const rightTransition=x===stepsX&&rightNeighbor&&rightNeighbor.stepsZ<stepsZ;
+        const bottomTransition=z===0&&bottomNeighbor&&bottomNeighbor.stepsX<stepsX;
+        const topTransition=z===stepsZ&&topNeighbor&&topNeighbor.stepsX<stepsX;
         let transition=null;
-        if(leftTransition)transition=coarseTerrainEdgeHeight(object,tile,'left',tz);
-        else if(rightTransition)transition=coarseTerrainEdgeHeight(object,tile,'right',tz);
-        else if(bottomTransition)transition=coarseTerrainEdgeHeight(object,tile,'bottom',tx);
-        else if(topTransition)transition=coarseTerrainEdgeHeight(object,tile,'top',tx);
-        const baseY=terrainBaseHeightAt(object,wx,wz),pathSample=transition===null?sampleScenePathTerrain(pathRuntimes,baseY,wx,wz):null;
-        const wy=transition===null?pathSample.height:transition;
+        if(leftTransition)transition=coarseTerrainEdgeSample(object,tile,'left',tz,leftNeighbor.stepsZ);
+        else if(rightTransition)transition=coarseTerrainEdgeSample(object,tile,'right',tz,rightNeighbor.stepsZ);
+        else if(bottomTransition)transition=coarseTerrainEdgeSample(object,tile,'bottom',tx,bottomNeighbor.stepsX);
+        else if(topTransition)transition=coarseTerrainEdgeSample(object,tile,'top',tx,topNeighbor.stepsX);
+        // Only chunks intersecting a compiled modifier need signed-distance
+        // evaluation. Transition/base tiles are guaranteed outside those
+        // conservative modifier bounds, so sampling the authored terrain there
+        // avoids tens of thousands of pointless corridor searches per edit.
+        const direct=transition===null
+          ?(tile.tier==='high'?pathTerrainVertexSample(object,pathRuntimes,wx,wz):{height:terrainBaseHeightAt(object,wx,wz),blend:0})
+          :null;
+        const wy=transition===null?direct.height:transition.height;
         // The compiled road, shoulder, and earthwork meshes own the visible
         // corridor boundary. Restrict the terrain underlay to the road/shoulder
         // support area so grid interpolation cannot paint a jagged dirt halo
         // beyond the exact swept construction geometry.
-        const blend=transition===null&&['road','shoulder'].includes(pathSample.zone)?1-pathSample.materialWeights.terrain:0;
+        const blend=transition===null?direct.blend:transition.blend;
         p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push((wx-bounds.minX)/(bounds.maxX-bounds.minX),(wz-bounds.minZ)/(bounds.maxZ-bounds.minZ));blends.push(blend);
-        if(transition!==null)maximumBoundaryMismatch=Math.max(maximumBoundaryMismatch,Math.abs(wy-transition));
+        if(transition!==null)maximumBoundaryMismatch=Math.max(maximumBoundaryMismatch,Math.abs(wy-transition.height));
       }
       const row=stepsX+1;
       for(let z=0;z<stepsZ;z++)for(let x=0;x<stepsX;x++){
@@ -544,7 +567,9 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
       strategy:'watertight-chunks',
       tileCount:tiles.size,
       highTileCount,
-      targetSpacing:.35,
+      transitionTileCount,
+      targetSpacing:.625,
+      transitionSpacing:2,
       maximumBoundaryMismatch,
       baseCellSize:[baseStepX,baseStepZ]
     };
