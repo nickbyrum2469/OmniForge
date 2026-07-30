@@ -58,11 +58,16 @@ export const PATH_BRIDGE_PROFILES = Object.freeze({
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
 export function normalizeBridgeProfile(input = {}) {
+  const hasAuthoredSupportSpacing = Object.prototype.hasOwnProperty.call(input || {}, 'supportSpacing')
+    && input.supportSpacing !== null
+    && input.supportSpacing !== '';
   return {
     bridgeStyle: PATH_BRIDGE_STYLES.includes(input.bridgeStyle) ? input.bridgeStyle : 'auto',
     railings: input.railings !== false,
     deckThickness: Math.max(0.12, Math.min(2, finite(input.deckThickness, 0.28))),
-    supportSpacing: Math.max(2, Math.min(60, finite(input.supportSpacing, 8)))
+    supportSpacing: hasAuthoredSupportSpacing
+      ? Math.max(2, Math.min(60, finite(input.supportSpacing, 8)))
+      : null
   };
 }
 
@@ -94,10 +99,15 @@ export function resolveBridgeProfile(segment, sections = [], baseHeightAt = () =
     }
   }
 
+  const legacyAutomaticSpacing = authored.bridgeStyle === 'auto' && authored.supportSpacing === 8;
+  const familySupportSpacing = PATH_BRIDGE_PROFILES[style].supportSpacing;
   return {
     ...PATH_BRIDGE_PROFILES[style],
     ...authored,
     bridgeStyle: style,
+    supportSpacing: authored.supportSpacing === null || legacyAutomaticSpacing
+      ? familySupportSpacing
+      : authored.supportSpacing,
     span,
     width,
     maximumClearance

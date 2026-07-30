@@ -1119,7 +1119,8 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
           label: bridgeProfile.label,
           span: bridgeProfile.span,
           width: bridgeProfile.width,
-          maximumClearance: bridgeProfile.maximumClearance
+          maximumClearance: bridgeProfile.maximumClearance,
+          supportSpacing: bridgeProfile.supportSpacing
         });
       }
       appendTunnel(structure, localSegment);

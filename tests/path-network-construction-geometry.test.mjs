@@ -67,6 +67,7 @@ test('bridge mode resolves a span-appropriate structural family and leaves terra
   const { geometry, terrainModifier } = build('bridge', { startY: 8, endY: 8 });
   assert.equal(geometry.validation.valid, true, geometry.validation.errors.join(' '));
   assert.equal(geometry.bridgeSelections[0].bridgeStyle, 'steel-girder');
+  assert.equal(geometry.bridgeSelections[0].supportSpacing, 24);
   assert.ok(geometry.meshes.structure.roles.includes('bridge-steel-main-girder'));
   assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-pier-footing'));
   assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-pier-column'));
@@ -121,6 +122,39 @@ test('terrain-following dirt roads never emit bridge supports', () => {
   const terrainModifier = compilePathTerrainModifier(compiled, { baseHeightAt: rollingHeight, chunkSize: 16 });
   const geometry = buildPathNetworkGeometry(compiled, { terrainModifier });
   assert.notEqual(compiled.segments[0].construction.mode, 'bridge');
+  assert.equal(geometry.bridgeSelections.length, 0);
+  assert.equal(geometry.meshes.structure.roles.some(role => role.startsWith('bridge-')), false);
+});
+
+test('an isolated sub-width terrain depression remains earthwork instead of spawning bridge supports', () => {
+  const network = normalizePathNetwork({
+    id: 'short-depression',
+    nodes: [
+      { id: 'a', position: [0, 0, 0], heightMode: 'absolute' },
+      { id: 'b', position: [40, 0, 0], heightMode: 'absolute' }
+    ],
+    segments: [{
+      id: 'dirt',
+      fromNode: 'a',
+      toNode: 'b',
+      constructionMode: 'auto',
+      crossSectionProfile: { width: 3, shoulderWidth: 0.6, blendDistance: 2 }
+    }],
+    engineering: {
+      bridgeThreshold: 5,
+      maximumBridgeSpan: 30,
+      maxGradePercent: 20
+    }
+  });
+  const terrainHeightAt = x => x >= 19 && x <= 21 ? -5.1 : 0;
+  const compiled = compilePathNetwork(network, {
+    terrainHeightAt,
+    terrainNormalAt: () => [0, 1, 0],
+    spacing: 0.5
+  });
+  const terrainModifier = compilePathTerrainModifier(compiled, { baseHeightAt: terrainHeightAt, chunkSize: 16 });
+  const geometry = buildPathNetworkGeometry(compiled, { terrainModifier });
+  assert.equal(compiled.segments[0].constructionIntervals.some(interval => interval.mode === 'bridge'), false);
   assert.equal(geometry.bridgeSelections.length, 0);
   assert.equal(geometry.meshes.structure.roles.some(role => role.startsWith('bridge-')), false);
 });

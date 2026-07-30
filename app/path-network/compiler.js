@@ -375,7 +375,6 @@ function mergeConstructionIntervals(intervals) {
     if (
       previous
       && previous.mode === interval.mode
-      && previous.reason === interval.reason
       && previous.automatic === interval.automatic
       && previous.endSampleIndex === interval.startSampleIndex
     ) {
@@ -386,6 +385,90 @@ function mergeConstructionIntervals(intervals) {
     merged.push({ ...interval });
   }
   return merged;
+}
+
+function intervalLength(interval) {
+  return Math.max(0, finite(interval?.endDistance) - finite(interval?.startDistance));
+}
+
+function replaceConstructionInterval(interval, mode, reason) {
+  interval.mode = mode;
+  interval.reason = reason;
+  interval.automatic = true;
+}
+
+function stabilizeConstructionIntervals(intervals, segment, engineering) {
+  const width = Math.max(0.5, finite(segment.crossSectionProfile?.width, 3));
+  const minimumBridgeLength = Math.max(6, width * 2);
+  const bridgeHysteresisLength = Math.max(1.5, width * 0.75);
+  const minimumRetainingLength = Math.max(4, width * 1.5);
+  const minimumEarthworkRun = Math.max(2.5, width * 1.25);
+  let stable = mergeConstructionIntervals(intervals);
+
+  // One or two terrain samples may briefly cross a threshold at the lip of a
+  // ravine. Join genuine bridge runs across that small lip before validating
+  // their total span; isolated bridge samples are earthwork, never a forest of
+  // piers.
+  for (let index = 1; index < stable.length - 1; index += 1) {
+    const interval = stable[index];
+    if (
+      stable[index - 1].mode === 'bridge'
+      && stable[index + 1].mode === 'bridge'
+      && !['bridge', 'tunnel', 'invalid'].includes(interval.mode)
+      && intervalLength(interval) <= bridgeHysteresisLength
+    ) {
+      replaceConstructionInterval(interval, 'bridge', 'bridge-gap-hysteresis');
+    }
+  }
+  stable = mergeConstructionIntervals(stable);
+
+  for (const interval of stable) {
+    const length = intervalLength(interval);
+    if (interval.mode === 'bridge' && length < minimumBridgeLength) {
+      replaceConstructionInterval(interval, 'cut-fill', 'short-gap-resolved-with-earthwork');
+    } else if (interval.mode === 'bridge' && length > engineering.maximumBridgeSpan) {
+      replaceConstructionInterval(interval, 'invalid', 'bridge-run-exceeds-maximum-span');
+    } else if (interval.mode === 'retaining-wall' && length < minimumRetainingLength) {
+      replaceConstructionInterval(interval, 'cut-fill', 'short-wall-resolved-with-earthwork');
+    }
+  }
+  stable = mergeConstructionIntervals(stable);
+
+  // Conform and cut/fill use the same continuous terrain modifier. Do not
+  // fracture that modifier into metre-wide strips whenever a noisy terrain
+  // sample crosses the reporting tolerance. Prefer the surrounding run, and
+  // prefer earthwork when the two neighbors disagree so required support is
+  // never silently removed.
+  for (let pass = 0; pass < 6; pass += 1) {
+    let changed = false;
+    for (let index = 0; index < stable.length; index += 1) {
+      const interval = stable[index];
+      if (
+        !['conform', 'cut-fill'].includes(interval.mode)
+        || intervalLength(interval) >= minimumEarthworkRun
+      ) continue;
+      const previous = stable[index - 1];
+      const next = stable[index + 1];
+      const previousIsTerrain = previous && ['conform', 'cut-fill'].includes(previous.mode);
+      const nextIsTerrain = next && ['conform', 'cut-fill'].includes(next.mode);
+      let replacement = null;
+      if (previousIsTerrain && nextIsTerrain) {
+        replacement = previous.mode === next.mode
+          ? previous.mode
+          : 'cut-fill';
+      } else if (previousIsTerrain && !next) {
+        replacement = previous.mode;
+      } else if (nextIsTerrain && !previous) {
+        replacement = next.mode;
+      }
+      if (!replacement || replacement === interval.mode) continue;
+      replaceConstructionInterval(interval, replacement, 'absorbed-short-terrain-transition');
+      changed = true;
+    }
+    stable = mergeConstructionIntervals(stable);
+    if (!changed) break;
+  }
+  return stable;
 }
 
 function constructionIntervalsFor(segment, samples, engineering, overallMetrics) {
@@ -438,19 +521,7 @@ function constructionIntervalsFor(segment, samples, engineering, overallMetrics)
     });
   }
 
-  const merged = mergeConstructionIntervals(intervals);
-  const minimumBridgeLength = Math.max(3, finite(segment.crossSectionProfile?.width, 3));
-  for (const interval of merged) {
-    const length = interval.endDistance - interval.startDistance;
-    if (interval.mode === 'bridge' && length < minimumBridgeLength) {
-      interval.mode = 'cut-fill';
-      interval.reason = 'short-gap-resolved-with-earthwork';
-    } else if (interval.mode === 'bridge' && length > engineering.maximumBridgeSpan) {
-      interval.mode = 'invalid';
-      interval.reason = 'bridge-run-exceeds-maximum-span';
-    }
-  }
-  return mergeConstructionIntervals(merged);
+  return stabilizeConstructionIntervals(intervals, segment, engineering);
 }
 
 function representativeConstruction(intervals) {

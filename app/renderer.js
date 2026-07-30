@@ -504,8 +504,8 @@ function appendPathTerrainBoundaryStitches({object,pathRuntimes,bounds,origin,po
       sectionsBySegment.get(section.segmentId).push(section);
     }
     for(const [segmentId,sections] of sectionsBySegment){
-      const segment=segments.get(segmentId),mode=segment?.construction?.mode;
-      if(!segment||segment.crossSectionProfile?.terrainModificationEnabled===false||['bridge','tunnel','invalid'].includes(mode))continue;
+      const segment=segments.get(segmentId);
+      if(!segment||segment.crossSectionProfile?.terrainModificationEnabled===false)continue;
       const width=clamp(Math.max(.35,Number(segment.crossSectionProfile?.blendDistance||2.5)*.2),.35,.9);
       maximumWidth=Math.max(maximumWidth,width);
       const outside=(section,key)=>{
@@ -516,6 +516,12 @@ function appendPathTerrainBoundaryStitches({object,pathRuntimes,bounds,origin,po
       for(let index=0;index<sections.length-1;index+=1){
         const current=sections[index],next=sections[index+1];
         if(current.distance>next.distance)continue;
+        const currentMode=current.construction?.mode;
+        const nextMode=next.construction?.mode;
+        if(
+          ['bridge','tunnel','invalid'].includes(currentMode)
+          || ['bridge','tunnel','invalid'].includes(nextMode)
+        )continue;
         addQuad(outside(current,'outerLeft'),current.outerLeft,outside(next,'outerLeft'),next.outerLeft);
         addQuad(current.outerRight,outside(current,'outerRight'),next.outerRight,outside(next,'outerRight'));
       }

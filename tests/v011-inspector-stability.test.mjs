@@ -32,3 +32,16 @@ test('diagnostic mode includes input, event-loop, WebGL, and long-task evidence'
   assert.match(source, /log\(`input-\$\{type\}`/);
   assert.match(source, /JSON\.stringify\(detail\)/);
 });
+
+test('spline drag instrumentation uses the runtime diagnostics API that exists in packaged builds', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'app', 'v011.js'), 'utf8');
+  assert.doesNotMatch(source, /__omniforgeDiagnostics\?\.event\?\.\('path-node-drag-/);
+  for (const eventName of [
+    'path-node-drag-begin',
+    'path-node-drag-rejected',
+    'path-node-drag-preview',
+    'path-node-drag-commit'
+  ]) {
+    assert.ok(source.includes(`window.__omniforgeDiagnostics?.log?.('${eventName}'`));
+  }
+});

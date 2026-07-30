@@ -61,8 +61,16 @@ test('the exact feasible path compiles into finite validated Civil Assist constr
   assert.equal(runtime.compiled.diagnostics.invalidSegmentIds.length, 0);
   assert.deepEqual(
     runtime.compiled.segments.map(segment => segment.construction.mode),
-    ['cut-fill', 'cut-fill', 'cut-fill']
+    ['conform', 'cut-fill', 'cut-fill']
   );
+  assert.deepEqual(
+    runtime.compiled.segments.map(segment => segment.constructionIntervals.length),
+    [1, 1, 3],
+    'sub-metre conform/cut-fill chatter must be absorbed into stable terrain runs'
+  );
+  assert.ok(runtime.compiled.constructionIntervals.every(interval => (
+    interval.endDistance - interval.startDistance >= 3.8
+  )));
   assert.equal(
     runtime.compiled.constructionIntervals.some(interval => (
       interval.mode === 'bridge' || interval.mode === 'retaining-wall'

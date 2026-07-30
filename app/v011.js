@@ -1001,7 +1001,7 @@ function beginNodeDrag(event) {
   const handle = event.target?.closest?.('[data-spline-node]');
   if (!overlay || !handle || !overlay.contains(handle)) return;
   if (event.button !== 0 || event.isPrimary === false || draggingNode) {
-    window.__omniforgeDiagnostics?.event?.('path-node-drag-rejected', {
+    window.__omniforgeDiagnostics?.log?.('path-node-drag-rejected', {
       button: event.button,
       isPrimary: event.isPrimary,
       pointerId: event.pointerId,
@@ -1039,7 +1039,7 @@ function beginNodeDrag(event) {
     previewPath: createPathNodeDragPreview(path, node.id),
     restorePreview: renderer?.pathPreview ? structuredClone(renderer.pathPreview) : null
   };
-  window.__omniforgeDiagnostics?.event?.('path-node-drag-begin', {
+  window.__omniforgeDiagnostics?.log?.('path-node-drag-begin', {
     pathId: path.id,
     nodeId: node.id,
     pointerId: event.pointerId,
@@ -1061,7 +1061,7 @@ function flushNodeDragPreview() {
   // path authority here forced the corridor, terrain, collision, and structural
   // meshes to regenerate on every pointer event and blocked editor input.
   // Full connected-system generation now happens once on pointer release.
-  window.__omniforgeDiagnostics?.event?.('path-node-drag-preview', {
+  window.__omniforgeDiagnostics?.log?.('path-node-drag-preview', {
     pathId: draggingNode.pathId,
     nodeId: draggingNode.nodeId
   });
@@ -1152,7 +1152,7 @@ async function finishNodeDrag(event) {
   releaseNodeDragListeners(drag);
   clearNodeDragPreview(drag);
   if (!shouldCommit || !node) return;
-  window.__omniforgeDiagnostics?.event?.('path-node-drag-commit', {
+  window.__omniforgeDiagnostics?.log?.('path-node-drag-commit', {
     pathId: drag.pathId,
     nodeId: drag.nodeId,
     vertical: drag.vertical,
