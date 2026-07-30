@@ -70,6 +70,7 @@ test('bridge mode resolves a span-appropriate structural family and leaves terra
   assert.ok(geometry.meshes.structure.roles.includes('bridge-steel-main-girder'));
   assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-pier-footing'));
   assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-pier-column'));
+  assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-pier-brace'));
   assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-pier-cap'));
   assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-abutment-backwall'));
   assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-abutment-wingwall'));

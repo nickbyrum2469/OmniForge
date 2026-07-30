@@ -570,7 +570,7 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
       section.center[1] - profile.deckThickness - 0.5
     );
     const seatY = section.center[1] - profile.deckThickness;
-    const wallHeight = Math.max(0.45, seatY - terrainY);
+    const wallHeight = Math.max(1.1, seatY - terrainY);
     const footingCenter = add3(
       add3(section.center, scale3(frame.tangent, direction * 0.55)),
       scale3(frame.up, -(section.center[1] - terrainY) + 0.18)
@@ -581,7 +581,7 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
       frame.tangent,
       frame.side,
       frame.up,
-      [2.1, profile.width + 2.4, 0.36],
+      [2.8, profile.width + 3.2, 0.52],
       `${materialRole}-abutment-footing`
     );
     appendOrientedBox(
@@ -594,7 +594,7 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
       frame.tangent,
       frame.side,
       frame.up,
-      [0.72, profile.width + 1.5, wallHeight],
+      [1.05, profile.width + 2.2, wallHeight],
       `${materialRole}-abutment-backwall`
     );
     for (const sign of [-1, 1]) {
@@ -611,16 +611,16 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
         builder,
         [wallTop[0], terrainY + Math.max(0.25, wallHeight * 0.35), wallTop[2]],
         wallTop,
-        0.38,
-        0.55,
+        0.52,
+        0.72,
         `${materialRole}-abutment-wingwall`
       );
       appendBeamBetween(
         builder,
         wallTop,
         wallTail,
-        0.34,
-        0.5,
+        0.48,
+        0.68,
         `${materialRole}-abutment-wingwall`
       );
     }
@@ -745,8 +745,11 @@ function appendSteelGirder(builder, segment, sections, baseHeightAt, profile) {
       [2.4, Math.max(2.6, profile.width + 1.8), 0.48],
       'bridge-concrete-pier-footing'
     );
-    const lowerSpread = Math.max(0.75, profile.width * 0.22);
-    const upperSpread = Math.max(0.95, profile.width * 0.34);
+    const lowerSpread = Math.max(0.9, profile.width * 0.28);
+    const upperSpread = Math.max(1.15, profile.width * 0.4);
+    const columnWidth = clamp(0.7 + height * 0.035, 0.9, 1.7);
+    const columnDepth = clamp(0.85 + height * 0.025, 1.05, 1.55);
+    const columnEnds = [];
     for (const sign of [-1, 1]) {
       const bottom = add3(
         [section.center[0], groundY + 0.42, section.center[2]],
@@ -760,9 +763,28 @@ function appendSteelGirder(builder, segment, sections, baseHeightAt, profile) {
         builder,
         bottom,
         top,
-        clamp(0.48 + height * 0.012, 0.5, 0.86),
-        clamp(0.52 + height * 0.012, 0.55, 0.9),
+        columnWidth,
+        columnDepth,
         'bridge-concrete-pier-column'
+      );
+      columnEnds.push({ bottom, top });
+    }
+    if (height > 5) {
+      appendBeamBetween(
+        builder,
+        mix3(columnEnds[0].bottom, columnEnds[0].top, 0.22),
+        mix3(columnEnds[1].bottom, columnEnds[1].top, 0.78),
+        clamp(columnWidth * 0.34, 0.34, 0.58),
+        clamp(columnDepth * 0.42, 0.42, 0.7),
+        'bridge-concrete-pier-brace'
+      );
+      appendBeamBetween(
+        builder,
+        mix3(columnEnds[1].bottom, columnEnds[1].top, 0.22),
+        mix3(columnEnds[0].bottom, columnEnds[0].top, 0.78),
+        clamp(columnWidth * 0.34, 0.34, 0.58),
+        clamp(columnDepth * 0.42, 0.42, 0.7),
+        'bridge-concrete-pier-brace'
       );
     }
     const capLeft = add3(
@@ -777,8 +799,8 @@ function appendSteelGirder(builder, segment, sections, baseHeightAt, profile) {
       builder,
       capLeft,
       capRight,
-      0.75,
-      0.72,
+      1.05,
+      0.94,
       'bridge-concrete-pier-cap'
     );
   }
