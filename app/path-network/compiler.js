@@ -204,7 +204,20 @@ function enforceVerticalLimits(samples, engineering, endpoints) {
   for (let index = 0; index < samples.length; index += 1) {
     const fraction = horizontalDistance > EPSILON ? cumulative[index] / horizontalDistance : 0;
     const anchorLine = startY + (endY - startY) * fraction;
-    const preferred = samples[index].position[1];
+    // Terrain-mode nodes author a corridor on the terrain, not a chord suspended
+    // between two terrain samples. The old solver preferred the Hermite curve's
+    // interpolated Y for every interior station. A harmless valley between two
+    // terrain nodes therefore looked like several metres of required fill and
+    // Civil Assist promoted an ordinary dirt path into a bridge with piers.
+    //
+    // Absolute/offset endpoints still retain the authored curve as their
+    // vertical authority, which is how an intentionally raised crossing is
+    // represented. Terrain endpoints instead prefer the natural sampled
+    // profile and the grade passes below make only the bounded adjustments
+    // required to keep the route traversable.
+    const preferred = endpoints.preferTerrain
+      ? samples[index].baseY
+      : samples[index].position[1];
     // An infeasible endpoint pair has no profile that can satisfy both hard
     // anchors and the configured grade. Keep its diagnostic guide monotone and
     // honest instead of clamping the interior and creating a fake cliff beside
@@ -402,7 +415,11 @@ function compileSegment(segment, network, positions, adjacency, nodeMap, options
     maximumDepth: options.maximumDepth
   });
   let samples = profileTerrainData(arcLengthResample(raw, spacing), options.terrainHeightAt, options.terrainNormalAt);
-  const vertical = enforceVerticalLimits(samples, network.engineering, { start, end });
+  const vertical = enforceVerticalLimits(samples, network.engineering, {
+    start,
+    end,
+    preferTerrain: fromNode.heightMode === 'terrain' && toNode.heightMode === 'terrain'
+  });
   samples = assignParallelTransportFrames(vertical.samples);
   for (let index = 0; index < samples.length; index += 1) {
     samples[index].segmentId = segment.id;

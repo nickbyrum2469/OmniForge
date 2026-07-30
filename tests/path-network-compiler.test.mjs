@@ -143,6 +143,60 @@ test('Civil Assist does not turn sub-drainage profile correction into broad eart
   assert.equal(compiled.segments[0].construction.mode, 'conform');
 });
 
+test('terrain-mode dirt paths follow the natural profile instead of becoming artificial bridges', () => {
+  const terrain = x => Math.sin(x / 9) * 2.4 + Math.sin(x / 3.5) * 0.35;
+  const input = normalizePathNetwork({
+    id: 'terrain-following-dirt-path',
+    pathClass: 'dirt-road',
+    nodes: [
+      { id: 'a', position: [0, terrain(0), 0], heightMode: 'terrain' },
+      { id: 'b', position: [48, terrain(48), 0], heightMode: 'terrain' }
+    ],
+    segments: [{
+      id: 'trail',
+      fromNode: 'a',
+      toNode: 'b',
+      constructionMode: 'auto',
+      crossSectionProfile: { width: 2.2, shoulderWidth: 0.35, blendDistance: 2.5 }
+    }],
+    engineering: {
+      maxGradePercent: 35,
+      bridgeThreshold: 2,
+      retainingWallThreshold: 3.5
+    }
+  });
+  const compiled = compilePathNetwork(input, {
+    terrainHeightAt: terrain,
+    terrainNormalAt: flatNormal,
+    spacing: 0.3
+  });
+  const segment = compiled.segments[0];
+  assert.notEqual(segment.construction.mode, 'bridge');
+  assert.ok(segment.metrics.maximumFill < input.engineering.bridgeThreshold);
+  assert.ok(segment.metrics.maximumCut < input.engineering.retainingWallThreshold);
+  assert.ok(Math.max(...segment.samples.map(sample => (
+    Math.abs(sample.position[1] - sample.baseY)
+  ))) < input.engineering.retainingWallThreshold);
+});
+
+test('absolute endpoints still create an intentional elevated crossing over deep terrain', () => {
+  const input = normalizePathNetwork({
+    id: 'intentional-raised-crossing',
+    nodes: [
+      { id: 'a', position: [0, 8, 0], heightMode: 'absolute' },
+      { id: 'b', position: [40, 8, 0], heightMode: 'absolute' }
+    ],
+    segments: [{ id: 'bridge', fromNode: 'a', toNode: 'b' }],
+    engineering: { bridgeThreshold: 5, maxGradePercent: 20 }
+  });
+  const compiled = compilePathNetwork(input, {
+    terrainHeightAt: () => 0,
+    terrainNormalAt: flatNormal,
+    spacing: 0.4
+  });
+  assert.equal(compiled.segments[0].construction.mode, 'bridge');
+});
+
 test('terrain, offset, and absolute nodes resolve through one compiler', () => {
   const input = normalizePathNetwork({
     id: 'height-modes',
