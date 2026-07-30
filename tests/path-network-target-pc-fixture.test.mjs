@@ -59,7 +59,7 @@ test('the exact feasible path compiles into finite validated Civil Assist constr
   assert.equal(runtime.compiled.diagnostics.invalidSegmentIds.length, 0);
   assert.deepEqual(
     runtime.compiled.segments.map(segment => segment.construction.mode),
-    ['conform', 'retaining-wall', 'cut-fill']
+    ['conform', 'retaining-wall', 'conform']
   );
   assert.equal(runtime.geometry.validation.valid, true);
   for (const mesh of Object.values(runtime.geometry.meshes)) {

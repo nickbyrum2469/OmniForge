@@ -223,7 +223,11 @@ function enforceVerticalLimits(samples, engineering, endpoints) {
     // honest instead of clamping the interior and creating a fake cliff beside
     // a re-snapped endpoint.
     const smooth = feasible
-      ? anchorLine + (preferred - anchorLine) * Math.sin(Math.PI * fraction) * 0.35
+      ? (
+          endpoints.preferTerrain
+            ? preferred
+            : anchorLine + (preferred - anchorLine) * Math.sin(Math.PI * fraction) * 0.35
+        )
       : anchorLine;
     samples[index].position[1] = index === 0 ? startY : index === samples.length - 1 ? endY : smooth;
   }
