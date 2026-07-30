@@ -94,7 +94,8 @@ test('the exact kilometre terrain uses watertight high-density path chunks', () 
   const runtimes = fixture.paths.map(compileFixturePath);
   const mesh = terrainMesh(structuredClone(fixture.terrain), structuredClone(fixture.paths), runtimes);
   assert.equal(terrainMesh.lastPathDetail.strategy, 'watertight-chunks');
-  assert.ok(terrainMesh.lastPathDetail.highTileCount >= 9);
+  assert.ok(terrainMesh.lastPathDetail.highTileCount >= 3);
+  assert.ok(terrainMesh.lastPathDetail.targetSpacing <= 0.35);
   assert.ok(terrainMesh.lastPathDetail.maximumBoundaryMismatch <= 0.005);
   assert.ok(mesh.positions.length / 3 > 50000);
   assert.equal([...mesh.positions].every(Number.isFinite), true);

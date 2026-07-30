@@ -356,7 +356,7 @@ function crossSectionsBySegment(terrainModifier) {
 function appendEarthwork(builder, segment, sections) {
   if (
     !sections.length
-    || !['cut-fill', 'retaining-wall', 'stairs'].includes(segment.construction.mode)
+    || !['conform', 'cut-fill', 'retaining-wall', 'stairs'].includes(segment.construction.mode)
   ) return;
   const repeat = Math.max(0.25, segment.crossSectionProfile.textureRepeatLength || 5);
   appendStrip(builder, sections.map(section => ({

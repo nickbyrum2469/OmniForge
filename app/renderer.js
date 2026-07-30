@@ -460,12 +460,7 @@ function activePathChunkKeys(pathRuntimes,chunkSize){
     const minZ=Math.floor(entry.bounds.minZ/chunkSize),maxZ=Math.floor(entry.bounds.maxZ/chunkSize);
     for(let x=minX;x<=maxX;x++)for(let z=minZ;z<=maxZ;z++)active.add(`${x}:${z}`);
   }
-  const halo=new Set(active);
-  for(const key of active){
-    const [x,z]=key.split(':').map(Number);
-    for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)halo.add(`${x+dx}:${z+dz}`);
-  }
-  return halo;
+  return active;
 }
 function coarseTerrainEdgeHeight(object,tile,edge,t){
   const vertical=edge==='left'||edge==='right',steps=vertical?tile.lowStepsZ:tile.lowStepsX;
@@ -509,7 +504,11 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
     }
     let highTileCount=0,maximumBoundaryMismatch=0;
     for(const tile of tiles.values()){
-      const targetSpacing=.75;
+      // Keep enough samples across a two-metre trail to stop diagonal grid
+      // cells from presenting as stair-stepped excavation edges. Only chunks
+      // touched by the compiled modifier use this density; neighboring chunks
+      // remain on the authored world budget.
+      const targetSpacing=.35;
       const stepsX=tile.high?clamp(Math.ceil((tile.maxX-tile.minX)/targetSpacing),2,128):tile.lowStepsX;
       const stepsZ=tile.high?clamp(Math.ceil((tile.maxZ-tile.minZ)/targetSpacing),2,128):tile.lowStepsZ;
       if(tile.high)highTileCount+=1;
@@ -526,7 +525,12 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
         else if(bottomTransition)transition=coarseTerrainEdgeHeight(object,tile,'bottom',tx);
         else if(topTransition)transition=coarseTerrainEdgeHeight(object,tile,'top',tx);
         const baseY=terrainBaseHeightAt(object,wx,wz),pathSample=transition===null?sampleScenePathTerrain(pathRuntimes,baseY,wx,wz):null;
-        const wy=transition===null?pathSample.height:transition,blend=transition===null?1-pathSample.materialWeights.terrain:0;
+        const wy=transition===null?pathSample.height:transition;
+        // The compiled road, shoulder, and earthwork meshes own the visible
+        // corridor boundary. Restrict the terrain underlay to the road/shoulder
+        // support area so grid interpolation cannot paint a jagged dirt halo
+        // beyond the exact swept construction geometry.
+        const blend=transition===null&&['road','shoulder'].includes(pathSample.zone)?1-pathSample.materialWeights.terrain:0;
         p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push((wx-bounds.minX)/(bounds.maxX-bounds.minX),(wz-bounds.minZ)/(bounds.maxZ-bounds.minZ));blends.push(blend);
         if(transition!==null)maximumBoundaryMismatch=Math.max(maximumBoundaryMismatch,Math.abs(wy-transition));
       }
@@ -540,7 +544,7 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
       strategy:'watertight-chunks',
       tileCount:tiles.size,
       highTileCount,
-      targetSpacing:.75,
+      targetSpacing:.35,
       maximumBoundaryMismatch,
       baseCellSize:[baseStepX,baseStepZ]
     };
