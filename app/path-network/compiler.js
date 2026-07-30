@@ -575,6 +575,7 @@ function compileSegment(segment, network, positions, adjacency, nodeMap, options
     constructionIntervals,
     crossSectionProfile: segment.crossSectionProfile,
     materialProfile: segment.materialProfile,
+    structureProfile: segment.structureProfile,
     gameplayRules: segment.gameplayRules
   };
 }

@@ -1,4 +1,5 @@
 import earcut, { deviation as earcutDeviation } from '../vendor/earcut.js';
+import { bridgeMaterialForRole, resolveBridgeProfile } from './bridge-profiles.js';
 
 const EPSILON = 1e-6;
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -13,9 +14,9 @@ const cross3 = (a, b) => [
   a[0] * b[1] - a[1] * b[0]
 ];
 const length3 = value => Math.hypot(value[0], value[1], value[2]);
-const normalize3 = value => {
+const normalize3 = (value, fallback = [0, 1, 0]) => {
   const length = length3(value);
-  return length > EPSILON ? scale3(value, 1 / length) : [0, 1, 0];
+  return length > EPSILON ? scale3(value, 1 / length) : [...fallback];
 };
 const distance3 = (a, b) => length3(sub3(a, b));
 
@@ -27,7 +28,8 @@ function createMeshBuilder(kind) {
     indices: [],
     uvs: [],
     blends: [],
-    roles: []
+    roles: [],
+    triangleRoles: []
   };
 }
 
@@ -48,6 +50,7 @@ function pushTriangle(builder, a, b, c) {
   const normal = cross3(sub3(pb, pa), sub3(pc, pa));
   if (normal[1] < 0) builder.indices.push(a, c, b);
   else builder.indices.push(a, b, c);
+  builder.triangleRoles.push(builder.roles[a] || builder.roles[b] || builder.roles[c] || builder.kind);
 }
 
 function finalizeNormals(builder) {
@@ -75,6 +78,21 @@ function finalizeNormals(builder) {
 
 function finalizeMesh(builder) {
   finalizeNormals(builder);
+  const groups = [];
+  for (let triangle = 0; triangle < builder.triangleRoles.length; triangle += 1) {
+    const material = bridgeMaterialForRole(builder.triangleRoles[triangle]);
+    const previous = groups.at(-1);
+    if (previous?.material?.name === material.name) {
+      previous.indexCount += 3;
+    } else {
+      groups.push({
+        name: material.name,
+        indexOffset: triangle * 3,
+        indexCount: 3,
+        material
+      });
+    }
+  }
   return {
     kind: builder.kind,
     positions: new Float32Array(builder.positions),
@@ -82,7 +100,8 @@ function finalizeMesh(builder) {
     indices: new Uint32Array(builder.indices),
     uvs: new Float32Array(builder.uvs),
     blends: new Float32Array(builder.blends),
-    roles: builder.roles
+    roles: builder.roles,
+    groups
   };
 }
 
@@ -400,6 +419,317 @@ function appendBox(builder, center, size, role) {
   ]) appendQuad(builder, points[a], points[b], points[c], points[d], role);
 }
 
+function appendOrientedBox(builder, center, tangentInput, sideInput, upInput, size, role) {
+  const tangent = normalize3(tangentInput);
+  let side = normalize3(sideInput);
+  let up = normalize3(upInput);
+  if (Math.abs(tangent[0] * side[0] + tangent[1] * side[1] + tangent[2] * side[2]) > 0.98) {
+    side = normalize3(cross3([0, 1, 0], tangent), [1, 0, 0]);
+  }
+  up = normalize3(cross3(tangent, side), up);
+  if (up[1] < 0) {
+    side = scale3(side, -1);
+    up = scale3(up, -1);
+  }
+  const halfLength = Math.max(0.01, finite(size[0], 0.1) * 0.5);
+  const halfWidth = Math.max(0.01, finite(size[1], 0.1) * 0.5);
+  const halfHeight = Math.max(0.01, finite(size[2], 0.1) * 0.5);
+  const point = (along, across, vertical) => add3(
+    add3(
+      add3(center, scale3(tangent, along * halfLength)),
+      scale3(side, across * halfWidth)
+    ),
+    scale3(up, vertical * halfHeight)
+  );
+  const points = [
+    point(-1, -1, -1), point(1, -1, -1),
+    point(-1, -1, 1), point(1, -1, 1),
+    point(-1, 1, -1), point(1, 1, -1),
+    point(-1, 1, 1), point(1, 1, 1)
+  ];
+  for (const [a, b, c, d] of [
+    [0, 1, 2, 3], [5, 4, 7, 6], [4, 0, 6, 2],
+    [1, 5, 3, 7], [2, 3, 6, 7], [4, 5, 0, 1]
+  ]) appendQuad(builder, points[a], points[b], points[c], points[d], role);
+}
+
+function appendBeamBetween(builder, start, end, width, height, role) {
+  const vector = sub3(end, start);
+  const beamLength = length3(vector);
+  if (beamLength < 0.02) return;
+  const tangent = scale3(vector, 1 / beamLength);
+  const reference = Math.abs(tangent[1]) > 0.92 ? [1, 0, 0] : [0, 1, 0];
+  const side = normalize3(cross3(reference, tangent), [1, 0, 0]);
+  const up = normalize3(cross3(tangent, side), [0, 1, 0]);
+  appendOrientedBox(
+    builder,
+    scale3(add3(start, end), 0.5),
+    tangent,
+    side,
+    up,
+    [beamLength, width, height],
+    role
+  );
+}
+
+function sectionFrame(sections, index) {
+  const previous = sections[Math.max(0, index - 1)];
+  const current = sections[index];
+  const next = sections[Math.min(sections.length - 1, index + 1)];
+  const tangent = normalize3(sub3(next.center, previous.center), [0, 0, 1]);
+  const side = normalize3(sub3(current.roadRight, current.roadLeft), [1, 0, 0]);
+  let up = normalize3(cross3(tangent, side), [0, 1, 0]);
+  if (up[1] < 0) up = scale3(up, -1);
+  return { tangent, side, up };
+}
+
+function nearestSectionIndex(sections, targetDistance) {
+  let selected = 0;
+  for (let index = 1; index < sections.length; index += 1) {
+    if (
+      Math.abs(sections[index].distance - targetDistance)
+      < Math.abs(sections[selected].distance - targetDistance)
+    ) selected = index;
+  }
+  return selected;
+}
+
+function sectionIndicesAtSpacing(sections, spacing, includeEnds = false) {
+  const firstDistance = sections[0].distance;
+  const lastDistance = sections.at(-1).distance;
+  const result = includeEnds ? [0] : [];
+  for (let distance = firstDistance + spacing; distance < lastDistance - spacing * 0.35; distance += spacing) {
+    const index = nearestSectionIndex(sections, distance);
+    if (!result.includes(index)) result.push(index);
+  }
+  if (includeEnds && !result.includes(sections.length - 1)) result.push(sections.length - 1);
+  return result;
+}
+
+function appendBridgeDeck(builder, sections, thickness, role) {
+  const top = sections.map(section => ({
+    distance: section.distance,
+    textureRepeatLength: 4,
+    positions: [
+      [section.roadLeft[0], section.roadLeft[1] + 0.025, section.roadLeft[2]],
+      [section.roadRight[0], section.roadRight[1] + 0.025, section.roadRight[2]]
+    ]
+  }));
+  const bottom = sections.map(section => ({
+    distance: section.distance,
+    textureRepeatLength: 4,
+    positions: [
+      [section.roadLeft[0], section.roadLeft[1] - thickness, section.roadLeft[2]],
+      [section.roadRight[0], section.roadRight[1] - thickness, section.roadRight[2]]
+    ]
+  }));
+  appendStrip(builder, top, `${role}-top`, [1, 1]);
+  appendStrip(builder, bottom, `${role}-underside`, [1, 1]);
+  appendStrip(builder, sections.map((section, index) => ({
+    distance: section.distance,
+    textureRepeatLength: 4,
+    positions: [top[index].positions[0], bottom[index].positions[0]]
+  })), `${role}-left-edge`, [1, 1]);
+  appendStrip(builder, sections.map((section, index) => ({
+    distance: section.distance,
+    textureRepeatLength: 4,
+    positions: [bottom[index].positions[1], top[index].positions[1]]
+  })), `${role}-right-edge`, [1, 1]);
+}
+
+function appendBridgeRailings(builder, sections, role) {
+  const indices = sectionIndicesAtSpacing(sections, 2.5, true);
+  for (const sideKey of ['roadLeft', 'roadRight']) {
+    const railPoints = [];
+    for (const index of indices) {
+      const section = sections[index];
+      const frame = sectionFrame(sections, index);
+      const foot = add3(section[sideKey], scale3(frame.up, 0.08));
+      const top = add3(foot, scale3(frame.up, 1.05));
+      appendBeamBetween(builder, foot, top, 0.09, 0.09, `${role}-post`);
+      railPoints.push(top);
+    }
+    for (let index = 1; index < railPoints.length; index += 1) {
+      appendBeamBetween(builder, railPoints[index - 1], railPoints[index], 0.11, 0.11, `${role}-handrail`);
+    }
+  }
+}
+
+function appendTimberTrestle(builder, segment, sections, baseHeightAt, profile) {
+  appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-timber-deck');
+  for (let index = 1; index < sections.length; index += 1) {
+    for (const key of ['roadLeft', 'roadRight']) {
+      const start = [...sections[index - 1][key]];
+      const end = [...sections[index][key]];
+      start[1] -= profile.deckThickness + 0.18;
+      end[1] -= profile.deckThickness + 0.18;
+      appendBeamBetween(builder, start, end, 0.22, 0.32, 'bridge-timber-longitudinal-beam');
+    }
+  }
+  for (const index of sectionIndicesAtSpacing(sections, 2.4, true)) {
+    const section = sections[index];
+    const frame = sectionFrame(sections, index);
+    const left = add3(section.roadLeft, scale3(frame.up, -profile.deckThickness - 0.14));
+    const right = add3(section.roadRight, scale3(frame.up, -profile.deckThickness - 0.14));
+    appendBeamBetween(builder, left, right, 0.2, 0.25, 'bridge-timber-crossbeam');
+  }
+  const supportSpacing = Math.max(4, profile.supportSpacing || 6);
+  for (const index of sectionIndicesAtSpacing(sections, supportSpacing)) {
+    const section = sections[index];
+    const frame = sectionFrame(sections, index);
+    const posts = [];
+    for (const sign of [-1, 1]) {
+      const top = add3(
+        add3(section.center, scale3(frame.side, sign * profile.width * 0.34)),
+        scale3(frame.up, -profile.deckThickness)
+      );
+      const groundY = finite(baseHeightAt(top[0], top[2]), top[1] - 1);
+      const bottom = [top[0], groundY, top[2]];
+      appendBeamBetween(builder, bottom, top, 0.28, 0.28, 'bridge-timber-trestle-post');
+      posts.push({ top, bottom });
+    }
+    appendBeamBetween(builder, posts[0].bottom, posts[1].top, 0.16, 0.16, 'bridge-timber-cross-brace');
+    appendBeamBetween(builder, posts[1].bottom, posts[0].top, 0.16, 0.16, 'bridge-timber-cross-brace');
+  }
+  if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-timber-railing');
+}
+
+function appendStoneArch(builder, segment, sections, baseHeightAt, profile) {
+  appendBridgeDeck(builder, sections, profile.deckThickness + 0.18, 'bridge-stone-deck');
+  const firstDistance = sections[0].distance;
+  const span = Math.max(EPSILON, sections.at(-1).distance - firstDistance);
+  for (const key of ['roadLeft', 'roadRight']) {
+    const arch = sections.map(section => {
+      const fraction = clamp((section.distance - firstDistance) / span, 0, 1);
+      const edge = section[key];
+      const ground = finite(baseHeightAt(edge[0], edge[2]), edge[1] - 1);
+      const archFactor = Math.sqrt(Math.max(0, 1 - ((fraction - 0.5) / 0.5) ** 2));
+      return [
+        edge[0],
+        ground + Math.max(0.3, edge[1] - ground - profile.deckThickness - 0.25) * archFactor,
+        edge[2]
+      ];
+    });
+    appendStrip(builder, sections.map((section, index) => ({
+      distance: section.distance,
+      textureRepeatLength: 3,
+      positions: [section[key], arch[index]]
+    })), 'bridge-stone-spandrel', [1, 1]);
+    for (let index = 1; index < arch.length; index += 1) {
+      appendBeamBetween(builder, arch[index - 1], arch[index], 0.34, 0.42, 'bridge-stone-arch-ring');
+    }
+  }
+  for (const section of [sections[0], sections.at(-1)]) {
+    const frame = sectionFrame(sections, sections.indexOf(section));
+    const groundY = finite(baseHeightAt(section.center[0], section.center[2]), section.center[1] - 1);
+    appendOrientedBox(
+      builder,
+      [section.center[0], (section.center[1] + groundY) * 0.5, section.center[2]],
+      frame.tangent,
+      frame.side,
+      frame.up,
+      [1.2, profile.width + 1.2, Math.max(0.4, section.center[1] - groundY)],
+      'bridge-stone-abutment'
+    );
+  }
+  if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-stone-parapet');
+}
+
+function appendSteelGirder(builder, segment, sections, baseHeightAt, profile) {
+  appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-concrete-deck');
+  for (let index = 1; index < sections.length; index += 1) {
+    for (const key of ['roadLeft', 'roadRight']) {
+      const start = [...sections[index - 1][key]];
+      const end = [...sections[index][key]];
+      start[1] -= profile.deckThickness + 0.45;
+      end[1] -= profile.deckThickness + 0.45;
+      appendBeamBetween(builder, start, end, 0.32, 0.82, 'bridge-steel-main-girder');
+    }
+  }
+  for (const index of sectionIndicesAtSpacing(sections, 4, true)) {
+    const section = sections[index];
+    const frame = sectionFrame(sections, index);
+    const left = add3(section.roadLeft, scale3(frame.up, -profile.deckThickness - 0.34));
+    const right = add3(section.roadRight, scale3(frame.up, -profile.deckThickness - 0.34));
+    appendBeamBetween(builder, left, right, 0.24, 0.4, 'bridge-steel-cross-girder');
+  }
+  const pierSpacing = Math.max(18, profile.supportSpacing || 24);
+  for (const index of sectionIndicesAtSpacing(sections, pierSpacing)) {
+    const section = sections[index];
+    const frame = sectionFrame(sections, index);
+    const groundY = finite(baseHeightAt(section.center[0], section.center[2]), section.center[1] - 1);
+    const height = Math.max(0.4, section.center[1] - profile.deckThickness - groundY);
+    appendOrientedBox(
+      builder,
+      [section.center[0], groundY + height * 0.5, section.center[2]],
+      frame.tangent,
+      frame.side,
+      frame.up,
+      [1.3, Math.max(1.2, profile.width * 0.42), height],
+      'bridge-concrete-hammerhead-pier'
+    );
+  }
+  if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-steel-railing');
+}
+
+function appendMasonryCauseway(builder, segment, sections, baseHeightAt, profile) {
+  appendBridgeDeck(builder, sections, profile.deckThickness + 0.2, 'bridge-masonry-deck');
+  for (const key of ['roadLeft', 'roadRight']) {
+    appendStrip(builder, sections.map(section => {
+      const top = section[key];
+      return {
+        distance: section.distance,
+        textureRepeatLength: 2.5,
+        positions: [top, [top[0], finite(baseHeightAt(top[0], top[2]), top[1] - 0.5), top[2]]]
+      };
+    }), 'bridge-masonry-sidewall', [1, 1]);
+  }
+  if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-masonry-parapet');
+}
+
+function appendRopeFootbridge(builder, segment, sections, baseHeightAt, profile) {
+  for (const index of sectionIndicesAtSpacing(sections, 0.55, true)) {
+    const section = sections[index];
+    const frame = sectionFrame(sections, index);
+    appendOrientedBox(
+      builder,
+      add3(section.center, scale3(frame.up, 0.04)),
+      frame.tangent,
+      frame.side,
+      frame.up,
+      [0.46, profile.width, 0.14],
+      'bridge-timber-deck-slat'
+    );
+  }
+  const railIndices = sectionIndicesAtSpacing(sections, 1.8, true);
+  const firstDistance = sections[0].distance;
+  const span = Math.max(EPSILON, sections.at(-1).distance - firstDistance);
+  for (const key of ['roadLeft', 'roadRight']) {
+    const handrail = [];
+    for (const index of railIndices) {
+      const section = sections[index];
+      const frame = sectionFrame(sections, index);
+      const fraction = clamp((section.distance - firstDistance) / span, 0, 1);
+      const sag = Math.sin(Math.PI * fraction) * 0.22;
+      const deckPoint = add3(section[key], scale3(frame.up, 0.08));
+      const railPoint = add3(deckPoint, scale3(frame.up, 1.15 - sag));
+      appendBeamBetween(builder, deckPoint, railPoint, 0.065, 0.065, 'bridge-rope-hanger');
+      handrail.push(railPoint);
+    }
+    for (let index = 1; index < handrail.length; index += 1) {
+      appendBeamBetween(builder, handrail[index - 1], handrail[index], 0.09, 0.09, 'bridge-rope-handrail');
+    }
+  }
+  for (const section of [sections[0], sections.at(-1)]) {
+    const frame = sectionFrame(sections, sections.indexOf(section));
+    for (const sign of [-1, 1]) {
+      const foot = add3(section.center, scale3(frame.side, sign * profile.width * 0.6));
+      const top = add3(foot, scale3(frame.up, 1.5));
+      appendBeamBetween(builder, foot, top, 0.24, 0.24, 'bridge-timber-anchor-post');
+    }
+  }
+}
+
 function crossSectionsBySegment(terrainModifier) {
   const result = new Map();
   for (const section of terrainModifier?.crossSections || []) {
@@ -449,38 +779,22 @@ function appendRetainingWalls(builder, segment, sections) {
 }
 
 function appendBridge(builder, segment, sections, baseHeightAt) {
-  if (segment.construction.mode !== 'bridge' || sections.length < 2) return;
-  const girderDepth = Math.max(0.35, segment.crossSectionProfile.width * 0.08);
-  for (const side of ['Left', 'Right']) {
-    const key = `road${side}`;
-    const rows = sections.map(section => {
-      const top = section[key];
-      return {
-        distance: section.distance,
-        textureRepeatLength: 5,
-        positions: [top, [top[0], top[1] - girderDepth, top[2]]]
-      };
-    });
-    appendStrip(builder, rows, `bridge-${side.toLowerCase()}-girder`, [1, 1]);
+  if (segment.construction.mode !== 'bridge' || sections.length < 2) return null;
+  const profile = resolveBridgeProfile(segment, sections, baseHeightAt);
+  if (profile.bridgeStyle === 'timber-trestle') {
+    appendTimberTrestle(builder, segment, sections, baseHeightAt, profile);
+  } else if (profile.bridgeStyle === 'stone-arch') {
+    appendStoneArch(builder, segment, sections, baseHeightAt, profile);
+  } else if (profile.bridgeStyle === 'steel-girder') {
+    appendSteelGirder(builder, segment, sections, baseHeightAt, profile);
+  } else if (profile.bridgeStyle === 'masonry-causeway') {
+    appendMasonryCauseway(builder, segment, sections, baseHeightAt, profile);
+  } else if (profile.bridgeStyle === 'rope-footbridge') {
+    appendRopeFootbridge(builder, segment, sections, baseHeightAt, profile);
+  } else {
+    throw new Error(`Unsupported bridge profile ${profile.bridgeStyle}.`);
   }
-  const length = sections.at(-1).distance - sections[0].distance;
-  const pierSpacing = Math.max(8, Math.min(24, segment.crossSectionProfile.width * 2.5));
-  const pierCount = Math.max(0, Math.floor(length / pierSpacing) - 1);
-  for (let index = 1; index <= pierCount; index += 1) {
-    const target = sections[0].distance + length * index / (pierCount + 1);
-    const section = sections.reduce((best, candidate) => (
-      Math.abs(candidate.distance - target) < Math.abs(best.distance - target) ? candidate : best
-    ), sections[0]);
-    const baseY = finite(baseHeightAt(section.center[0], section.center[2]), section.center[1] - 1);
-    const topY = section.center[1] - girderDepth;
-    const height = Math.max(0.25, topY - baseY);
-    appendBox(
-      builder,
-      [section.center[0], baseY + height * 0.5, section.center[2]],
-      [Math.max(0.65, segment.crossSectionProfile.width * 0.16), height, Math.max(0.65, segment.crossSectionProfile.width * 0.16)],
-      'bridge-pier'
-    );
-  }
+  return profile;
 }
 
 function appendTunnel(builder, segment) {
@@ -618,13 +932,20 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
   const earthwork = createMeshBuilder('earthwork');
   const structure = createMeshBuilder('structure');
   const guides = { center: [], edges: [], construction: [] };
-  const degree = degreeMap(compiled);
+  // Invalid construction stays visible through the guide overlay but must not
+  // create traversable render/collision/navigation surfaces. Valid segments in
+  // the same connected graph remain usable instead of disappearing with the
+  // invalid branch.
+  const surfaceSegments = compiled.segments.filter(segment => segment.construction.mode !== 'invalid');
+  const surfaceCompiled = { ...compiled, segments: surfaceSegments };
+  const degree = degreeMap(surfaceCompiled);
   const sectionsBySegment = crossSectionsBySegment(options.terrainModifier);
   const baseHeightAt = options.terrainModifier?.baseHeightAt || (() => 0);
   const portalsByNode = new Map((compiled.nodes || []).map(node => [node.id, []]));
   const preparedSegments = [];
+  const bridgeSelections = [];
 
-  for (const segment of compiled.segments) {
+  for (const segment of surfaceSegments) {
     const prepared = trimSamplesForJunctions(segment, degree);
     preparedSegments.push({ segment, ...prepared });
     if (prepared.fromPortal) portalsByNode.get(segment.fromNode)?.push(prepared.fromPortal);
@@ -644,13 +965,31 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
       const localSections = sectionsForInterval(constructionSections, interval);
       appendEarthwork(earthwork, localSegment, localSections);
       appendRetainingWalls(structure, localSegment, localSections);
-      appendBridge(structure, localSegment, localSections, baseHeightAt);
+      const bridgeProfile = appendBridge(structure, localSegment, localSections, baseHeightAt);
+      if (bridgeProfile) {
+        bridgeSelections.push({
+          segmentId: segment.id,
+          startDistance: interval.startDistance,
+          endDistance: interval.endDistance,
+          bridgeStyle: bridgeProfile.bridgeStyle,
+          label: bridgeProfile.label,
+          span: bridgeProfile.span,
+          width: bridgeProfile.width,
+          maximumClearance: bridgeProfile.maximumClearance
+        });
+      }
       appendTunnel(structure, localSegment);
     }
     const isFromDeadEnd = (degree.get(segment.fromNode) || 0) === 1;
     const isToDeadEnd = (degree.get(segment.toNode) || 0) === 1;
     if (isFromDeadEnd) appendEndCap(road, rows[0], 'dead-end-cap');
     if (isToDeadEnd) appendEndCap(road, rows.at(-1), 'dead-end-cap');
+  }
+
+  // Guides come from the exact compiled samples for every authored segment,
+  // including blocked intervals, so invalid work never vanishes.
+  for (const segment of compiled.segments) {
+    const rows = roadRows(segment, segment.samples);
     for (let index = 0; index < rows.length - 1; index += 1) {
       guides.center.push(...rows[index].positions[1], ...rows[index + 1].positions[1]);
       guides.edges.push(
@@ -661,7 +1000,7 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
   }
 
   const junctionReports = [];
-  for (const junction of compiled.junctions || []) {
+  for (const junction of (compiled.junctions || []).filter(item => (degree.get(item.nodeId) || 0) >= 3)) {
     const report = appendJunction(road, junction, portalsByNode, options);
     junctionReports.push({
       nodeId: junction.nodeId,
@@ -700,6 +1039,7 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
     guides,
     portalsByNode,
     junctions: junctionReports,
+    bridgeSelections,
     validation
   };
 }

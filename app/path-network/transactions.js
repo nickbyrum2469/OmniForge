@@ -1,5 +1,6 @@
 import {
   PATH_CONSTRUCTION_MODES,
+  PATH_BRIDGE_STYLES,
   PATH_HANDLE_MODES,
   PATH_HEIGHT_MODES,
   clonePathNetwork,
@@ -182,6 +183,19 @@ function applyOperation(network, operation) {
       segment.constructionLocked = operation.locked === true;
       break;
     }
+    case 'set-segment-structure': {
+      const segment = ensureSegment(network, cleanId(operation.segmentId));
+      const bridgeStyle = String(operation.bridgeStyle || 'auto');
+      if (!PATH_BRIDGE_STYLES.includes(bridgeStyle)) {
+        throw new Error(`Unknown bridge style ${bridgeStyle}.`);
+      }
+      segment.structureProfile = {
+        ...segment.structureProfile,
+        bridgeStyle,
+        railings: operation.railings !== false
+      };
+      break;
+    }
     case 'reverse-segment': {
       const segment = ensureSegment(network, cleanId(operation.segmentId));
       [segment.fromNode, segment.toNode] = [segment.toNode, segment.fromNode];
@@ -202,6 +216,7 @@ function applyOperation(network, operation) {
         constructionLocked: false,
         crossSectionProfile: structuredClone(network.defaults.crossSectionProfile),
         materialProfile: structuredClone(network.defaults.materialProfile),
+        structureProfile: structuredClone(network.defaults.structureProfile),
         gameplayRules: structuredClone(network.defaults.gameplayRules)
       });
       break;

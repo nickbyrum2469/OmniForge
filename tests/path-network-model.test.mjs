@@ -137,6 +137,12 @@ test('path transactions move, split, classify, and undo without mutating the inp
         segmentId: firstSegment.id,
         constructionMode: 'bridge',
         locked: true
+      },
+      {
+        type: 'set-segment-structure',
+        segmentId: firstSegment.id,
+        bridgeStyle: 'stone-arch',
+        railings: true
       }
     ]
   });
@@ -146,7 +152,43 @@ test('path transactions move, split, classify, and undo without mutating the inp
   assert.equal(result.network.nodes[0].position[1], 8);
   assert.equal(result.network.segments[0].constructionMode, 'bridge');
   assert.equal(result.network.segments[0].constructionLocked, true);
+  assert.equal(result.network.segments[0].structureProfile.bridgeStyle, 'stone-arch');
+  assert.equal(result.network.segments[0].structureProfile.railings, true);
   assert.deepEqual(result.inverse.replaceNetwork, original);
+});
+
+test('bridge profiles normalize and reject unknown structure families', () => {
+  const network = normalizePathNetwork({
+    id: 'bridge-profile',
+    nodes: [
+      { id: 'a', position: [0, 0, 0] },
+      { id: 'b', position: [10, 0, 0] }
+    ],
+    segments: [{
+      id: 'bridge',
+      fromNode: 'a',
+      toNode: 'b',
+      structureProfile: {
+        bridgeStyle: 'timber-trestle',
+        deckThickness: 100,
+        supportSpacing: 0,
+        railings: false
+      }
+    }]
+  });
+  assert.deepEqual(network.segments[0].structureProfile, {
+    bridgeStyle: 'timber-trestle',
+    railings: false,
+    deckThickness: 2,
+    supportSpacing: 2
+  });
+  assert.throws(() => applyPathNetworkTransaction(network, {
+    operations: [{
+      type: 'set-segment-structure',
+      segmentId: 'bridge',
+      bridgeStyle: 'gray-placeholder-bridge'
+    }]
+  }), /Unknown bridge style/);
 });
 
 test('path transactions author free, aligned, and automatic spline handles', () => {

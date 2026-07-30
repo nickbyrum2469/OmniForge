@@ -1,3 +1,5 @@
+import { normalizeBridgeProfile, PATH_BRIDGE_STYLES } from './bridge-profiles.js';
+
 const PATH_NETWORK_SCHEMA_VERSION = 2;
 
 export const PATH_CONSTRUCTION_MODES = Object.freeze([
@@ -12,6 +14,7 @@ export const PATH_CONSTRUCTION_MODES = Object.freeze([
 
 export const PATH_HEIGHT_MODES = Object.freeze(['terrain', 'offset', 'absolute']);
 export const PATH_HANDLE_MODES = Object.freeze(['automatic', 'aligned', 'free']);
+export { PATH_BRIDGE_STYLES };
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, finite(value, minimum)));
@@ -119,6 +122,7 @@ export function normalizePathNetwork(input = {}, options = {}) {
       shoulderMaterialId: source?.materialProfile?.shoulderMaterialId ?? input.defaults?.materialProfile?.shoulderMaterialId ?? null,
       structureMaterialId: source?.materialProfile?.structureMaterialId ?? input.defaults?.materialProfile?.structureMaterialId ?? null
     },
+    structureProfile: normalizeBridgeProfile(source?.structureProfile || input.defaults?.structureProfile),
     gameplayRules: defaultGameplayRules(source?.gameplayRules || input.defaults?.gameplayRules),
     costBreakdown: source?.costBreakdown ? structuredClone(source.costBreakdown) : null
   }));
@@ -141,6 +145,7 @@ export function normalizePathNetwork(input = {}, options = {}) {
         shoulderMaterialId: input.defaults?.materialProfile?.shoulderMaterialId ?? null,
         structureMaterialId: input.defaults?.materialProfile?.structureMaterialId ?? null
       },
+      structureProfile: normalizeBridgeProfile(input.defaults?.structureProfile),
       gameplayRules: defaultGameplayRules(input.defaults?.gameplayRules)
     },
     engineering: defaultEngineering(input.engineering),

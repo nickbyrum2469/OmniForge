@@ -2,6 +2,7 @@ import { PathGenerationWorkerPool } from './path-network/generation-pool.js';
 import { trailArchetypes } from './path-network/archetypes.js';
 import { trailCandidateToPathNetwork } from './path-network/trail-solver.js';
 import { nearestCompiledStation } from './path-network/compiler.js';
+import { PATH_BRIDGE_STYLES } from './path-network/model.js';
 import {
   advancePathNodeDragGesture,
   createPathNodeDragGesture,
@@ -278,6 +279,20 @@ function pathPanel(object) {
   const archetypeOptions = trailArchetypes().map(item => `<option value="${escapeHtml(item.id)}" ${item.id === draft.archetype ? 'selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
   const constructionOptions = ['auto', 'conform', 'cut-fill', 'retaining-wall', 'bridge', 'tunnel', 'stairs']
     .map(mode => `<option value="${mode}" ${mode === selectedSegment?.constructionMode ? 'selected' : ''}>${mode}</option>`).join('');
+  const bridgeLabels = {
+    auto: 'Auto — match span and path type',
+    'timber-trestle': 'Timber trestle',
+    'stone-arch': 'Stone arch',
+    'steel-girder': 'Steel girder',
+    'masonry-causeway': 'Masonry causeway',
+    'rope-footbridge': 'Rope footbridge'
+  };
+  const bridgeStyle = selectedSegment?.structureProfile?.bridgeStyle || 'auto';
+  const bridgeOptions = PATH_BRIDGE_STYLES
+    .map(style => `<option value="${style}" ${style === bridgeStyle ? 'selected' : ''}>${escapeHtml(bridgeLabels[style] || style)}</option>`)
+    .join('');
+  const activeBridgeSelections = (runtime?.geometry?.bridgeSelections || [])
+    .filter(item => item.segmentId === selectedSegment?.id);
   const suggestedHandles = suggestPathNodeHandles(network, selectedNode.id);
   const incomingHandle = selectedNode.incomingHandle || suggestedHandles.incomingHandle;
   const outgoingHandle = selectedNode.outgoingHandle || suggestedHandles.outgoingHandle;
@@ -308,8 +323,13 @@ function pathPanel(object) {
       <label class="v011-field"><span>Route cost overlay</span><input id="v012ShowRouteCosts" type="checkbox" ${network.editor?.showGrade === true ? 'checked' : ''}></label>
       <label class="v011-field"><span>Construction mode</span><select id="v012ConstructionMode">${constructionOptions}</select></label>
       <label class="v011-field"><span>Lock construction</span><input id="v012ConstructionLocked" type="checkbox" ${selectedSegment?.constructionLocked ? 'checked' : ''}></label>
+      <label class="v011-field"><span>Bridge family</span><select id="v012BridgeStyle">${bridgeOptions}</select></label>
+      <label class="v011-field"><span>Bridge railings</span><input id="v012BridgeRailings" type="checkbox" ${selectedSegment?.structureProfile?.railings !== false ? 'checked' : ''}></label>
       <label class="v011-field"><span>Civil Assist</span><input id="v012CivilAssist" type="checkbox" ${network.engineering?.civilAssist !== false ? 'checked' : ''}></label>
     </div>
+    <p class="v011-note">${activeBridgeSelections.length
+      ? `Resolved bridge: ${escapeHtml(activeBridgeSelections.map(item => `${item.label} · ${Number(item.span).toFixed(1)} m span`).join(' · '))}`
+      : 'Bridge families are only generated for validated bridge intervals. Terrain-following dirt paths remain terrain construction and never receive bridge supports.'}</p>
     <div class="v011-node-editor">
       <div class="v011-panel-title"><div><small>SELECTED 3D NODE</small><strong>Node ${selectedIndex + 1}</strong></div><span>${escapeHtml(selectedNode.heightMode)}</span></div>
       <div class="v011-grid">
@@ -432,6 +452,8 @@ function enhanceInspector() {
   }, 'Toggle route cost overlay'));
   $('#v012ConstructionMode')?.addEventListener('change', () => updateSelectedConstruction(object, selectedNode.node));
   $('#v012ConstructionLocked')?.addEventListener('change', () => updateSelectedConstruction(object, selectedNode.node));
+  $('#v012BridgeStyle')?.addEventListener('change', () => updateSelectedStructure(object, selectedNode.node));
+  $('#v012BridgeRailings')?.addEventListener('change', () => updateSelectedStructure(object, selectedNode.node));
   $('#v012CivilAssist')?.addEventListener('change', event => replacePathNetwork(object, {
     ...object.properties.pathNetwork,
     engineering: { ...object.properties.pathNetwork.engineering, civilAssist: event.target.checked }
@@ -643,6 +665,21 @@ function updateSelectedConstruction(object, node) {
       segmentId: segment.id,
       constructionMode: $('#v012ConstructionMode')?.value || segment.constructionMode,
       locked: $('#v012ConstructionLocked')?.checked === true
+    }]
+  });
+}
+
+function updateSelectedStructure(object, node) {
+  const segment = object.properties.pathNetwork.segments.find(item => item.fromNode === node.id || item.toNode === node.id)
+    || object.properties.pathNetwork.segments[0];
+  if (!segment) return;
+  return transactPathNetwork(object, {
+    label: 'Update bridge family',
+    operations: [{
+      type: 'set-segment-structure',
+      segmentId: segment.id,
+      bridgeStyle: $('#v012BridgeStyle')?.value || segment.structureProfile?.bridgeStyle || 'auto',
+      railings: $('#v012BridgeRailings')?.checked !== false
     }]
   });
 }

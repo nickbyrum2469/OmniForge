@@ -769,11 +769,7 @@ export class Renderer3D{
     if(cached?.signature===signature)return cached.meshes;
     if(cached?.meshes)for(const mesh of Object.values(cached.meshes)){if(!mesh)continue;for(const buffer of mesh.buffers||[])this.gl.deleteBuffer(buffer);this.gl.deleteVertexArray(mesh.vao);}
     const diagnostics=runtime.diagnostics;
-    if(!diagnostics.valid){
-      this.pathSurfaces.set(pathObject.id,{signature,meshes:null,diagnostics});
-      window.__omniforgeDiagnostics?.warn?.('path-network-v2-blocked',{pathId:pathObject.id,diagnostics});
-      return null;
-    }
+    if(!diagnostics.valid)window.__omniforgeDiagnostics?.warn?.('path-network-v2-partially-blocked',{pathId:pathObject.id,diagnostics});
     const meshes={};
     for(const [name,data] of Object.entries(runtime.geometry.meshes)){
       if(data.indices.length)meshes[name]=createBufferMesh(this.gl,data);
@@ -974,7 +970,7 @@ export class Renderer3D{
         if(pathSurfaceCullMode(kind)==='double-sided')gl.disable(gl.CULL_FACE);
         else{gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);}
         const terrainMaterial={materialId:terrain.properties?.materialId||null,color:terrain.properties?.color||'#35522f'};
-        const proxy={id:`path-network-v2:${kind}:${pathObject.id}`,type:structural?'box':'terrain',visible:true,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},properties:{...pathObject.properties,...terrainMaterial,materialId:structural?(segmentProfile.structureMaterialId||pathObject.properties?.structureMaterialId||null):(kind==='road'?(segmentProfile.surfaceMaterialId||pathObject.properties?.materialId||null):terrainMaterial.materialId),color:structural?(pathObject.properties?.structureColor||'#596168'):(kind==='road'?(pathObject.properties?.color||'#73573d'):terrainMaterial.color),opacity:1,castsShadows:false,receivesShadows:true}};
+        const proxy={id:`path-network-v2:${kind}:${pathObject.id}`,type:structural?'model':'terrain',visible:true,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},properties:{...pathObject.properties,...terrainMaterial,materialId:structural?(segmentProfile.structureMaterialId||pathObject.properties?.structureMaterialId||null):(kind==='road'?(segmentProfile.surfaceMaterialId||pathObject.properties?.materialId||null):terrainMaterial.materialId),color:structural?(pathObject.properties?.structureColor||'#596168'):(kind==='road'?(pathObject.properties?.color||'#73573d'):terrainMaterial.color),opacity:1,castsShadows:true,receivesShadows:true}};
         this.drawMesh(proxy,mesh,viewProj,lightViewProj,scene,false,camera,lights,null,structural?null:pathObject);
       }
     }
