@@ -143,9 +143,36 @@ test('live terrain mesh consumes the v2 modifier bundle and its material field',
   const scene = sceneFixture();
   const runtimes = compileScenePathRuntimes(scene);
   const mesh = terrainMesh(scene.objects[0], [scene.objects[1]], runtimes);
-  const rowSize = Number(scene.objects[0].properties.resolutionX) + 1;
-  const centerIndex = 32 * rowSize + 32;
+  let centerIndex = -1;
+  let centerDistance = Infinity;
+  const edgeHeights = new Map();
+  for (let index = 0; index < mesh.positions.length / 3; index += 1) {
+    const x = mesh.positions[index * 3];
+    const y = mesh.positions[index * 3 + 1];
+    const z = mesh.positions[index * 3 + 2];
+    const distance = Math.hypot(x, z);
+    if (distance < centerDistance) {
+      centerDistance = distance;
+      centerIndex = index;
+    }
+    const key = `${x.toFixed(5)}:${z.toFixed(5)}`;
+    const values = edgeHeights.get(key) || [];
+    values.push(y);
+    edgeHeights.set(key, values);
+  }
+  assert.ok(centerDistance < 0.01);
   assert.ok(mesh.positions[centerIndex * 3 + 1] > 1.9);
   assert.ok(mesh.blends[centerIndex] > 0.99);
   assert.equal(mesh.positions.every(Number.isFinite), true);
+  assert.equal(terrainMesh.lastPathDetail.strategy, 'watertight-chunks');
+  assert.ok(terrainMesh.lastPathDetail.highTileCount > 0);
+  assert.ok(mesh.positions.length > (64 + 1) * (64 + 1) * 3);
+  for (const values of edgeHeights.values()) {
+    if (values.length < 2) continue;
+    assert.ok(Math.max(...values) - Math.min(...values) <= 0.005);
+  }
+  for (let index = 0; index < mesh.positions.length / 3; index += 1) {
+    if (mesh.blends[index] <= 0.001) continue;
+    assert.ok(Math.abs(mesh.positions[index * 3 + 2]) < 7);
+  }
 });

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { compilePathObjectRuntime, sampleScenePathTerrain } from '../app/path-network/runtime.js';
 import { migrateLegacyPathObject } from '../app/path-network/model.js';
 import { createTerrainQueryService } from '../app/world/terrain-query-service.js';
+import { terrainMesh } from '../app/renderer.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixture = JSON.parse(fs.readFileSync(
@@ -87,4 +88,27 @@ test('the exact impossible branch is blocked and cannot alter terrain or become 
     const sample = sampleScenePathTerrain([runtime], baseHeight, x, z);
     assert.equal(sample.height, baseHeight);
   }
+});
+
+test('the exact kilometre terrain uses watertight high-density path chunks', () => {
+  const runtimes = fixture.paths.map(compileFixturePath);
+  const mesh = terrainMesh(structuredClone(fixture.terrain), structuredClone(fixture.paths), runtimes);
+  assert.equal(terrainMesh.lastPathDetail.strategy, 'watertight-chunks');
+  assert.ok(terrainMesh.lastPathDetail.highTileCount >= 9);
+  assert.ok(terrainMesh.lastPathDetail.maximumBoundaryMismatch <= 0.005);
+  assert.ok(mesh.positions.length / 3 > 50000);
+  assert.equal([...mesh.positions].every(Number.isFinite), true);
+  assert.equal([...mesh.normals].every(Number.isFinite), true);
+  assert.equal([...mesh.indices].every(index => Number.isInteger(index) && index >= 0 && index < mesh.positions.length / 3), true);
+
+  let blendedVertexCount = 0;
+  for (let index = 0; index < mesh.positions.length / 3; index += 1) {
+    if (mesh.blends[index] <= 0.001) continue;
+    blendedVertexCount += 1;
+    const x = mesh.positions[index * 3];
+    const z = mesh.positions[index * 3 + 2];
+    assert.ok(x >= -35 && x <= 16, `path material escaped in X at ${x}`);
+    assert.ok(z >= -38 && z <= 8, `path material escaped in Z at ${z}`);
+  }
+  assert.ok(blendedVertexCount > 25);
 });

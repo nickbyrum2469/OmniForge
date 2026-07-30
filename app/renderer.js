@@ -451,14 +451,100 @@ function cylinderMesh(seg=32){
 
 export function terrainHeight(terrain,x,z,paths=[]){return sharedTerrainHeightAt(terrain,x,z,paths);}
 export function pathBlendAt(paths,x,z){return sharedPathBlendAt(paths,x,z);}
+function activePathChunkKeys(pathRuntimes,chunkSize){
+  const active=new Set();
+  for(const runtime of pathRuntimes||[])for(const entry of runtime?.terrainModifier?.entries||[]){
+    const mode=entry?.construction?.mode;
+    if(entry?.profile?.terrainModificationEnabled===false||['bridge','tunnel','invalid'].includes(mode))continue;
+    const minX=Math.floor(entry.bounds.minX/chunkSize),maxX=Math.floor(entry.bounds.maxX/chunkSize);
+    const minZ=Math.floor(entry.bounds.minZ/chunkSize),maxZ=Math.floor(entry.bounds.maxZ/chunkSize);
+    for(let x=minX;x<=maxX;x++)for(let z=minZ;z<=maxZ;z++)active.add(`${x}:${z}`);
+  }
+  const halo=new Set(active);
+  for(const key of active){
+    const [x,z]=key.split(':').map(Number);
+    for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)halo.add(`${x+dx}:${z+dz}`);
+  }
+  return halo;
+}
+function coarseTerrainEdgeHeight(object,tile,edge,t){
+  const vertical=edge==='left'||edge==='right',steps=vertical?tile.lowStepsZ:tile.lowStepsX;
+  const scaled=clamp(t,0,1)*steps,index=Math.min(steps-1,Math.floor(scaled)),local=scaled-index;
+  const along0=index/steps,along1=(index+1)/steps;
+  const x0=edge==='left'?tile.minX:edge==='right'?tile.maxX:lerp(tile.minX,tile.maxX,along0);
+  const x1=edge==='left'?tile.minX:edge==='right'?tile.maxX:lerp(tile.minX,tile.maxX,along1);
+  const z0=edge==='bottom'?tile.minZ:edge==='top'?tile.maxZ:lerp(tile.minZ,tile.maxZ,along0);
+  const z1=edge==='bottom'?tile.minZ:edge==='top'?tile.maxZ:lerp(tile.minZ,tile.maxZ,along1);
+  return lerp(terrainBaseHeightAt(object,x0,z0),terrainBaseHeightAt(object,x1,z1),local);
+}
 export function terrainMesh(object,paths,pathRuntimes=[]){
   const props=normalizeTerrainProperties(object.properties||{},object.transform||{}),resX=clamp(Math.round(Number(props.resolutionX||props.resolution||128)),8,256),resZ=clamp(Math.round(Number(props.resolutionZ||props.resolution||128)),8,256),bounds=props.bounds,p=[],n=[],idx=[],uv=[],blends=[];
   const ox=Number(object.transform.position?.[0]||0),oy=Number(object.transform.position?.[1]||0),oz=Number(object.transform.position?.[2]||0);
-  for(let z=0;z<=resZ;z++)for(let x=0;x<=resX;x++){
-    const wx=lerp(bounds.minX,bounds.maxX,x/resX),wz=lerp(bounds.minZ,bounds.maxZ,z/resZ),baseY=terrainBaseHeightAt(object,wx,wz),pathSample=sampleScenePathTerrain(pathRuntimes,baseY,wx,wz),wy=pathRuntimes.length?pathSample.height:terrainHeight(object,wx,wz,paths);
-    p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push(x/resX,z/resZ);blends.push(pathRuntimes.length?1-pathSample.materialWeights.terrain:pathBlendAt(paths,wx,wz));
+  if(!pathRuntimes.length){
+    for(let z=0;z<=resZ;z++)for(let x=0;x<=resX;x++){
+      const wx=lerp(bounds.minX,bounds.maxX,x/resX),wz=lerp(bounds.minZ,bounds.maxZ,z/resZ),wy=terrainHeight(object,wx,wz,paths);
+      p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push(x/resX,z/resZ);blends.push(pathBlendAt(paths,wx,wz));
+    }
+    for(let z=0;z<resZ;z++)for(let x=0;x<resX;x++){const a=z*(resX+1)+x,b=a+resX+1;idx.push(a,b,a+1,b,b+1,a+1);}
+  }else{
+    // Path construction is rendered through complete terrain chunks. Affected
+    // chunks receive local density while untouched chunks keep the authored
+    // world budget. Dense-to-coarse borders are constrained to the exact coarse
+    // edge segments, so no independent patch can float, overlap, or open a hole.
+    const chunkSize=clamp(Number(props.chunkSize||64),8,512);
+    const minChunkX=Math.floor(bounds.minX/chunkSize),maxChunkX=Math.ceil(bounds.maxX/chunkSize)-1;
+    const minChunkZ=Math.floor(bounds.minZ/chunkSize),maxChunkZ=Math.ceil(bounds.maxZ/chunkSize)-1;
+    const highKeys=activePathChunkKeys(pathRuntimes,chunkSize),tiles=new Map();
+    const baseStepX=(bounds.maxX-bounds.minX)/resX,baseStepZ=(bounds.maxZ-bounds.minZ)/resZ;
+    for(let cz=minChunkZ;cz<=maxChunkZ;cz++)for(let cx=minChunkX;cx<=maxChunkX;cx++){
+      const minX=Math.max(bounds.minX,cx*chunkSize),maxX=Math.min(bounds.maxX,(cx+1)*chunkSize);
+      const minZ=Math.max(bounds.minZ,cz*chunkSize),maxZ=Math.min(bounds.maxZ,(cz+1)*chunkSize);
+      if(maxX<=minX||maxZ<=minZ)continue;
+      const high=highKeys.has(`${cx}:${cz}`);
+      tiles.set(`${cx}:${cz}`,{
+        cx,cz,minX,maxX,minZ,maxZ,high,
+        lowStepsX:Math.max(1,Math.round((maxX-minX)/baseStepX)),
+        lowStepsZ:Math.max(1,Math.round((maxZ-minZ)/baseStepZ))
+      });
+    }
+    let highTileCount=0,maximumBoundaryMismatch=0;
+    for(const tile of tiles.values()){
+      const targetSpacing=.75;
+      const stepsX=tile.high?clamp(Math.ceil((tile.maxX-tile.minX)/targetSpacing),2,128):tile.lowStepsX;
+      const stepsZ=tile.high?clamp(Math.ceil((tile.maxZ-tile.minZ)/targetSpacing),2,128):tile.lowStepsZ;
+      if(tile.high)highTileCount+=1;
+      const offset=p.length/3;
+      for(let z=0;z<=stepsZ;z++)for(let x=0;x<=stepsX;x++){
+        const tx=x/stepsX,tz=z/stepsZ,wx=lerp(tile.minX,tile.maxX,tx),wz=lerp(tile.minZ,tile.maxZ,tz);
+        const leftTransition=tile.high&&x===0&&!tiles.get(`${tile.cx-1}:${tile.cz}`)?.high;
+        const rightTransition=tile.high&&x===stepsX&&!tiles.get(`${tile.cx+1}:${tile.cz}`)?.high;
+        const bottomTransition=tile.high&&z===0&&!tiles.get(`${tile.cx}:${tile.cz-1}`)?.high;
+        const topTransition=tile.high&&z===stepsZ&&!tiles.get(`${tile.cx}:${tile.cz+1}`)?.high;
+        let transition=null;
+        if(leftTransition)transition=coarseTerrainEdgeHeight(object,tile,'left',tz);
+        else if(rightTransition)transition=coarseTerrainEdgeHeight(object,tile,'right',tz);
+        else if(bottomTransition)transition=coarseTerrainEdgeHeight(object,tile,'bottom',tx);
+        else if(topTransition)transition=coarseTerrainEdgeHeight(object,tile,'top',tx);
+        const baseY=terrainBaseHeightAt(object,wx,wz),pathSample=transition===null?sampleScenePathTerrain(pathRuntimes,baseY,wx,wz):null;
+        const wy=transition===null?pathSample.height:transition,blend=transition===null?1-pathSample.materialWeights.terrain:0;
+        p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push((wx-bounds.minX)/(bounds.maxX-bounds.minX),(wz-bounds.minZ)/(bounds.maxZ-bounds.minZ));blends.push(blend);
+        if(transition!==null)maximumBoundaryMismatch=Math.max(maximumBoundaryMismatch,Math.abs(wy-transition));
+      }
+      const row=stepsX+1;
+      for(let z=0;z<stepsZ;z++)for(let x=0;x<stepsX;x++){
+        const a=offset+z*row+x,b=a+row;
+        idx.push(a,b,a+1,b,b+1,a+1);
+      }
+    }
+    terrainMesh.lastPathDetail={
+      strategy:'watertight-chunks',
+      tileCount:tiles.size,
+      highTileCount,
+      targetSpacing:.75,
+      maximumBoundaryMismatch,
+      baseCellSize:[baseStepX,baseStepZ]
+    };
   }
-  for(let z=0;z<resZ;z++)for(let x=0;x<resX;x++){const a=z*(resX+1)+x,b=a+resX+1;idx.push(a,b,a+1,b,b+1,a+1);}
   const normals=new Float32Array(p.length);
   for(let t=0;t<idx.length;t+=3){const ia=idx[t]*3,ib=idx[t+1]*3,ic=idx[t+2]*3,A=[p[ia],p[ia+1],p[ia+2]],B=[p[ib],p[ib+1],p[ib+2]],C=[p[ic],p[ic+1],p[ic+2]],fn=normalize(cross(sub(B,A),sub(C,A)));for(const ii of [ia,ib,ic]){normals[ii]+=fn[0];normals[ii+1]+=fn[1];normals[ii+2]+=fn[2];}}
   for(let k=0;k<normals.length;k+=3){const q=normalize([normals[k],normals[k+1],normals[k+2]]);normals[k]=q[0];normals[k+1]=q[1];normals[k+2]=q[2];}

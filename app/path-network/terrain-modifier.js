@@ -115,7 +115,12 @@ function materialWeights(zone, influence) {
 
 function sampleEntry(entry, x, z, baseHeight, engineering) {
   const nearest = pointSegment2(x, z, entry.start.position, entry.end.position);
-  const lateral = Math.abs(nearest.lateral);
+  // Perpendicular distance is valid only while the closest point lies inside
+  // the segment. At a clamped endpoint it becomes zero for the entire tangent
+  // extension, which previously projected road material and terrain work far
+  // beyond dead ends. The true closest-point distance produces the intended
+  // bounded capsule and is identical to |lateral| within the segment.
+  const lateral = nearest.distance;
   if (lateral > entry.extents.outerEdge + EPSILON) return null;
 
   const centerY = lerp(entry.start.position[1], entry.end.position[1], nearest.t);

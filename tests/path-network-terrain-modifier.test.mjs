@@ -75,6 +75,19 @@ test('road, shoulder, ditch, and blend use one signed-distance field', () => {
   assert.notEqual(road.height, road.baseHeight);
 });
 
+test('terrain and material influence stop at the compiled segment end caps', () => {
+  const modifier = modifierFor();
+  const beforeStart = samplePathTerrainModifier(modifier, -12, 0);
+  const afterEnd = samplePathTerrainModifier(modifier, 52, 0);
+  for (const sample of [beforeStart, afterEnd]) {
+    assert.equal(sample.terrainApplied, false);
+    assert.equal(sample.influence, 0);
+    assert.equal(sample.zone, 'terrain');
+    assert.equal(sample.materialWeights.terrain, 1);
+    assert.equal(sample.materialWeights.road, 0);
+  }
+});
+
 test('terrain construction obeys the shared cut and fill limits', () => {
   const modifier = modifierFor();
   for (let x = 0; x <= 40; x += 1) {
