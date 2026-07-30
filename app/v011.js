@@ -1019,6 +1019,12 @@ function beginNodeDrag(event) {
     previewPath: createPathNodeDragPreview(path, node.id),
     restorePreview: renderer?.pathPreview ? structuredClone(renderer.pathPreview) : null
   };
+  window.__omniforgeDiagnostics?.event?.('path-node-drag-begin', {
+    pathId: path.id,
+    nodeId: node.id,
+    pointerId: event.pointerId,
+    vertical: event.shiftKey === true
+  });
   enhanceInspector();
   event.currentTarget.setPointerCapture?.(event.pointerId);
   window.addEventListener('pointermove', dragNode, true);
@@ -1030,7 +1036,15 @@ function beginNodeDrag(event) {
 function flushNodeDragPreview() {
   pathDragPreviewFrame = 0;
   if (!draggingNode?.previewPath) return;
-  bridge()?.renderer?.()?.setPathPreview(draggingNode.previewPath);
+  // renderNodeOverlay reads previewPath directly, so the selected handle still
+  // tracks the pointer each animation frame. Replacing the renderer's complete
+  // path authority here forced the corridor, terrain, collision, and structural
+  // meshes to regenerate on every pointer event and blocked editor input.
+  // Full connected-system generation now happens once on pointer release.
+  window.__omniforgeDiagnostics?.event?.('path-node-drag-preview', {
+    pathId: draggingNode.pathId,
+    nodeId: draggingNode.nodeId
+  });
 }
 
 function scheduleNodeDragPreview() {
@@ -1058,7 +1072,13 @@ function dragNode(event) {
       heightOffset: 0
     });
   } else {
-    const point = renderer?.terrainPointFromScreen?.(snapshot.scene, snapshot.camera, event.clientX, event.clientY);
+    const point = renderer?.terrainPointFromScreen?.(
+      snapshot.scene,
+      snapshot.camera,
+      event.clientX,
+      event.clientY,
+      { surface: 'base' }
+    );
     if (!point) return;
     updatePathNodeDragPreview(draggingNode.previewPath, draggingNode.nodeId, {
       position: [point[0], node.heightMode === 'absolute' ? node.position[1] : point[1], point[2]]
@@ -1082,7 +1102,9 @@ function clearNodeDragPreview(drag) {
     cancelAnimationFrame(pathDragPreviewFrame);
     pathDragPreviewFrame = 0;
   }
-  bridge()?.renderer?.()?.setPathPreview(drag?.restorePreview || null);
+  // Node dragging no longer replaces the renderer-owned preview, so there is
+  // nothing to restore here. Avoid invalidating the terrain/path runtime cache
+  // immediately before the release transaction performs its one real rebuild.
 }
 
 function cancelNodeDrag() {
@@ -1110,6 +1132,12 @@ async function finishNodeDrag(event) {
   releaseNodeDragListeners(drag);
   clearNodeDragPreview(drag);
   if (!shouldCommit || !node) return;
+  window.__omniforgeDiagnostics?.event?.('path-node-drag-commit', {
+    pathId: drag.pathId,
+    nodeId: drag.nodeId,
+    vertical: drag.vertical,
+    position: [...node.position]
+  });
   await transactPathNetwork(path, {
     label: drag.vertical ? 'Raise or lower path node' : 'Move path node',
     operations: [{
@@ -1131,7 +1159,13 @@ function installViewportEditing() {
     event.preventDefault();
     event.stopImmediatePropagation();
     const snapshot = currentSnapshot();
-    const point = bridge()?.renderer?.()?.terrainPointFromScreen?.(snapshot.scene, snapshot.camera, event.clientX, event.clientY);
+    const point = bridge()?.renderer?.()?.terrainPointFromScreen?.(
+      snapshot.scene,
+      snapshot.camera,
+      event.clientX,
+      event.clientY,
+      { surface: 'base' }
+    );
     if (!point) return bridge()?.showToast?.('The sculpt cursor did not hit terrain.', 'error');
     try {
       await applyMutation(await api('/api/v011/terrain/' + encodeURIComponent(terrainSculptMode.terrainId) + '/sculpt', { method: 'POST', body: { ...terrainSculptMode, x: point[0], z: point[2], targetHeight: terrainSculptMode.mode === 'flatten' ? terrainSculptMode.targetHeight : point[1] } }), true);
@@ -1150,7 +1184,13 @@ function installViewportEditing() {
     event.preventDefault();
     event.stopImmediatePropagation();
     const snapshot = currentSnapshot();
-    const point = bridge()?.renderer?.()?.terrainPointFromScreen?.(snapshot.scene, snapshot.camera, event.clientX, event.clientY);
+    const point = bridge()?.renderer?.()?.terrainPointFromScreen?.(
+      snapshot.scene,
+      snapshot.camera,
+      event.clientX,
+      event.clientY,
+      { surface: 'base' }
+    );
     if (!point) return bridge()?.showToast?.('The cursor did not hit terrain.', 'error');
     const path = snapshot.scene.objects.find(object => object.id === splineEditPathId);
     const nearest = nearestCompiledStation(activePathRuntime(path)?.compiled, point);

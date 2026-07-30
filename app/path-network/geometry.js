@@ -574,7 +574,7 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
     const wallBottomY = seatY - wallHeight;
     const footingCenter = add3(
       add3(section.center, scale3(frame.tangent, direction * 0.55)),
-      scale3(frame.up, Math.min(terrainY - 0.22, wallBottomY + 0.12) - section.center[1])
+      scale3(frame.up, Math.min(terrainY - 0.48, wallBottomY - 0.26) - section.center[1])
     );
     appendOrientedBox(
       builder,
