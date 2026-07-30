@@ -593,6 +593,9 @@ function createBufferMesh(gl,data){
 function createLineBuffer(gl,positions){
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(positions),gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);gl.bindVertexArray(null);return {vao,count:positions.length/3,buffer:b};
 }
+export function pathSurfaceCullMode(kind){
+  return kind==='structure'?'double-sided':'front-face';
+}
 
 export class Renderer3D{
   constructor(canvas){
@@ -904,13 +907,15 @@ export class Renderer3D{
     const {gl,scene,camera,viewProj,lightViewProj,lights}=frame;
     const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return;
     const pathScene=this.pathRenderScene(scene),paths=pathScene.objects.filter(object=>object.type==='path'&&object.visible!==false);if(!paths.length)return;
-    gl.disable(gl.BLEND);gl.depthMask(true);gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);
+    gl.disable(gl.BLEND);gl.depthMask(true);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);
     for(const pathObject of paths){
       const meshes=this.pathSurfaceFor(pathObject,pathScene);if(!meshes)continue;
       const segmentProfile=pathObject.properties?.pathNetwork?.segments?.[0]?.materialProfile||{};
       for(const [kind,mesh] of Object.entries(meshes)){
         if(!mesh)continue;
         const structural=kind==='structure';
+        if(pathSurfaceCullMode(kind)==='double-sided')gl.disable(gl.CULL_FACE);
+        else{gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);}
         const terrainMaterial={materialId:terrain.properties?.materialId||null,color:terrain.properties?.color||'#35522f'};
         const proxy={id:`path-network-v2:${kind}:${pathObject.id}`,type:structural?'box':'terrain',visible:true,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},properties:{...pathObject.properties,...terrainMaterial,materialId:structural?(segmentProfile.structureMaterialId||pathObject.properties?.structureMaterialId||null):(kind==='road'?(segmentProfile.surfaceMaterialId||pathObject.properties?.materialId||null):terrainMaterial.materialId),color:structural?(pathObject.properties?.structureColor||'#596168'):(kind==='road'?(pathObject.properties?.color||'#73573d'):terrainMaterial.color),opacity:1,castsShadows:false,receivesShadows:true}};
         this.drawMesh(proxy,mesh,viewProj,lightViewProj,scene,false,camera,lights,null,structural?null:pathObject);
