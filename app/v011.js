@@ -622,7 +622,7 @@ function pathGenerationPool() {
   if (!routeGenerationPool) {
     const logicalProcessors = Math.max(2, Number(navigator.hardwareConcurrency || 4));
     routeGenerationPool = new PathGenerationWorkerPool({
-      workerCount: Math.min(4, logicalProcessors - 1)
+      workerCount: logicalProcessors - 1
     });
   }
   return routeGenerationPool;

@@ -132,6 +132,8 @@ test('v0.11 editor, renderer, runtime, desktop, and MCP expose the connected wor
   assert.match(editor,/Shift-drag raises or lowers it/);
   assert.match(editor,/Right-click inserts a node into the nearest compiled segment/);
   assert.match(editor,/PathGenerationWorkerPool/);
+  assert.match(editor,/workerCount:\s*logicalProcessors\s*-\s*1/);
+  assert.doesNotMatch(editor,/Math\.min\(4,\s*logicalProcessors\s*-\s*1\)/);
   assert.match(editor,/\/api\/v012\/path\//);
   assert.match(editor,/terrainPointFromScreen/);
   assert.match(editor,/data-v011-expand/);
