@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  advancePathNodeDragGesture,
+  createPathNodeDragGesture,
   createPathNodeDragPreview,
   pathNodeFromDragPreview,
+  shouldCommitPathNodeDragGesture,
   updatePathNodeDragPreview
 } from '../app/path-network/editor-drag-preview.js';
 
@@ -50,4 +53,56 @@ test('node drag preview exposes the final candidate for one release transaction'
   assert.deepEqual(candidate.position, [14, 11, 9]);
   assert.equal(candidate.heightMode, 'absolute');
   assert.throws(() => updatePathNodeDragPreview(preview, 'missing', { position: [0, 0, 0] }), /does not exist/);
+});
+
+test('a node click never becomes a path transaction without an intentional drag', () => {
+  const gesture = createPathNodeDragGesture({ pointerId: 7, clientX: 500, clientY: 320 });
+  assert.equal(
+    shouldCommitPathNodeDragGesture(gesture, { pointerId: 7 }),
+    false
+  );
+  assert.equal(
+    advancePathNodeDragGesture(gesture, {
+      pointerId: 7,
+      clientX: 502,
+      clientY: 321,
+      buttons: 1
+    }).accepted,
+    false
+  );
+  assert.equal(
+    shouldCommitPathNodeDragGesture(gesture, { pointerId: 7 }),
+    false
+  );
+});
+
+test('viewport mouse movement without the primary button cancels an armed node drag', () => {
+  const gesture = createPathNodeDragGesture({ pointerId: 3, clientX: 400, clientY: 250 });
+  const result = advancePathNodeDragGesture(gesture, {
+    pointerId: 3,
+    clientX: 520,
+    clientY: 300,
+    buttons: 0
+  });
+  assert.deepEqual(result, { accepted: false, active: false, cancel: true });
+  assert.equal(shouldCommitPathNodeDragGesture(gesture, { pointerId: 3 }), false);
+});
+
+test('only the active primary pointer can commit a deliberate node drag', () => {
+  const gesture = createPathNodeDragGesture({
+    pointerId: 11,
+    clientX: 100,
+    clientY: 100,
+    vertical: true
+  });
+  const result = advancePathNodeDragGesture(gesture, {
+    pointerId: 11,
+    clientX: 100,
+    clientY: 112,
+    buttons: 1
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(gesture.vertical, true);
+  assert.equal(shouldCommitPathNodeDragGesture(gesture, { pointerId: 12 }), false);
+  assert.equal(shouldCommitPathNodeDragGesture(gesture, { pointerId: 11 }), true);
 });

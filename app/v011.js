@@ -3,8 +3,11 @@ import { trailArchetypes } from './path-network/archetypes.js';
 import { trailCandidateToPathNetwork } from './path-network/trail-solver.js';
 import { nearestCompiledStation } from './path-network/compiler.js';
 import {
+  advancePathNodeDragGesture,
+  createPathNodeDragGesture,
   createPathNodeDragPreview,
   pathNodeFromDragPreview,
+  shouldCommitPathNodeDragGesture,
   updatePathNodeDragPreview
 } from './path-network/editor-drag-preview.js';
 import { suggestPathNodeHandles } from './path-network/transactions.js';
@@ -901,6 +904,7 @@ function renderNodeOverlay() {
 }
 
 function beginNodeDrag(event) {
+  if (event.button !== 0 || event.isPrimary === false || draggingNode) return;
   event.preventDefault();
   event.stopPropagation();
   const snapshot = currentSnapshot();
@@ -916,11 +920,18 @@ function beginNodeDrag(event) {
     nodeId: node.id,
     index: selectedSplineNodeIndex,
     pointerId: event.pointerId,
+    captureTarget: event.currentTarget,
     startClientY: event.clientY,
     startPosition: [...node.position],
     startHeightMode: node.heightMode,
     startHeightOffset: node.heightOffset,
     vertical: event.shiftKey === true,
+    gesture: createPathNodeDragGesture({
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      vertical: event.shiftKey === true
+    }),
     previewPath: createPathNodeDragPreview(path, node.id),
     restorePreview: renderer?.pathPreview ? structuredClone(renderer.pathPreview) : null
   };
@@ -928,6 +939,8 @@ function beginNodeDrag(event) {
   event.currentTarget.setPointerCapture?.(event.pointerId);
   window.addEventListener('pointermove', dragNode, true);
   window.addEventListener('pointerup', finishNodeDrag, true);
+  window.addEventListener('pointercancel', cancelNodeDragFromEvent, true);
+  event.currentTarget.addEventListener('lostpointercapture', cancelNodeDragFromEvent, { once: true });
 }
 
 function flushNodeDragPreview() {
@@ -941,13 +954,19 @@ function scheduleNodeDragPreview() {
 }
 
 function dragNode(event) {
-  if (!draggingNode) return;
+  if (!draggingNode || event.pointerId !== draggingNode.pointerId) return;
+  const decision = advancePathNodeDragGesture(draggingNode.gesture, event);
+  if (decision.cancel) {
+    cancelNodeDrag('primary-button-released');
+    return;
+  }
+  if (!decision.accepted) return;
   event.preventDefault();
   const snapshot = currentSnapshot();
   const renderer = bridge()?.renderer?.();
   const node = pathNodeFromDragPreview(draggingNode.previewPath, draggingNode.nodeId);
   if (!node) return;
-  if (draggingNode.vertical || event.shiftKey) {
+  if (draggingNode.gesture.vertical) {
     draggingNode.vertical = true;
     updatePathNodeDragPreview(draggingNode.previewPath, draggingNode.nodeId, {
       position: [node.position[0], draggingNode.startPosition[1] - (event.clientY - draggingNode.startClientY) * 0.15, node.position[2]],
@@ -964,22 +983,49 @@ function dragNode(event) {
   scheduleNodeDragPreview();
 }
 
-async function finishNodeDrag(event) {
-  if (!draggingNode) return;
-  event.preventDefault();
+function releaseNodeDragListeners(drag) {
   window.removeEventListener('pointermove', dragNode, true);
   window.removeEventListener('pointerup', finishNodeDrag, true);
-  const snapshot = currentSnapshot();
-  const path = snapshot?.scene?.objects?.find(object => object.id === draggingNode.pathId);
-  const drag = draggingNode;
-  const node = pathNodeFromDragPreview(drag.previewPath, drag.nodeId);
+  window.removeEventListener('pointercancel', cancelNodeDragFromEvent, true);
+  drag?.captureTarget?.removeEventListener?.('lostpointercapture', cancelNodeDragFromEvent);
+  if (drag?.captureTarget?.hasPointerCapture?.(drag.pointerId)) {
+    drag.captureTarget.releasePointerCapture(drag.pointerId);
+  }
+}
+
+function clearNodeDragPreview(drag) {
   if (pathDragPreviewFrame) {
     cancelAnimationFrame(pathDragPreviewFrame);
     pathDragPreviewFrame = 0;
   }
+  bridge()?.renderer?.()?.setPathPreview(drag?.restorePreview || null);
+}
+
+function cancelNodeDrag() {
+  if (!draggingNode) return;
+  const drag = draggingNode;
   draggingNode = null;
-  bridge()?.renderer?.()?.setPathPreview(drag.restorePreview);
-  if (!node) return;
+  releaseNodeDragListeners(drag);
+  clearNodeDragPreview(drag);
+}
+
+function cancelNodeDragFromEvent(event) {
+  if (!draggingNode || (event.pointerId !== undefined && event.pointerId !== draggingNode.pointerId)) return;
+  cancelNodeDrag('pointer-cancelled');
+}
+
+async function finishNodeDrag(event) {
+  if (!draggingNode || event.pointerId !== draggingNode.pointerId) return;
+  event.preventDefault();
+  const snapshot = currentSnapshot();
+  const path = snapshot?.scene?.objects?.find(object => object.id === draggingNode.pathId);
+  const drag = draggingNode;
+  const node = pathNodeFromDragPreview(drag.previewPath, drag.nodeId);
+  const shouldCommit = shouldCommitPathNodeDragGesture(drag.gesture, event);
+  draggingNode = null;
+  releaseNodeDragListeners(drag);
+  clearNodeDragPreview(drag);
+  if (!shouldCommit || !node) return;
   await transactPathNetwork(path, {
     label: drag.vertical ? 'Raise or lower path node' : 'Move path node',
     operations: [{
@@ -1035,6 +1081,14 @@ function installViewportEditing() {
         node: { id: nodeId, position: [point[0], point[1], point[2]], heightMode: 'terrain' }
       }]
     });
+  }, true);
+  document.addEventListener('pointerlockchange', cancelNodeDrag);
+  window.addEventListener('blur', cancelNodeDrag);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) cancelNodeDrag();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.code === 'Escape') cancelNodeDrag();
   }, true);
 }
 
