@@ -347,6 +347,104 @@ function civilAssistMode(segment, metrics, engineering) {
   return { mode: 'conform', reason: 'terrain-and-grade-within-limits', automatic: true };
 }
 
+function mergeConstructionIntervals(intervals) {
+  const merged = [];
+  for (const interval of intervals) {
+    const previous = merged.at(-1);
+    if (
+      previous
+      && previous.mode === interval.mode
+      && previous.reason === interval.reason
+      && previous.automatic === interval.automatic
+      && previous.endSampleIndex === interval.startSampleIndex
+    ) {
+      previous.endDistance = interval.endDistance;
+      previous.endSampleIndex = interval.endSampleIndex;
+      continue;
+    }
+    merged.push({ ...interval });
+  }
+  return merged;
+}
+
+function constructionIntervalsFor(segment, samples, engineering, overallMetrics) {
+  const wholeSegment = construction => [{
+    segmentId: segment.id,
+    startDistance: 0,
+    endDistance: overallMetrics.length,
+    startSampleIndex: 0,
+    endSampleIndex: Math.max(0, samples.length - 1),
+    ...construction
+  }];
+  const selected = civilAssistMode(segment, overallMetrics, engineering);
+  if (
+    segment.constructionLocked
+    || segment.constructionMode !== 'auto'
+    || !engineering.civilAssist
+    || selected.mode === 'invalid'
+    || samples.length < 2
+  ) return wholeSegment(selected);
+
+  const intervals = [];
+  for (let index = 0; index < samples.length - 1; index += 1) {
+    const start = samples[index];
+    const end = samples[index + 1];
+    const horizontal = Math.max(EPSILON, Math.hypot(
+      end.position[0] - start.position[0],
+      end.position[2] - start.position[2]
+    ));
+    const metrics = {
+      length: end.distance - start.distance,
+      maximumCut: Math.max(start.baseY - start.position[1], end.baseY - end.position[1], 0),
+      maximumFill: Math.max(start.position[1] - start.baseY, end.position[1] - end.baseY, 0),
+      maximumTerrainSlopeDegrees: Math.max(
+        Math.acos(clamp(start.terrainNormal[1], -1, 1)) * 180 / Math.PI,
+        Math.acos(clamp(end.terrainNormal[1], -1, 1)) * 180 / Math.PI
+      ),
+      maximumGradePercent: Math.abs(end.position[1] - start.position[1]) / horizontal * 100
+    };
+    intervals.push({
+      segmentId: segment.id,
+      startDistance: start.distance,
+      endDistance: end.distance,
+      startSampleIndex: index,
+      endSampleIndex: index + 1,
+      ...civilAssistMode(segment, metrics, engineering)
+    });
+  }
+
+  const merged = mergeConstructionIntervals(intervals);
+  const minimumBridgeLength = Math.max(3, finite(segment.crossSectionProfile?.width, 3));
+  for (const interval of merged) {
+    const length = interval.endDistance - interval.startDistance;
+    if (interval.mode === 'bridge' && length < minimumBridgeLength) {
+      interval.mode = 'cut-fill';
+      interval.reason = 'short-gap-resolved-with-earthwork';
+    } else if (interval.mode === 'bridge' && length > engineering.maximumBridgeSpan) {
+      interval.mode = 'invalid';
+      interval.reason = 'bridge-run-exceeds-maximum-span';
+    }
+  }
+  return mergeConstructionIntervals(merged);
+}
+
+function representativeConstruction(intervals) {
+  const priority = new Map([
+    ['invalid', 7],
+    ['tunnel', 6],
+    ['bridge', 5],
+    ['retaining-wall', 4],
+    ['stairs', 3],
+    ['cut-fill', 2],
+    ['conform', 1]
+  ]);
+  return intervals.reduce((selected, interval) => (
+    !selected || (priority.get(interval.mode) || 0) > (priority.get(selected.mode) || 0)
+      ? interval
+      : selected
+  ), null) || { mode: 'conform', reason: 'terrain-and-grade-within-limits', automatic: true };
+}
+
 function harmonizeTwoArmFrames(network, compiledSegments) {
   const endpoints = new Map(network.nodes.map(node => [node.id, []]));
   for (const segment of compiledSegments) {
@@ -436,14 +534,20 @@ function compileSegment(segment, network, positions, adjacency, nodeMap, options
     unavoidableGradePercent: vertical.unavoidableGradePercent,
     profileFeasible: vertical.feasible
   };
-  const construction = civilAssistMode(segment, metrics, network.engineering);
+  const constructionIntervals = constructionIntervalsFor(segment, samples, network.engineering, metrics);
+  const construction = representativeConstruction(constructionIntervals);
   return {
     id: segment.id,
     fromNode: segment.fromNode,
     toNode: segment.toNode,
     samples,
     metrics,
-    construction,
+    construction: {
+      mode: construction.mode,
+      reason: construction.reason,
+      automatic: construction.automatic
+    },
+    constructionIntervals,
     crossSectionProfile: segment.crossSectionProfile,
     materialProfile: segment.materialProfile,
     gameplayRules: segment.gameplayRules
@@ -516,14 +620,7 @@ export function compilePathNetwork(input, options = {}) {
     segments,
     stations,
     junctions,
-    constructionIntervals: segments.map(segment => ({
-      segmentId: segment.id,
-      startDistance: 0,
-      endDistance: segment.metrics.length,
-      mode: segment.construction.mode,
-      reason: segment.construction.reason,
-      automatic: segment.construction.automatic
-    })),
+    constructionIntervals: segments.flatMap(segment => segment.constructionIntervals.map(interval => ({ ...interval }))),
     diagnostics: {
       valid: invalidSegments.length === 0,
       nodeCount: network.nodes.length,

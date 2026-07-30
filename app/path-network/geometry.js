@@ -498,6 +498,29 @@ function appendStairs(builder, segment, engineering) {
   return Boolean(previousEnd);
 }
 
+function intervalSegment(segment, interval) {
+  const samples = segment.samples.slice(
+    interval.startSampleIndex,
+    interval.endSampleIndex + 1
+  );
+  return {
+    ...segment,
+    samples,
+    construction: {
+      mode: interval.mode,
+      reason: interval.reason,
+      automatic: interval.automatic
+    }
+  };
+}
+
+function sectionsForInterval(sections, interval) {
+  return sections.filter(section => (
+    section.distance >= interval.startDistance - EPSILON
+    && section.distance <= interval.endDistance + EPSILON
+  ));
+}
+
 export function validatePathNetworkGeometry(meshes) {
   const errors = [];
   const meshReports = {};
@@ -560,10 +583,14 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
     appendStrip(shoulder, shoulderRows(segment, samples, -1), 'left-shoulder', [1, 0.45]);
     appendStrip(shoulder, shoulderRows(segment, samples, 1), 'right-shoulder', [1, 0.45]);
     const constructionSections = sectionsBySegment.get(segment.id) || [];
-    appendEarthwork(earthwork, segment, constructionSections);
-    appendRetainingWalls(structure, segment, constructionSections);
-    appendBridge(structure, segment, constructionSections, baseHeightAt);
-    appendTunnel(structure, segment);
+    for (const interval of segment.constructionIntervals || []) {
+      const localSegment = intervalSegment(segment, interval);
+      const localSections = sectionsForInterval(constructionSections, interval);
+      appendEarthwork(earthwork, localSegment, localSections);
+      appendRetainingWalls(structure, localSegment, localSections);
+      appendBridge(structure, localSegment, localSections, baseHeightAt);
+      appendTunnel(structure, localSegment);
+    }
     const isFromDeadEnd = (degree.get(segment.fromNode) || 0) === 1;
     const isToDeadEnd = (degree.get(segment.toNode) || 0) === 1;
     if (isFromDeadEnd) appendEndCap(road, rows[0], 'dead-end-cap');

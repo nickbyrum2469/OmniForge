@@ -77,6 +77,9 @@ function constructionEntry(segment, sample, next, pairIndex) {
   const profile = segment.crossSectionProfile;
   const extents = profileExtents(profile);
   const padding = extents.outerEdge + 0.05;
+  const construction = (segment.constructionIntervals || []).find(interval => (
+    pairIndex >= interval.startSampleIndex && pairIndex < interval.endSampleIndex
+  )) || segment.construction;
   return {
     id: `${segment.id}:${pairIndex}`,
     segmentId: segment.id,
@@ -85,7 +88,7 @@ function constructionEntry(segment, sample, next, pairIndex) {
     end: next,
     profile,
     extents,
-    construction: segment.construction,
+    construction,
     bounds: {
       minX: Math.min(sample.position[0], next.position[0]) - padding,
       maxX: Math.max(sample.position[0], next.position[0]) + padding,
@@ -202,6 +205,14 @@ function nearestEntrySample(modifier, x, z, baseHeight) {
   return nearest;
 }
 
+function constructionAtDistance(segment, distance) {
+  const intervals = segment.constructionIntervals || [];
+  return intervals.find(interval => (
+    distance >= interval.startDistance - EPSILON
+    && distance <= interval.endDistance + EPSILON
+  )) || segment.construction;
+}
+
 function crossSectionForSample(segment, sample, baseHeightAt) {
   const profile = segment.crossSectionProfile;
   const extents = profileExtents(profile);
@@ -235,6 +246,7 @@ function crossSectionForSample(segment, sample, baseHeightAt) {
     segmentId: segment.id,
     distance: sample.distance,
     center: [...sample.position],
+    construction: constructionAtDistance(segment, sample.distance),
     roadLeft,
     roadRight,
     shoulderLeft,

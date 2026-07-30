@@ -197,6 +197,60 @@ test('absolute endpoints still create an intentional elevated crossing over deep
   assert.equal(compiled.segments[0].construction.mode, 'bridge');
 });
 
+test('Civil Assist limits an automatic bridge to the actual local gap', () => {
+  const input = normalizePathNetwork({
+    id: 'local-gap-crossing',
+    nodes: [
+      { id: 'a', position: [0, 0, 0], heightMode: 'absolute' },
+      { id: 'b', position: [60, 0, 0], heightMode: 'absolute' }
+    ],
+    segments: [{ id: 'crossing', fromNode: 'a', toNode: 'b' }],
+    engineering: {
+      bridgeThreshold: 5,
+      maximumBridgeSpan: 20,
+      maxGradePercent: 20
+    }
+  });
+  const compiled = compilePathNetwork(input, {
+    terrainHeightAt: x => x >= 26 && x <= 34 ? -8 : 0,
+    terrainNormalAt: flatNormal,
+    spacing: 0.5
+  });
+  const intervals = compiled.segments[0].constructionIntervals;
+  const bridges = intervals.filter(interval => interval.mode === 'bridge');
+  assert.equal(bridges.length, 1);
+  assert.ok(bridges[0].startDistance >= 25);
+  assert.ok(bridges[0].endDistance <= 35);
+  assert.ok(bridges[0].endDistance - bridges[0].startDistance < 12);
+  assert.ok(intervals.some(interval => interval.mode === 'conform'));
+  assert.ok(bridges[0].endDistance - bridges[0].startDistance < compiled.segments[0].metrics.length * 0.25);
+});
+
+test('Civil Assist rejects an automatic unsupported run longer than the configured bridge span', () => {
+  const input = normalizePathNetwork({
+    id: 'unsupported-long-crossing',
+    nodes: [
+      { id: 'a', position: [0, 0, 0], heightMode: 'absolute' },
+      { id: 'b', position: [80, 0, 0], heightMode: 'absolute' }
+    ],
+    segments: [{ id: 'crossing', fromNode: 'a', toNode: 'b' }],
+    engineering: {
+      bridgeThreshold: 5,
+      maximumBridgeSpan: 20,
+      maxGradePercent: 20
+    }
+  });
+  const compiled = compilePathNetwork(input, {
+    terrainHeightAt: x => x >= 15 && x <= 65 ? -8 : 0,
+    terrainNormalAt: flatNormal,
+    spacing: 0.5
+  });
+  assert.equal(compiled.diagnostics.valid, false);
+  assert.ok(compiled.segments[0].constructionIntervals.some(interval => (
+    interval.mode === 'invalid' && interval.reason === 'bridge-run-exceeds-maximum-span'
+  )));
+});
+
 test('terrain, offset, and absolute nodes resolve through one compiler', () => {
   const input = normalizePathNetwork({
     id: 'height-modes',
