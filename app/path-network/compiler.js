@@ -283,15 +283,28 @@ function assignParallelTransportFrames(samples) {
   return samples;
 }
 
-function sampleMetrics(samples) {
+function lateralTerrainRelief(sample, segment) {
+  const normal = sample.terrainNormal || [0, 1, 0];
+  const side = sample.side || [1, 0, 0];
+  const halfConstructionWidth = (
+    finite(segment?.crossSectionProfile?.width, 3) * 0.5
+    + finite(segment?.crossSectionProfile?.shoulderWidth, 0.8)
+  );
+  const crossSlope = Math.abs(dot3(normal, side)) / Math.max(0.08, Math.abs(normal[1]));
+  return crossSlope * halfConstructionWidth;
+}
+
+function sampleMetrics(samples, segment) {
   let maximumCut = 0;
   let maximumFill = 0;
   let maximumTerrainSlopeDegrees = 0;
   let maximumGradePercent = 0;
+  let maximumCrossSectionRelief = 0;
   for (let index = 0; index < samples.length; index += 1) {
     const sample = samples[index];
     maximumCut = Math.max(maximumCut, sample.baseY - sample.position[1]);
     maximumFill = Math.max(maximumFill, sample.position[1] - sample.baseY);
+    maximumCrossSectionRelief = Math.max(maximumCrossSectionRelief, lateralTerrainRelief(sample, segment));
     maximumTerrainSlopeDegrees = Math.max(
       maximumTerrainSlopeDegrees,
       Math.acos(clamp(sample.terrainNormal[1], -1, 1)) * 180 / Math.PI
@@ -305,7 +318,13 @@ function sampleMetrics(samples) {
       maximumGradePercent = Math.max(maximumGradePercent, Math.abs(sample.position[1] - previous.position[1]) / horizontal * 100);
     }
   }
-  return { maximumCut, maximumFill, maximumTerrainSlopeDegrees, maximumGradePercent };
+  return {
+    maximumCut,
+    maximumFill,
+    maximumTerrainSlopeDegrees,
+    maximumGradePercent,
+    maximumCrossSectionRelief
+  };
 }
 
 function civilAssistMode(segment, metrics, engineering) {
@@ -327,12 +346,6 @@ function civilAssistMode(segment, metrics, engineering) {
   if (metrics.maximumFill > engineering.bridgeThreshold) {
     return { mode: 'bridge', reason: 'fill-depth-exceeds-bridge-threshold', automatic: true };
   }
-  if (
-    metrics.maximumTerrainSlopeDegrees > 38
-    || Math.max(metrics.maximumCut, metrics.maximumFill) > engineering.retainingWallThreshold
-  ) {
-    return { mode: 'retaining-wall', reason: 'side-slope-requires-structure', automatic: true };
-  }
   const profile = segment.crossSectionProfile || {};
   const surfaceTolerance = Math.max(
     0.25,
@@ -341,7 +354,15 @@ function civilAssistMode(segment, metrics, engineering) {
       + (profile.drainageEnabled === false ? 0 : finite(profile.ditchDepth, 0.2))
     ) * 1.25)
   );
-  if (metrics.maximumCut > surfaceTolerance || metrics.maximumFill > surfaceTolerance) {
+  const maximumEarthworkDepth = Math.max(
+    metrics.maximumCut,
+    metrics.maximumFill,
+    finite(metrics.maximumCrossSectionRelief)
+  );
+  if (maximumEarthworkDepth > engineering.retainingWallThreshold) {
+    return { mode: 'retaining-wall', reason: 'side-slope-requires-structure', automatic: true };
+  }
+  if (maximumEarthworkDepth > surfaceTolerance) {
     return { mode: 'cut-fill', reason: 'vertical-profile-requires-earthwork', automatic: true };
   }
   return { mode: 'conform', reason: 'terrain-and-grade-within-limits', automatic: true };
@@ -400,6 +421,10 @@ function constructionIntervalsFor(segment, samples, engineering, overallMetrics)
       maximumTerrainSlopeDegrees: Math.max(
         Math.acos(clamp(start.terrainNormal[1], -1, 1)) * 180 / Math.PI,
         Math.acos(clamp(end.terrainNormal[1], -1, 1)) * 180 / Math.PI
+      ),
+      maximumCrossSectionRelief: Math.max(
+        lateralTerrainRelief(start, segment),
+        lateralTerrainRelief(end, segment)
       ),
       maximumGradePercent: Math.abs(end.position[1] - start.position[1]) / horizontal * 100
     };
@@ -529,7 +554,7 @@ function compileSegment(segment, network, positions, adjacency, nodeMap, options
     samples[index].curvature = curvatureAt(samples, index);
   }
   const metrics = {
-    ...sampleMetrics(samples),
+    ...sampleMetrics(samples, segment),
     length: samples.at(-1)?.distance || 0,
     unavoidableGradePercent: vertical.unavoidableGradePercent,
     profileFeasible: vertical.feasible

@@ -273,7 +273,7 @@ test('terrain, offset, and absolute nodes resolve through one compiler', () => {
 });
 
 test('Civil Assist selects conform, bridge, tunnel, retaining wall, stairs, and locked modes deterministically', () => {
-  const compile = ({ endY = 0, terrain = () => 0, normal = flatNormal, vehicleClass = 'mixed', lockedMode = null }) => {
+  const compile = ({ endY = 0, terrain = () => 0, normal = flatNormal, vehicleClass = 'mixed', lockedMode = null, width = 3 }) => {
     const input = normalizePathNetwork({
       id: `civil-${endY}-${lockedMode || 'auto'}`,
       nodes: [
@@ -286,6 +286,7 @@ test('Civil Assist selects conform, bridge, tunnel, retaining wall, stairs, and 
         toNode: 'b',
         constructionMode: lockedMode || 'auto',
         constructionLocked: Boolean(lockedMode),
+        crossSectionProfile: { width },
         gameplayRules: { vehicleClass }
       }],
       engineering: {
@@ -300,9 +301,53 @@ test('Civil Assist selects conform, bridge, tunnel, retaining wall, stairs, and 
   assert.equal(compile({}), 'conform');
   assert.equal(compile({ terrain: () => -7 }), 'bridge');
   assert.equal(compile({ terrain: () => 10 }), 'tunnel');
-  assert.equal(compile({ normal: () => [0.8, 0.6, 0] }), 'retaining-wall');
+  assert.equal(compile({ normal: () => [0, 0.6, 0.8], width: 8 }), 'retaining-wall');
   assert.equal(compile({ endY: 12, vehicleClass: 'pedestrian' }), 'stairs');
   assert.equal(compile({ lockedMode: 'bridge' }), 'bridge');
+});
+
+test('Civil Assist uses actual path width and cross-slope relief instead of adding walls to every steep dirt trail', () => {
+  const steepSideSlope = () => [0.8, 0.6, 0];
+  const narrow = network({
+    nodes: [
+      { id: 'a', position: [0, 0, 0], heightMode: 'terrain' },
+      { id: 'b', position: [0, 0, 30], heightMode: 'terrain' }
+    ],
+    segments: [{
+      id: 'trail',
+      fromNode: 'a',
+      toNode: 'b',
+      crossSectionProfile: { width: 1.2, shoulderWidth: 0.2 }
+    }]
+  });
+  const wide = network({
+    nodes: narrow.nodes,
+    segments: [{
+      id: 'road',
+      fromNode: 'a',
+      toNode: 'b',
+      crossSectionProfile: { width: 8, shoulderWidth: 1 }
+    }]
+  });
+  const narrowCompiled = compilePathNetwork(narrow, {
+    terrainHeightAt: flatHeight,
+    terrainNormalAt: steepSideSlope
+  });
+  const wideCompiled = compilePathNetwork(wide, {
+    terrainHeightAt: flatHeight,
+    terrainNormalAt: steepSideSlope
+  });
+
+  assert.equal(narrowCompiled.segments[0].construction.mode, 'cut-fill');
+  assert.equal(wideCompiled.segments[0].construction.mode, 'retaining-wall');
+  assert.ok(
+    narrowCompiled.segments[0].metrics.maximumCrossSectionRelief
+    < narrow.engineering.retainingWallThreshold
+  );
+  assert.ok(
+    wideCompiled.segments[0].metrics.maximumCrossSectionRelief
+    > wide.engineering.retainingWallThreshold
+  );
 });
 
 test('unavoidable vehicle grade is reported invalid instead of silently violating limits', () => {

@@ -20,7 +20,9 @@ import {
   undoTerrainSculpt,
   clearTerrainSculpt,
   normalizePathProperties,
-  migrateSceneWorldFoundation
+  migrateSceneWorldFoundation,
+  terrainHeightAt,
+  terrainNormalAt
 } from './v011-systems.mjs';
 import { TERRAIN_PRESETS } from '../app/worldgen.js';
 import {
@@ -29,8 +31,13 @@ import {
 } from '../app/path-network/model.js';
 import {
   applyPathNetworkTransaction,
+  mergePathNetworksAtSegment,
   replacePathNetwork
 } from '../app/path-network/transactions.js';
+import {
+  compilePathNetwork,
+  nearestCompiledStation
+} from '../app/path-network/compiler.js';
 
 function json(res, status, payload) {
   const body = JSON.stringify(payload, null, 2);
@@ -100,13 +107,15 @@ function requireExpectedRevision(network, value) {
   }
 }
 
-function pushPathHistory(path, key, network, label) {
+function pushPathHistory(path, key, network, label, metadata = {}) {
   const history = Array.isArray(path.properties?.[key])
     ? path.properties[key].slice(-15)
     : [];
   history.push({
     label: String(label || 'Path edit').slice(0, 120),
     network: clonePathNetwork(network),
+    restoreObjects: Array.isArray(metadata.restoreObjects) ? structuredClone(metadata.restoreObjects) : [],
+    removeObjectIds: Array.isArray(metadata.removeObjectIds) ? metadata.removeObjectIds.map(String) : [],
     recordedAt: new Date().toISOString()
   });
   path.properties[key] = history;
@@ -115,6 +124,23 @@ function pushPathHistory(path, key, network, label) {
 function recordPathEdit(path, network, label) {
   pushPathHistory(path, 'pathNetworkUndo', network, label);
   path.properties.pathNetworkRedo = [];
+}
+
+function applyPathHistoryObjects(scene, entry) {
+  const removeIds = new Set(entry?.removeObjectIds || []);
+  const removedObjects = scene.objects.filter(object => removeIds.has(object.id)).map(object => structuredClone(object));
+  if (removeIds.size) scene.objects = scene.objects.filter(object => !removeIds.has(object.id));
+  const restoredObjects = [];
+  for (const object of entry?.restoreObjects || []) {
+    if (scene.objects.some(item => item.id === object.id)) continue;
+    const restored = structuredClone(object);
+    scene.objects.push(restored);
+    restoredObjects.push(restored);
+  }
+  return {
+    restoreObjects: removedObjects,
+    removeObjectIds: restoredObjects.map(object => object.id)
+  };
 }
 
 async function handleGround(req, res, url) {
@@ -221,6 +247,78 @@ export async function handleV011Request(req, res) {
       return true;
     }
 
+    ids = match(url.pathname, /^\/api\/v012\/path\/([^/]+)\/merge\/([^/]+)$/);
+    if (ids && req.method === 'POST') {
+      const input = await readJsonBody(req);
+      const result = mutateState(state => {
+        ensureWorldFoundationState(state);
+        const scene = activeScene(state);
+        const target = requirePath(state, ids[0]);
+        const source = requirePath(state, ids[1]);
+        if (target.id === source.id) throw new Error('A path cannot be merged into itself.');
+        const current = authoritativePathNetwork(target);
+        const sourceNetwork = authoritativePathNetwork(source);
+        requireExpectedRevision(current, input.expectedRevision);
+        requireExpectedRevision(sourceNetwork, input.expectedSourceRevision);
+        const terrain = scene.objects.find(object => object.type === 'terrain');
+        if (!terrain) throw new Error('A terrain is required to join path networks.');
+        const baseHeightAt = (x, z) => terrainHeightAt(terrain, x, z, []);
+        const baseNormalAt = (x, z) => terrainNormalAt(terrain, x, z, []);
+        const compiledTarget = compilePathNetwork(current, {
+          terrainHeightAt: baseHeightAt,
+          terrainNormalAt: baseNormalAt,
+          spacing: 0.35
+        });
+        const degree = new Map(sourceNetwork.nodes.map(node => [node.id, 0]));
+        for (const segment of sourceNetwork.segments) {
+          degree.set(segment.fromNode, (degree.get(segment.fromNode) || 0) + 1);
+          degree.set(segment.toNode, (degree.get(segment.toNode) || 0) + 1);
+        }
+        const endpoints = sourceNetwork.nodes.filter(node => degree.get(node.id) === 1);
+        const nearest = endpoints
+          .map(node => ({ node, nearest: nearestCompiledStation(compiledTarget, node.position) }))
+          .filter(item => item.nearest)
+          .sort((a, b) => a.nearest.distance - b.nearest.distance)[0];
+        if (!nearest) throw new Error('No open branch endpoint can be joined to the target path.');
+        const naturalHeight = baseHeightAt(nearest.nearest.position[0], nearest.nearest.position[2]);
+        const heightOffset = nearest.nearest.position[1] - naturalHeight;
+        const merged = mergePathNetworksAtSegment(current, sourceNetwork, {
+          targetSegmentId: nearest.nearest.segmentId,
+          junctionPosition: nearest.nearest.position,
+          sourceNodeId: nearest.node.id,
+          heightMode: Math.abs(heightOffset) <= 0.02 ? 'terrain' : 'offset',
+          heightOffset
+        });
+        pushPathHistory(target, 'pathNetworkUndo', current, input.label || 'Join path branch', {
+          restoreObjects: [source]
+        });
+        target.properties.pathNetworkRedo = [];
+        target.properties.pathNetwork = merged.network;
+        target.properties.pathNetworkSchemaVersion = merged.network.schemaVersion;
+        scene.objects = scene.objects.filter(object => object.id !== source.id);
+        state.selection.objectId = target.id;
+        addActivity(state, 'path-network', `Joined ${source.name} into ${target.name} as a real branch junction.`, {
+          targetPathId: target.id,
+          sourcePathId: source.id,
+          junctionNodeId: merged.junctionNodeId,
+          revision: merged.network.revision
+        });
+        return {
+          path: target,
+          network: merged.network,
+          validation: merged.validation,
+          removedPathId: source.id,
+          junctionNodeId: merged.junctionNodeId,
+          importedNodeCount: merged.importedNodeCount,
+          importedSegmentCount: merged.importedSegmentCount,
+          undoDepth: target.properties.pathNetworkUndo.length,
+          redoDepth: 0
+        };
+      });
+      json(res, 200, { ...result.result, state: result.state });
+      return true;
+    }
+
     ids = match(url.pathname, /^\/api\/v012\/path\/([^/]+)\/undo$/);
     if (ids && req.method === 'POST') {
       const input = await readJsonBody(req);
@@ -232,7 +330,9 @@ export async function handleV011Request(req, res) {
         const history = Array.isArray(path.properties.pathNetworkUndo) ? path.properties.pathNetworkUndo : [];
         const entry = history.pop();
         if (!entry?.network) throw new Error('No Path Network edit is available to undo.');
-        pushPathHistory(path, 'pathNetworkRedo', current, entry.label);
+        const scene = activeScene(state);
+        const inverseObjects = applyPathHistoryObjects(scene, entry);
+        pushPathHistory(path, 'pathNetworkRedo', current, entry.label, inverseObjects);
         const restored = replacePathNetwork(current, {
           ...entry.network,
           id: current.id,
@@ -269,7 +369,9 @@ export async function handleV011Request(req, res) {
         const history = Array.isArray(path.properties.pathNetworkRedo) ? path.properties.pathNetworkRedo : [];
         const entry = history.pop();
         if (!entry?.network) throw new Error('No Path Network edit is available to redo.');
-        pushPathHistory(path, 'pathNetworkUndo', current, entry.label);
+        const scene = activeScene(state);
+        const inverseObjects = applyPathHistoryObjects(scene, entry);
+        pushPathHistory(path, 'pathNetworkUndo', current, entry.label, inverseObjects);
         const restored = replacePathNetwork(current, {
           ...entry.network,
           id: current.id,

@@ -284,6 +284,15 @@ function pathPanel(object) {
   const manualHandlesAllowed = suggestedHandles.degree <= 2;
   const handleOptions = ['automatic', 'aligned', 'free']
     .map(mode => `<option value="${mode}" ${mode === selectedNode.handleMode ? 'selected' : ''} ${mode !== 'automatic' && !manualHandlesAllowed ? 'disabled' : ''}>${mode}</option>`).join('');
+  const joinablePaths = (currentSnapshot()?.scene?.objects || [])
+    .filter(item => (
+      item.type === 'path'
+      && item.id !== object.id
+      && item.properties?.pathNetwork?.schemaVersion === 2
+    ));
+  const joinOptions = joinablePaths
+    .map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)} · ${item.properties.pathNetwork.nodes.length} nodes</option>`)
+    .join('');
   return `<section class="v011-authoring-panel" data-v011-panel="path">
     <div class="v011-panel-title"><div><small>PATH NETWORK v2</small><strong>3D corridor authoring</strong></div><span>r${network.revision} · ${network.nodes.length} nodes</span></div>
     <div class="v012-runtime-status ${runtimeState}" data-v012-runtime-status="${runtimeState}">
@@ -330,6 +339,14 @@ function pathPanel(object) {
       </div>
     </div>
     <div class="v011-actions"><button id="v012ReverseNetwork" type="button">Reverse segment directions</button></div>
+    <div class="v012-network-tools">
+      <div class="v011-panel-title"><div><small>PATH BRANCHES</small><strong>Join paths into one network</strong></div><span>${joinablePaths.length} available</span></div>
+      ${joinablePaths.length
+        ? `<label class="v011-field"><span>Branch path</span><select id="v012JoinSourcePath">${joinOptions}</select></label>
+           <div class="v011-actions"><button id="v012JoinPath" class="primary" type="button">Join nearest branch</button></div>
+           <p class="v011-note">Connects the branch's nearest open end to the closest point on this road. The separate branch object is removed, and one Undo restores both paths.</p>`
+        : '<p class="v011-note">No separate Path Network branches are available. Create another path before using Join.</p>'}
+    </div>
     <div class="v012-route-generator">
       <div class="v011-panel-title"><div><small>TERRAIN-AWARE TRAIL SOLVER</small><strong>Generate non-destructive route</strong></div><span>${escapeHtml(generation.status)}</span></div>
       <div class="v011-grid">
@@ -437,6 +454,7 @@ function enhanceInspector() {
     label: 'Reverse path directions',
     operations: object.properties.pathNetwork.segments.map(segment => ({ type: 'reverse-segment', segmentId: segment.id }))
   }));
+  $('#v012JoinPath')?.addEventListener('click', () => joinPathNetwork(object, $('#v012JoinSourcePath')?.value));
   for (const id of ['v012RouteArchetype','v012RouteSeed','v012RouteStartX','v012RouteStartZ','v012RouteEndX','v012RouteEndZ','v012UseRestriction','v012RestrictionMinX','v012RestrictionMaxX','v012RestrictionMinZ','v012RestrictionMaxZ']) {
     $(`#${id}`)?.addEventListener('change', () => captureRouteDraft(object));
   }
@@ -503,6 +521,35 @@ async function transactPathNetwork(object, transaction) {
       selectedPathNodeId = payload.network.nodes[Math.max(0, payload.network.nodes.length - 1)]?.id || null;
     }
     bridge()?.showToast?.(`${transaction.label || 'Path edit'} · r${payload.network.revision}`, 'success');
+    return payload;
+  } catch (error) {
+    bridge()?.showToast?.(error.message, 'error');
+    return null;
+  }
+}
+
+async function joinPathNetwork(target, sourceId) {
+  const source = currentSnapshot()?.scene?.objects?.find(object => object.id === sourceId);
+  if (!source?.properties?.pathNetwork) {
+    bridge()?.showToast?.('Select a valid Path Network branch to join.', 'error');
+    return null;
+  }
+  try {
+    const payload = await api(`/api/v012/path/${encodeURIComponent(target.id)}/merge/${encodeURIComponent(source.id)}`, {
+      method: 'POST',
+      body: {
+        expectedRevision: target.properties.pathNetwork.revision,
+        expectedSourceRevision: source.properties.pathNetwork.revision,
+        label: `Join ${source.name}`
+      }
+    });
+    splineEditPathId = target.id;
+    selectedPathNodeId = payload.junctionNodeId;
+    await applyMutation(payload, true);
+    bridge()?.showToast?.(
+      `Joined ${source.name} · ${payload.importedSegmentCount + 1} connected segments · r${payload.network.revision}`,
+      'success'
+    );
     return payload;
   } catch (error) {
     bridge()?.showToast?.(error.message, 'error');

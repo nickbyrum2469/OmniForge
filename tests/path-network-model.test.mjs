@@ -7,7 +7,12 @@ import {
   normalizePathNetwork,
   validatePathNetwork
 } from '../app/path-network/model.js';
-import { applyPathNetworkTransaction, suggestPathNodeHandles } from '../app/path-network/transactions.js';
+import {
+  applyPathNetworkTransaction,
+  mergePathNetworksAtSegment,
+  pathNetworkDegrees,
+  suggestPathNodeHandles
+} from '../app/path-network/transactions.js';
 import { migrateSceneWorldFoundation } from '../app/worldgen.js';
 
 function legacyPath(overrides = {}) {
@@ -195,6 +200,49 @@ test('path transactions author free, aligned, and automatic spline handles', () 
   assert.equal(automatic.nodes[1].handleMode, 'automatic');
   assert.equal(automatic.nodes[1].incomingHandle, null);
   assert.equal(automatic.nodes[1].outgoingHandle, null);
+});
+
+test('separate paths merge into one validated branch junction without mutating either input', () => {
+  const target = normalizePathNetwork({
+    id: 'main-road',
+    revision: 7,
+    nodes: [
+      { id: 'west', position: [-20, 0, 0], heightMode: 'terrain' },
+      { id: 'east', position: [20, 0, 0], heightMode: 'terrain' }
+    ],
+    segments: [{ id: 'main', fromNode: 'west', toNode: 'east' }]
+  });
+  const source = normalizePathNetwork({
+    id: 'branch-road',
+    revision: 4,
+    nodes: [
+      { id: 'south', position: [0, 0, 18], heightMode: 'terrain' },
+      { id: 'branch-end', position: [0, 0, 5], heightMode: 'terrain' }
+    ],
+    segments: [{ id: 'branch', fromNode: 'south', toNode: 'branch-end' }]
+  });
+  const targetBefore = structuredClone(target);
+  const sourceBefore = structuredClone(source);
+  const result = mergePathNetworksAtSegment(target, source, {
+    targetSegmentId: 'main',
+    junctionPosition: [0, 1.5, 0],
+    sourceNodeId: 'branch-end',
+    heightMode: 'offset',
+    heightOffset: 1.5
+  });
+  const degrees = pathNetworkDegrees(result.network);
+  const junction = result.network.nodes.find(node => node.id === result.junctionNodeId);
+
+  assert.equal(result.validation.valid, true);
+  assert.equal(result.network.revision, 8);
+  assert.equal(result.network.nodes.length, 5);
+  assert.equal(result.network.segments.length, 4);
+  assert.equal(degrees.get(result.junctionNodeId), 3);
+  assert.deepEqual(junction.position, [0, 1.5, 0]);
+  assert.equal(junction.heightMode, 'offset');
+  assert.equal(junction.heightOffset, 1.5);
+  assert.deepEqual(target, targetBefore);
+  assert.deepEqual(source, sourceBefore);
 });
 
 test('manual handles reject junction ambiguity and zero-length vectors', () => {

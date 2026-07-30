@@ -239,6 +239,80 @@ export function replacePathNetwork(input, replacement) {
   return { network: clonePathNetwork(network), validation };
 }
 
+export function mergePathNetworksAtSegment(targetInput, sourceInput, options = {}) {
+  const target = clonePathNetwork(normalizePathNetwork(targetInput, { pathId: targetInput?.id }));
+  const source = normalizePathNetwork(sourceInput, { pathId: sourceInput?.id });
+  const targetSegmentId = cleanId(options.targetSegmentId);
+  ensureSegment(target, targetSegmentId);
+  const junctionPosition = vec3(options.junctionPosition, [0, 0, 0]);
+  const junctionId = nextId(target, 'node');
+  applyOperation(target, {
+    type: 'insert-node',
+    segmentId: targetSegmentId,
+    node: {
+      id: junctionId,
+      position: junctionPosition,
+      heightMode: PATH_HEIGHT_MODES.includes(options.heightMode) ? options.heightMode : 'terrain',
+      heightOffset: finite(options.heightOffset)
+    }
+  });
+
+  const sourceDegrees = pathNetworkDegrees(source);
+  const endpoints = source.nodes.filter(node => sourceDegrees.get(node.id) === 1);
+  if (!endpoints.length) throw new Error('The source path has no open endpoint that can join the target network.');
+  const requestedSourceNodeId = cleanId(options.sourceNodeId);
+  const sourceEndpoint = requestedSourceNodeId
+    ? endpoints.find(node => node.id === requestedSourceNodeId)
+    : endpoints.reduce((nearest, node) => (
+        !nearest
+        || length3(sub3(node.position, junctionPosition)) < length3(sub3(nearest.position, junctionPosition))
+          ? node
+          : nearest
+      ), null);
+  if (!sourceEndpoint) throw new Error('The requested source endpoint is not an open path endpoint.');
+
+  const nodeIds = new Map();
+  for (const node of source.nodes) {
+    const id = nextId(target, 'node');
+    nodeIds.set(node.id, id);
+    target.nodes.push({ ...structuredClone(node), id });
+  }
+  for (const segment of source.segments) {
+    target.segments.push({
+      ...structuredClone(segment),
+      id: nextId(target, 'segment'),
+      fromNode: nodeIds.get(segment.fromNode),
+      toNode: nodeIds.get(segment.toNode)
+    });
+  }
+  target.segments.push({
+    id: nextId(target, 'segment'),
+    fromNode: junctionId,
+    toNode: nodeIds.get(sourceEndpoint.id),
+    curveType: 'hermite',
+    constructionMode: 'auto',
+    constructionLocked: false,
+    crossSectionProfile: structuredClone(source.defaults.crossSectionProfile),
+    materialProfile: structuredClone(source.defaults.materialProfile),
+    gameplayRules: structuredClone(source.defaults.gameplayRules)
+  });
+  target.revision = Math.max(
+    finite(targetInput?.revision, 0),
+    finite(sourceInput?.revision, 0)
+  ) + 1;
+  const normalized = normalizePathNetwork(target, { pathId: target.id });
+  const validation = validatePathNetwork(normalized);
+  if (!validation.valid) throw new Error(`Merged Path Network is invalid: ${validation.errors.join(' ')}`);
+  return {
+    network: clonePathNetwork(normalized),
+    validation,
+    junctionNodeId: junctionId,
+    sourceEndpointId: sourceEndpoint.id,
+    importedNodeCount: source.nodes.length,
+    importedSegmentCount: source.segments.length
+  };
+}
+
 export function pathNetworkDegrees(network) {
   const nodes = pathNetworkNodeMap(network);
   const degree = new Map([...nodes.keys()].map(id => [id, 0]));

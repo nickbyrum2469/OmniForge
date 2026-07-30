@@ -59,8 +59,16 @@ test('the exact feasible path compiles into finite validated Civil Assist constr
   assert.equal(runtime.compiled.diagnostics.invalidSegmentIds.length, 0);
   assert.deepEqual(
     runtime.compiled.segments.map(segment => segment.construction.mode),
-    ['conform', 'retaining-wall', 'conform']
+    ['cut-fill', 'cut-fill', 'cut-fill']
   );
+  assert.equal(
+    runtime.compiled.constructionIntervals.some(interval => (
+      interval.mode === 'bridge' || interval.mode === 'retaining-wall'
+    )),
+    false,
+    'the terrain-following dirt route must not create bridge piers or retaining walls'
+  );
+  assert.equal(runtime.geometry.meshes.structure.indices.length, 0);
   assert.equal(runtime.geometry.validation.valid, true);
   for (const mesh of Object.values(runtime.geometry.meshes)) {
     assert.ok([...mesh.positions].every(Number.isFinite));
