@@ -228,6 +228,48 @@ function ringSelfIntersects(ring) {
   return false;
 }
 
+function minimumHeadingSeparation(portals) {
+  const headings = portals
+    .map(portal => Math.atan2(portal.direction[2], portal.direction[0]))
+    .sort((a, b) => a - b);
+  if (headings.length < 2) return Math.PI * 2;
+  let minimum = Math.PI * 2;
+  for (let index = 0; index < headings.length; index += 1) {
+    const next = headings[(index + 1) % headings.length]
+      + (index === headings.length - 1 ? Math.PI * 2 : 0);
+    minimum = Math.min(minimum, next - headings[index]);
+  }
+  return minimum;
+}
+
+function convexHullXZ(points, y) {
+  const unique = new Map();
+  for (const point of points) {
+    if (!point?.every(Number.isFinite)) continue;
+    unique.set(`${point[0].toFixed(6)}:${point[2].toFixed(6)}`, [point[0], y, point[2]]);
+  }
+  const sorted = [...unique.values()].sort((a, b) => a[0] - b[0] || a[2] - b[2]);
+  if (sorted.length < 3) return [];
+  const turn = (a, b, c) => (
+    (b[0] - a[0]) * (c[2] - a[2])
+    - (b[2] - a[2]) * (c[0] - a[0])
+  );
+  const lower = [];
+  for (const point of sorted) {
+    while (lower.length >= 2 && turn(lower.at(-2), lower.at(-1), point) <= EPSILON) lower.pop();
+    lower.push(point);
+  }
+  const upper = [];
+  for (let index = sorted.length - 1; index >= 0; index -= 1) {
+    const point = sorted[index];
+    while (upper.length >= 2 && turn(upper.at(-2), upper.at(-1), point) <= EPSILON) upper.pop();
+    upper.push(point);
+  }
+  lower.pop();
+  upper.pop();
+  return sanitizeRing([...lower, ...upper]);
+}
+
 function quadratic3(start, control, end, t) {
   const inverse = 1 - t;
   return [
@@ -277,8 +319,22 @@ function junctionRing(junction, portalsByNode, options) {
   }
   const sanitized = sanitizeRing(ring);
   if (sanitized.length < 3) return { ring: [], portals: sorted, error: 'degenerate-ring' };
-  if (ringSelfIntersects(sanitized)) return { ring: sanitized, portals: sorted, error: 'self-intersection' };
-  return { ring: sanitized, portals: sorted, error: null };
+  if (ringSelfIntersects(sanitized)) {
+    // A bounded convex cleanup is safe for a real junction with distinct
+    // approaches and mixed widths. It keeps every trimmed portal inside one
+    // watertight polygon without resurrecting the old radial dirt patch.
+    // Nearly collinear approaches remain invalid because their topology is
+    // ambiguous and a convex patch would hide the authoring error.
+    if (minimumHeadingSeparation(sorted) < Math.PI / 18) {
+      return { ring: sanitized, portals: sorted, error: 'self-intersection', fallback: null };
+    }
+    const hull = convexHullXZ(sorted.flatMap(portal => [portal.left, portal.right]), averageY);
+    if (hull.length >= 3 && !ringSelfIntersects(hull)) {
+      return { ring: hull, portals: sorted, error: null, fallback: 'bounded-convex-hull' };
+    }
+    return { ring: sanitized, portals: sorted, error: 'self-intersection', fallback: null };
+  }
+  return { ring: sanitized, portals: sorted, error: null, fallback: null };
 }
 
 function appendJunction(builder, junction, portalsByNode, options) {
@@ -613,6 +669,7 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
       ringVertexCount: report.ring.length,
       triangleCount: report.triangleCount,
       deviation: report.deviation,
+      fallback: report.fallback || null,
       error: report.error
     });
     if (!report.error) {

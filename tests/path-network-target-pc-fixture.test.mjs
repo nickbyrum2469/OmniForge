@@ -5,6 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compilePathObjectRuntime, sampleScenePathTerrain } from '../app/path-network/runtime.js';
 import { migrateLegacyPathObject } from '../app/path-network/model.js';
+import { mergePathNetworksAtSegment, pathNetworkDegrees } from '../app/path-network/transactions.js';
+import { compilePathNetwork, nearestCompiledStation } from '../app/path-network/compiler.js';
 import { createTerrainQueryService } from '../app/world/terrain-query-service.js';
 import { terrainMesh } from '../app/renderer.js';
 
@@ -96,6 +98,51 @@ test('the exact impossible branch is blocked and cannot alter terrain or become 
     const sample = sampleScenePathTerrain([runtime], baseHeight, x, z);
     assert.equal(sample.height, baseHeight);
   }
+});
+
+test('the exact orphaned branch welds into one bounded junction without self-intersection', () => {
+  const terrainService = createTerrainQueryService({ terrain: fixture.terrain });
+  const heightAt = (x, z) => terrainService.elevationAt(x, z, { view: 'authored-natural' });
+  const normalAt = (x, z) => terrainService.normalAt(x, z, { view: 'authored-natural' });
+  const target = migrateLegacyPathObject(structuredClone(fixture.paths[0]), {
+    terrainHeightAt: heightAt
+  }).network;
+  const source = migrateLegacyPathObject(structuredClone(fixture.paths[1]), {
+    terrainHeightAt: heightAt
+  }).network;
+  const compiledTarget = compilePathNetwork(target, {
+    terrainHeightAt: heightAt,
+    terrainNormalAt: normalAt,
+    spacing: 0.35
+  });
+  const sourceDegrees = pathNetworkDegrees(source);
+  const nearest = source.nodes
+    .filter(node => sourceDegrees.get(node.id) === 1)
+    .map(node => ({ node, station: nearestCompiledStation(compiledTarget, node.position) }))
+    .sort((a, b) => a.station.distance - b.station.distance)[0];
+  const naturalHeight = heightAt(nearest.station.position[0], nearest.station.position[2]);
+  const heightOffset = nearest.station.position[1] - naturalHeight;
+  const merged = mergePathNetworksAtSegment(target, source, {
+    targetSegmentId: nearest.station.segmentId,
+    junctionPosition: nearest.station.position,
+    sourceNodeId: nearest.node.id,
+    heightMode: Math.abs(heightOffset) <= 0.02 ? 'terrain' : 'offset',
+    heightOffset
+  });
+  const mergedObject = structuredClone(fixture.paths[0]);
+  mergedObject.properties.pathNetwork = merged.network;
+  mergedObject.properties.pathNetworkSchemaVersion = 2;
+  const runtime = compilePathObjectRuntime(mergedObject, structuredClone(fixture.terrain), {
+    generationRevision: 2,
+    quality: 'test'
+  });
+
+  assert.equal(merged.junctionCreated, false);
+  assert.equal(pathNetworkDegrees(merged.network).get(merged.junctionNodeId), 2);
+  assert.equal(merged.network.nodes.length, target.nodes.length + source.nodes.length - 1);
+  assert.equal(merged.network.segments.length, target.segments.length + source.segments.length);
+  assert.equal(runtime.geometry.validation.valid, true, runtime.geometry.validation.errors.join(' '));
+  assert.equal(runtime.geometry.junctions.length, 0);
 });
 
 test('the exact kilometre terrain uses watertight tiered path chunks', () => {

@@ -243,19 +243,25 @@ export function mergePathNetworksAtSegment(targetInput, sourceInput, options = {
   const target = clonePathNetwork(normalizePathNetwork(targetInput, { pathId: targetInput?.id }));
   const source = normalizePathNetwork(sourceInput, { pathId: sourceInput?.id });
   const targetSegmentId = cleanId(options.targetSegmentId);
-  ensureSegment(target, targetSegmentId);
+  const targetSegment = ensureSegment(target, targetSegmentId);
   const junctionPosition = vec3(options.junctionPosition, [0, 0, 0]);
-  const junctionId = nextId(target, 'node');
-  applyOperation(target, {
-    type: 'insert-node',
-    segmentId: targetSegmentId,
-    node: {
-      id: junctionId,
-      position: junctionPosition,
-      heightMode: PATH_HEIGHT_MODES.includes(options.heightMode) ? options.heightMode : 'terrain',
-      heightOffset: finite(options.heightOffset)
-    }
-  });
+  const endpointSnapTolerance = Math.max(0.001, finite(options.endpointSnapTolerance, 0.05));
+  const endpointNode = [targetSegment.fromNode, targetSegment.toNode]
+    .map(nodeId => ensureNode(target, nodeId))
+    .find(node => length3(sub3(node.position, junctionPosition)) <= endpointSnapTolerance);
+  const junctionId = endpointNode?.id || nextId(target, 'node');
+  if (!endpointNode) {
+    applyOperation(target, {
+      type: 'insert-node',
+      segmentId: targetSegmentId,
+      node: {
+        id: junctionId,
+        position: junctionPosition,
+        heightMode: PATH_HEIGHT_MODES.includes(options.heightMode) ? options.heightMode : 'terrain',
+        heightOffset: finite(options.heightOffset)
+      }
+    });
+  }
 
   const sourceDegrees = pathNetworkDegrees(source);
   const endpoints = source.nodes.filter(node => sourceDegrees.get(node.id) === 1);
@@ -271,8 +277,13 @@ export function mergePathNetworksAtSegment(targetInput, sourceInput, options = {
       ), null);
   if (!sourceEndpoint) throw new Error('The requested source endpoint is not an open path endpoint.');
 
-  const nodeIds = new Map();
+  // A branch join is a topological weld, not a short connector segment. Importing
+  // the source endpoint beside the new junction creates two nearly coincident
+  // nodes and a tiny third approach. That produces unstable tangents and
+  // self-intersecting junction polygons in the exact recovered user project.
+  const nodeIds = new Map([[sourceEndpoint.id, junctionId]]);
   for (const node of source.nodes) {
+    if (node.id === sourceEndpoint.id) continue;
     const id = nextId(target, 'node');
     nodeIds.set(node.id, id);
     target.nodes.push({ ...structuredClone(node), id });
@@ -285,17 +296,6 @@ export function mergePathNetworksAtSegment(targetInput, sourceInput, options = {
       toNode: nodeIds.get(segment.toNode)
     });
   }
-  target.segments.push({
-    id: nextId(target, 'segment'),
-    fromNode: junctionId,
-    toNode: nodeIds.get(sourceEndpoint.id),
-    curveType: 'hermite',
-    constructionMode: 'auto',
-    constructionLocked: false,
-    crossSectionProfile: structuredClone(source.defaults.crossSectionProfile),
-    materialProfile: structuredClone(source.defaults.materialProfile),
-    gameplayRules: structuredClone(source.defaults.gameplayRules)
-  });
   target.revision = Math.max(
     finite(targetInput?.revision, 0),
     finite(sourceInput?.revision, 0)
@@ -307,8 +307,9 @@ export function mergePathNetworksAtSegment(targetInput, sourceInput, options = {
     network: clonePathNetwork(normalized),
     validation,
     junctionNodeId: junctionId,
+    junctionCreated: !endpointNode,
     sourceEndpointId: sourceEndpoint.id,
-    importedNodeCount: source.nodes.length,
+    importedNodeCount: Math.max(0, source.nodes.length - 1),
     importedSegmentCount: source.segments.length
   };
 }

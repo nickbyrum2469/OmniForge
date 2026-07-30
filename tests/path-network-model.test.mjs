@@ -235,9 +235,11 @@ test('separate paths merge into one validated branch junction without mutating e
 
   assert.equal(result.validation.valid, true);
   assert.equal(result.network.revision, 8);
-  assert.equal(result.network.nodes.length, 5);
-  assert.equal(result.network.segments.length, 4);
+  assert.equal(result.network.nodes.length, 4);
+  assert.equal(result.network.segments.length, 3);
   assert.equal(degrees.get(result.junctionNodeId), 3);
+  assert.equal(result.importedNodeCount, 1);
+  assert.equal(result.importedSegmentCount, 1);
   assert.deepEqual(junction.position, [0, 1.5, 0]);
   assert.equal(junction.heightMode, 'offset');
   assert.equal(junction.heightOffset, 1.5);
