@@ -451,14 +451,86 @@ function cylinderMesh(seg=32){
 
 export function terrainHeight(terrain,x,z,paths=[]){return sharedTerrainHeightAt(terrain,x,z,paths);}
 export function pathBlendAt(paths,x,z){return sharedPathBlendAt(paths,x,z);}
+function terrainPathDetailBounds(pathRuntimes,stepX,stepZ){
+  const padding=Math.max(stepX,stepZ)*1.25+.1,bounds=[];
+  for(const runtime of pathRuntimes||[])for(const entry of runtime?.terrainModifier?.entries||[]){
+    const mode=entry?.construction?.mode;
+    if(entry?.profile?.terrainModificationEnabled===false||['bridge','tunnel','invalid'].includes(mode))continue;
+    bounds.push({
+      minX:entry.bounds.minX-padding,maxX:entry.bounds.maxX+padding,
+      minZ:entry.bounds.minZ-padding,maxZ:entry.bounds.maxZ+padding
+    });
+  }
+  return bounds;
+}
+function terrainCellOverlapsBounds(minX,maxX,minZ,maxZ,bounds){
+  return bounds.some(item=>maxX>=item.minX&&minX<=item.maxX&&maxZ>=item.minZ&&minZ<=item.maxZ);
+}
 export function terrainMesh(object,paths,pathRuntimes=[]){
   const props=normalizeTerrainProperties(object.properties||{},object.transform||{}),resX=clamp(Math.round(Number(props.resolutionX||props.resolution||128)),8,256),resZ=clamp(Math.round(Number(props.resolutionZ||props.resolution||128)),8,256),bounds=props.bounds,p=[],n=[],idx=[],uv=[],blends=[];
   const ox=Number(object.transform.position?.[0]||0),oy=Number(object.transform.position?.[1]||0),oz=Number(object.transform.position?.[2]||0);
-  for(let z=0;z<=resZ;z++)for(let x=0;x<=resX;x++){
-    const wx=lerp(bounds.minX,bounds.maxX,x/resX),wz=lerp(bounds.minZ,bounds.maxZ,z/resZ),baseY=terrainBaseHeightAt(object,wx,wz),pathSample=sampleScenePathTerrain(pathRuntimes,baseY,wx,wz),wy=pathRuntimes.length?pathSample.height:terrainHeight(object,wx,wz,paths);
-    p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push(x/resX,z/resZ);blends.push(pathRuntimes.length?1-pathSample.materialWeights.terrain:pathBlendAt(paths,wx,wz));
+  if(!pathRuntimes.length){
+    for(let z=0;z<=resZ;z++)for(let x=0;x<=resX;x++){
+      const wx=lerp(bounds.minX,bounds.maxX,x/resX),wz=lerp(bounds.minZ,bounds.maxZ,z/resZ),wy=terrainHeight(object,wx,wz,paths);
+      p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push(x/resX,z/resZ);blends.push(pathBlendAt(paths,wx,wz));
+    }
+    for(let z=0;z<resZ;z++)for(let x=0;x<resX;x++){const a=z*(resX+1)+x,b=a+resX+1;idx.push(a,b,a+1,b,b+1,a+1);}
+  }else{
+    // A kilometre-scale terrain can legitimately use an 8 m base grid while a
+    // road is only 2 m wide. Sampling construction only at those base vertices
+    // turns a bounded corridor into giant material triangles and cliff walls.
+    // Keep the unchanged world coarse, but tessellate only the dirty path-cell
+    // halo. The halo boundary is snapped to the neighboring coarse edge so the
+    // local replacement cannot open a crack.
+    const stepX=(bounds.maxX-bounds.minX)/resX,stepZ=(bounds.maxZ-bounds.minZ)/resZ;
+    const detailBounds=terrainPathDetailBounds(pathRuntimes,stepX,stepZ);
+    const detailed=Array.from({length:resZ},(_,z)=>Array.from({length:resX},(_,x)=>{
+      const minX=bounds.minX+x*stepX,minZ=bounds.minZ+z*stepZ;
+      return terrainCellOverlapsBounds(minX,minX+stepX,minZ,minZ+stepZ,detailBounds);
+    }));
+    const subdivision=clamp(Math.ceil(Math.max(stepX,stepZ)/.75),2,12),vertices=new Map(),baseCorners=new Map();
+    const baseCorner=(x,z)=>{
+      const key=`${x}:${z}`;
+      if(!baseCorners.has(key)){
+        const wx=bounds.minX+x*stepX,wz=bounds.minZ+z*stepZ;
+        baseCorners.set(key,terrainBaseHeightAt(object,wx,wz));
+      }
+      return baseCorners.get(key);
+    };
+    const transitionHeight=(cellX,cellZ,localX,localZ)=>{
+      const atLeft=localX<=1e-8&&!(detailed[cellZ]?.[cellX-1]);
+      const atRight=localX>=1-1e-8&&!(detailed[cellZ]?.[cellX+1]);
+      const atBottom=localZ<=1e-8&&!(detailed[cellZ-1]?.[cellX]);
+      const atTop=localZ>=1-1e-8&&!(detailed[cellZ+1]?.[cellX]);
+      if(atLeft)return lerp(baseCorner(cellX,cellZ),baseCorner(cellX,cellZ+1),localZ);
+      if(atRight)return lerp(baseCorner(cellX+1,cellZ),baseCorner(cellX+1,cellZ+1),localZ);
+      if(atBottom)return lerp(baseCorner(cellX,cellZ),baseCorner(cellX+1,cellZ),localX);
+      if(atTop)return lerp(baseCorner(cellX,cellZ+1),baseCorner(cellX+1,cellZ+1),localX);
+      return null;
+    };
+    const vertexAt=(cellX,cellZ,localX,localZ,isDetailed)=>{
+      const wx=bounds.minX+(cellX+localX)*stepX,wz=bounds.minZ+(cellZ+localZ)*stepZ;
+      const key=`${Math.round(wx*1e6)}:${Math.round(wz*1e6)}`;
+      if(vertices.has(key))return vertices.get(key);
+      const baseY=terrainBaseHeightAt(object,wx,wz),transition=isDetailed?transitionHeight(cellX,cellZ,localX,localZ):null;
+      const pathSample=transition===null?sampleScenePathTerrain(pathRuntimes,baseY,wx,wz):null;
+      const wy=transition===null?pathSample.height:transition,blend=transition===null?1-pathSample.materialWeights.terrain:0;
+      const index=p.length/3;
+      p.push(wx-ox,wy-oy,wz-oz);uv.push((wx-bounds.minX)/(bounds.maxX-bounds.minX),(wz-bounds.minZ)/(bounds.maxZ-bounds.minZ));blends.push(blend);vertices.set(key,index);
+      return index;
+    };
+    let detailCellCount=0;
+    for(let z=0;z<resZ;z++)for(let x=0;x<resX;x++){
+      const isDetailed=detailed[z][x],steps=isDetailed?subdivision:1;
+      if(isDetailed)detailCellCount+=1;
+      for(let localZ=0;localZ<steps;localZ++)for(let localX=0;localX<steps;localX++){
+        const x0=localX/steps,x1=(localX+1)/steps,z0=localZ/steps,z1=(localZ+1)/steps;
+        const a=vertexAt(x,z,x0,z0,isDetailed),b=vertexAt(x,z,x0,z1,isDetailed),c=vertexAt(x,z,x1,z0,isDetailed),d=vertexAt(x,z,x1,z1,isDetailed);
+        idx.push(a,b,c,b,d,c);
+      }
+    }
+    terrainMesh.lastPathDetail={detailCellCount,subdivision,baseCellSize:[stepX,stepZ]};
   }
-  for(let z=0;z<resZ;z++)for(let x=0;x<resX;x++){const a=z*(resX+1)+x,b=a+resX+1;idx.push(a,b,a+1,b,b+1,a+1);}
   const normals=new Float32Array(p.length);
   for(let t=0;t<idx.length;t+=3){const ia=idx[t]*3,ib=idx[t+1]*3,ic=idx[t+2]*3,A=[p[ia],p[ia+1],p[ia+2]],B=[p[ib],p[ib+1],p[ib+2]],C=[p[ic],p[ic+1],p[ic+2]],fn=normalize(cross(sub(B,A),sub(C,A)));for(const ii of [ia,ib,ic]){normals[ii]+=fn[0];normals[ii+1]+=fn[1];normals[ii+2]+=fn[2];}}
   for(let k=0;k<normals.length;k+=3){const q=normalize([normals[k],normals[k+1],normals[k+2]]);normals[k]=q[0];normals[k+1]=q[1];normals[k+2]=q[2];}

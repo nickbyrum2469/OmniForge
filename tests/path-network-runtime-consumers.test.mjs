@@ -143,9 +143,24 @@ test('live terrain mesh consumes the v2 modifier bundle and its material field',
   const scene = sceneFixture();
   const runtimes = compileScenePathRuntimes(scene);
   const mesh = terrainMesh(scene.objects[0], [scene.objects[1]], runtimes);
-  const rowSize = Number(scene.objects[0].properties.resolutionX) + 1;
-  const centerIndex = 32 * rowSize + 32;
+  let centerIndex = -1;
+  let centerDistance = Infinity;
+  for (let index = 0; index < mesh.positions.length / 3; index += 1) {
+    const distance = Math.hypot(mesh.positions[index * 3], mesh.positions[index * 3 + 2]);
+    if (distance < centerDistance) {
+      centerDistance = distance;
+      centerIndex = index;
+    }
+  }
+  assert.ok(centerDistance < 0.01);
   assert.ok(mesh.positions[centerIndex * 3 + 1] > 1.9);
   assert.ok(mesh.blends[centerIndex] > 0.99);
   assert.equal(mesh.positions.every(Number.isFinite), true);
+  assert.ok(mesh.positions.length > (64 + 1) * (64 + 1) * 3);
+  assert.ok(terrainMesh.lastPathDetail.detailCellCount > 0);
+  assert.ok(terrainMesh.lastPathDetail.subdivision >= 2);
+  for (let index = 0; index < mesh.positions.length / 3; index += 1) {
+    if (mesh.blends[index] <= 0.001) continue;
+    assert.ok(Math.abs(mesh.positions[index * 3 + 2]) < 7);
+  }
 });
