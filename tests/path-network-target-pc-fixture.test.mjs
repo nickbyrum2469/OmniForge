@@ -99,6 +99,9 @@ test('the exact kilometre terrain uses watertight tiered path chunks', () => {
   assert.ok(terrainMesh.lastPathDetail.targetSpacing <= 0.625);
   assert.ok(terrainMesh.lastPathDetail.transitionSpacing <= 2);
   assert.ok(terrainMesh.lastPathDetail.maximumBoundaryMismatch <= 0.005);
+  assert.ok(terrainMesh.lastPathDetail.boundaryStitches.vertexCount > 0);
+  assert.ok(terrainMesh.lastPathDetail.boundaryStitches.triangleCount > 0);
+  assert.ok(terrainMesh.lastPathDetail.boundaryStitches.maximumWidth <= 0.9);
   assert.ok(mesh.positions.length / 3 > 50000);
   assert.equal([...mesh.positions].every(Number.isFinite), true);
   assert.equal([...mesh.normals].every(Number.isFinite), true);
@@ -114,4 +117,50 @@ test('the exact kilometre terrain uses watertight tiered path chunks', () => {
     assert.ok(z >= -38 && z <= 8, `path material escaped in Z at ${z}`);
   }
   assert.ok(blendedVertexCount > 25);
+
+  const boundaryTolerance = 0.005;
+  const boundaryCells = new Map();
+  const cellKey = point => point.map(value => Math.floor(value / boundaryTolerance)).join(':');
+  for (let index = 0; index < mesh.positions.length; index += 3) {
+    const point = [mesh.positions[index], mesh.positions[index + 1], mesh.positions[index + 2]];
+    const key = cellKey(point);
+    if (!boundaryCells.has(key)) boundaryCells.set(key, []);
+    boundaryCells.get(key).push(point);
+  }
+  const hasBoundaryVertex = target => {
+    const cell = target.map(value => Math.floor(value / boundaryTolerance));
+    for (let x = -1; x <= 1; x += 1) {
+      for (let y = -1; y <= 1; y += 1) {
+        for (let z = -1; z <= 1; z += 1) {
+          const candidates = boundaryCells.get(`${cell[0] + x}:${cell[1] + y}:${cell[2] + z}`) || [];
+          if (candidates.some(point => Math.hypot(
+            point[0] - target[0],
+            point[1] - target[1],
+            point[2] - target[2]
+          ) <= boundaryTolerance)) return true;
+        }
+      }
+    }
+    return false;
+  };
+  const terrainOrigin = fixture.terrain.transform?.position || [0, 0, 0];
+  for (const runtime of runtimes) {
+    const activeSegments = new Set(runtime.compiled.segments
+      .filter(segment => (
+        segment.crossSectionProfile.terrainModificationEnabled !== false
+        && !['bridge', 'tunnel', 'invalid'].includes(segment.construction.mode)
+      ))
+      .map(segment => segment.id));
+    for (const section of runtime.terrainModifier.crossSections) {
+      if (!activeSegments.has(section.segmentId)) continue;
+      for (const vertex of [section.outerLeft, section.outerRight]) {
+        const localVertex = vertex.map((value, axis) => Number(value) - Number(terrainOrigin[axis] || 0));
+        assert.equal(
+          hasBoundaryVertex(localVertex),
+          true,
+          `compiled construction boundary ${vertex.join(',')} was not stitched into the terrain mesh`
+        );
+      }
+    }
+  }
 });

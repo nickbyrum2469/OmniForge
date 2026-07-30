@@ -469,6 +469,59 @@ function pathTerrainVertexSample(object,pathRuntimes,x,z){
     blend:['road','shoulder'].includes(pathSample.zone)?1-pathSample.materialWeights.terrain:0
   };
 }
+function appendPathTerrainBoundaryStitches({object,pathRuntimes,bounds,origin,positions,normals,indices,uvs,blends}){
+  const [ox,oy,oz]=origin;
+  let vertexCount=0,triangleCount=0,maximumWidth=0;
+  const addVertex=point=>{
+    const index=positions.length/3;
+    positions.push(point[0]-ox,point[1]-oy,point[2]-oz);
+    normals.push(0,1,0);
+    uvs.push(
+      (point[0]-bounds.minX)/Math.max(1e-6,bounds.maxX-bounds.minX),
+      (point[2]-bounds.minZ)/Math.max(1e-6,bounds.maxZ-bounds.minZ)
+    );
+    blends.push(0);
+    vertexCount+=1;
+    return index;
+  };
+  const addTriangle=(a,b,c)=>{
+    const point=index=>positions.slice(index*3,index*3+3);
+    const A=point(a),B=point(b),C=point(c),face=cross(sub(B,A),sub(C,A));
+    if(face[1]<0)indices.push(a,c,b);else indices.push(a,b,c);
+    triangleCount+=1;
+  };
+  const addQuad=(a,b,c,d)=>{
+    const ia=addVertex(a),ib=addVertex(b),ic=addVertex(c),id=addVertex(d);
+    addTriangle(ia,ib,ic);
+    addTriangle(ib,id,ic);
+  };
+  for(const runtime of pathRuntimes||[]){
+    const segments=new Map((runtime?.compiled?.segments||[]).map(segment=>[segment.id,segment]));
+    const sectionsBySegment=new Map();
+    for(const section of runtime?.terrainModifier?.crossSections||[]){
+      if(!sectionsBySegment.has(section.segmentId))sectionsBySegment.set(section.segmentId,[]);
+      sectionsBySegment.get(section.segmentId).push(section);
+    }
+    for(const [segmentId,sections] of sectionsBySegment){
+      const segment=segments.get(segmentId),mode=segment?.construction?.mode;
+      if(!segment||segment.crossSectionProfile?.terrainModificationEnabled===false||['bridge','tunnel','invalid'].includes(mode))continue;
+      const width=clamp(Math.max(.35,Number(segment.crossSectionProfile?.blendDistance||2.5)*.2),.35,.9);
+      maximumWidth=Math.max(maximumWidth,width);
+      const outside=(section,key)=>{
+        const inner=section[key],dx=inner[0]-section.center[0],dz=inner[2]-section.center[2],length=Math.hypot(dx,dz)||1;
+        const x=inner[0]+dx/length*width,z=inner[2]+dz/length*width;
+        return [x,terrainBaseHeightAt(object,x,z)-.015,z];
+      };
+      for(let index=0;index<sections.length-1;index+=1){
+        const current=sections[index],next=sections[index+1];
+        if(current.distance>next.distance)continue;
+        addQuad(outside(current,'outerLeft'),current.outerLeft,outside(next,'outerLeft'),next.outerLeft);
+        addQuad(current.outerRight,outside(current,'outerRight'),next.outerRight,outside(next,'outerRight'));
+      }
+    }
+  }
+  return {vertexCount,triangleCount,maximumWidth};
+}
 function coarseTerrainEdgeSample(object,tile,edge,t,steps){
   steps=Math.max(1,steps);
   const scaled=clamp(t,0,1)*steps,index=Math.min(steps-1,Math.floor(scaled)),local=scaled-index;
@@ -563,6 +616,9 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
         idx.push(a,b,a+1,b,b+1,a+1);
       }
     }
+    const boundaryStitches=appendPathTerrainBoundaryStitches({
+      object,pathRuntimes,bounds,origin:[ox,oy,oz],positions:p,normals:n,indices:idx,uvs:uv,blends
+    });
     terrainMesh.lastPathDetail={
       strategy:'watertight-chunks',
       tileCount:tiles.size,
@@ -571,6 +627,7 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
       targetSpacing:.625,
       transitionSpacing:2,
       maximumBoundaryMismatch,
+      boundaryStitches,
       baseCellSize:[baseStepX,baseStepZ]
     };
   }
