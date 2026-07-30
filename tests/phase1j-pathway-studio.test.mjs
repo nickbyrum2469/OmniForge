@@ -133,6 +133,9 @@ test('renderer and editor expose Pathway Studio authority and telemetry',()=>{
   assert.doesNotMatch(v011,/function nearestNetworkSegment/);
   assert.match(v011,/createPathNodeDragPreview/);
   assert.match(v011,/scheduleNodeDragPreview/);
+  assert.match(v011,/overlay\.addEventListener\('pointerdown', beginNodeDrag, true\)/);
+  assert.match(v011,/event\.target\?\.closest\?\.\('\[data-spline-node\]'\)/);
+  assert.doesNotMatch(v011,/handle\.addEventListener\('pointerdown', beginNodeDrag\)/);
   assert.doesNotMatch(v011,/setPathPreview\(draggingNode\.previewPath\)/);
   assert.match(v011,/path-node-drag-preview/);
   assert.match(v011,/\{ surface: 'base' \}/);

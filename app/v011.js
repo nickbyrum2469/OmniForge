@@ -940,11 +940,21 @@ function refreshToolbar() {
 
 function installOverlay() {
   const wrap = $('#viewportWrap');
-  if (!wrap || $('#splineNodeOverlay')) return;
-  const overlay = document.createElement('div');
-  overlay.id = 'splineNodeOverlay';
-  overlay.className = 'spline-node-overlay';
-  wrap.appendChild(overlay);
+  if (!wrap) return;
+  let overlay = $('#splineNodeOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'splineNodeOverlay';
+    overlay.className = 'spline-node-overlay';
+    wrap.appendChild(overlay);
+  }
+  if (overlay.dataset.nodeDragDelegated !== 'true') {
+    // Handles are reconciled continuously while the camera and scene move.
+    // Keep one stable listener on the overlay instead of tying input authority
+    // to the lifetime of an individual button element.
+    overlay.addEventListener('pointerdown', beginNodeDrag, true);
+    overlay.dataset.nodeDragDelegated = 'true';
+  }
 }
 
 function renderNodeOverlay() {
@@ -973,7 +983,6 @@ function renderNodeOverlay() {
       handle.type = 'button';
       handle.className = 'spline-node-handle';
       handle.dataset.splineNode = String(index);
-      handle.addEventListener('pointerdown', beginNodeDrag);
       overlay.appendChild(handle);
     }
     existing.delete(index);
@@ -988,13 +997,24 @@ function renderNodeOverlay() {
 }
 
 function beginNodeDrag(event) {
-  if (event.button !== 0 || event.isPrimary === false || draggingNode) return;
+  const overlay = $('#splineNodeOverlay');
+  const handle = event.target?.closest?.('[data-spline-node]');
+  if (!overlay || !handle || !overlay.contains(handle)) return;
+  if (event.button !== 0 || event.isPrimary === false || draggingNode) {
+    window.__omniforgeDiagnostics?.event?.('path-node-drag-rejected', {
+      button: event.button,
+      isPrimary: event.isPrimary,
+      pointerId: event.pointerId,
+      dragAlreadyActive: Boolean(draggingNode)
+    });
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
   const snapshot = currentSnapshot();
   const path = snapshot?.scene?.objects?.find(object => object.id === splineEditPathId);
   if (!path) return;
-  selectedSplineNodeIndex = Number(event.currentTarget.dataset.splineNode);
+  selectedSplineNodeIndex = Number(handle.dataset.splineNode);
   const node = path.properties?.pathNetwork?.nodes?.[selectedSplineNodeIndex];
   if (!node) return;
   selectedPathNodeId = node.id;
@@ -1004,7 +1024,7 @@ function beginNodeDrag(event) {
     nodeId: node.id,
     index: selectedSplineNodeIndex,
     pointerId: event.pointerId,
-    captureTarget: event.currentTarget,
+    captureTarget: handle,
     startClientY: event.clientY,
     startPosition: [...node.position],
     startHeightMode: node.heightMode,
@@ -1026,11 +1046,11 @@ function beginNodeDrag(event) {
     vertical: event.shiftKey === true
   });
   enhanceInspector();
-  event.currentTarget.setPointerCapture?.(event.pointerId);
+  handle.setPointerCapture?.(event.pointerId);
   window.addEventListener('pointermove', dragNode, true);
   window.addEventListener('pointerup', finishNodeDrag, true);
   window.addEventListener('pointercancel', cancelNodeDragFromEvent, true);
-  event.currentTarget.addEventListener('lostpointercapture', cancelNodeDragFromEvent, { once: true });
+  handle.addEventListener('lostpointercapture', cancelNodeDragFromEvent, { once: true });
 }
 
 function flushNodeDragPreview() {
