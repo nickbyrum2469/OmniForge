@@ -118,6 +118,7 @@ test('renderer and editor expose Pathway Studio authority and telemetry',()=>{
   const app=fs.readFileSync(path.join(ROOT,'app','app.js'),'utf8');
   const v011=fs.readFileSync(path.join(ROOT,'app','v011.js'),'utf8');
   const styles=fs.readFileSync(path.join(ROOT,'app','styles.css'),'utf8');
+  const v011Styles=fs.readFileSync(path.join(ROOT,'app','v011.css'),'utf8');
   assert.match(renderer,/pathwayCorridors:/);
   assert.match(renderer,/materialId:terrain\.properties\?\.materialId/);
   assert.match(renderer,/gl\.polygonOffset\(-2,-2\)/);
@@ -125,6 +126,8 @@ test('renderer and editor expose Pathway Studio authority and telemetry',()=>{
   assert.match(app,/applyPathwayPreset/);
   assert.match(app,/fitPathwayLanesButton/);
   assert.match(styles,/\.pathway-status\.bad/);
+  assert.match(v011Styles,/\.spline-node-handle:hover[^}]*filter:brightness/);
+  assert.doesNotMatch(v011Styles,/\.spline-node-handle:hover[^}]*scale:/);
   assert.match(v011,/function pathNodeSelection\(object\)/);
   assert.match(v011,/selectedPathNodeId/);
   assert.match(v011,/type: 'move-node'/);

@@ -29,7 +29,7 @@
 .v011-spline-editing #viewport { cursor:crosshair; }
 .spline-node-overlay { position:absolute; inset:0; z-index:5; pointer-events:none; overflow:hidden; }
 .spline-node-handle { position:absolute; left:0; top:0; width:24px; height:24px; margin:-12px 0 0 -12px; border-radius:50%; border:2px solid #f4ddff; background:#7f4bd3; color:white; font:700 9px ui-monospace, monospace; box-shadow:0 0 0 3px rgba(82,46,136,.36), 0 4px 14px rgba(0,0,0,.5); pointer-events:auto; cursor:grab; transform-origin:center; }
-.spline-node-handle:hover { background:#a864ff; scale:1.12; }
+.spline-node-handle:hover { background:#a864ff; filter:brightness(1.16); box-shadow:0 0 0 5px rgba(168,100,255,.42),0 6px 18px rgba(0,0,0,.58); }
 .spline-node-handle:active { cursor:grabbing; background:#d070ff; }
 [data-number-path^="scale."]:disabled { opacity:.45; cursor:not-allowed; }
 @media (max-width: 1300px) { .v011-grid { grid-template-columns:1fr; } }
