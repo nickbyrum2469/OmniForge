@@ -46,6 +46,37 @@ test('compiler preserves exact anchors and produces near-uniform arc-length stat
   assert.equal(compiled.sourceRevision, 4);
 });
 
+test('automatic dead-end tangents approach endpoints without overshoot or loopback', () => {
+  const input = normalizePathNetwork({
+    id: 'dead-end-tangent-direction',
+    nodes: [
+      { id: 'start', position: [0, 0, 0], heightMode: 'absolute' },
+      { id: 'end', position: [20, 0, 0], heightMode: 'absolute' }
+    ],
+    segments: [{
+      id: 'road',
+      fromNode: 'start',
+      toNode: 'end',
+      curveType: 'hermite',
+      crossSectionProfile: { width: 4, blendDistance: 4 }
+    }],
+    engineering: { maxGradePercent: 100 }
+  });
+  const samples = compilePathNetwork(input, {
+    terrainHeightAt: flatHeight,
+    terrainNormalAt: flatNormal,
+    spacing: 0.25
+  }).segments[0].samples;
+
+  assert.deepEqual(samples[0].position, [0, 0, 0]);
+  assert.deepEqual(samples.at(-1).position, [20, 0, 0]);
+  assert.ok(samples.every(sample => sample.position[0] >= 0 && sample.position[0] <= 20));
+  assert.ok(samples.slice(1).every((sample, index) => (
+    sample.position[0] > samples[index].position[0]
+  )));
+  assert.ok(Math.max(...samples.map(sample => Math.abs(sample.curvature))) < 1e-6);
+});
+
 test('parallel-transport side frames remain finite and never flip', () => {
   const compiled = compilePathNetwork(network(), {
     terrainHeightAt: flatHeight,

@@ -49,12 +49,18 @@ function automaticTangent(nodeId, otherId, isStart, positions, adjacency, distan
   const node = positions.get(nodeId);
   const other = positions.get(otherId);
   const connected = (adjacency.get(nodeId) || []).filter(item => item.nodeId !== otherId);
-  let vector = sub3(other, node);
+  // Hermite endpoint tangents are derivatives in the segment's from -> to
+  // direction. A degree-one end node therefore needs node - other, while a
+  // degree-one start node needs other - node. Reusing other - node at both
+  // ends points the final derivative backwards, makes the curve overshoot its
+  // authored endpoint, and folds wide road/earthwork sweeps over themselves.
+  let vector = isStart ? sub3(other, node) : sub3(node, other);
   if (connected.length === 1) {
     const neighbor = positions.get(connected[0].nodeId);
     vector = isStart ? sub3(other, neighbor) : sub3(neighbor, other);
   }
-  const direction = normalize3(vector, normalize3(sub3(other, node)));
+  const chordDirection = isStart ? sub3(other, node) : sub3(node, other);
+  const direction = normalize3(vector, normalize3(chordDirection));
   return scale3(direction, distance * clamp(1 - tension * 0.72, 0.12, 1));
 }
 
