@@ -516,8 +516,8 @@ function appendBridgeDeck(builder, sections, thickness, role) {
     distance: section.distance,
     textureRepeatLength: 4,
     positions: [
-      [section.roadLeft[0], section.roadLeft[1] + 0.025, section.roadLeft[2]],
-      [section.roadRight[0], section.roadRight[1] + 0.025, section.roadRight[2]]
+      [...section.roadLeft],
+      [...section.roadRight]
     ]
   }));
   const bottom = sections.map(section => ({
@@ -685,7 +685,10 @@ function appendStoneArch(builder, segment, sections, baseHeightAt, profile) {
       const archFactor = Math.sqrt(Math.max(0, 1 - ((fraction - 0.5) / 0.5) ** 2));
       return [
         edge[0],
-        ground + Math.max(0.3, edge[1] - ground - profile.deckThickness - 0.25) * archFactor,
+        Math.min(
+          edge[1] - 0.18,
+          ground + Math.max(0.3, edge[1] - ground - profile.deckThickness - 0.25) * archFactor
+        ),
         edge[2]
       ];
     });
@@ -697,19 +700,6 @@ function appendStoneArch(builder, segment, sections, baseHeightAt, profile) {
     for (let index = 1; index < arch.length; index += 1) {
       appendBeamBetween(builder, arch[index - 1], arch[index], 0.34, 0.42, 'bridge-stone-arch-ring');
     }
-  }
-  for (const section of [sections[0], sections.at(-1)]) {
-    const frame = sectionFrame(sections, sections.indexOf(section));
-    const groundY = finite(baseHeightAt(section.center[0], section.center[2]), section.center[1] - 1);
-    appendOrientedBox(
-      builder,
-      [section.center[0], (section.center[1] + groundY) * 0.5, section.center[2]],
-      frame.tangent,
-      frame.side,
-      frame.up,
-      [1.2, profile.width + 1.2, Math.max(0.4, section.center[1] - groundY)],
-      'bridge-stone-abutment'
-    );
   }
   appendBridgeAbutments(builder, sections, baseHeightAt, profile, 'bridge-stone');
   if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-stone-parapet');
@@ -1012,11 +1002,11 @@ function appendStairs(builder, segment, engineering) {
   return Boolean(previousEnd);
 }
 
-function intervalSegment(segment, interval) {
-  const samples = segment.samples.slice(
-    interval.startSampleIndex,
-    interval.endSampleIndex + 1
-  );
+function intervalSegment(segment, interval, availableSamples = segment.samples) {
+  const samples = availableSamples.filter(sample => (
+    sample.distance >= interval.startDistance - EPSILON
+    && sample.distance <= interval.endDistance + EPSILON
+  ));
   return {
     ...segment,
     samples,
@@ -1033,6 +1023,20 @@ function sectionsForInterval(sections, interval) {
     section.distance >= interval.startDistance - EPSILON
     && section.distance <= interval.endDistance + EPSILON
   ));
+}
+
+function constructionIntervalsForSurface(segment) {
+  if (segment.constructionIntervals?.length) return segment.constructionIntervals;
+  return [{
+    segmentId: segment.id,
+    startDistance: segment.samples[0]?.distance || 0,
+    endDistance: segment.samples.at(-1)?.distance || 0,
+    ...segment.construction
+  }];
+}
+
+function intervalOwnsRoadSurface(mode) {
+  return !['bridge', 'stairs', 'invalid'].includes(mode);
 }
 
 export function validatePathNetworkGeometry(meshes) {
@@ -1098,15 +1102,34 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
 
   for (const prepared of preparedSegments) {
     const { segment, samples } = prepared;
-    const rows = roadRows(segment, samples);
-    const generatedStairs = appendStairs(road, segment, compiled.engineering);
-    if (!generatedStairs) appendStrip(road, rows, 'road-core', [1, 1, 1]);
-    appendStrip(shoulder, shoulderRows(segment, samples, -1), 'left-shoulder', [1, 0.45]);
-    appendStrip(shoulder, shoulderRows(segment, samples, 1), 'right-shoulder', [1, 0.45]);
     const constructionSections = sectionsBySegment.get(segment.id) || [];
-    for (const interval of segment.constructionIntervals || []) {
-      const localSegment = intervalSegment(segment, interval);
-      const localSections = sectionsForInterval(constructionSections, interval);
+    const intervalSurfaces = [];
+    for (const interval of constructionIntervalsForSurface(segment)) {
+      const localSegment = intervalSegment(segment, interval, samples);
+      if (localSegment.samples.length < 2) continue;
+      const localRange = {
+        ...interval,
+        startDistance: localSegment.samples[0].distance,
+        endDistance: localSegment.samples.at(-1).distance
+      };
+      const localSections = sectionsForInterval(constructionSections, localRange);
+      if (intervalOwnsRoadSurface(interval.mode)) {
+        appendStrip(road, roadRows(localSegment, localSegment.samples), 'road-core', [1, 1, 1]);
+        appendStrip(
+          shoulder,
+          shoulderRows(localSegment, localSegment.samples, -1),
+          'left-shoulder',
+          [1, 0.45]
+        );
+        appendStrip(
+          shoulder,
+          shoulderRows(localSegment, localSegment.samples, 1),
+          'right-shoulder',
+          [1, 0.45]
+        );
+      } else if (interval.mode === 'stairs') {
+        appendStairs(road, localSegment, compiled.engineering);
+      }
       appendEarthwork(earthwork, localSegment, localSections);
       appendRetainingWalls(structure, localSegment, localSections);
       const bridgeProfile = appendBridge(structure, localSegment, localSections, baseHeightAt);
@@ -1124,11 +1147,21 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
         });
       }
       appendTunnel(structure, localSegment);
+      intervalSurfaces.push({
+        mode: interval.mode,
+        rows: roadRows(localSegment, localSegment.samples)
+      });
     }
     const isFromDeadEnd = (degree.get(segment.fromNode) || 0) === 1;
     const isToDeadEnd = (degree.get(segment.toNode) || 0) === 1;
-    if (isFromDeadEnd) appendEndCap(road, rows[0], 'dead-end-cap');
-    if (isToDeadEnd) appendEndCap(road, rows.at(-1), 'dead-end-cap');
+    const firstSurface = intervalSurfaces[0];
+    const lastSurface = intervalSurfaces.at(-1);
+    if (isFromDeadEnd && intervalOwnsRoadSurface(firstSurface?.mode)) {
+      appendEndCap(road, firstSurface.rows[0], 'dead-end-cap');
+    }
+    if (isToDeadEnd && intervalOwnsRoadSurface(lastSurface?.mode)) {
+      appendEndCap(road, lastSurface.rows.at(-1), 'dead-end-cap');
+    }
   }
 
   // Guides come from the exact compiled samples for every authored segment,

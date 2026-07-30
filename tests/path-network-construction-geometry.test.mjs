@@ -79,6 +79,61 @@ test('bridge mode resolves a span-appropriate structural family and leaves terra
   assert.ok(geometry.meshes.structure.groups.some(group => group.material.name === 'bridge-steel'));
   assert.ok(geometry.meshes.structure.groups.some(group => group.material.name === 'bridge-concrete'));
   assert.ok(terrainModifier.entries.every(entry => entry.construction.mode === 'bridge'));
+  assert.equal(geometry.meshes.road.roles.includes('road-core'), false);
+  assert.equal(geometry.meshes.shoulder.indices.length, 0);
+  assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-deck-top'));
+});
+
+test('mixed bridge intervals give the deck exclusive ownership of the span surface', () => {
+  const network = normalizePathNetwork({
+    id: 'mixed-bridge-surface-ownership',
+    nodes: [
+      { id: 'a', position: [0, 0, 0], heightMode: 'absolute' },
+      { id: 'b', position: [60, 0, 0], heightMode: 'absolute' }
+    ],
+    segments: [{
+      id: 'route',
+      fromNode: 'a',
+      toNode: 'b',
+      constructionMode: 'auto',
+      crossSectionProfile: { width: 4, shoulderWidth: 0.8, blendDistance: 2 }
+    }],
+    engineering: {
+      bridgeThreshold: 3,
+      minimumBridgeRunLength: 8,
+      bridgeIntervalPadding: 0,
+      maximumBridgeSpan: 40,
+      maximumFill: 2,
+      maxGradePercent: 20
+    }
+  });
+  const terrainHeightAt = x => x >= 20 && x <= 40 ? -8 : 0;
+  const compiled = compilePathNetwork(network, {
+    terrainHeightAt,
+    terrainNormalAt: () => [0, 1, 0],
+    spacing: 1
+  });
+  const terrainModifier = compilePathTerrainModifier(compiled, {
+    baseHeightAt: terrainHeightAt,
+    chunkSize: 16
+  });
+  const geometry = buildPathNetworkGeometry(compiled, { terrainModifier });
+  const bridge = compiled.segments[0].constructionIntervals.find(interval => interval.mode === 'bridge');
+  assert.ok(bridge, 'expected an automatic bridge interval over the sustained gap');
+  const roadPositions = [];
+  for (let index = 0; index < geometry.meshes.road.positions.length; index += 3) {
+    if (geometry.meshes.road.roles[index / 3] !== 'road-core') continue;
+    roadPositions.push(geometry.meshes.road.positions[index]);
+  }
+  assert.ok(roadPositions.some(x => x < bridge.startDistance + 0.001));
+  assert.ok(roadPositions.some(x => x > bridge.endDistance - 0.001));
+  assert.equal(
+    roadPositions.some(x => x > bridge.startDistance + 0.001 && x < bridge.endDistance - 0.001),
+    false,
+    'ordinary road triangles must not remain underneath the bridge deck'
+  );
+  assert.ok(geometry.meshes.structure.roles.some(role => role.endsWith('-deck-top')));
+  assert.equal(geometry.validation.valid, true, geometry.validation.errors.join(' '));
 });
 
 test('five bridge families generate distinct production topology and material groups', () => {
