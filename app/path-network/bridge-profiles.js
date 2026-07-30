@@ -56,6 +56,17 @@ export const PATH_BRIDGE_PROFILES = Object.freeze({
 });
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+const BRIDGE_MATERIAL_ROOT = '/assets/materials/path-structures';
+
+function textureSet(family) {
+  const root = `${BRIDGE_MATERIAL_ROOT}/${family}`;
+  return {
+    baseColor: `${root}/basecolor.jpg`,
+    normal: `${root}/normal-gl.jpg`,
+    roughness: `${root}/roughness.jpg`,
+    ao: `${root}/ao.jpg`
+  };
+}
 
 export function normalizeBridgeProfile(input = {}) {
   const hasAuthoredSupportSpacing = Object.prototype.hasOwnProperty.call(input || {}, 'supportSpacing')
@@ -117,19 +128,64 @@ export function resolveBridgeProfile(segment, sections = [], baseHeightAt = () =
 export function bridgeMaterialForRole(role = '') {
   const text = String(role);
   if (text.includes('timber') || text.includes('deck-slat')) {
-    return { name: 'bridge-timber', baseColor: [0.24, 0.105, 0.035, 1], roughness: 0.82, metallic: 0 };
+    return {
+      name: 'bridge-timber',
+      baseColor: [0.72, 0.58, 0.42, 1],
+      roughness: 0.82,
+      metallic: 0,
+      textureTintStrength: 0.38,
+      normalStrength: 0.82,
+      aoStrength: 0.9,
+      textureUrls: textureSet('timber')
+    };
   }
   if (text.includes('rope')) {
-    return { name: 'bridge-rope', baseColor: [0.12, 0.055, 0.02, 1], roughness: 0.96, metallic: 0 };
+    return {
+      name: 'bridge-rope',
+      baseColor: [0.15, 0.065, 0.018, 1],
+      roughness: 0.96,
+      metallic: 0,
+      textureTintStrength: 0.55,
+      normalStrength: 0.45,
+      aoStrength: 0.75,
+      textureUrls: textureSet('timber')
+    };
   }
   if (text.includes('steel')) {
-    return { name: 'bridge-steel', baseColor: [0.13, 0.17, 0.21, 1], roughness: 0.34, metallic: 0.72 };
+    return {
+      name: 'bridge-steel',
+      baseColor: [0.58, 0.64, 0.7, 1],
+      roughness: 0.34,
+      metallic: 0.72,
+      textureTintStrength: 0.32,
+      normalStrength: 0.72,
+      aoStrength: 0.85,
+      textureUrls: textureSet('steel')
+    };
   }
   if (text.includes('concrete')) {
-    return { name: 'bridge-concrete', baseColor: [0.34, 0.36, 0.37, 1], roughness: 0.9, metallic: 0 };
+    return {
+      name: 'bridge-concrete',
+      baseColor: [0.76, 0.77, 0.76, 1],
+      roughness: 0.9,
+      metallic: 0,
+      textureTintStrength: 0.28,
+      normalStrength: 0.88,
+      aoStrength: 0.9,
+      textureUrls: textureSet('concrete')
+    };
   }
   if (text.includes('stone') || text.includes('masonry') || text.includes('retaining') || text.includes('tunnel')) {
-    return { name: 'bridge-masonry', baseColor: [0.34, 0.31, 0.26, 1], roughness: 0.92, metallic: 0 };
+    return {
+      name: 'bridge-masonry',
+      baseColor: [0.68, 0.64, 0.56, 1],
+      roughness: 0.92,
+      metallic: 0,
+      textureTintStrength: 0.3,
+      normalStrength: 0.92,
+      aoStrength: 0.95,
+      textureUrls: textureSet('masonry')
+    };
   }
   return { name: 'path-structure', baseColor: [0.31, 0.34, 0.37, 1], roughness: 0.78, metallic: 0.05 };
 }

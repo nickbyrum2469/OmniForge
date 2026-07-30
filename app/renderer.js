@@ -321,6 +321,9 @@ void main(){
     vec3 pathN=uUsePathNormal>.5?texture(uPathNormalTexture,pathUV).xyz*2.0-1.0:vec3(0,0,1);
     vec3 mapped=mix(normalize(vec3(baseN.xy*uBaseNormalStrength,max(.05,baseN.z))),normalize(vec3(pathN.xy*uPathNormalStrength,max(.05,pathN.z))),blend);
     n=applyWorldNormal(n,mapped,1.0);
+  }else if(uUseBaseNormal>.5){
+    vec3 baseN=texture(uBaseNormalTexture,baseUV).xyz*2.0-1.0;
+    n=applyWorldNormal(n,baseN,uBaseNormalStrength);
   }
 
   float roughness=clamp(uRoughness,0.03,1.0);
@@ -902,9 +905,16 @@ export class Renderer3D{
     if(useImportedGroups){
       for(const group of mesh.groups){
         const material=group.material||mesh.sourceMaterials?.[group.materialIndex]||mesh.sourceMaterial||{};
-        const color=Array.isArray(material.baseColor)?material.baseColor:[.62,.66,.72,1],importedBase=this.textureFromUrl(material.textureUrls?.baseColor,false);
+        const color=Array.isArray(material.baseColor)?material.baseColor:[.62,.66,.72,1];
+        const importedBase=this.textureFromUrl(material.textureUrls?.baseColor,false);
+        const importedNormal=this.textureFromUrl(material.textureUrls?.normal,false);
+        const importedRoughness=this.textureFromUrl(material.textureUrls?.roughness,false);
+        const importedAO=this.textureFromUrl(material.textureUrls?.ao,false);
         set3('uBaseColor',new Float32Array([Number(color[0]??.62),Number(color[1]??.66),Number(color[2]??.72)]));
-        set1('uBaseColorIsLinear',1);set1('uBaseTextureTintStrength',1);bindMap(0,'uBaseTexture',importedBase);set1('uUseBaseTexture',importedBase.ready?1:0);set1('uBaseTextureScale',1);
+        set1('uBaseColorIsLinear',1);set1('uBaseTextureTintStrength',Number(material.textureTintStrength??1));
+        bindMap(0,'uBaseTexture',importedBase);bindMap(2,'uBaseNormalTexture',importedNormal);bindMap(4,'uBaseRoughnessTexture',importedRoughness);bindMap(6,'uBaseAOTexture',importedAO);
+        set1('uUseBaseTexture',importedBase.ready?1:0);set1('uUseBaseNormal',importedNormal.ready?1:0);set1('uUseBaseRoughness',importedRoughness.ready?1:0);set1('uUseBaseAO',importedAO.ready?1:0);set1('uUseBaseHeight',0);
+        set1('uBaseTextureScale',1);set1('uBaseNormalStrength',Number(material.normalStrength??1));set1('uBaseRoughnessMultiplier',Number(material.roughnessMultiplier??1));set1('uBaseAOStrength',Number(material.aoStrength??1));
         const alpha=Number(color[3]??1);set1('uOpacity',alpha);set1('uRoughness',Number(material.roughness??.8));set1('uMetallic',Number(material.metallic??0));
         if(alpha<.999){gl.enable(gl.BLEND);gl.depthMask(false);}else{gl.disable(gl.BLEND);gl.depthMask(true);}
         if(material.doubleSided)gl.disable(gl.CULL_FACE);else gl.enable(gl.CULL_FACE);

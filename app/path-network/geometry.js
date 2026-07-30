@@ -399,12 +399,21 @@ function appendEndCap(builder, row, role) {
   }
 }
 
-function appendQuad(builder, a, b, c, d, role, uvScale = 1) {
+function appendQuad(
+  builder,
+  a,
+  b,
+  c,
+  d,
+  role,
+  uvScale = Math.max(0.25, distance3(a, b) / 2),
+  uvScaleV = Math.max(0.25, distance3(a, c) / 2)
+) {
   const base = builder.positions.length / 3;
   pushVertex(builder, a, [0, 0], 1, role);
   pushVertex(builder, b, [uvScale, 0], 1, role);
-  pushVertex(builder, c, [0, 1], 1, role);
-  pushVertex(builder, d, [uvScale, 1], 1, role);
+  pushVertex(builder, c, [0, uvScaleV], 1, role);
+  pushVertex(builder, d, [uvScale, uvScaleV], 1, role);
   pushTriangle(builder, base, base + 1, base + 2);
   pushTriangle(builder, base + 1, base + 3, base + 2);
 }
