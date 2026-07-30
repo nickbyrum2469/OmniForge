@@ -68,7 +68,11 @@ test('bridge mode resolves a span-appropriate structural family and leaves terra
   assert.equal(geometry.validation.valid, true, geometry.validation.errors.join(' '));
   assert.equal(geometry.bridgeSelections[0].bridgeStyle, 'steel-girder');
   assert.ok(geometry.meshes.structure.roles.includes('bridge-steel-main-girder'));
-  assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-hammerhead-pier'));
+  assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-pier-footing'));
+  assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-pier-column'));
+  assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-pier-cap'));
+  assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-abutment-backwall'));
+  assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-abutment-wingwall'));
   assert.equal(geometry.meshes.structure.roles.includes('bridge-pier'), false);
   assert.ok(geometry.meshes.structure.groups.some(group => group.material.name === 'bridge-steel'));
   assert.ok(geometry.meshes.structure.groups.some(group => group.material.name === 'bridge-concrete'));

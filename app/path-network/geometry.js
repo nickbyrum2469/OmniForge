@@ -19,6 +19,11 @@ const normalize3 = (value, fallback = [0, 1, 0]) => {
   return length > EPSILON ? scale3(value, 1 / length) : [...fallback];
 };
 const distance3 = (a, b) => length3(sub3(a, b));
+const mix3 = (a, b, amount) => [
+  lerp(a[0], b[0], amount),
+  lerp(a[1], b[1], amount),
+  lerp(a[2], b[2], amount)
+];
 
 function createMeshBuilder(kind) {
   return {
@@ -555,6 +560,73 @@ function appendBridgeRailings(builder, sections, role) {
   }
 }
 
+function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materialRole = 'bridge-concrete') {
+  for (const index of [0, sections.length - 1]) {
+    const section = sections[index];
+    const frame = sectionFrame(sections, index);
+    const direction = index === 0 ? -1 : 1;
+    const terrainY = finite(
+      baseHeightAt(section.center[0], section.center[2]),
+      section.center[1] - profile.deckThickness - 0.5
+    );
+    const seatY = section.center[1] - profile.deckThickness;
+    const wallHeight = Math.max(0.45, seatY - terrainY);
+    const footingCenter = add3(
+      add3(section.center, scale3(frame.tangent, direction * 0.55)),
+      scale3(frame.up, -(section.center[1] - terrainY) + 0.18)
+    );
+    appendOrientedBox(
+      builder,
+      footingCenter,
+      frame.tangent,
+      frame.side,
+      frame.up,
+      [2.1, profile.width + 2.4, 0.36],
+      `${materialRole}-abutment-footing`
+    );
+    appendOrientedBox(
+      builder,
+      [
+        section.center[0] + frame.tangent[0] * direction * 0.55,
+        terrainY + wallHeight * 0.5,
+        section.center[2] + frame.tangent[2] * direction * 0.55
+      ],
+      frame.tangent,
+      frame.side,
+      frame.up,
+      [0.72, profile.width + 1.5, wallHeight],
+      `${materialRole}-abutment-backwall`
+    );
+    for (const sign of [-1, 1]) {
+      const wallTop = add3(
+        add3(section.center, scale3(frame.side, sign * (profile.width * 0.5 + 0.6))),
+        scale3(frame.up, -profile.deckThickness * 0.6)
+      );
+      const wallTail = add3(
+        add3(wallTop, scale3(frame.tangent, direction * 2)),
+        scale3(frame.side, sign * 0.45)
+      );
+      wallTail[1] = Math.max(terrainY + 0.3, wallTail[1] - 0.45);
+      appendBeamBetween(
+        builder,
+        [wallTop[0], terrainY + Math.max(0.25, wallHeight * 0.35), wallTop[2]],
+        wallTop,
+        0.38,
+        0.55,
+        `${materialRole}-abutment-wingwall`
+      );
+      appendBeamBetween(
+        builder,
+        wallTop,
+        wallTail,
+        0.34,
+        0.5,
+        `${materialRole}-abutment-wingwall`
+      );
+    }
+  }
+}
+
 function appendTimberTrestle(builder, segment, sections, baseHeightAt, profile) {
   appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-timber-deck');
   for (let index = 1; index < sections.length; index += 1) {
@@ -591,6 +663,7 @@ function appendTimberTrestle(builder, segment, sections, baseHeightAt, profile) 
     appendBeamBetween(builder, posts[0].bottom, posts[1].top, 0.16, 0.16, 'bridge-timber-cross-brace');
     appendBeamBetween(builder, posts[1].bottom, posts[0].top, 0.16, 0.16, 'bridge-timber-cross-brace');
   }
+  appendBridgeAbutments(builder, sections, baseHeightAt, profile, 'bridge-timber');
   if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-timber-railing');
 }
 
@@ -632,18 +705,21 @@ function appendStoneArch(builder, segment, sections, baseHeightAt, profile) {
       'bridge-stone-abutment'
     );
   }
+  appendBridgeAbutments(builder, sections, baseHeightAt, profile, 'bridge-stone');
   if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-stone-parapet');
 }
 
 function appendSteelGirder(builder, segment, sections, baseHeightAt, profile) {
   appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-concrete-deck');
+  const girderCount = clamp(Math.round(profile.width / 2) + 2, 3, 8);
   for (let index = 1; index < sections.length; index += 1) {
-    for (const key of ['roadLeft', 'roadRight']) {
-      const start = [...sections[index - 1][key]];
-      const end = [...sections[index][key]];
+    for (let girder = 0; girder < girderCount; girder += 1) {
+      const amount = girderCount === 1 ? 0.5 : girder / (girderCount - 1);
+      const start = mix3(sections[index - 1].roadLeft, sections[index - 1].roadRight, amount);
+      const end = mix3(sections[index].roadLeft, sections[index].roadRight, amount);
       start[1] -= profile.deckThickness + 0.45;
       end[1] -= profile.deckThickness + 0.45;
-      appendBeamBetween(builder, start, end, 0.32, 0.82, 'bridge-steel-main-girder');
+      appendBeamBetween(builder, start, end, 0.24, 0.72, 'bridge-steel-main-girder');
     }
   }
   for (const index of sectionIndicesAtSpacing(sections, 4, true)) {
@@ -658,17 +734,55 @@ function appendSteelGirder(builder, segment, sections, baseHeightAt, profile) {
     const section = sections[index];
     const frame = sectionFrame(sections, index);
     const groundY = finite(baseHeightAt(section.center[0], section.center[2]), section.center[1] - 1);
-    const height = Math.max(0.4, section.center[1] - profile.deckThickness - groundY);
+    const capY = section.center[1] - profile.deckThickness - 0.48;
+    const height = Math.max(0.4, capY - groundY);
     appendOrientedBox(
       builder,
-      [section.center[0], groundY + height * 0.5, section.center[2]],
+      [section.center[0], groundY + 0.24, section.center[2]],
       frame.tangent,
       frame.side,
       frame.up,
-      [1.3, Math.max(1.2, profile.width * 0.42), height],
-      'bridge-concrete-hammerhead-pier'
+      [2.4, Math.max(2.6, profile.width + 1.8), 0.48],
+      'bridge-concrete-pier-footing'
+    );
+    const lowerSpread = Math.max(0.75, profile.width * 0.22);
+    const upperSpread = Math.max(0.95, profile.width * 0.34);
+    for (const sign of [-1, 1]) {
+      const bottom = add3(
+        [section.center[0], groundY + 0.42, section.center[2]],
+        scale3(frame.side, sign * lowerSpread)
+      );
+      const top = add3(
+        [section.center[0], capY - 0.18, section.center[2]],
+        scale3(frame.side, sign * upperSpread)
+      );
+      appendBeamBetween(
+        builder,
+        bottom,
+        top,
+        clamp(0.48 + height * 0.012, 0.5, 0.86),
+        clamp(0.52 + height * 0.012, 0.55, 0.9),
+        'bridge-concrete-pier-column'
+      );
+    }
+    const capLeft = add3(
+      [section.center[0], capY, section.center[2]],
+      scale3(frame.side, -(profile.width * 0.5 + 0.7))
+    );
+    const capRight = add3(
+      [section.center[0], capY, section.center[2]],
+      scale3(frame.side, profile.width * 0.5 + 0.7)
+    );
+    appendBeamBetween(
+      builder,
+      capLeft,
+      capRight,
+      0.75,
+      0.72,
+      'bridge-concrete-pier-cap'
     );
   }
+  appendBridgeAbutments(builder, sections, baseHeightAt, profile, 'bridge-concrete');
   if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-steel-railing');
 }
 
@@ -684,6 +798,7 @@ function appendMasonryCauseway(builder, segment, sections, baseHeightAt, profile
       };
     }), 'bridge-masonry-sidewall', [1, 1]);
   }
+  appendBridgeAbutments(builder, sections, baseHeightAt, profile, 'bridge-masonry');
   if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-masonry-parapet');
 }
 
@@ -728,6 +843,7 @@ function appendRopeFootbridge(builder, segment, sections, baseHeightAt, profile)
       appendBeamBetween(builder, foot, top, 0.24, 0.24, 'bridge-timber-anchor-post');
     }
   }
+  appendBridgeAbutments(builder, sections, baseHeightAt, profile, 'bridge-timber');
 }
 
 function crossSectionsBySegment(terrainModifier) {
