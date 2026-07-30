@@ -71,8 +71,21 @@ test('road, shoulder, ditch, and blend use one signed-distance field', () => {
   assert.equal(ditch.materialWeights.earthwork, 1);
   assert.ok(blend.materialWeights.terrain > 0);
   assert.ok(blend.materialWeights.earthwork > 0);
-  assert.equal(road.height, road.targetHeight);
+  assert.equal(road.terrainUnderlayClearance, 0.04);
+  assert.ok(Math.abs((road.targetHeight - road.height) - 0.04) < 1e-9);
+  assert.equal(road.supportHeight, road.height);
   assert.notEqual(road.height, road.baseHeight);
+});
+
+test('visible construction surface remains above its terrain support underlay', () => {
+  const modifier = modifierFor('cut-fill');
+  const road = samplePathTerrainModifier(modifier, 20, 0);
+  const shoulder = samplePathTerrainModifier(modifier, 20, 3.5);
+  const outer = samplePathTerrainModifier(modifier, 20, 8);
+
+  assert.ok(road.targetHeight - road.height >= 0.039);
+  assert.ok(shoulder.targetHeight - shoulder.height >= 0.039);
+  assert.ok(Math.abs(outer.height - outer.baseHeight) < 1e-9);
 });
 
 test('terrain and material influence stop at the compiled segment end caps', () => {

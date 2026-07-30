@@ -158,8 +158,23 @@ function sampleEntry(entry, x, z, baseHeight, engineering) {
   const applies = terrainModeApplies(mode, profile);
   const maxCut = Math.max(0, finite(engineering.maxCutDepth, 6));
   const maxFill = Math.max(0, finite(engineering.maxFillDepth, 2.5));
-  const boundedTarget = clamp(targetHeight, baseHeight - maxCut, baseHeight + maxFill);
-  const height = applies ? lerp(baseHeight, boundedTarget, influence) : baseHeight;
+  // The compiled road, shoulder, and earthwork meshes are the authoritative
+  // visible/collision/navigation surface. The terrain modifier is their
+  // support underlay. Separating those surfaces prevents coplanar z-fighting
+  // without changing the authored construction elevation or the untouched
+  // terrain at the feathered outer boundary.
+  const terrainUnderlayClearance = clamp(profile.terrainUnderlayClearance ?? 0.04, 0.005, 0.25);
+  const underlayWeight = zone === 'blend' ? influence : 1;
+  // Reserve the underlay separation inside the configured cut budget. The
+  // support terrain therefore never exceeds maxCutDepth merely to make room
+  // for the visible road surface.
+  const boundedTarget = clamp(
+    targetHeight,
+    baseHeight - maxCut + terrainUnderlayClearance * underlayWeight,
+    baseHeight + maxFill
+  );
+  const supportHeight = boundedTarget - terrainUnderlayClearance * underlayWeight;
+  const height = applies ? lerp(baseHeight, supportHeight, influence) : baseHeight;
   return {
     entryId: entry.id,
     segmentId: entry.segmentId,
@@ -172,6 +187,8 @@ function sampleEntry(entry, x, z, baseHeight, engineering) {
     center: [nearest.x, centerY, nearest.z],
     baseHeight,
     targetHeight: boundedTarget,
+    supportHeight,
+    terrainUnderlayClearance: applies ? terrainUnderlayClearance * underlayWeight : 0,
     height,
     influence: applies ? influence : 0,
     zone,

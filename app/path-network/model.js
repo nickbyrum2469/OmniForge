@@ -56,6 +56,10 @@ function defaultCrossSection(source = {}) {
     cutSlopeRatio: clamp(source.cutSlopeRatio ?? 1.5, 0.25, 10),
     fillSlopeRatio: clamp(source.fillSlopeRatio ?? 2, 0.25, 10),
     blendDistance: clamp(source.blendDistance ?? 2.5, 0.05, 200),
+    // The road/shoulder meshes own the visible construction surface. Keep the
+    // supporting terrain slightly below them so the two independently
+    // tessellated surfaces cannot z-fight or intermittently bury the road.
+    terrainUnderlayClearance: clamp(source.terrainUnderlayClearance ?? 0.04, 0.005, 0.25),
     terrainModificationEnabled: source.terrainModificationEnabled !== false
   };
 }
