@@ -571,9 +571,10 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
     );
     const seatY = section.center[1] - profile.deckThickness;
     const wallHeight = Math.max(1.1, seatY - terrainY);
+    const wallBottomY = seatY - wallHeight;
     const footingCenter = add3(
       add3(section.center, scale3(frame.tangent, direction * 0.55)),
-      scale3(frame.up, -(section.center[1] - terrainY) + 0.18)
+      scale3(frame.up, Math.min(terrainY - 0.22, wallBottomY + 0.12) - section.center[1])
     );
     appendOrientedBox(
       builder,
@@ -588,7 +589,7 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
       builder,
       [
         section.center[0] + frame.tangent[0] * direction * 0.55,
-        terrainY + wallHeight * 0.5,
+        seatY - wallHeight * 0.5,
         section.center[2] + frame.tangent[2] * direction * 0.55
       ],
       frame.tangent,
@@ -606,10 +607,15 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
         add3(wallTop, scale3(frame.tangent, direction * 2)),
         scale3(frame.side, sign * 0.45)
       );
-      wallTail[1] = Math.max(terrainY + 0.3, wallTail[1] - 0.45);
+      wallTail[1] = Math.min(wallTop[1] - 0.3, terrainY + 0.15);
+      const wallRoot = [
+        wallTop[0],
+        Math.min(wallTop[1] - 0.3, Math.max(wallBottomY + 0.15, terrainY - 0.15)),
+        wallTop[2]
+      ];
       appendBeamBetween(
         builder,
-        [wallTop[0], terrainY + Math.max(0.25, wallHeight * 0.35), wallTop[2]],
+        wallRoot,
         wallTop,
         0.52,
         0.72,
