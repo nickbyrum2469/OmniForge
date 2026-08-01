@@ -49,12 +49,10 @@ function pushVertex(builder, position, uv, blend, role) {
 }
 
 function pushTriangle(builder, a, b, c) {
-  const pa = builder.positions.slice(a * 3, a * 3 + 3);
-  const pb = builder.positions.slice(b * 3, b * 3 + 3);
-  const pc = builder.positions.slice(c * 3, c * 3 + 3);
-  const normal = cross3(sub3(pb, pa), sub3(pc, pa));
-  if (normal[1] < 0) builder.indices.push(a, c, b);
-  else builder.indices.push(a, b, c);
+  // Winding is part of the authored topology. Forcing every triangle to face
+  // upward corrupts bridge undersides, box side walls, tunnel linings, and
+  // shadow meshes. Callers must provide counter-clockwise outward winding.
+  builder.indices.push(a, b, c);
   builder.triangleRoles.push(builder.roles[a] || builder.roles[b] || builder.roles[c] || builder.kind);
 }
 
@@ -197,17 +195,20 @@ function shoulderRows(segment, samples, sideSign) {
   const halfWidth = profile.width * 0.5;
   const outerDistance = halfWidth + profile.shoulderWidth;
   const repeat = Math.max(0.25, profile.textureRepeatLength || 5);
-  return samples.map(sample => ({
+  return samples.map(sample => {
+    const inner = add3(sample.position, scale3(sample.side, sideSign * halfWidth));
+    const outer = add3(
+      add3(sample.position, scale3(sample.side, sideSign * outerDistance)),
+      [0, -profile.shoulderDrop, 0]
+    );
+    return {
     distance: sample.distance,
     textureRepeatLength: repeat,
-    positions: [
-      add3(sample.position, scale3(sample.side, sideSign * halfWidth)),
-      add3(
-        add3(sample.position, scale3(sample.side, sideSign * outerDistance)),
-        [0, -profile.shoulderDrop, 0]
-      )
-    ]
-  }));
+      // Both shoulders keep counter-clockwise top-surface winding. The left
+      // strip runs outer-to-inner while the right runs inner-to-outer.
+      positions: sideSign < 0 ? [outer, inner] : [inner, outer]
+    };
+  });
 }
 
 function lineIntersection2(a, directionA, b, directionB) {
@@ -418,21 +419,6 @@ function appendQuad(
   pushTriangle(builder, base + 1, base + 3, base + 2);
 }
 
-function appendBox(builder, center, size, role) {
-  const [cx, cy, cz] = center;
-  const [sx, sy, sz] = size.map(value => Math.max(0.02, value * 0.5));
-  const points = [
-    [cx - sx, cy - sy, cz - sz], [cx + sx, cy - sy, cz - sz],
-    [cx - sx, cy + sy, cz - sz], [cx + sx, cy + sy, cz - sz],
-    [cx - sx, cy - sy, cz + sz], [cx + sx, cy - sy, cz + sz],
-    [cx - sx, cy + sy, cz + sz], [cx + sx, cy + sy, cz + sz]
-  ];
-  for (const [a, b, c, d] of [
-    [0, 1, 2, 3], [5, 4, 7, 6], [4, 0, 6, 2],
-    [1, 5, 3, 7], [2, 3, 6, 7], [4, 5, 0, 1]
-  ]) appendQuad(builder, points[a], points[b], points[c], points[d], role);
-}
-
 function appendOrientedBox(builder, center, tangentInput, sideInput, upInput, size, role) {
   const tangent = normalize3(tangentInput);
   let side = normalize3(sideInput);
@@ -455,16 +441,26 @@ function appendOrientedBox(builder, center, tangentInput, sideInput, upInput, si
     ),
     scale3(up, vertical * halfHeight)
   );
-  const points = [
-    point(-1, -1, -1), point(1, -1, -1),
-    point(-1, -1, 1), point(1, -1, 1),
-    point(-1, 1, -1), point(1, 1, -1),
-    point(-1, 1, 1), point(1, 1, 1)
-  ];
-  for (const [a, b, c, d] of [
-    [0, 1, 2, 3], [5, 4, 7, 6], [4, 0, 6, 2],
-    [1, 5, 3, 7], [2, 3, 6, 7], [4, 5, 0, 1]
-  ]) appendQuad(builder, points[a], points[b], points[c], points[d], role);
+  const points = {
+    nnn: point(-1, -1, -1),
+    pnn: point(1, -1, -1),
+    nnp: point(-1, -1, 1),
+    pnp: point(1, -1, 1),
+    npn: point(-1, 1, -1),
+    ppn: point(1, 1, -1),
+    npp: point(-1, 1, 1),
+    ppp: point(1, 1, 1)
+  };
+  // Local axes are right-handed: tangent x side = up. Each face is emitted
+  // counter-clockwise when viewed from outside, including the underside.
+  for (const face of [
+    [points.nnp, points.pnp, points.npp, points.ppp], // +up
+    [points.npn, points.ppn, points.nnn, points.pnn], // -up
+    [points.nnn, points.pnn, points.nnp, points.pnp], // -side
+    [points.npp, points.ppp, points.npn, points.ppn], // +side
+    [points.npn, points.nnn, points.npp, points.nnp], // -tangent
+    [points.pnn, points.ppn, points.pnp, points.ppp]  // +tangent
+  ]) appendQuad(builder, ...face, role);
 }
 
 function appendBeamBetween(builder, start, end, width, height, role) {
@@ -538,17 +534,36 @@ function appendBridgeDeck(builder, sections, thickness, role) {
     ]
   }));
   appendStrip(builder, top, `${role}-top`, [1, 1]);
-  appendStrip(builder, bottom, `${role}-underside`, [1, 1]);
+  appendStrip(builder, bottom.map(row => ({
+    ...row,
+    positions: [row.positions[1], row.positions[0]]
+  })), `${role}-underside`, [1, 1]);
   appendStrip(builder, sections.map((section, index) => ({
     distance: section.distance,
     textureRepeatLength: 4,
-    positions: [top[index].positions[0], bottom[index].positions[0]]
+    positions: [bottom[index].positions[0], top[index].positions[0]]
   })), `${role}-left-edge`, [1, 1]);
   appendStrip(builder, sections.map((section, index) => ({
     distance: section.distance,
     textureRepeatLength: 4,
-    positions: [bottom[index].positions[1], top[index].positions[1]]
+    positions: [top[index].positions[1], bottom[index].positions[1]]
   })), `${role}-right-edge`, [1, 1]);
+  appendQuad(
+    builder,
+    top[0].positions[1],
+    top[0].positions[0],
+    bottom[0].positions[1],
+    bottom[0].positions[0],
+    `${role}-start-face`
+  );
+  appendQuad(
+    builder,
+    top.at(-1).positions[0],
+    top.at(-1).positions[1],
+    bottom.at(-1).positions[0],
+    bottom.at(-1).positions[1],
+    `${role}-end-face`
+  );
 }
 
 function appendBridgeRailings(builder, sections, role) {
@@ -574,68 +589,63 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
     const section = sections[index];
     const frame = sectionFrame(sections, index);
     const direction = index === 0 ? -1 : 1;
-    const terrainY = finite(
-      baseHeightAt(section.center[0], section.center[2]),
+    const horizontalTangent = normalize3([frame.tangent[0], 0, frame.tangent[2]], [0, 0, 1]);
+    const horizontalSide = normalize3([-horizontalTangent[2], 0, horizontalTangent[0]], [1, 0, 0]);
+    const up = [0, 1, 0];
+    const terrainSamples = [
+      section.center,
+      add3(section.center, scale3(horizontalSide, profile.width * 0.5 + 0.65)),
+      add3(section.center, scale3(horizontalSide, -(profile.width * 0.5 + 0.65)))
+    ].map(point => finite(
+      baseHeightAt(point[0], point[2]),
       section.center[1] - profile.deckThickness - 0.5
-    );
+    ));
+    const terrainY = Math.min(...terrainSamples);
     const seatY = section.center[1] - profile.deckThickness;
-    const wallHeight = Math.max(1.1, seatY - terrainY);
+    const wallHeight = clamp(seatY - terrainY, 1.1, 14);
     const wallBottomY = seatY - wallHeight;
-    const footingCenter = add3(
-      add3(section.center, scale3(frame.tangent, direction * 0.55)),
-      scale3(frame.up, Math.min(terrainY - 0.48, wallBottomY - 0.26) - section.center[1])
-    );
+    const backCenter = add3(section.center, scale3(horizontalTangent, direction * 0.62));
+    const footingCenter = [
+      backCenter[0],
+      Math.min(terrainY - 0.22, wallBottomY - 0.22),
+      backCenter[2]
+    ];
     appendOrientedBox(
       builder,
       footingCenter,
-      frame.tangent,
-      frame.side,
-      frame.up,
+      horizontalTangent,
+      horizontalSide,
+      up,
       [2.8, profile.width + 3.2, 0.52],
       `${materialRole}-abutment-footing`
     );
     appendOrientedBox(
       builder,
       [
-        section.center[0] + frame.tangent[0] * direction * 0.55,
+        backCenter[0],
         seatY - wallHeight * 0.5,
-        section.center[2] + frame.tangent[2] * direction * 0.55
+        backCenter[2]
       ],
-      frame.tangent,
-      frame.side,
-      frame.up,
+      horizontalTangent,
+      horizontalSide,
+      up,
       [1.05, profile.width + 2.2, wallHeight],
       `${materialRole}-abutment-backwall`
     );
     for (const sign of [-1, 1]) {
-      const wallTop = add3(
-        add3(section.center, scale3(frame.side, sign * (profile.width * 0.5 + 0.6))),
-        scale3(frame.up, -profile.deckThickness * 0.6)
+      const wingHeight = Math.max(0.9, Math.min(4, wallHeight * 0.72));
+      const wingCenter = add3(
+        add3(backCenter, scale3(horizontalTangent, direction * 1.45)),
+        scale3(horizontalSide, sign * (profile.width * 0.5 + 0.82))
       );
-      const wallTail = add3(
-        add3(wallTop, scale3(frame.tangent, direction * 2)),
-        scale3(frame.side, sign * 0.45)
-      );
-      wallTail[1] = Math.min(wallTop[1] - 0.3, terrainY + 0.15);
-      const wallRoot = [
-        wallTop[0],
-        Math.min(wallTop[1] - 0.3, Math.max(wallBottomY + 0.15, terrainY - 0.15)),
-        wallTop[2]
-      ];
-      appendBeamBetween(
+      wingCenter[1] = seatY - wingHeight * 0.5 - 0.08;
+      appendOrientedBox(
         builder,
-        wallRoot,
-        wallTop,
-        0.52,
-        0.72,
-        `${materialRole}-abutment-wingwall`
-      );
-      appendBeamBetween(
-        builder,
-        wallTop,
-        wallTail,
-        0.48,
-        0.68,
+        wingCenter,
+        horizontalTangent,
+        horizontalSide,
+        up,
+        [3.1, 0.5, wingHeight],
         `${materialRole}-abutment-wingwall`
       );
     }
@@ -1128,7 +1138,7 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
           shoulder,
           shoulderRows(localSegment, localSegment.samples, -1),
           'left-shoulder',
-          [1, 0.45]
+          [0.45, 1]
         );
         appendStrip(
           shoulder,

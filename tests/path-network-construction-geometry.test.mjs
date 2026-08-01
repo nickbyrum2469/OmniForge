@@ -84,6 +84,61 @@ test('bridge mode resolves a span-appropriate structural family and leaves terra
   assert.ok(geometry.meshes.structure.roles.includes('bridge-concrete-deck-top'));
 });
 
+test('bridge solids retain outward top, side, and underside winding', () => {
+  const { geometry } = build('bridge', {
+    startY: 8,
+    endY: 8,
+    span: 44,
+    width: 9,
+    bridgeStyle: 'steel-girder'
+  });
+  const mesh = geometry.meshes.structure;
+  const normalsForRole = role => {
+    const result = [];
+    for (let index = 0; index < mesh.roles.length; index += 1) {
+      if (mesh.roles[index] !== role) continue;
+      result.push(Array.from(mesh.normals.slice(index * 3, index * 3 + 3)));
+    }
+    return result;
+  };
+  const deckTop = normalsForRole('bridge-concrete-deck-top');
+  const deckUnderside = normalsForRole('bridge-concrete-deck-underside');
+  const girder = normalsForRole('bridge-steel-main-girder');
+  assert.ok(deckTop.length > 0);
+  assert.ok(deckUnderside.length > 0);
+  assert.ok(deckTop.every(normal => normal[1] > 0.9), 'deck top must face upward');
+  assert.ok(deckUnderside.every(normal => normal[1] < -0.9), 'deck underside must face downward');
+  assert.ok(girder.some(normal => normal[1] > 0.9), 'girder must have a top face');
+  assert.ok(girder.some(normal => normal[1] < -0.9), 'girder must have an underside face');
+  assert.ok(girder.some(normal => Math.abs(normal[1]) < 0.1), 'girder must have side faces');
+});
+
+test('bridge abutments stay bounded around their approach portals', () => {
+  const { geometry } = build('bridge', {
+    startY: 8,
+    endY: 8,
+    span: 44,
+    width: 9,
+    bridgeStyle: 'steel-girder'
+  });
+  const mesh = geometry.meshes.structure;
+  const abutmentVertices = [];
+  for (let index = 0; index < mesh.roles.length; index += 1) {
+    if (!mesh.roles[index].includes('abutment')) continue;
+    abutmentVertices.push(Array.from(mesh.positions.slice(index * 3, index * 3 + 3)));
+  }
+  assert.ok(abutmentVertices.length > 0);
+  assert.ok(abutmentVertices.every(point => point.every(Number.isFinite)));
+  assert.ok(
+    abutmentVertices.every(point => point[0] >= -5 && point[0] <= 49),
+    'abutments must remain local to the two bridge portals'
+  );
+  assert.ok(
+    abutmentVertices.every(point => Math.abs(point[2]) <= 12),
+    'abutments must not be projected sideways by a sloped road frame'
+  );
+});
+
 test('mixed bridge intervals give the deck exclusive ownership of the span surface', () => {
   const network = normalizePathNetwork({
     id: 'mixed-bridge-surface-ownership',
