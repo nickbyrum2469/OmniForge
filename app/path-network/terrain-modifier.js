@@ -241,6 +241,11 @@ function crossSectionForSample(segment, sample, baseHeightAt) {
   ];
   const roadLeft = point(-extents.halfRoad);
   const roadRight = point(extents.halfRoad);
+  const roadCenter = [
+    sample.position[0] + sample.normal[0] * finite(profile.crownHeight, 0.08),
+    sample.position[1] + sample.normal[1] * finite(profile.crownHeight, 0.08),
+    sample.position[2] + sample.normal[2] * finite(profile.crownHeight, 0.08)
+  ];
   const shoulderLeft = point(-extents.shoulderEdge);
   const shoulderRight = point(extents.shoulderEdge);
   shoulderLeft[1] -= finite(profile.shoulderDrop, 0.08);
@@ -265,6 +270,7 @@ function crossSectionForSample(segment, sample, baseHeightAt) {
     center: [...sample.position],
     construction: constructionAtDistance(segment, sample.distance),
     roadLeft,
+    roadCenter,
     roadRight,
     shoulderLeft,
     shoulderRight,

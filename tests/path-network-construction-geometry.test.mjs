@@ -188,6 +188,22 @@ test('mixed bridge intervals give the deck exclusive ownership of the span surfa
     'ordinary road triangles must not remain underneath the bridge deck'
   );
   assert.ok(geometry.meshes.structure.roles.some(role => role.endsWith('-deck-top')));
+  const positionsForRoleAtX = (mesh, roleMatches, x) => {
+    const result = new Set();
+    for (let index = 0; index < mesh.roles.length; index += 1) {
+      if (!roleMatches(mesh.roles[index])) continue;
+      const point = Array.from(mesh.positions.slice(index * 3, index * 3 + 3));
+      if (Math.abs(point[0] - x) > 0.001) continue;
+      result.add(point.map(value => value.toFixed(5)).join(':'));
+    }
+    return result;
+  };
+  for (const boundary of [bridge.startDistance, bridge.endDistance]) {
+    const roadBoundary = positionsForRoleAtX(geometry.meshes.road, role => role === 'road-core', boundary);
+    const deckBoundary = positionsForRoleAtX(geometry.meshes.structure, role => role.endsWith('-deck-top'), boundary);
+    assert.ok(roadBoundary.size >= 3, 'road boundary must include left, crown, and right vertices');
+    assert.deepEqual(deckBoundary, roadBoundary, 'bridge deck must share the exact crowned road boundary');
+  }
   assert.equal(geometry.validation.valid, true, geometry.validation.errors.join(' '));
 });
 

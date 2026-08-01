@@ -522,16 +522,17 @@ function appendBridgeDeck(builder, sections, thickness, role) {
     textureRepeatLength: 4,
     positions: [
       [...section.roadLeft],
+      [...(section.roadCenter || section.center)],
       [...section.roadRight]
     ]
   }));
   const bottom = sections.map(section => ({
     distance: section.distance,
     textureRepeatLength: 4,
-    positions: [
-      [section.roadLeft[0], section.roadLeft[1] - thickness, section.roadLeft[2]],
-      [section.roadRight[0], section.roadRight[1] - thickness, section.roadRight[2]]
-    ]
+    positions: (section.roadCenter
+      ? [section.roadLeft, section.roadCenter, section.roadRight]
+      : [section.roadLeft, section.center, section.roadRight]
+    ).map(point => [point[0], point[1] - thickness, point[2]])
   }));
   appendStrip(builder, top, `${role}-top`, [1, 1]);
   appendStrip(builder, bottom.map(row => ({
@@ -550,18 +551,26 @@ function appendBridgeDeck(builder, sections, thickness, role) {
   })), `${role}-right-edge`, [1, 1]);
   appendQuad(
     builder,
-    top[0].positions[1],
-    top[0].positions[0],
-    bottom[0].positions[1],
-    bottom[0].positions[0],
+    top[0].positions[1], top[0].positions[0],
+    bottom[0].positions[1], bottom[0].positions[0],
     `${role}-start-face`
   );
   appendQuad(
     builder,
-    top.at(-1).positions[0],
-    top.at(-1).positions[1],
-    bottom.at(-1).positions[0],
-    bottom.at(-1).positions[1],
+    top[0].positions[2], top[0].positions[1],
+    bottom[0].positions[2], bottom[0].positions[1],
+    `${role}-start-face`
+  );
+  appendQuad(
+    builder,
+    top.at(-1).positions[0], top.at(-1).positions[1],
+    bottom.at(-1).positions[0], bottom.at(-1).positions[1],
+    `${role}-end-face`
+  );
+  appendQuad(
+    builder,
+    top.at(-1).positions[1], top.at(-1).positions[2],
+    bottom.at(-1).positions[1], bottom.at(-1).positions[2],
     `${role}-end-face`
   );
 }
