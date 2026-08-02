@@ -3,10 +3,13 @@ import {
   mat4Identity, mat4Multiply, mat4Perspective, mat4Ortho, mat4LookAt, mat4Invert,
   transformPoint, modelMatrix, normalMatrix3, hexToRgb, cameraForward
 } from './math.js';
-import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, normalizeTerrainProperties, terrainBounds } from './worldgen.js';
+import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, terrainBaseHeightAt, normalizeTerrainProperties, terrainBounds } from './worldgen.js';
 import { buildPathGuideSegmentsFromCorridor, buildTerrainConformingPathSurface, terrainPathSamplingDiagnostics } from './path-visuals.js';
+import { compileScenePathRuntimes, sampleScenePathTerrain } from './path-network/runtime.js';
+import { buildPathCostGuideData } from './path-network/debug-visualization.js';
 import { resolveViewportLighting } from './world-runtime.js';
 import { normalizeEnvironmentState } from './environment-runtime.js';
+import { pickTerrainPoint } from './terrain-picking.js';
 import { SkyPass } from './sky-pass.js';
 import { RenderGraph } from './render-graph.js';
 import { FrameResources, detectRenderCapabilities } from './frame-resources.js';
@@ -318,6 +321,9 @@ void main(){
     vec3 pathN=uUsePathNormal>.5?texture(uPathNormalTexture,pathUV).xyz*2.0-1.0:vec3(0,0,1);
     vec3 mapped=mix(normalize(vec3(baseN.xy*uBaseNormalStrength,max(.05,baseN.z))),normalize(vec3(pathN.xy*uPathNormalStrength,max(.05,pathN.z))),blend);
     n=applyWorldNormal(n,mapped,1.0);
+  }else if(uUseBaseNormal>.5){
+    vec3 baseN=texture(uBaseNormalTexture,baseUV).xyz*2.0-1.0;
+    n=applyWorldNormal(n,baseN,uBaseNormalStrength);
   }
 
   float roughness=clamp(uRoughness,0.03,1.0);
@@ -449,14 +455,192 @@ function cylinderMesh(seg=32){
 
 export function terrainHeight(terrain,x,z,paths=[]){return sharedTerrainHeightAt(terrain,x,z,paths);}
 export function pathBlendAt(paths,x,z){return sharedPathBlendAt(paths,x,z);}
-export function terrainMesh(object,paths){
+function activePathChunkKeys(pathRuntimes,chunkSize){
+  const active=new Set();
+  for(const runtime of pathRuntimes||[])for(const entry of runtime?.terrainModifier?.entries||[]){
+    const mode=entry?.construction?.mode;
+    if(entry?.profile?.terrainModificationEnabled===false||['bridge','tunnel','invalid'].includes(mode))continue;
+    const minX=Math.floor(entry.bounds.minX/chunkSize),maxX=Math.floor(entry.bounds.maxX/chunkSize);
+    const minZ=Math.floor(entry.bounds.minZ/chunkSize),maxZ=Math.floor(entry.bounds.maxZ/chunkSize);
+    for(let x=minX;x<=maxX;x++)for(let z=minZ;z<=maxZ;z++)active.add(`${x}:${z}`);
+  }
+  return active;
+}
+function pathTerrainVertexSample(object,pathRuntimes,x,z){
+  const baseY=terrainBaseHeightAt(object,x,z),pathSample=sampleScenePathTerrain(pathRuntimes,baseY,x,z);
+  return {
+    height:pathSample.height,
+    blend:['road','shoulder'].includes(pathSample.zone)?1-pathSample.materialWeights.terrain:0
+  };
+}
+function appendPathTerrainBoundaryStitches({object,pathRuntimes,bounds,origin,positions,normals,indices,uvs,blends}){
+  const [ox,oy,oz]=origin;
+  let vertexCount=0,triangleCount=0,maximumWidth=0;
+  const addVertex=point=>{
+    const index=positions.length/3;
+    positions.push(point[0]-ox,point[1]-oy,point[2]-oz);
+    normals.push(0,1,0);
+    uvs.push(
+      (point[0]-bounds.minX)/Math.max(1e-6,bounds.maxX-bounds.minX),
+      (point[2]-bounds.minZ)/Math.max(1e-6,bounds.maxZ-bounds.minZ)
+    );
+    blends.push(0);
+    vertexCount+=1;
+    return index;
+  };
+  const addTriangle=(a,b,c)=>{
+    const point=index=>positions.slice(index*3,index*3+3);
+    const A=point(a),B=point(b),C=point(c),face=cross(sub(B,A),sub(C,A));
+    if(face[1]<0)indices.push(a,c,b);else indices.push(a,b,c);
+    triangleCount+=1;
+  };
+  const addQuad=(a,b,c,d)=>{
+    const ia=addVertex(a),ib=addVertex(b),ic=addVertex(c),id=addVertex(d);
+    addTriangle(ia,ib,ic);
+    addTriangle(ib,id,ic);
+  };
+  for(const runtime of pathRuntimes||[]){
+    const segments=new Map((runtime?.compiled?.segments||[]).map(segment=>[segment.id,segment]));
+    const sectionsBySegment=new Map();
+    for(const section of runtime?.terrainModifier?.crossSections||[]){
+      if(!sectionsBySegment.has(section.segmentId))sectionsBySegment.set(section.segmentId,[]);
+      sectionsBySegment.get(section.segmentId).push(section);
+    }
+    for(const [segmentId,sections] of sectionsBySegment){
+      const segment=segments.get(segmentId);
+      if(!segment||segment.crossSectionProfile?.terrainModificationEnabled===false)continue;
+      const width=clamp(Math.max(.35,Number(segment.crossSectionProfile?.blendDistance||2.5)*.2),.35,.9);
+      maximumWidth=Math.max(maximumWidth,width);
+      const outside=(section,key)=>{
+        const inner=section[key],dx=inner[0]-section.center[0],dz=inner[2]-section.center[2],length=Math.hypot(dx,dz)||1;
+        const x=inner[0]+dx/length*width,z=inner[2]+dz/length*width;
+        return [x,terrainBaseHeightAt(object,x,z)-.015,z];
+      };
+      for(let index=0;index<sections.length-1;index+=1){
+        const current=sections[index],next=sections[index+1];
+        if(current.distance>next.distance)continue;
+        const currentMode=current.construction?.mode;
+        const nextMode=next.construction?.mode;
+        if(
+          ['bridge','tunnel','invalid'].includes(currentMode)
+          || ['bridge','tunnel','invalid'].includes(nextMode)
+        )continue;
+        addQuad(outside(current,'outerLeft'),current.outerLeft,outside(next,'outerLeft'),next.outerLeft);
+        addQuad(current.outerRight,outside(current,'outerRight'),next.outerRight,outside(next,'outerRight'));
+      }
+    }
+  }
+  return {vertexCount,triangleCount,maximumWidth};
+}
+function coarseTerrainEdgeSample(object,tile,edge,t,steps){
+  steps=Math.max(1,steps);
+  const scaled=clamp(t,0,1)*steps,index=Math.min(steps-1,Math.floor(scaled)),local=scaled-index;
+  const along0=index/steps,along1=(index+1)/steps;
+  const x0=edge==='left'?tile.minX:edge==='right'?tile.maxX:lerp(tile.minX,tile.maxX,along0);
+  const x1=edge==='left'?tile.minX:edge==='right'?tile.maxX:lerp(tile.minX,tile.maxX,along1);
+  const z0=edge==='bottom'?tile.minZ:edge==='top'?tile.maxZ:lerp(tile.minZ,tile.maxZ,along0);
+  const z1=edge==='bottom'?tile.minZ:edge==='top'?tile.maxZ:lerp(tile.minZ,tile.maxZ,along1);
+  return {
+    height:lerp(terrainBaseHeightAt(object,x0,z0),terrainBaseHeightAt(object,x1,z1),local),
+    blend:0
+  };
+}
+export function terrainMesh(object,paths,pathRuntimes=[]){
   const props=normalizeTerrainProperties(object.properties||{},object.transform||{}),resX=clamp(Math.round(Number(props.resolutionX||props.resolution||128)),8,256),resZ=clamp(Math.round(Number(props.resolutionZ||props.resolution||128)),8,256),bounds=props.bounds,p=[],n=[],idx=[],uv=[],blends=[];
   const ox=Number(object.transform.position?.[0]||0),oy=Number(object.transform.position?.[1]||0),oz=Number(object.transform.position?.[2]||0);
-  for(let z=0;z<=resZ;z++)for(let x=0;x<=resX;x++){
-    const wx=lerp(bounds.minX,bounds.maxX,x/resX),wz=lerp(bounds.minZ,bounds.maxZ,z/resZ),wy=terrainHeight(object,wx,wz,paths);
-    p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push(x/resX,z/resZ);blends.push(pathBlendAt(paths,wx,wz));
+  if(!pathRuntimes.length){
+    for(let z=0;z<=resZ;z++)for(let x=0;x<=resX;x++){
+      const wx=lerp(bounds.minX,bounds.maxX,x/resX),wz=lerp(bounds.minZ,bounds.maxZ,z/resZ),wy=terrainHeight(object,wx,wz,paths);
+      p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push(x/resX,z/resZ);blends.push(pathBlendAt(paths,wx,wz));
+    }
+    for(let z=0;z<resZ;z++)for(let x=0;x<resX;x++){const a=z*(resX+1)+x,b=a+resX+1;idx.push(a,b,a+1,b,b+1,a+1);}
+  }else{
+    // Path construction is rendered through complete terrain chunks. Modifier
+    // chunks use fine geometry, a one-chunk transition ring absorbs the density
+    // change, and untouched chunks keep the authored world budget. Every denser
+    // edge is projected to its path-aware coarser neighbor, so adjacent tiers
+    // describe the same boundary without a floating patch, curtain, or hole.
+    const chunkSize=clamp(Number(props.chunkSize||64),8,512);
+    const minChunkX=Math.floor(bounds.minX/chunkSize),maxChunkX=Math.ceil(bounds.maxX/chunkSize)-1;
+    const minChunkZ=Math.floor(bounds.minZ/chunkSize),maxChunkZ=Math.ceil(bounds.maxZ/chunkSize)-1;
+    const highKeys=activePathChunkKeys(pathRuntimes,chunkSize),transitionKeys=new Set(highKeys),tiles=new Map();
+    for(const key of highKeys){
+      const [cx,cz]=key.split(':').map(Number);
+      for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)transitionKeys.add(`${cx+dx}:${cz+dz}`);
+    }
+    const baseStepX=(bounds.maxX-bounds.minX)/resX,baseStepZ=(bounds.maxZ-bounds.minZ)/resZ;
+    for(let cz=minChunkZ;cz<=maxChunkZ;cz++)for(let cx=minChunkX;cx<=maxChunkX;cx++){
+      const minX=Math.max(bounds.minX,cx*chunkSize),maxX=Math.min(bounds.maxX,(cx+1)*chunkSize);
+      const minZ=Math.max(bounds.minZ,cz*chunkSize),maxZ=Math.min(bounds.maxZ,(cz+1)*chunkSize);
+      if(maxX<=minX||maxZ<=minZ)continue;
+      const key=`${cx}:${cz}`,tier=highKeys.has(key)?'high':transitionKeys.has(key)?'transition':'base';
+      tiles.set(`${cx}:${cz}`,{
+        cx,cz,minX,maxX,minZ,maxZ,tier,
+        lowStepsX:Math.max(1,Math.round((maxX-minX)/baseStepX)),
+        lowStepsZ:Math.max(1,Math.round((maxZ-minZ)/baseStepZ))
+      });
+    }
+    for(const tile of tiles.values()){
+      const spacing=tile.tier==='high'?.625:tile.tier==='transition'?2:null;
+      tile.stepsX=spacing?clamp(Math.ceil((tile.maxX-tile.minX)/spacing),2,128):tile.lowStepsX;
+      tile.stepsZ=spacing?clamp(Math.ceil((tile.maxZ-tile.minZ)/spacing),2,128):tile.lowStepsZ;
+    }
+    let highTileCount=0,transitionTileCount=0,maximumBoundaryMismatch=0;
+    for(const tile of tiles.values()){
+      const stepsX=tile.stepsX,stepsZ=tile.stepsZ;
+      if(tile.tier==='high')highTileCount+=1;
+      if(tile.tier==='transition')transitionTileCount+=1;
+      const offset=p.length/3;
+      for(let z=0;z<=stepsZ;z++)for(let x=0;x<=stepsX;x++){
+        const tx=x/stepsX,tz=z/stepsZ,wx=lerp(tile.minX,tile.maxX,tx),wz=lerp(tile.minZ,tile.maxZ,tz);
+        const leftNeighbor=tiles.get(`${tile.cx-1}:${tile.cz}`),rightNeighbor=tiles.get(`${tile.cx+1}:${tile.cz}`);
+        const bottomNeighbor=tiles.get(`${tile.cx}:${tile.cz-1}`),topNeighbor=tiles.get(`${tile.cx}:${tile.cz+1}`);
+        const leftTransition=x===0&&leftNeighbor&&leftNeighbor.stepsZ<stepsZ;
+        const rightTransition=x===stepsX&&rightNeighbor&&rightNeighbor.stepsZ<stepsZ;
+        const bottomTransition=z===0&&bottomNeighbor&&bottomNeighbor.stepsX<stepsX;
+        const topTransition=z===stepsZ&&topNeighbor&&topNeighbor.stepsX<stepsX;
+        let transition=null;
+        if(leftTransition)transition=coarseTerrainEdgeSample(object,tile,'left',tz,leftNeighbor.stepsZ);
+        else if(rightTransition)transition=coarseTerrainEdgeSample(object,tile,'right',tz,rightNeighbor.stepsZ);
+        else if(bottomTransition)transition=coarseTerrainEdgeSample(object,tile,'bottom',tx,bottomNeighbor.stepsX);
+        else if(topTransition)transition=coarseTerrainEdgeSample(object,tile,'top',tx,topNeighbor.stepsX);
+        // Only chunks intersecting a compiled modifier need signed-distance
+        // evaluation. Transition/base tiles are guaranteed outside those
+        // conservative modifier bounds, so sampling the authored terrain there
+        // avoids tens of thousands of pointless corridor searches per edit.
+        const direct=transition===null
+          ?(tile.tier==='high'?pathTerrainVertexSample(object,pathRuntimes,wx,wz):{height:terrainBaseHeightAt(object,wx,wz),blend:0})
+          :null;
+        const wy=transition===null?direct.height:transition.height;
+        // The compiled road, shoulder, and earthwork meshes own the visible
+        // corridor boundary. Restrict the terrain underlay to the road/shoulder
+        // support area so grid interpolation cannot paint a jagged dirt halo
+        // beyond the exact swept construction geometry.
+        const blend=transition===null?direct.blend:transition.blend;
+        p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push((wx-bounds.minX)/(bounds.maxX-bounds.minX),(wz-bounds.minZ)/(bounds.maxZ-bounds.minZ));blends.push(blend);
+        if(transition!==null)maximumBoundaryMismatch=Math.max(maximumBoundaryMismatch,Math.abs(wy-transition.height));
+      }
+      const row=stepsX+1;
+      for(let z=0;z<stepsZ;z++)for(let x=0;x<stepsX;x++){
+        const a=offset+z*row+x,b=a+row;
+        idx.push(a,b,a+1,b,b+1,a+1);
+      }
+    }
+    const boundaryStitches=appendPathTerrainBoundaryStitches({
+      object,pathRuntimes,bounds,origin:[ox,oy,oz],positions:p,normals:n,indices:idx,uvs:uv,blends
+    });
+    terrainMesh.lastPathDetail={
+      strategy:'watertight-chunks',
+      tileCount:tiles.size,
+      highTileCount,
+      transitionTileCount,
+      targetSpacing:.625,
+      transitionSpacing:2,
+      maximumBoundaryMismatch,
+      boundaryStitches,
+      baseCellSize:[baseStepX,baseStepZ]
+    };
   }
-  for(let z=0;z<resZ;z++)for(let x=0;x<resX;x++){const a=z*(resX+1)+x,b=a+resX+1;idx.push(a,b,a+1,b,b+1,a+1);}
   const normals=new Float32Array(p.length);
   for(let t=0;t<idx.length;t+=3){const ia=idx[t]*3,ib=idx[t+1]*3,ic=idx[t+2]*3,A=[p[ia],p[ia+1],p[ia+2]],B=[p[ib],p[ib+1],p[ib+2]],C=[p[ic],p[ic+1],p[ic+2]],fn=normalize(cross(sub(B,A),sub(C,A)));for(const ii of [ia,ib,ic]){normals[ii]+=fn[0];normals[ii+1]+=fn[1];normals[ii+2]+=fn[2];}}
   for(let k=0;k<normals.length;k+=3){const q=normalize([normals[k],normals[k+1],normals[k+2]]);normals[k]=q[0];normals[k+1]=q[1];normals[k+2]=q[2];}
@@ -476,6 +660,9 @@ function createBufferMesh(gl,data){
 function createLineBuffer(gl,positions){
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(positions),gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);gl.bindVertexArray(null);return {vao,count:positions.length/3,buffer:b};
 }
+export function pathSurfaceCullMode(kind){
+  return kind==='structure'?'double-sided':'front-face';
+}
 
 export class Renderer3D{
   constructor(canvas){
@@ -494,7 +681,7 @@ export class Renderer3D{
     canvas.addEventListener('webglcontextlost',this.boundContextLost,false);canvas.addEventListener('webglcontextrestored',this.boundContextRestored,false);
     this.meshProgram=program(gl,meshVS,meshFS);this.depthProgram=program(gl,depthVS,depthFS);this.lineProgram=program(gl,lineVS,lineFS);this.skyPass=null;try{this.skyPass=new SkyPass(gl);}catch(error){console.error('Renderer-owned sky initialization failed; using the opaque environment fallback.',error);window.__omniforgeDiagnostics?.warn?.('sky-pass-initialization-failed',{message:error.message});}
     this.staticMeshes={cube:createBufferMesh(gl,cubeMesh()),plane:createBufferMesh(gl,planeMesh()),sphere:createBufferMesh(gl,sphereMesh()),cylinder:createBufferMesh(gl,cylinderMesh())};
-    this.dynamic=new Map();this.pathLines=new Map();this.pathSurfaces=new Map();this.lastTerrainSamplingDiagnostics=null;this.terrainSamplingWarningSignature='';this.textureCache=new Map();this.instanceBuffers=new Set();this.renderStart=performance.now();this.assets=[];this.modelMeshes=new Map();this.modelLoads=new Map();this.modelRevisions=new Map();this.modelLoadRevisions=new Map();this.grid=null;this.gridKey='';this.selectionBox=createLineBuffer(gl,this.boxLines());this.whiteTexture=this.createSolidTexture([255,255,255,255]);this.flatNormalTexture=this.createSolidTexture([128,128,255,255]);
+    this.dynamic=new Map();this.pathLines=new Map();this.pathSurfaces=new Map();this.pathPreview=null;this.pathRuntimeFrameCache=null;this.lastTerrainSamplingDiagnostics=null;this.terrainSamplingWarningSignature='';this.textureCache=new Map();this.instanceBuffers=new Set();this.renderStart=performance.now();this.assets=[];this.modelMeshes=new Map();this.modelLoads=new Map();this.modelRevisions=new Map();this.modelLoadRevisions=new Map();this.grid=null;this.gridKey='';this.selectionBox=createLineBuffer(gl,this.boxLines());this.whiteTexture=this.createSolidTexture([255,255,255,255]);this.flatNormalTexture=this.createSolidTexture([128,128,255,255]);
     this.createShadowResources(2048);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.disable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     this.renderGraph=this.createRenderGraph();
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(canvas);this.resize();
@@ -507,6 +694,8 @@ export class Renderer3D{
     this.assets=next;
     for(const asset of models.values())this.ensureModelMesh(asset);
   }
+  setPathPreview(pathObject){this.pathPreview=pathObject?structuredClone(pathObject):null;this.pathRuntimeFrameCache=null;}
+  pathRenderScene(scene){return this.pathPreview?{...scene,objects:[...scene.objects.filter(object=>object.id!==this.pathPreview.id),this.pathPreview]}:scene;}
   ensureModelMesh(asset){
     if(!asset?.id||!asset.meshUrl)return;const revision=this.modelRevision(asset);
     if(this.modelMeshes.has(asset.id)&&this.modelRevisions.get(asset.id)===revision)return;
@@ -555,9 +744,9 @@ export class Renderer3D{
     if(object.properties?.celestialRole)return null;
     if(object.type==='box')return this.staticMeshes.cube;if(object.type==='decal')return this.staticMeshes.plane;if(this.staticMeshes[object.type])return this.staticMeshes[object.type];if(object.type==='directionalLight'||object.type==='pointLight')return this.staticMeshes.sphere;if(object.type==='empty'||object.type==='path')return null;
     if(object.type==='model'){const asset=this.assets.find(item=>item.type==='model'&&item.id===object.properties?.assetId);if(asset)this.ensureModelMesh(asset);return asset?this.modelMeshes.get(asset.id)||null:null;}
-    const paths=scene.objects.filter(o=>o.type==='path'),signature=JSON.stringify([object.type,object.properties,object.transform.scale,paths.map(p=>[p.visible,p.transform,p.properties])]),cached=this.dynamic.get(object.id);
+    const paths=scene.objects.filter(o=>o.type==='path'),pathRuntimes=object.type==='terrain'?this.scenePathRuntimes(scene):[],signature=JSON.stringify([object.type,object.properties,object.transform.scale,paths.map(p=>[p.visible,p.transform,p.properties])]),cached=this.dynamic.get(object.id);
     if(cached?.signature===signature)return cached.mesh;if(cached){for(const b of cached.mesh.buffers)this.gl.deleteBuffer(b);this.gl.deleteVertexArray(cached.mesh.vao);}
-    const data=object.type==='terrain'?terrainMesh(object,paths):null;if(!data)return null;const mesh=createBufferMesh(this.gl,data);this.dynamic.set(object.id,{signature,mesh});return mesh;
+    const data=object.type==='terrain'?terrainMesh(object,paths,pathRuntimes):null;if(!data)return null;const mesh=createBufferMesh(this.gl,data);this.dynamic.set(object.id,{signature,mesh});return mesh;
   }
   prepareInstances(mesh,objects){
     const gl=this.gl,matrices=new Float32Array(objects.length*16);
@@ -579,24 +768,52 @@ export class Renderer3D{
     return groups;
   }
   pathBuffers(pathObject,scene){
-    const terrain=scene.objects.find(o=>o.type==='terrain'),signature=JSON.stringify([pathObject.properties,pathObject.transform,terrain?.properties,terrain?.transform]),cached=this.pathLines.get(pathObject.id);if(cached?.signature===signature)return cached;
-    if(cached){for(const item of [cached.center,cached.edges])if(item){this.gl.deleteVertexArray(item.vao);this.gl.deleteBuffer(item.buffer);}}
-    const data=pathLineData(pathObject,terrain,scene.objects.filter(object=>object.type==='path'&&object.visible!==false)),next={signature,center:createLineBuffer(this.gl,data.center),edges:createLineBuffer(this.gl,data.edges)};this.pathLines.set(pathObject.id,next);return next;
+    const runtime=this.scenePathRuntimes(scene).find(item=>item.pathObjectId===pathObject.id);if(!runtime)return {center:null,edges:null};
+    const signature=`${runtime.sourceRevision}:${runtime.generationRevision}:${pathObject.properties?.previewRevision||0}:${runtime.geometry.guides.center.length}:${runtime.geometry.guides.edges.length}`,cached=this.pathLines.get(pathObject.id);if(cached?.signature===signature)return cached;
+    if(cached){for(const item of [cached.center,cached.edges,cached.construction,...(cached.costSegments||[]).map(entry=>entry.buffer)])if(item){this.gl.deleteVertexArray(item.vao);this.gl.deleteBuffer(item.buffer);}}
+    const data=runtime.geometry.guides,costSegments=buildPathCostGuideData(runtime).map(entry=>({...entry,buffer:createLineBuffer(this.gl,entry.positions)})),next={signature,center:createLineBuffer(this.gl,data.center),edges:createLineBuffer(this.gl,data.edges),construction:createLineBuffer(this.gl,data.construction),costSegments};this.pathLines.set(pathObject.id,next);return next;
   }
   pathSurfaceFor(pathObject,scene){
-    const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false),paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);
-    if(!terrain)return null;
-    const signature=JSON.stringify([pathObject.properties,pathObject.transform,terrain.properties,terrain.transform,paths.map(path=>[path.id,path.properties,path.transform])]),cached=this.pathSurfaces.get(pathObject.id);
-    if(cached?.signature===signature)return cached.mesh;
-    if(cached?.mesh){for(const buffer of cached.mesh.buffers||[])this.gl.deleteBuffer(buffer);this.gl.deleteVertexArray(cached.mesh.vao);}
-    const data=buildTerrainConformingPathSurface(pathObject,terrain,paths);
-    const diagnostics=data.diagnostics||null;
-    if(!data.indices.length||diagnostics?.meshValid===false){
-      this.pathSurfaces.set(pathObject.id,{signature,mesh:null,diagnostics});
-      window.__omniforgeDiagnostics?.warn?.('pathway-corridor-blocked',{pathId:pathObject.id,diagnostics});
-      return null;
+    const runtime=this.scenePathRuntimes(scene).find(item=>item.pathObjectId===pathObject.id);if(!runtime)return null;
+    const signature=`${runtime.sourceRevision}:${runtime.generationRevision}:${pathObject.properties?.previewRevision||0}`,cached=this.pathSurfaces.get(pathObject.id);
+    if(cached?.signature===signature)return cached.meshes;
+    if(cached?.meshes)for(const mesh of Object.values(cached.meshes)){if(!mesh)continue;for(const buffer of mesh.buffers||[])this.gl.deleteBuffer(buffer);this.gl.deleteVertexArray(mesh.vao);}
+    const diagnostics=runtime.diagnostics;
+    if(!diagnostics.valid)window.__omniforgeDiagnostics?.warn?.('path-network-v2-partially-blocked',{pathId:pathObject.id,diagnostics});
+    const meshes={};
+    for(const [name,data] of Object.entries(runtime.geometry.meshes)){
+      if(data.indices.length)meshes[name]=createBufferMesh(this.gl,data);
     }
-    const mesh=createBufferMesh(this.gl,data);mesh.pathwayDiagnostics=diagnostics;this.pathSurfaces.set(pathObject.id,{signature,mesh,diagnostics});return mesh;
+    this.pathSurfaces.set(pathObject.id,{signature,meshes,diagnostics});return meshes;
+  }
+  scenePathRuntimes(scene){
+    const terrain=scene?.objects?.find(object=>object.type==='terrain'&&object.visible!==false),paths=(scene?.objects||[]).filter(object=>object.type==='path'&&object.visible!==false);
+    const revisionKey=JSON.stringify([
+      terrain?.id||null,
+      terrain?.properties?.generatedRevision||0,
+      paths.map(pathObject=>[
+        pathObject.id,
+        pathObject.properties?.pathNetwork?.revision||0,
+        pathObject.properties?.previewRevision||0
+      ])
+    ]);
+    const cached=this.pathRuntimeFrameCache;
+    if(
+      cached
+      && cached.terrain===terrain
+      && cached.revisionKey===revisionKey
+      && cached.paths.length===paths.length
+      && cached.paths.every((pathObject,index)=>pathObject===paths[index])
+    )return cached.runtimes;
+    try{
+      const runtimes=compileScenePathRuntimes(scene);
+      this.pathRuntimeFrameCache={terrain,paths:[...paths],revisionKey,runtimes};
+      return runtimes;
+    }catch(error){
+      this.pathRuntimeFrameCache=null;
+      window.__omniforgeDiagnostics?.warn?.('path-network-v2-compile-failed',{message:error.message});
+      return [];
+    }
   }
   updateTerrainSamplingDiagnostics(scene){
     const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false),paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);
@@ -607,8 +824,9 @@ export class Renderer3D{
   }
   cameraMatrices(camera){const forward=cameraForward(camera),target=add(camera.position,forward),view=mat4LookAt(camera.position,target),proj=mat4Perspective((camera.fov||62)*DEG,this.canvas.width/this.canvas.height,.08,12000),viewProj=mat4Multiply(proj,view);return {view,proj,viewProj,inverse:mat4Invert(viewProj)};}
   worldToScreen(camera,point){const rect=this.canvas.getBoundingClientRect(),{viewProj}=this.cameraMatrices(camera),x=point[0],y=point[1],z=point[2],cx=viewProj[0]*x+viewProj[4]*y+viewProj[8]*z+viewProj[12],cy=viewProj[1]*x+viewProj[5]*y+viewProj[9]*z+viewProj[13],cz=viewProj[2]*x+viewProj[6]*y+viewProj[10]*z+viewProj[14],cw=viewProj[3]*x+viewProj[7]*y+viewProj[11]*z+viewProj[15];if(cw<=.001)return {visible:false,x:0,y:0};const nx=cx/cw,ny=cy/cw;return {visible:cz/cw>=-1&&cz/cw<=1&&nx>=-1.2&&nx<=1.2&&ny>=-1.2&&ny<=1.2,x:(nx*.5+.5)*rect.width,y:(1-(ny*.5+.5))*rect.height};}
-  terrainHeightForScene(scene,x,z){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false),paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);return terrainHeight(terrain,x,z,paths);}
-  terrainPointFromScreen(scene,camera,x,y){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return null;const paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false),ray=this.rayFromScreen(camera,x,y),bounds=terrainBounds(terrain);let previous=null;for(let distance=0;distance<=12000;distance+=Math.max(1,Number(terrain.properties?.chunkSize||64)*.08)){const point=add(ray.origin,scale(ray.dir,distance));if(point[0]<bounds.minX-10||point[0]>bounds.maxX+10||point[2]<bounds.minZ-10||point[2]>bounds.maxZ+10)continue;const delta=point[1]-terrainHeight(terrain,point[0],point[2],paths);if(previous&&previous.delta>=0&&delta<=0){let low=previous.distance,high=distance;for(let step=0;step<18;step++){const mid=(low+high)*.5,p=add(ray.origin,scale(ray.dir,mid)),d=p[1]-terrainHeight(terrain,p[0],p[2],paths);if(d>0)low=mid;else high=mid;}const hit=add(ray.origin,scale(ray.dir,(low+high)*.5));return [hit[0],terrainHeight(terrain,hit[0],hit[2],paths),hit[2]];}previous={distance,delta};}return null;}
+  terrainBaseHeightForScene(scene,x,z){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);return terrain?terrainBaseHeightAt(terrain,x,z):0;}
+  terrainHeightForScene(scene,x,z){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return 0;const baseY=terrainBaseHeightAt(terrain,x,z);return sampleScenePathTerrain(this.scenePathRuntimes(scene),baseY,x,z).height;}
+  terrainPointFromScreen(scene,camera,x,y,{surface='scene'}={}){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return null;const heightAt=surface==='base'?(px,pz)=>terrainBaseHeightAt(terrain,px,pz):(px,pz)=>this.terrainHeightForScene(scene,px,pz);return pickTerrainPoint({ray:this.rayFromScreen(camera,x,y),bounds:terrainBounds(terrain),heightAt,step:Math.min(6,Math.max(2,Number(terrain.properties?.chunkSize||64)*.06)),refinementSteps:12});}
   lightState(scene,editorMode='edit',viewportLightingMode=null){
     const sun=scene.objects.find(o=>o.type==='directionalLight'&&o.visible&&o.properties?.celestialRole==='sun')||scene.objects.find(o=>o.type==='directionalLight'&&o.visible&&!o.properties?.celestialRole);let dir=[.45,-.8,.25],color=[1,.95,.82],intensity=1,shadows=true;
     if(sun){
@@ -627,6 +845,11 @@ export class Renderer3D{
     const gl=this.gl;gl.bindFramebuffer(gl.FRAMEBUFFER,this.shadowFramebuffer);gl.viewport(0,0,this.shadowSize,this.shadowSize);gl.clear(gl.DEPTH_BUFFER_BIT);gl.colorMask(false,false,false,false);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT);gl.useProgram(this.depthProgram);
     gl.uniformMatrix4fv(gl.getUniformLocation(this.depthProgram,'uLightViewProj'),false,lightViewProj);
     for(const object of scene.objects){if(!object.visible||['empty','path','directionalLight','pointLight'].includes(object.type)||object.properties?.castsShadows===false||(options.hideEditorReferences&&isEditorReference(object)))continue;const mesh=this.meshFor(object,scene);if(!mesh)continue;gl.bindVertexArray(mesh.vao);gl.uniformMatrix4fv(gl.getUniformLocation(this.depthProgram,'uModel'),false,modelMatrix(object.transform));gl.drawElements(gl.TRIANGLES,mesh.count,mesh.indexType,0);}
+    gl.uniformMatrix4fv(gl.getUniformLocation(this.depthProgram,'uModel'),false,mat4Identity());
+    for(const pathObject of scene.objects.filter(object=>object.type==='path'&&object.visible!==false&&object.properties?.castsShadows!==false)){
+      const meshes=this.pathSurfaceFor(pathObject,scene);if(!meshes)continue;
+      for(const mesh of Object.values(meshes)){if(!mesh)continue;gl.bindVertexArray(mesh.vao);gl.drawElements(gl.TRIANGLES,mesh.count,mesh.indexType,0);}
+    }
     gl.bindVertexArray(null);gl.cullFace(gl.BACK);gl.colorMask(true,true,true,true);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);
   }
   drawMesh(object,mesh,viewProj,lightViewProj,scene,selected,camera,lights,instances=null,materialPath=null){
@@ -682,9 +905,16 @@ export class Renderer3D{
     if(useImportedGroups){
       for(const group of mesh.groups){
         const material=group.material||mesh.sourceMaterials?.[group.materialIndex]||mesh.sourceMaterial||{};
-        const color=Array.isArray(material.baseColor)?material.baseColor:[.62,.66,.72,1],importedBase=this.textureFromUrl(material.textureUrls?.baseColor,false);
+        const color=Array.isArray(material.baseColor)?material.baseColor:[.62,.66,.72,1];
+        const importedBase=this.textureFromUrl(material.textureUrls?.baseColor,false);
+        const importedNormal=this.textureFromUrl(material.textureUrls?.normal,false);
+        const importedRoughness=this.textureFromUrl(material.textureUrls?.roughness,false);
+        const importedAO=this.textureFromUrl(material.textureUrls?.ao,false);
         set3('uBaseColor',new Float32Array([Number(color[0]??.62),Number(color[1]??.66),Number(color[2]??.72)]));
-        set1('uBaseColorIsLinear',1);set1('uBaseTextureTintStrength',1);bindMap(0,'uBaseTexture',importedBase);set1('uUseBaseTexture',importedBase.ready?1:0);set1('uBaseTextureScale',1);
+        set1('uBaseColorIsLinear',1);set1('uBaseTextureTintStrength',Number(material.textureTintStrength??1));
+        bindMap(0,'uBaseTexture',importedBase);bindMap(2,'uBaseNormalTexture',importedNormal);bindMap(4,'uBaseRoughnessTexture',importedRoughness);bindMap(6,'uBaseAOTexture',importedAO);
+        set1('uUseBaseTexture',importedBase.ready?1:0);set1('uUseBaseNormal',importedNormal.ready?1:0);set1('uUseBaseRoughness',importedRoughness.ready?1:0);set1('uUseBaseAO',importedAO.ready?1:0);set1('uUseBaseHeight',0);
+        set1('uBaseTextureScale',1);set1('uBaseNormalStrength',Number(material.normalStrength??1));set1('uBaseRoughnessMultiplier',Number(material.roughnessMultiplier??1));set1('uBaseAOStrength',Number(material.aoStrength??1));
         const alpha=Number(color[3]??1);set1('uOpacity',alpha);set1('uRoughness',Number(material.roughness??.8));set1('uMetallic',Number(material.metallic??0));
         if(alpha<.999){gl.enable(gl.BLEND);gl.depthMask(false);}else{gl.disable(gl.BLEND);gl.depthMask(true);}
         if(material.doubleSided)gl.disable(gl.CULL_FACE);else gl.enable(gl.CULL_FACE);
@@ -747,13 +977,26 @@ export class Renderer3D{
   renderPathSurfacePass(frame){
     const {gl,scene,camera,viewProj,lightViewProj,lights}=frame;
     const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return;
-    const paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);if(!paths.length)return;
-    gl.disable(gl.BLEND);gl.depthMask(true);gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);
-    for(const pathObject of paths){const mesh=this.pathSurfaceFor(pathObject,scene);if(!mesh)continue;const proxy={id:`path-surface:${pathObject.id}`,type:'terrain',visible:true,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},properties:{...pathObject.properties,materialId:terrain.properties?.materialId||null,color:terrain.properties?.color||'#35522f',opacity:1,castsShadows:false,receivesShadows:true}};this.drawMesh(proxy,mesh,viewProj,lightViewProj,scene,false,camera,lights,null,pathObject);}
+    const pathScene=this.pathRenderScene(scene),paths=pathScene.objects.filter(object=>object.type==='path'&&object.visible!==false);if(!paths.length)return;
+    gl.disable(gl.BLEND);gl.depthMask(true);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);
+    for(const pathObject of paths){
+      const meshes=this.pathSurfaceFor(pathObject,pathScene);if(!meshes)continue;
+      const segmentProfile=pathObject.properties?.pathNetwork?.segments?.[0]?.materialProfile||{};
+      for(const [kind,mesh] of Object.entries(meshes)){
+        if(!mesh)continue;
+        const structural=kind==='structure';
+        if(pathSurfaceCullMode(kind)==='double-sided')gl.disable(gl.CULL_FACE);
+        else{gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);}
+        const terrainMaterial={materialId:terrain.properties?.materialId||null,color:terrain.properties?.color||'#35522f'};
+        const proxy={id:`path-network-v2:${kind}:${pathObject.id}`,type:structural?'model':'terrain',visible:true,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},properties:{...pathObject.properties,...terrainMaterial,materialId:structural?(segmentProfile.structureMaterialId||pathObject.properties?.structureMaterialId||null):(kind==='road'?(segmentProfile.surfaceMaterialId||pathObject.properties?.materialId||null):terrainMaterial.materialId),color:structural?(pathObject.properties?.structureColor||'#596168'):(kind==='road'?(pathObject.properties?.color||'#73573d'):terrainMaterial.color),opacity:1,castsShadows:true,receivesShadows:true}};
+        this.drawMesh(proxy,mesh,viewProj,lightViewProj,scene,false,camera,lights,null,structural?null:pathObject);
+      }
+    }
     gl.disable(gl.POLYGON_OFFSET_FILL);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
   }
   renderEditorOverlayPass(frame){
     const {gl,scene,camera,selectedId,viewProj}=frame;
+    const pathScene=this.pathRenderScene(scene);
     gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     this.ensureGrid(scene);if(scene.settings.gridVisible)this.drawLines(this.grid,mat4Identity(),viewProj,[.45,.56,.68,.18]);
     if(scene.settings.splinesVisible!==false){
@@ -761,7 +1004,7 @@ export class Renderer3D{
       // v011-spline-editing-only x-ray path left unselected guides depth-tested,
       // making them z-fight with sampled terrain and appear disconnected.
       gl.disable(gl.DEPTH_TEST);
-      for(const pathObject of scene.objects.filter(o=>o.type==='path'&&o.visible&&o.properties?.showSpline!==false)){const buffers=this.pathBuffers(pathObject,scene),selected=pathObject.id===selectedId;this.drawLines(buffers.edges,mat4Identity(),viewProj,selected?[.96,.56,1,1]:[.56,.34,.18,.7],selected?3:2);if(selected)this.drawLines(buffers.center,mat4Identity(),viewProj,[1,.9,1,1],3);}
+      for(const pathObject of pathScene.objects.filter(o=>o.type==='path'&&o.visible&&o.properties?.showSpline!==false)){const buffers=this.pathBuffers(pathObject,pathScene),runtime=this.scenePathRuntimes(pathScene).find(item=>item.pathObjectId===pathObject.id),preview=pathObject.id===this.pathPreview?.id,selected=pathObject.id===selectedId,showCosts=preview||pathObject.properties?.pathNetwork?.editor?.showGrade===true||runtime?.diagnostics?.valid===false;this.drawLines(buffers.edges,mat4Identity(),viewProj,preview?[.2,.9,1,1]:(selected?[.96,.56,1,1]:[.56,.34,.18,.7]),preview?4:(selected?3:2));if(showCosts)for(const entry of buffers.costSegments||[])this.drawLines(entry.buffer,mat4Identity(),viewProj,entry.color,preview?6:5);if(selected||preview){this.drawLines(buffers.center,mat4Identity(),viewProj,showCosts?[1,1,1,.78]:(preview?[.85,1,1,1]:[1,.9,1,1]),showCosts?1.5:3);this.drawLines(buffers.construction,mat4Identity(),viewProj,preview?[.15,1,.7,.95]:[.25,.85,1,.9],2);}}
       gl.enable(gl.DEPTH_TEST);
     }
     const selected=scene.objects.find(o=>o.id===selectedId);

@@ -17,5 +17,8 @@
     "node": ">=20"
   },
   "main": "desktop/main.cjs",
-  "productName": "OmniForge"
+  "productName": "OmniForge",
+  "dependencies": {
+    "earcut": "3.2.3"
+  }
 }

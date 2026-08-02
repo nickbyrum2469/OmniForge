@@ -113,8 +113,9 @@ test('World, path, terrain, renderer, and API source expose the corrective autho
   assert.match(worldUi, /v010CelestialMode/);
   assert.match(worldUi, /v010CloudQuality/);
   assert.match(pathUi, /v011ToggleSculpt/);
-  assert.match(pathUi, /v011DeleteNode/);
-  assert.match(pathUi, /selectedSplineNodeIndex/);
+  assert.match(pathUi, /v012DeleteNode/);
+  assert.match(pathUi, /selectedPathNodeId/);
+  assert.match(pathUi, /transactPathNetwork/);
   assert.match(renderer, /uMoonIntensity/);
   assert.match(renderer, /v011-spline-editing/);
   assert.match(sky, /volumetricCloud/);
@@ -124,5 +125,6 @@ test('World, path, terrain, renderer, and API source expose the corrective autho
   assert.match(environment, /object\.properties\?\.elevation/);
   assert.match(api010, /\(state\.assets \|\| \[\]\)\.filter/);
   assert.match(api011, /sculpt\\\/undo/);
-  assert.match(api011, /Number\.isInteger\(Number\(input\.index\)\)/);
+  assert.match(api011, /\/api\\\/v012\\\/path/);
+  assert.match(api011, /applyPathNetworkTransaction/);
 });

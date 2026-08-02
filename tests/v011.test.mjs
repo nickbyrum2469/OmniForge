@@ -21,6 +21,7 @@ import {
   splitPath
 } from '../app/worldgen.js';
 import { terrainDiagnostics, pathDiagnostics } from '../server/v011-systems.mjs';
+import { pathNetworkDegrees } from '../app/path-network/transactions.js';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 
@@ -129,7 +130,14 @@ test('v0.11 editor, renderer, runtime, desktop, and MCP expose the connected wor
   assert.match(html,/id="splineToggle"/);
   assert.match(html,/v011\.css/);
   assert.match(html,/v011\.js/);
-  assert.match(editor,/Right-click terrain to insert a node/);
+  assert.match(editor,/Shift-drag raises or lowers it/);
+  assert.match(editor,/Right-click inserts a node into the nearest compiled segment/);
+  assert.match(editor,/PathGenerationWorkerPool/);
+  assert.match(editor,/workerCount:\s*logicalProcessors\s*-\s*1/);
+  assert.doesNotMatch(editor,/Math\.min\(4,\s*logicalProcessors\s*-\s*1\)/);
+  assert.match(editor,/\/api\/v012\/path\//);
+  assert.match(editor,/Join nearest branch/);
+  assert.match(editor,/expectedSourceRevision/);
   assert.match(editor,/terrainPointFromScreen/);
   assert.match(editor,/data-v011-expand/);
   assert.match(renderer,/buildPathGuideSegmentsFromCorridor/);
@@ -137,6 +145,8 @@ test('v0.11 editor, renderer, runtime, desktop, and MCP expose the connected wor
   assert.match(renderer,/Spline guides are editor overlays, not world geometry/);
   assert.match(renderer,/if\(scene\.settings\.splinesVisible!==false\)\{\s*\/\/[\s\S]*?gl\.disable\(gl\.DEPTH_TEST\)/);
   assert.match(renderer,/terrainPointFromScreen/);
+  assert.match(renderer,/setPathPreview/);
+  assert.match(renderer,/pathRuntimeFrameCache/);
   assert.match(app,/__omniforgeV011Bridge/);
   assert.match(mcp,/v011Tools, callV011Tool/);
   assert.equal(packageJson.version,'0.11.0');
@@ -168,6 +178,98 @@ test('v0.11 bootstrap persists terrain expansion and spline node editing through
     assert.equal(grade.body.diagnostics.validation,grade.body.diagnostics.gameplayReady?'passed':'failed');
     if(grade.body.diagnostics.gameplayReady)assert.ok(grade.body.diagnostics.compiledMaxGradePercent<=6.15);
     else assert.equal(grade.body.diagnostics.constraintStatus,'blocked-infeasible-profile');
+    const v2Initial=await requestJson(port,`/api/v012/path/${pathId}/network`);
+    assert.equal(v2Initial.status,200);
+    assert.equal(v2Initial.body.network.schemaVersion,2);
+    const networkRevision=v2Initial.body.network.revision;
+    const node=v2Initial.body.network.nodes[1];
+    const v2Moved=await requestJson(port,`/api/v012/path/${pathId}/transaction`,{
+      method:'POST',
+      body:JSON.stringify({
+        expectedRevision:networkRevision,
+        label:'Raise trail node',
+        operations:[{
+          type:'move-node',
+          nodeId:node.id,
+          position:[node.position[0],node.position[1]+4,node.position[2]],
+          heightMode:'absolute'
+        }]
+      })
+    });
+    assert.equal(v2Moved.status,200);
+    assert.equal(v2Moved.body.network.revision,networkRevision+1);
+    assert.equal(v2Moved.body.network.nodes.find(item=>item.id===node.id).position[1],node.position[1]+4);
+    assert.equal(v2Moved.body.network.nodes.find(item=>item.id===node.id).heightMode,'absolute');
+    const conflict=await requestJson(port,`/api/v012/path/${pathId}/transaction`,{
+      method:'POST',
+      body:JSON.stringify({
+        expectedRevision:networkRevision,
+        operations:[{type:'move-node',nodeId:node.id,position:node.position}]
+      })
+    });
+    assert.equal(conflict.status,400);
+    assert.match(conflict.body.error,/revision conflict/);
+    const undone=await requestJson(port,`/api/v012/path/${pathId}/undo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+1})
+    });
+    assert.equal(undone.status,200);
+    assert.deepEqual(undone.body.network.nodes.find(item=>item.id===node.id).position,node.position);
+    assert.equal(undone.body.redoDepth,1);
+    const redone=await requestJson(port,`/api/v012/path/${pathId}/redo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+2})
+    });
+    assert.equal(redone.status,200);
+    assert.equal(redone.body.network.revision,networkRevision+3);
+    assert.equal(redone.body.network.nodes.find(item=>item.id===node.id).position[1],node.position[1]+4);
+    assert.equal(redone.body.redoDepth,0);
+    const branchNetwork={
+      schemaVersion:2,
+      id:'path-branch-test',
+      revision:1,
+      purpose:'API merge regression branch',
+      pathClass:'dirt-road',
+      nodes:[
+        {id:'branch-open',position:[0,0,0],heightMode:'terrain'},
+        {id:'branch-far',position:[0,0,-20],heightMode:'terrain'}
+      ],
+      segments:[{id:'branch-segment',fromNode:'branch-open',toNode:'branch-far'}]
+    };
+    const createdBranch=await requestJson(port,'/api/object',{
+      method:'POST',
+      body:JSON.stringify({
+        id:'path-branch-test',
+        type:'path',
+        name:'Terrain Path Branch',
+        properties:{pathNetwork:branchNetwork,pathNetworkSchemaVersion:2}
+      })
+    });
+    assert.equal(createdBranch.status,201);
+    const merged=await requestJson(port,`/api/v012/path/${pathId}/merge/path-branch-test`,{
+      method:'POST',
+      body:JSON.stringify({
+        expectedRevision:networkRevision+3,
+        expectedSourceRevision:1,
+        label:'Join API branch'
+      })
+    });
+    assert.equal(merged.status,200);
+    assert.equal(merged.body.removedPathId,'path-branch-test');
+    assert.equal(pathNetworkDegrees(merged.body.network).get(merged.body.junctionNodeId),3);
+    assert.equal(merged.body.state.scenes[0].objects.some(item=>item.id==='path-branch-test'),false);
+    const mergeUndo=await requestJson(port,`/api/v012/path/${pathId}/undo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+4})
+    });
+    assert.equal(mergeUndo.status,200);
+    assert.equal(mergeUndo.body.state.scenes[0].objects.some(item=>item.id==='path-branch-test'),true);
+    const mergeRedo=await requestJson(port,`/api/v012/path/${pathId}/redo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+5})
+    });
+    assert.equal(mergeRedo.status,200);
+    assert.equal(mergeRedo.body.state.scenes[0].objects.some(item=>item.id==='path-branch-test'),false);
     const settings=await requestJson(port,'/api/v011/scene-settings',{method:'PATCH',body:JSON.stringify({splinesVisible:false})});
     assert.equal(settings.status,200);assert.equal(settings.body.settings.splinesVisible,false);
     const persisted=JSON.parse(fs.readFileSync(path.join(runtime,'data','engine-state.json'),'utf8'));
