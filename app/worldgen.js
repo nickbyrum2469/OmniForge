@@ -1,4 +1,5 @@
 import { attachPathNetwork } from './path-network/model.js';
+import { migrateTerrainWorldMetadata } from './world/terrain-world-schema.js';
 
 const EPSILON = 1e-6;
 
@@ -621,6 +622,7 @@ export function migrateSceneWorldFoundation(scene) {
       object.transform.scale = [1, 1, 1];
     }
   }
+  migrateTerrainWorldMetadata(scene);
   return scene;
 }
 

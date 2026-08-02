@@ -315,3 +315,19 @@ The branch remains blocked until the exact Windows package is tested against the
 - Play-mode rigid-body grounding, v0.11 object grounding, imported-model placement, and deterministic foliage placement now use the same compiled scene runtime and final-construction terrain service as the renderer. Foliage uses the same signed-distance exclusion field and cannot be excluded by an invalid route.
 - Permanent production-consumer regressions cover bounded underlay versus visible surface, bridge and tunnel vertical selection, overlapping networks, invalid-route isolation, server grounding, and foliage placement. The complete source suite passes `275/275` and repository verification passes; exact committed Windows-package interaction remains required before this authority cutover is accepted.
 - Cold-start diagnostics separately attribute the prior `6782.7 ms` warning to synchronous renderer/shader initialization (approximately `6577 ms` before the first render), not path compilation. A warm reused Chromium GPU cache reduces that constructor-era work to about `191 ms`; shader-stage instrumentation and asynchronous SkyPass compilation remain a separate renderer-startup gate.
+
+## Inspector runtime-stability correction
+
+- The target-PC freeze was reproduced as Inspector event-listener accumulation rather than a blocked WebGL context, runaway state poll, or Path Network compiler loop. `bindInspector()` used document-wide property selectors, so every object selection rebound Inspector callbacks to persistent World Settings controls.
+- Inspector bindings are now scoped to the replaceable Inspector subtree. A permanent source regression prevents global property-selector binding from returning.
+- Exact Windows package `855b97d72ac4bf953a5ab5fc6f3ffc503fcc2237` matches the real Git commit. After a two-minute active editor pass, post-GC listener counts remained exactly `490 -> 490`, connected listeners `390 -> 390`, DOM nodes `4729 -> 4729`, and no pending request, renderer crash, WebGL context loss, unhandled error, or active-edit event-loop stall occurred.
+- The same package completed camera navigation, repeated hierarchy/Inspector selection, spline-node drags, Undo, and Save. State polling remained bounded at about `0.73` requests per second. A controlled final window close recorded `cleanShutdown: true`.
+- Latest multi-angle captures prove the visible steel bridge deck and rails remain continuous and the catastrophic terrain holes/tears do not recur. Bridge approach blending, support-foundation grading/shadows, terrain material quality, and the full structural-family proof set remain visually blocked.
+
+## Terrain World planning schema gate
+
+- `scene.terrainWorld` schema v1 is the single scene-level home for authored construction-site planning and terrain-region reservations. It stores world-space-metre footprints, grading intent, access anchors, and surface/subsurface reservations without becoming another terrain, path, render, collision, navigation, or generation authority.
+- Construction-site metadata constrains building pads, districts, plazas, and infrastructure sites. Access anchors may reference the existing Path Network v2 object/network/node/segment identities; road geometry is never copied into the planning record.
+- Terrain-region metadata can reserve protected landforms and future cave, tomb, catacomb, or utility volumes. This gate intentionally stores no voxel/SDF fields, height arrays, meshes, portals, collision, navigation, or worker caches.
+- Migration is deterministic and idempotent, preserves explicit dangling references for repair, and cannot prevent a project from loading because optional planning metadata is malformed.
+- Isolated persistence coverage writes and reloads the metadata through both authoritative `data/engine-state.json` and the managed project `.omniforge/project-state.json` while preserving top-level schema 9, terrain schema 2, and Path Network schema 2.
