@@ -318,6 +318,19 @@ test('an invalid branch stays in guides without hiding valid connected road geom
   assert.ok(geometry.meshes.road.indices.length > 0);
   assert.ok(Math.max(...roadX) <= 20.001);
   assert.ok(Math.max(...guideX) >= 39.999);
+  assert.equal(geometry.guides.blockedCorridors.length, 1);
+  const blockedGuide = geometry.guides.blockedCorridors[0];
+  assert.equal(blockedGuide.segmentId, 'blocked');
+  assert.equal(blockedGuide.reason, 'test-blocked-branch');
+  assert.equal(blockedGuide.role, 'editor-blocked-corridor');
+  assert.ok(blockedGuide.boundaries.length > 0);
+  assert.ok(blockedGuide.hatches.length > 0);
+  assert.equal(blockedGuide.endCaps.length, 12);
+  assert.ok([
+    ...blockedGuide.boundaries,
+    ...blockedGuide.hatches,
+    ...blockedGuide.endCaps
+  ].every(Number.isFinite));
 });
 
 test('tunnel mode creates a continuous swept lining from the compiled frames', () => {

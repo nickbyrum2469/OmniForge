@@ -9,6 +9,11 @@ import { mergePathNetworksAtSegment, pathNetworkDegrees } from '../app/path-netw
 import { compilePathNetwork, nearestCompiledStation } from '../app/path-network/compiler.js';
 import { createTerrainQueryService } from '../app/world/terrain-query-service.js';
 import { terrainMesh } from '../app/renderer.js';
+import {
+  connectPathRuntimeConsumers,
+  pathFoliageExcluded,
+  pathGroundingSample
+} from '../app/path-network/consumers.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixture = JSON.parse(fs.readFileSync(
@@ -99,6 +104,21 @@ test('the exact impossible branch is blocked and cannot alter terrain or become 
   assert.ok(runtime.compiled.segments.every(segment => (
     segment.construction.reason === 'unavoidable-grade-exceeds-limit'
   )));
+  assert.equal(runtime.geometry.guides.blockedCorridors.length, 2);
+  assert.ok(runtime.geometry.guides.blockedCorridors.every(corridor => (
+    corridor.boundaries.length > 0
+    && corridor.hatches.length > 0
+    && corridor.endCaps.length === 12
+    && [...corridor.boundaries, ...corridor.hatches, ...corridor.endCaps].every(Number.isFinite)
+  )));
+
+  const consumers = connectPathRuntimeConsumers(runtime);
+  assert.deepEqual(consumers.collision.segmentIds, []);
+  assert.deepEqual(consumers.navigation.segmentIds, []);
+  assert.equal(Object.hasOwn(consumers.render, 'blockedCorridors'), false);
+  const [pathX, pathZ] = pathObject.properties.points[0];
+  assert.equal(pathFoliageExcluded(consumers, pathX, pathZ), false);
+  assert.equal(pathGroundingSample(consumers, pathX, pathZ).source, 'terrain');
 
   const terrainService = createTerrainQueryService({ terrain: fixture.terrain });
   for (const [x, z] of pathObject.properties.points) {

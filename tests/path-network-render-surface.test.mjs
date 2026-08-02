@@ -27,6 +27,15 @@ test('a blocked branch warns without suppressing valid meshes in the same networ
   assert.doesNotMatch(rendererSource, /if\(!diagnostics\.valid\)\{[\s\S]{0,240}return null/);
 });
 
+test('blocked corridors are editor-only hatched guides and never enter the shadow or opaque mesh path', () => {
+  assert.match(rendererSource, /blockedCorridors=.*createLineBuffer/);
+  assert.match(rendererSource, /options\?\.editorMode!==['"]play['"]/);
+  assert.match(rendererSource, /blocked\.hatches/);
+  assert.match(rendererSource, /blocked\.boundaries/);
+  assert.match(rendererSource, /blocked\.endCaps/);
+  assert.doesNotMatch(rendererSource, /renderShadow[\s\S]{0,1800}blockedCorridors/);
+});
+
 test('Pathway Studio exposes the data-driven bridge family transaction', () => {
   assert.match(pathUiSource, /id="v012BridgeStyle"/);
   assert.match(pathUiSource, /set-segment-structure/);

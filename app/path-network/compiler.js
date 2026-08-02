@@ -328,6 +328,27 @@ function sampleMetrics(samples, segment) {
 }
 
 function civilAssistMode(segment, metrics, engineering) {
+  const pedestrian = segment.gameplayRules.vehicleClass === 'pedestrian';
+  if (metrics.maximumGradePercent > engineering.maxGradePercent + 0.05) {
+    if (pedestrian && segment.constructionMode === 'stairs') {
+      return {
+        mode: 'stairs',
+        reason: segment.constructionLocked ? 'user-locked' : 'user-selected',
+        automatic: false
+      };
+    }
+    if (segment.constructionMode === 'auto' && pedestrian) {
+      return { mode: 'stairs', reason: 'grade-exceeds-pedestrian-limit', automatic: true };
+    }
+    const authored = segment.constructionMode !== 'auto';
+    return {
+      mode: 'invalid',
+      reason: authored
+        ? `${segment.constructionLocked ? 'locked' : 'selected'}-mode-violates-grade-limit`
+        : 'unavoidable-grade-exceeds-limit',
+      automatic: !authored
+    };
+  }
   if (segment.constructionLocked && segment.constructionMode !== 'auto') {
     return { mode: segment.constructionMode, reason: 'user-locked', automatic: false };
   }
@@ -335,11 +356,6 @@ function civilAssistMode(segment, metrics, engineering) {
     return { mode: segment.constructionMode, reason: 'user-selected', automatic: false };
   }
   if (!engineering.civilAssist) return { mode: 'conform', reason: 'civil-assist-disabled', automatic: false };
-  const pedestrian = segment.gameplayRules.vehicleClass === 'pedestrian';
-  if (metrics.maximumGradePercent > engineering.maxGradePercent + 0.05) {
-    if (pedestrian) return { mode: 'stairs', reason: 'grade-exceeds-pedestrian-limit', automatic: true };
-    return { mode: 'invalid', reason: 'unavoidable-grade-exceeds-limit', automatic: true };
-  }
   if (metrics.maximumCut > engineering.tunnelThreshold) {
     return { mode: 'tunnel', reason: 'cut-depth-exceeds-tunnel-threshold', automatic: true };
   }

@@ -769,9 +769,17 @@ export class Renderer3D{
   }
   pathBuffers(pathObject,scene){
     const runtime=this.scenePathRuntimes(scene).find(item=>item.pathObjectId===pathObject.id);if(!runtime)return {center:null,edges:null};
-    const signature=`${runtime.sourceRevision}:${runtime.generationRevision}:${pathObject.properties?.previewRevision||0}:${runtime.geometry.guides.center.length}:${runtime.geometry.guides.edges.length}`,cached=this.pathLines.get(pathObject.id);if(cached?.signature===signature)return cached;
-    if(cached){for(const item of [cached.center,cached.edges,cached.construction,...(cached.costSegments||[]).map(entry=>entry.buffer)])if(item){this.gl.deleteVertexArray(item.vao);this.gl.deleteBuffer(item.buffer);}}
-    const data=runtime.geometry.guides,costSegments=buildPathCostGuideData(runtime).map(entry=>({...entry,buffer:createLineBuffer(this.gl,entry.positions)})),next={signature,center:createLineBuffer(this.gl,data.center),edges:createLineBuffer(this.gl,data.edges),construction:createLineBuffer(this.gl,data.construction),costSegments};this.pathLines.set(pathObject.id,next);return next;
+    const blockedGuideCount=(runtime.geometry.guides.blockedCorridors||[]).length;
+    const signature=`${runtime.sourceRevision}:${runtime.generationRevision}:${pathObject.properties?.previewRevision||0}:${runtime.geometry.guides.center.length}:${runtime.geometry.guides.edges.length}:${blockedGuideCount}`,cached=this.pathLines.get(pathObject.id);if(cached?.signature===signature)return cached;
+    if(cached){for(const item of [cached.center,cached.edges,cached.construction,...(cached.costSegments||[]).map(entry=>entry.buffer),...(cached.blockedCorridors||[]).flatMap(entry=>[entry.boundaries,entry.hatches,entry.endCaps])])if(item){this.gl.deleteVertexArray(item.vao);this.gl.deleteBuffer(item.buffer);}}
+    const data=runtime.geometry.guides,costSegments=buildPathCostGuideData(runtime).map(entry=>({...entry,buffer:createLineBuffer(this.gl,entry.positions)})),blockedCorridors=(data.blockedCorridors||[]).map(entry=>({...entry,boundaries:createLineBuffer(this.gl,entry.boundaries),hatches:createLineBuffer(this.gl,entry.hatches),endCaps:createLineBuffer(this.gl,entry.endCaps)})),next={signature,center:createLineBuffer(this.gl,data.center),edges:createLineBuffer(this.gl,data.edges),construction:createLineBuffer(this.gl,data.construction),costSegments,blockedCorridors};this.pathLines.set(pathObject.id,next);return next;
+  }
+  drawBlockedPathGuides(buffers,viewProj){
+    for(const blocked of buffers.blockedCorridors||[]){
+      this.drawLines(blocked.hatches,mat4Identity(),viewProj,[1,.55,.1,.7],2);
+      this.drawLines(blocked.boundaries,mat4Identity(),viewProj,[1,.08,.03,1],4);
+      this.drawLines(blocked.endCaps,mat4Identity(),viewProj,[1,.78,.25,1],5);
+    }
   }
   pathSurfaceFor(pathObject,scene){
     const runtime=this.scenePathRuntimes(scene).find(item=>item.pathObjectId===pathObject.id);if(!runtime)return null;
@@ -995,7 +1003,7 @@ export class Renderer3D{
     gl.disable(gl.POLYGON_OFFSET_FILL);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
   }
   renderEditorOverlayPass(frame){
-    const {gl,scene,camera,selectedId,viewProj}=frame;
+    const {gl,scene,camera,selectedId,viewProj,options}=frame;
     const pathScene=this.pathRenderScene(scene);
     gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     this.ensureGrid(scene);if(scene.settings.gridVisible)this.drawLines(this.grid,mat4Identity(),viewProj,[.45,.56,.68,.18]);
@@ -1004,7 +1012,7 @@ export class Renderer3D{
       // v011-spline-editing-only x-ray path left unselected guides depth-tested,
       // making them z-fight with sampled terrain and appear disconnected.
       gl.disable(gl.DEPTH_TEST);
-      for(const pathObject of pathScene.objects.filter(o=>o.type==='path'&&o.visible&&o.properties?.showSpline!==false)){const buffers=this.pathBuffers(pathObject,pathScene),runtime=this.scenePathRuntimes(pathScene).find(item=>item.pathObjectId===pathObject.id),preview=pathObject.id===this.pathPreview?.id,selected=pathObject.id===selectedId,showCosts=preview||pathObject.properties?.pathNetwork?.editor?.showGrade===true||runtime?.diagnostics?.valid===false;this.drawLines(buffers.edges,mat4Identity(),viewProj,preview?[.2,.9,1,1]:(selected?[.96,.56,1,1]:[.56,.34,.18,.7]),preview?4:(selected?3:2));if(showCosts)for(const entry of buffers.costSegments||[])this.drawLines(entry.buffer,mat4Identity(),viewProj,entry.color,preview?6:5);if(selected||preview){this.drawLines(buffers.center,mat4Identity(),viewProj,showCosts?[1,1,1,.78]:(preview?[.85,1,1,1]:[1,.9,1,1]),showCosts?1.5:3);this.drawLines(buffers.construction,mat4Identity(),viewProj,preview?[.15,1,.7,.95]:[.25,.85,1,.9],2);}}
+      for(const pathObject of pathScene.objects.filter(o=>o.type==='path'&&o.visible&&o.properties?.showSpline!==false)){const buffers=this.pathBuffers(pathObject,pathScene),runtime=this.scenePathRuntimes(pathScene).find(item=>item.pathObjectId===pathObject.id),preview=pathObject.id===this.pathPreview?.id,selected=pathObject.id===selectedId,showCosts=preview||pathObject.properties?.pathNetwork?.editor?.showGrade===true||runtime?.diagnostics?.valid===false;this.drawLines(buffers.edges,mat4Identity(),viewProj,preview?[.2,.9,1,1]:(selected?[.96,.56,1,1]:[.56,.34,.18,.7]),preview?4:(selected?3:2));if(showCosts)for(const entry of buffers.costSegments||[])this.drawLines(entry.buffer,mat4Identity(),viewProj,entry.color,preview?6:5);if(selected||preview){this.drawLines(buffers.center,mat4Identity(),viewProj,showCosts?[1,1,1,.78]:(preview?[.85,1,1,1]:[1,.9,1,1]),showCosts?1.5:3);this.drawLines(buffers.construction,mat4Identity(),viewProj,preview?[.15,1,.7,.95]:[.25,.85,1,.9],2);}if(options?.editorMode!=='play')this.drawBlockedPathGuides(buffers,viewProj);}
       gl.enable(gl.DEPTH_TEST);
     }
     const selected=scene.objects.find(o=>o.id===selectedId);

@@ -304,6 +304,7 @@ test('Civil Assist selects conform, bridge, tunnel, retaining wall, stairs, and 
   assert.equal(compile({ normal: () => [0, 0.6, 0.8], width: 8 }), 'retaining-wall');
   assert.equal(compile({ endY: 12, vehicleClass: 'pedestrian' }), 'stairs');
   assert.equal(compile({ lockedMode: 'bridge' }), 'bridge');
+  assert.equal(compile({ endY: 30, lockedMode: 'conform' }), 'invalid');
 });
 
 test('Civil Assist uses actual path width and cross-slope relief instead of adding walls to every steep dirt trail', () => {

@@ -44,7 +44,8 @@ export function connectPathRuntimeConsumers(runtime) {
 
 export function pathFoliageExcluded(consumers, x, z, padding = 0) {
   const sample = samplePathTerrainModifier(consumers.foliage.terrainModifier, x, z);
-  return sample.signedDistance <= Math.max(0, Number(padding) || 0);
+  return sample.constructionMode !== 'invalid'
+    && sample.signedDistance <= Math.max(0, Number(padding) || 0);
 }
 
 export function pathGroundingSample(consumers, x, z, options = {}) {

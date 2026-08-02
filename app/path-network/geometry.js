@@ -190,6 +190,84 @@ function roadRows(segment, samples) {
   }));
 }
 
+function interpolateRoadRow(rows, distance) {
+  if (!rows.length) return null;
+  if (distance <= rows[0].distance) return rows[0];
+  if (distance >= rows.at(-1).distance) return rows.at(-1);
+  for (let index = 1; index < rows.length; index += 1) {
+    const previous = rows[index - 1];
+    const current = rows[index];
+    if (distance > current.distance) continue;
+    const span = Math.max(EPSILON, current.distance - previous.distance);
+    const amount = clamp((distance - previous.distance) / span, 0, 1);
+    return {
+      distance,
+      positions: previous.positions.map((position, column) => mix3(position, current.positions[column], amount))
+    };
+  }
+  return rows.at(-1);
+}
+
+function blockedCorridorGuide(segment) {
+  const rows = roadRows(segment, segment.samples || []);
+  const boundaries = [];
+  const hatches = [];
+  const endCaps = [];
+  if (rows.length < 2) {
+    return {
+      segmentId: segment.id,
+      reason: segment.construction?.reason || 'invalid-path',
+      role: 'editor-blocked-corridor',
+      boundaries,
+      hatches,
+      endCaps
+    };
+  }
+
+  for (let index = 1; index < rows.length; index += 1) {
+    boundaries.push(
+      ...rows[index - 1].positions[0], ...rows[index].positions[0],
+      ...rows[index - 1].positions[2], ...rows[index].positions[2]
+    );
+  }
+  endCaps.push(
+    ...rows[0].positions[0], ...rows[0].positions[2],
+    ...rows.at(-1).positions[0], ...rows.at(-1).positions[2]
+  );
+
+  const width = Math.max(0.5, finite(segment.crossSectionProfile?.width, 3));
+  const baseSpacing = clamp(width * 0.75, 1.5, 6);
+  const startDistance = rows[0].distance;
+  const endDistance = rows.at(-1).distance;
+  const maximumHatches = 256;
+  const spacing = Math.max(baseSpacing, (endDistance - startDistance) / maximumHatches);
+  const diagonalReach = Math.min(spacing * 0.72, width);
+  let hatchIndex = 0;
+  for (
+    let distance = startDistance;
+    distance <= endDistance + EPSILON && hatchIndex < maximumHatches;
+    distance += spacing, hatchIndex += 1
+  ) {
+    const start = interpolateRoadRow(rows, distance);
+    const end = interpolateRoadRow(rows, Math.min(endDistance, distance + diagonalReach));
+    if (!start || !end) continue;
+    const reverse = hatchIndex % 2 === 1;
+    hatches.push(
+      ...(reverse ? start.positions[2] : start.positions[0]),
+      ...(reverse ? end.positions[0] : end.positions[2])
+    );
+  }
+
+  return {
+    segmentId: segment.id,
+    reason: segment.construction?.reason || 'invalid-path',
+    role: 'editor-blocked-corridor',
+    boundaries,
+    hatches,
+    endCaps
+  };
+}
+
 function shoulderRows(segment, samples, sideSign) {
   const profile = segment.crossSectionProfile;
   const halfWidth = profile.width * 0.5;
@@ -1107,7 +1185,7 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
   const shoulder = createMeshBuilder('shoulder');
   const earthwork = createMeshBuilder('earthwork');
   const structure = createMeshBuilder('structure');
-  const guides = { center: [], edges: [], construction: [] };
+  const guides = { center: [], edges: [], construction: [], blockedCorridors: [] };
   // Invalid construction stays visible through the guide overlay but must not
   // create traversable render/collision/navigation surfaces. Valid segments in
   // the same connected graph remain usable instead of disappearing with the
@@ -1202,6 +1280,9 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
         ...rows[index].positions[0], ...rows[index + 1].positions[0],
         ...rows[index].positions[2], ...rows[index + 1].positions[2]
       );
+    }
+    if (segment.construction.mode === 'invalid') {
+      guides.blockedCorridors.push(blockedCorridorGuide(segment));
     }
   }
 
