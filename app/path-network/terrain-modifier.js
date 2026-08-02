@@ -186,6 +186,11 @@ function sampleEntry(entry, x, z, baseHeight, engineering) {
     normalizedLateral: nearest.lateral / Math.max(EPSILON, extents.outerEdge),
     center: [nearest.x, centerY, nearest.z],
     baseHeight,
+    // The authored cross-section is the surface that objects, characters,
+    // collision, and navigation stand on. targetHeight remains the bounded
+    // terrain-support target so a bridge deck or tunnel floor is never
+    // mistaken for the terrain beneath/above it.
+    surfaceHeight: targetHeight,
     targetHeight: boundedTarget,
     supportHeight,
     terrainUnderlayClearance: applies ? terrainUnderlayClearance * underlayWeight : 0,
@@ -351,7 +356,10 @@ export function samplePathTerrainModifier(modifier, x, z) {
     normalizedLateral: Infinity,
     center: null,
     baseHeight,
+    surfaceHeight: baseHeight,
     targetHeight: baseHeight,
+    supportHeight: baseHeight,
+    terrainUnderlayClearance: 0,
     height: baseHeight,
     influence: 0,
     zone: 'terrain',

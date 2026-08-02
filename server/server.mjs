@@ -14,7 +14,8 @@ import {
 import { normalizeProvider, normalizeIntegrationSettings } from './provider-framework.mjs';
 import { initializeJobManager, createJob, cancelJob, retryJob, clearCompletedJobs, shutdownJobs } from './job-manager.mjs';
 import { searchMarketplace, marketplaceDetails, prepareMarketplaceDownload, resolveMarketplaceImportFiles, createMaterialFromMarketplaceDownload, inspectDownloadedJob } from './marketplace.mjs';
-import { terrainHeightAt as sharedTerrainHeightAt } from '../app/worldgen.js';
+import { createScenePathRuntimeContext } from '../app/path-network/runtime.js';
+import { sampleSceneGroundSurface } from '../app/path-network/consumers.js';
 import { defaultWorldSettings, applyWorldToScene } from './v010-systems.mjs';
 import { celestialAuthorityNeedsRepair, isCelestialProxy, patchCelestialWorldFromProxy, repairCelestialAuthority } from './celestial-authority.mjs';
 
@@ -156,10 +157,14 @@ function decalObjectFromRecipe(recipe,material,body={}) {
 function rgbToHex(color=[.65,.68,.74]) {
   return `#${color.slice(0,3).map(value=>Math.max(0,Math.min(255,Math.round(Number(value||0)*255))).toString(16).padStart(2,'0')).join('')}`;
 }
-function terrainHeightAt(terrain,x,z,paths=[]){return sharedTerrainHeightAt(terrain,x,z,paths);}
+function sceneGroundSurfaceAt(scene,x,z,referenceY=null){
+  const context=createScenePathRuntimeContext(scene);if(!context.terrain||!context.terrainService)return 0;
+  const terrainHeight=context.terrainService.elevationAt(x,z,{view:'final-construction'});
+  return sampleSceneGroundSurface(context.sceneConsumers,terrainHeight,x,z,{referenceY,snapTolerance:.25}).height;
+}
 function modelObjectFromAsset(asset,body={}){
   const size=asset.bounds?.size||[1,1,1],position=Array.isArray(body.position)?body.position.map(Number):[0,0,0],scene=body.scene||null;
-  const terrain=scene?.objects?.find(object=>object.type==='terrain'),paths=scene?.objects?.filter(object=>object.type==='path'&&object.visible!==false)||[];if(!Array.isArray(body.position))position[1]=terrainHeightAt(terrain,position[0],position[2],paths)+Math.max(0,size[1]/2-(asset.bounds?.center?.[1]||0));
+  if(!Array.isArray(body.position))position[1]=sceneGroundSurfaceAt(scene,position[0],position[2])+Math.max(0,size[1]/2-(asset.bounds?.center?.[1]||0));
   return createSceneObject('model',{name:body.name||asset.name,position,scale:Array.isArray(body.scale)?body.scale.map(Number):[1,1,1],rotation:Array.isArray(body.rotation)?body.rotation.map(Number):[0,0,0],properties:{assetId:asset.id,color:rgbToHex(asset.material?.baseColor),metallic:Number(asset.material?.metallic||0),roughness:Number(asset.material?.roughness??.8),collider:asset.collisionStatus==='generated',collision:asset.collision||null,castsShadows:true,receivesShadows:true,previewOnly:Boolean(body.previewOnly),previewTransactionId:body.previewTransactionId||null}});
 }
 

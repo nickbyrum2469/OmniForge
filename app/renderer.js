@@ -6,6 +6,7 @@ import {
 import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, terrainBaseHeightAt, normalizeTerrainProperties, terrainBounds } from './worldgen.js';
 import { buildPathGuideSegmentsFromCorridor, buildTerrainConformingPathSurface, terrainPathSamplingDiagnostics } from './path-visuals.js';
 import { compileScenePathRuntimes, sampleScenePathTerrain } from './path-network/runtime.js';
+import { connectScenePathRuntimeConsumers, sampleSceneGroundSurface } from './path-network/consumers.js';
 import { buildPathCostGuideData } from './path-network/debug-visualization.js';
 import { resolveViewportLighting } from './world-runtime.js';
 import { normalizeEnvironmentState } from './environment-runtime.js';
@@ -834,6 +835,19 @@ export class Renderer3D{
   worldToScreen(camera,point){const rect=this.canvas.getBoundingClientRect(),{viewProj}=this.cameraMatrices(camera),x=point[0],y=point[1],z=point[2],cx=viewProj[0]*x+viewProj[4]*y+viewProj[8]*z+viewProj[12],cy=viewProj[1]*x+viewProj[5]*y+viewProj[9]*z+viewProj[13],cz=viewProj[2]*x+viewProj[6]*y+viewProj[10]*z+viewProj[14],cw=viewProj[3]*x+viewProj[7]*y+viewProj[11]*z+viewProj[15];if(cw<=.001)return {visible:false,x:0,y:0};const nx=cx/cw,ny=cy/cw;return {visible:cz/cw>=-1&&cz/cw<=1&&nx>=-1.2&&nx<=1.2&&ny>=-1.2&&ny<=1.2,x:(nx*.5+.5)*rect.width,y:(1-(ny*.5+.5))*rect.height};}
   terrainBaseHeightForScene(scene,x,z){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);return terrain?terrainBaseHeightAt(terrain,x,z):0;}
   terrainHeightForScene(scene,x,z){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return 0;const baseY=terrainBaseHeightAt(terrain,x,z);return sampleScenePathTerrain(this.scenePathRuntimes(scene),baseY,x,z).height;}
+  scenePathConsumers(scene){
+    const runtimes=this.scenePathRuntimes(scene),cached=this.pathRuntimeFrameCache;
+    if(cached?.runtimes===runtimes&&cached.sceneConsumers)return cached.sceneConsumers;
+    const sceneConsumers=connectScenePathRuntimeConsumers(runtimes);
+    if(cached?.runtimes===runtimes)cached.sceneConsumers=sceneConsumers;
+    return sceneConsumers;
+  }
+  groundSurfaceForScene(scene,x,z,options={}){
+    const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);
+    if(!terrain)return {height:0,source:'terrain',generationRevision:0};
+    const terrainHeight=this.terrainHeightForScene(scene,x,z);
+    return sampleSceneGroundSurface(this.scenePathConsumers(scene),terrainHeight,x,z,options);
+  }
   terrainPointFromScreen(scene,camera,x,y,{surface='scene'}={}){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return null;const heightAt=surface==='base'?(px,pz)=>terrainBaseHeightAt(terrain,px,pz):(px,pz)=>this.terrainHeightForScene(scene,px,pz);return pickTerrainPoint({ray:this.rayFromScreen(camera,x,y),bounds:terrainBounds(terrain),heightAt,step:Math.min(6,Math.max(2,Number(terrain.properties?.chunkSize||64)*.06)),refinementSteps:12});}
   lightState(scene,editorMode='edit',viewportLightingMode=null){
     const sun=scene.objects.find(o=>o.type==='directionalLight'&&o.visible&&o.properties?.celestialRole==='sun')||scene.objects.find(o=>o.type==='directionalLight'&&o.visible&&!o.properties?.celestialRole);let dir=[.45,-.8,.25],color=[1,.95,.82],intensity=1,shadows=true;

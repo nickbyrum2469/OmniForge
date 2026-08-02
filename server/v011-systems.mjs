@@ -16,6 +16,8 @@ import {
   undoTerrainSculpt,
   clearTerrainSculpt
 } from '../app/worldgen.js';
+import { createScenePathRuntimeContext } from '../app/path-network/runtime.js';
+import { sampleSceneGroundSurface } from '../app/path-network/consumers.js';
 
 const now = () => new Date().toISOString();
 
@@ -56,10 +58,10 @@ function categoryMode(category) {
   return 'support-plane';
 }
 
-export function fitGroundContactV011({ scene, object, asset, maxTilt = 35 }) {
+export function fitGroundContactV011({ scene, object, asset, maxTilt = 35, runtimeContext = null }) {
   const terrain = scene.objects.find(item => item.type === 'terrain' && item.visible !== false);
   if (!terrain) throw new Error('No visible authoritative terrain exists in the active scene.');
-  const paths = scene.objects.filter(item => item.type === 'path' && item.visible !== false);
+  const context = runtimeContext || createScenePathRuntimeContext(scene);
   const position = object.transform?.position || [0, 0, 0];
   const bounds = objectBounds(asset, object);
   const category = asset?.category || object.type;
@@ -71,8 +73,19 @@ export function fitGroundContactV011({ scene, object, asset, maxTilt = 35 }) {
     ? [[-halfX * 0.72, -halfZ * 0.68], [halfX * 0.72, -halfZ * 0.68], [-halfX * 0.72, halfZ * 0.68], [halfX * 0.72, halfZ * 0.68]]
     : [[-halfX, -halfZ], [halfX, -halfZ], [halfX, halfZ], [-halfX, halfZ]];
   const supports = localSupports.map(([x, z]) => [position[0] + x * c - z * s, position[2] + x * s + z * c]);
-  const heights = supports.map(([x, z]) => terrainHeightAt(terrain, x, z, paths));
-  const centerHeight = terrainHeightAt(terrain, position[0], position[2], paths);
+  const base = Number(bounds.min[1] ?? -0.5);
+  const referenceY = position[1] + base;
+  const groundSampleAt = (x, z, sampleReferenceY = referenceY) => {
+    const constructionTerrainHeight = context.terrainService.elevationAt(x, z, { view: 'final-construction' });
+    return sampleSceneGroundSurface(context.sceneConsumers, constructionTerrainHeight, x, z, {
+      referenceY: sampleReferenceY,
+      snapTolerance: Math.max(0.25, Math.abs(bounds.size[1]) * 0.1)
+    });
+  };
+  const supportSamples = supports.map(([x, z]) => groundSampleAt(x, z));
+  const heights = supportSamples.map(sample => sample.height);
+  const centerSample = groundSampleAt(position[0], position[2]);
+  const centerHeight = centerSample.height;
   const averageHeight = (heights.reduce((sum, value) => sum + value, 0) + centerHeight) / (heights.length + 1);
   let pitch = 0, roll = 0;
   if (!['foliage', 'character', 'creature', 'architecture', 'vehicle'].includes(category)) {
@@ -82,12 +95,20 @@ export function fitGroundContactV011({ scene, object, asset, maxTilt = 35 }) {
     roll = clamp(roll, -maxTilt, maxTilt);
   }
   const burial = category === 'foliage' ? Number(object.properties?.rootBurial ?? asset?.placement?.rootBurial ?? 0.08) : 0;
-  const base = Number(bounds.min[1] ?? -0.5);
   object.transform.position = [position[0], averageHeight - base - burial, position[2]];
   object.transform.rotation = [pitch, Number(object.transform?.rotation?.[1] || 0), roll];
   const finalBase = object.transform.position[1] + base;
   const signedErrors = heights.map(height => finalBase - height);
-  const normal = terrainNormalAt(terrain, position[0], position[2], paths);
+  const normalStep = Math.max(0.2, Math.min(1, Math.min(halfX, halfZ) * 0.5));
+  const left = groundSampleAt(position[0] - normalStep, position[2], centerHeight + normalStep).height;
+  const right = groundSampleAt(position[0] + normalStep, position[2], centerHeight + normalStep).height;
+  const down = groundSampleAt(position[0], position[2] - normalStep, centerHeight + normalStep).height;
+  const up = groundSampleAt(position[0], position[2] + normalStep, centerHeight + normalStep).height;
+  const rawNormal = [left - right, normalStep * 2, down - up];
+  const normalLength = Math.hypot(...rawNormal) || 1;
+  const normal = rawNormal.map(value => value / normalLength);
+  const allSamples = [...supportSamples, centerSample];
+  const pathSamples = allSamples.filter(sample => sample.source === 'path-surface');
   const diagnostics = {
     mode: categoryMode(category),
     supportPoints: supports.map((point, index) => [point[0], heights[index], point[1]]),
@@ -95,7 +116,10 @@ export function fitGroundContactV011({ scene, object, asset, maxTilt = 35 }) {
     maxContactError: Math.max(...signedErrors.map(Math.abs)),
     floatingError: Math.max(0, ...signedErrors),
     penetrationError: Math.max(0, ...signedErrors.map(value => -value)),
-    pathAware: paths.some(path => path.properties?.carveTerrain),
+    pathAware: pathSamples.length > 0,
+    pathNetworkIds: [...new Set(pathSamples.map(sample => sample.sourceNetworkId).filter(Boolean))].sort(),
+    pathGenerationRevisions: [...new Set(pathSamples.map(sample => sample.generationRevision).filter(Number.isFinite))].sort((a, b) => a - b),
+    constructionModes: [...new Set(pathSamples.map(sample => sample.constructionMode).filter(Boolean))].sort(),
     updatedAt: now()
   };
   object.properties = { ...(object.properties || {}), grounding: diagnostics };

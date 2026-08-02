@@ -6,6 +6,7 @@ import {
   samplePathTerrainModifier
 } from './terrain-modifier.js';
 import { createTerrainQueryService } from '../world/terrain-query-service.js';
+import { connectScenePathRuntimeConsumers } from './consumers.js';
 
 let objectCache = new WeakMap();
 const stableRuntimeCache = new Map();
@@ -14,6 +15,7 @@ const MAXIMUM_STABLE_RUNTIMES = 96;
 function runtimeSignature(pathObject, terrain, options) {
   return JSON.stringify({
     pathId: pathObject?.id,
+    transform: pathObject?.transform || null,
     visible: pathObject?.visible !== false,
     network: pathObject?.properties?.pathNetwork || null,
     legacy: pathObject?.properties?.pathNetwork
@@ -133,6 +135,47 @@ export function compileScenePathRuntimes(scene, options = {}) {
       useStableCache: options.useStableCache ?? !externalTerrainService,
       chunkSize: options.chunkSize ?? scene.settings?.worldChunkSize ?? terrain.properties?.chunkSize
     }));
+}
+
+export function createScenePathRuntimeContext(scene, options = {}) {
+  const terrain = scene?.objects?.find(object => object.type === 'terrain' && object.visible !== false) || null;
+  if (!terrain) {
+    return {
+      schemaVersion: 1,
+      terrain: null,
+      runtimes: [],
+      sceneConsumers: connectScenePathRuntimeConsumers([]),
+      authoredTerrainService: null,
+      terrainService: null,
+      generationRevision: 0
+    };
+  }
+  const {
+    authoredTerrainService: providedAuthoredTerrainService,
+    terrainService: providedConstructionTerrainService,
+    ...compileOptions
+  } = options;
+  const authoredTerrainService = providedAuthoredTerrainService || createTerrainQueryService({ terrain });
+  const runtimes = compileScenePathRuntimes(scene, {
+    ...compileOptions,
+    terrainService: authoredTerrainService,
+    useStableCache: compileOptions.useStableCache ?? true
+  });
+  const terrainService = providedConstructionTerrainService || createTerrainQueryService({
+    terrain,
+    pathRuntimes: runtimes,
+    tileSize: scene?.settings?.worldChunkSize ?? terrain.properties?.chunkSize
+  });
+  const sceneConsumers = connectScenePathRuntimeConsumers(runtimes);
+  return {
+    schemaVersion: 1,
+    terrain,
+    runtimes,
+    sceneConsumers,
+    authoredTerrainService,
+    terrainService,
+    generationRevision: sceneConsumers.generationRevision
+  };
 }
 
 export function sampleScenePathTerrain(runtimes, baseHeight, x, z) {

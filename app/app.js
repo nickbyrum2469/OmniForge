@@ -1192,7 +1192,12 @@ function physicsStep(dt) {
     if(component?.useGravity!==false)body.velocity[1]+=gravity*dt;
     object.transform.position[0]+=body.velocity[0]*dt;object.transform.position[1]+=body.velocity[1]*dt;object.transform.position[2]+=body.velocity[2]*dt;
     if(terrain&&hasCollider(object)){
-      const floor=terrainHeight(terrain,object.transform.position[0],object.transform.position[2],scene.objects.filter(item=>item.type==='path'&&item.visible!==false)),half=objectHalfExtents(object)[1];
+      const half=objectHalfExtents(object)[1],referenceY=object.transform.position[1]-half;
+      const floorSample=renderer?.groundSurfaceForScene?.(scene,object.transform.position[0],object.transform.position[2],{
+        referenceY,
+        snapTolerance:Math.max(.25,Math.abs(body.velocity[1])*dt+.08)
+      });
+      const floor=Number.isFinite(Number(floorSample?.height))?Number(floorSample.height):terrainHeight(terrain,object.transform.position[0],object.transform.position[2]);
       if(object.transform.position[1]-half<floor){const restitution=clamp(Number(component?.restitution??.18),0,1);object.transform.position[1]=floor+half;body.velocity[1]=Math.abs(body.velocity[1])>.35?-body.velocity[1]*restitution:0;}
     }
     if(hasCollider(object))for(const other of scene.objects)resolveStaticAabb(object,body,other);
