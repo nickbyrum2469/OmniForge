@@ -20,6 +20,19 @@ test('Scene Block inspector enhancement has a stable marker and coalesced observ
   assert.match(observer, /inspectorEnhanceQueued = false;\s*enhanceInspector\(\)/);
 });
 
+test('object inspector bindings stay scoped to the replaceable inspector subtree', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'app', 'app.js'), 'utf8');
+  const bindingStart = source.indexOf('function bindInspector');
+  const bindingEnd = source.indexOf('function hashText', bindingStart);
+  const binding = source.slice(bindingStart, bindingEnd);
+
+  assert.match(binding, /const container = ui\.inspectorContent/);
+  assert.match(binding, /const find = selector => container\.querySelector\(selector\)/);
+  assert.match(binding, /const findAll = selector => container\.querySelectorAll\(selector\)/);
+  assert.doesNotMatch(binding, /\$\$\(/);
+  assert.doesNotMatch(binding, /(?<![A-Za-z])\$\(/);
+});
+
 test('diagnostic mode includes input, event-loop, WebGL, and long-task evidence', () => {
   const source = fs.readFileSync(path.join(ROOT, 'app', 'runtime-diagnostics.js'), 'utf8');
   for (const evidence of [

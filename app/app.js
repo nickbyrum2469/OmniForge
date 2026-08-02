@@ -549,63 +549,66 @@ function renderInspector() {
 
 function setNested(arrayRoot,index,value){ arrayRoot[Number(index)] = Number(value); }
 function bindInspector(object) {
+  const container = ui.inspectorContent;
+  const find = selector => container.querySelector(selector);
+  const findAll = selector => container.querySelectorAll(selector);
   if(object.properties?.celestialProxy)return;
   if(object.type==='path'&&object.properties?.pathNetwork?.schemaVersion!==2){
-    $$('[data-pathway-live]').forEach(input=>input.addEventListener('input',()=>{
+    findAll('[data-pathway-live]').forEach(input=>input.addEventListener('input',()=>{
       const key=input.dataset.propertyKey;if(!key)return;
       object.properties[key]=input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value;
       markLocalMutation();
     }));
-    $('#applyPathwayPresetButton')?.addEventListener('click',()=>{
-      const preset=$('[data-pathway-preset]')?.value||'dirtRoad';
+    find('#applyPathwayPresetButton')?.addEventListener('click',()=>{
+      const preset=find('[data-pathway-preset]')?.value||'dirtRoad';
       patchObject(object.id,{properties:applyPathwayPreset(object.properties,preset)});
     });
-    $('#fitPathwayLanesButton')?.addEventListener('click',()=>{
+    find('#fitPathwayLanesButton')?.addEventListener('click',()=>{
       const laneCount=Math.max(1,Number(object.properties.laneCount||2)),laneWidth=Math.max(.5,Number(object.properties.laneWidth||2.4));
       patchObject(object.id,{properties:{width:laneCount*laneWidth,profileRevision:Number(object.properties.profileRevision||1)+1}});
     });
-    $('#reversePathwayButton')?.addEventListener('click',()=>{
+    find('#reversePathwayButton')?.addEventListener('click',()=>{
       const points=deepClone(object.properties.points||[]).reverse();
       patchObject(object.id,{properties:{points,profileRevision:Number(object.properties.profileRevision||1)+1}});
     });
-    $('#rebuildPathwayButton')?.addEventListener('click',()=>patchObject(object.id,{properties:{profileRevision:Number(object.properties.profileRevision||1)+1}}));
+    find('#rebuildPathwayButton')?.addEventListener('click',()=>patchObject(object.id,{properties:{profileRevision:Number(object.properties.profileRevision||1)+1}}));
   }
-  $('#objectNameInput')?.addEventListener('change',event=>patchObject(object.id,{name:event.target.value.trim()||object.name}));
-  $$('[data-number-path]').forEach(input=>input.addEventListener('change',event=>{
+  find('#objectNameInput')?.addEventListener('change',event=>patchObject(object.id,{name:event.target.value.trim()||object.name}));
+  findAll('[data-number-path]').forEach(input=>input.addEventListener('change',event=>{
     const [root,index]=input.dataset.numberPath.split('.');
     const transform=deepClone(object.transform); setNested(transform[root],index,event.target.value);
     if(root==='scale') transform[root][Number(index)] = Math.max(.01,transform[root][Number(index)]);
     patchObject(object.id,{transform});
   }));
-  $('[data-material-id]')?.addEventListener('change',event=>patchObject(object.id,{properties:{materialId:event.target.value||null}}));
-  $$('[data-property-key]').forEach(input=>input.addEventListener('change',event=>{
+  find('[data-material-id]')?.addEventListener('change',event=>patchObject(object.id,{properties:{materialId:event.target.value||null}}));
+  findAll('[data-property-key]').forEach(input=>input.addEventListener('change',event=>{
     const key=input.dataset.propertyKey;if(key.startsWith('component.'))return;
     if(key==='__visible') return patchObject(object.id,{visible:input.checked});
     if(key==='__locked') return patchObject(object.id,{locked:input.checked});
     const value=input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value;
     patchObject(object.id,{properties:{[key]:value}});
   }));
-  $$('[data-property-key^="component."]').forEach(input=>input.addEventListener('change',event=>{
+  findAll('[data-property-key^="component."]').forEach(input=>input.addEventListener('change',event=>{
     event.stopImmediatePropagation();
     const [,index,field]=input.dataset.propertyKey.split('.'),components=deepClone(object.components||[]),component=typeof components[Number(index)]==='string'?{type:components[Number(index)]}:components[Number(index)];
     component[field]=input.type==='checkbox'?input.checked:Number(input.value);components[Number(index)]=component;patchObject(object.id,{components});
   }));
-  $$('[data-component-path]').forEach(input=>input.addEventListener('change',()=>{const [index,field]=input.dataset.componentPath.split('.'),components=deepClone(object.components||[]),component=typeof components[Number(index)]==='string'?{type:components[Number(index)]}:components[Number(index)];component[field]=input.value;components[Number(index)]=component;patchObject(object.id,{components});}));
-  $$('[data-path-point]').forEach(input=>input.addEventListener('change',event=>{
+  findAll('[data-component-path]').forEach(input=>input.addEventListener('change',()=>{const [index,field]=input.dataset.componentPath.split('.'),components=deepClone(object.components||[]),component=typeof components[Number(index)]==='string'?{type:components[Number(index)]}:components[Number(index)];component[field]=input.value;components[Number(index)]=component;patchObject(object.id,{components});}));
+  findAll('[data-path-point]').forEach(input=>input.addEventListener('change',event=>{
     const [index,axis]=input.dataset.pathPoint.split('.');const points=deepClone(object.properties.points||[]);points[Number(index)][Number(axis)]=Number(input.value);patchObject(object.id,{properties:{points}});
   }));
-  $$('[data-remove-point]').forEach(button=>button.addEventListener('click',()=>{
+  findAll('[data-remove-point]').forEach(button=>button.addEventListener('click',()=>{
     const points=deepClone(object.properties.points||[]);if(points.length<=2)return showToast('A path needs at least two points.','error');points.splice(Number(button.dataset.removePoint),1);patchObject(object.id,{properties:{points}});
   }));
-  $('#addPathPoint')?.addEventListener('click',()=>{
+  find('#addPathPoint')?.addEventListener('click',()=>{
     const points=deepClone(object.properties.points||[]),last=points.at(-1)||[0,0],prev=points.at(-2)||[last[0]-8,last[1]];points.push([last[0]+(last[0]-prev[0]||8),last[1]+(last[1]-prev[1])]);patchObject(object.id,{properties:{points}});
   });
-  $('#addRigidbody')?.addEventListener('click',()=>{
+  find('#addRigidbody')?.addEventListener('click',()=>{
     const components=deepClone(object.components||[]);if(components.some(c=>(c.type||c)==='RigidBody'))return showToast('Rigidbody already added.');components.push({type:'RigidBody',mass:1,useGravity:true,kinematic:false,restitution:.18});patchObject(object.id,{components});
   });
-  $('#addCollider')?.addEventListener('click',()=>{const components=deepClone(object.components||[]);if(components.some(c=>(c.type||c)==='Collider'))return showToast('Collider already added.');components.push({type:'Collider',shape:object.type==='sphere'?'sphere':'box',trigger:false});patchObject(object.id,{components});});
-  $('#addRotator')?.addEventListener('click',()=>{const components=deepClone(object.components||[]);if(components.some(c=>(c.type||c)==='Rotator'))return showToast('Rotator already added.');components.push({type:'Rotator',x:0,y:30,z:0});patchObject(object.id,{components});});
-  $$('[data-remove-component]').forEach(button=>button.addEventListener('click',()=>{const components=deepClone(object.components||[]);components.splice(Number(button.dataset.removeComponent),1);patchObject(object.id,{components});}));
+  find('#addCollider')?.addEventListener('click',()=>{const components=deepClone(object.components||[]);if(components.some(c=>(c.type||c)==='Collider'))return showToast('Collider already added.');components.push({type:'Collider',shape:object.type==='sphere'?'sphere':'box',trigger:false});patchObject(object.id,{components});});
+  find('#addRotator')?.addEventListener('click',()=>{const components=deepClone(object.components||[]);if(components.some(c=>(c.type||c)==='Rotator'))return showToast('Rotator already added.');components.push({type:'Rotator',x:0,y:30,z:0});patchObject(object.id,{components});});
+  findAll('[data-remove-component]').forEach(button=>button.addEventListener('click',()=>{const components=deepClone(object.components||[]);components.splice(Number(button.dataset.removeComponent),1);patchObject(object.id,{components});}));
 }
 
 
