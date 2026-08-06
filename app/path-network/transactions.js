@@ -8,6 +8,16 @@ import {
   pathNetworkNodeMap,
   validatePathNetwork
 } from './model.js';
+import {
+  PATH_CROSS_SECTION_PROFILE_IDS,
+  normalizePathCrossSection,
+  pathCrossSectionProfile
+} from './cross-section-profiles.js';
+import {
+  PATH_SURFACE_DETAIL_PROFILE_IDS,
+  normalizePathSurfaceDetail,
+  pathSurfaceDetailProfile
+} from './surface-detail-profiles.js';
 
 const HANDLE_EPSILON = 1e-4;
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -183,6 +193,26 @@ function applyOperation(network, operation) {
       segment.constructionLocked = operation.locked === true;
       break;
     }
+    case 'set-segment-cross-section': {
+      const segment = ensureSegment(network, cleanId(operation.segmentId));
+      const requestedProfileId = operation.profileId === undefined
+        ? segment.crossSectionProfile?.profileId || 'dirt-road'
+        : String(operation.profileId || '');
+      if (!PATH_CROSS_SECTION_PROFILE_IDS.includes(requestedProfileId)) {
+        throw new Error(`Unknown path cross-section profile ${requestedProfileId}.`);
+      }
+      const overrides = operation.crossSectionProfile && typeof operation.crossSectionProfile === 'object'
+        ? operation.crossSectionProfile
+        : {};
+      segment.crossSectionProfile = operation.profileId === undefined
+        ? normalizePathCrossSection({
+            ...segment.crossSectionProfile,
+            ...overrides,
+            profileId: requestedProfileId
+          })
+        : pathCrossSectionProfile(requestedProfileId, overrides);
+      break;
+    }
     case 'set-segment-structure': {
       const segment = ensureSegment(network, cleanId(operation.segmentId));
       const bridgeStyle = String(operation.bridgeStyle || 'auto');
@@ -194,6 +224,48 @@ function applyOperation(network, operation) {
         bridgeStyle,
         railings: operation.railings !== false
       };
+      break;
+    }
+    case 'set-segment-surface-detail': {
+      const segment = ensureSegment(network, cleanId(operation.segmentId));
+      const requestedProfileId = operation.profileId === undefined
+        ? segment.surfaceDetailProfile?.profileId || 'weathered-dirt-road'
+        : String(operation.profileId || '');
+      if (!PATH_SURFACE_DETAIL_PROFILE_IDS.includes(requestedProfileId)) {
+        throw new Error(`Unknown path surface detail profile ${requestedProfileId}.`);
+      }
+      const overrides = operation.surfaceDetailProfile && typeof operation.surfaceDetailProfile === 'object'
+        ? operation.surfaceDetailProfile
+        : {};
+      segment.surfaceDetailProfile = operation.profileId === undefined
+        ? normalizePathSurfaceDetail({
+            ...segment.surfaceDetailProfile,
+            ...overrides,
+            profileId: requestedProfileId
+          })
+        : pathSurfaceDetailProfile(requestedProfileId, overrides);
+      break;
+    }
+    case 'set-default-cross-section': {
+      const requestedProfileId = String(operation.profileId || '');
+      if (!PATH_CROSS_SECTION_PROFILE_IDS.includes(requestedProfileId)) {
+        throw new Error(`Unknown path cross-section profile ${requestedProfileId}.`);
+      }
+      const overrides = operation.crossSectionProfile && typeof operation.crossSectionProfile === 'object'
+        ? operation.crossSectionProfile
+        : {};
+      network.defaults.crossSectionProfile = pathCrossSectionProfile(requestedProfileId, overrides);
+      break;
+    }
+    case 'set-default-surface-detail': {
+      const requestedProfileId = String(operation.profileId || '');
+      if (!PATH_SURFACE_DETAIL_PROFILE_IDS.includes(requestedProfileId)) {
+        throw new Error(`Unknown path surface detail profile ${requestedProfileId}.`);
+      }
+      const overrides = operation.surfaceDetailProfile && typeof operation.surfaceDetailProfile === 'object'
+        ? operation.surfaceDetailProfile
+        : {};
+      network.defaults.surfaceDetailProfile = pathSurfaceDetailProfile(requestedProfileId, overrides);
       break;
     }
     case 'reverse-segment': {
@@ -216,6 +288,7 @@ function applyOperation(network, operation) {
         constructionLocked: false,
         crossSectionProfile: structuredClone(network.defaults.crossSectionProfile),
         materialProfile: structuredClone(network.defaults.materialProfile),
+        surfaceDetailProfile: structuredClone(network.defaults.surfaceDetailProfile),
         structureProfile: structuredClone(network.defaults.structureProfile),
         gameplayRules: structuredClone(network.defaults.gameplayRules)
       });

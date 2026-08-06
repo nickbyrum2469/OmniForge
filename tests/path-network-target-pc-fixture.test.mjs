@@ -177,73 +177,109 @@ test('the exact kilometre terrain uses watertight tiered path chunks', () => {
   const runtimes = fixture.paths.map(compileFixturePath);
   const mesh = terrainMesh(structuredClone(fixture.terrain), structuredClone(fixture.paths), runtimes);
   assert.equal(terrainMesh.lastPathDetail.strategy, 'watertight-chunks');
-  assert.ok(terrainMesh.lastPathDetail.highTileCount >= 3);
+  const expectedTerrainChunks = new Set(runtimes.flatMap(runtime => (
+    runtime.terrainModifier.terrainDirtyChunkKeys
+  )));
+  assert.equal(
+    terrainMesh.lastPathDetail.highTileCount,
+    expectedTerrainChunks.size,
+    'renderer must refine only chunks with compiled terrain authority'
+  );
+  assert.ok(terrainMesh.lastPathDetail.highTileCount >= 2);
   assert.ok(terrainMesh.lastPathDetail.transitionTileCount > 0);
   assert.ok(terrainMesh.lastPathDetail.targetSpacing <= 0.625);
   assert.ok(terrainMesh.lastPathDetail.transitionSpacing <= 2);
   assert.ok(terrainMesh.lastPathDetail.maximumBoundaryMismatch <= 0.005);
-  assert.ok(terrainMesh.lastPathDetail.boundaryStitches.vertexCount > 0);
-  assert.ok(terrainMesh.lastPathDetail.boundaryStitches.triangleCount > 0);
-  assert.ok(terrainMesh.lastPathDetail.boundaryStitches.maximumWidth <= 0.9);
+  assert.deepEqual(
+    terrainMesh.lastPathDetail.boundaryStitches,
+    { vertexCount: 0, triangleCount: 0, maximumWidth: 0 },
+    'the renderer must not append a second nearly-coplanar terrain stitch surface'
+  );
+  assert.ok(terrainMesh.lastPathDetail.surfaceClipping.maskTriangleCount > 0);
+  assert.ok(terrainMesh.lastPathDetail.surfaceClipping.clippedTriangleCount > 0);
+  assert.ok(
+    terrainMesh.lastPathDetail.surfaceClipping.terrainTriangleFastRejectCount
+      >= terrainMesh.lastPathDetail.surfaceClipping.inputTriangleCount * 0.95,
+    'terrain clipping must reject the untouched kilometre terrain before polygon work'
+  );
+  assert.ok(
+    terrainMesh.lastPathDetail.surfaceClipping.surfaceTriangleBoundsTestCount
+      <= terrainMesh.lastPathDetail.surfaceClipping.inputTriangleCount * 3,
+    'terrain clipping regressed toward an all-terrain/all-road triangle search'
+  );
+  assert.ok(
+    terrainMesh.lastPathDetail.surfaceClipping.surfaceTriangleIntersectionTestCount
+      <= terrainMesh.lastPathDetail.surfaceClipping.inputTriangleCount * 0.2,
+    'terrain clipping exceeded the target-PC polygon-intersection operation budget'
+  );
+  assert.equal(
+    terrainMesh.lastPathDetail.surfaceClipping.constructionClassifierQueryCount,
+    0,
+    'uniform visible construction should not perform per-surface construction searches'
+  );
+  assert.ok(
+    terrainMesh.lastPathDetail.terrainSampling.fastRejectCount
+      >= terrainMesh.lastPathDetail.terrainSampling.queryCount * 0.9,
+    'fine renderer terrain sampling index did not reject unrelated path entries'
+  );
+  assert.ok(
+    terrainMesh.lastPathDetail.terrainSampling.indexedCellReferenceCount < 1000,
+    'target-PC terrain sampling index exceeded its bounded entry-cell budget'
+  );
+  assert.ok(
+    terrainMesh.lastPathDetail.surfaceClipping.outputTriangleCount
+      <= terrainMesh.lastPathDetail.surfaceClipping.inputTriangleCount * 1.25,
+    'surface ownership clipping exceeded the bounded terrain triangle budget'
+  );
   assert.ok(mesh.positions.length / 3 > 50000);
   assert.equal([...mesh.positions].every(Number.isFinite), true);
   assert.equal([...mesh.normals].every(Number.isFinite), true);
   assert.equal([...mesh.indices].every(index => Number.isInteger(index) && index >= 0 && index < mesh.positions.length / 3), true);
 
-  let blendedVertexCount = 0;
+  const terrainService = createTerrainQueryService({ terrain: fixture.terrain });
+  const terrainOrigin = fixture.terrain.transform?.position || [0, 0, 0];
+  let modifiedVertexCount = 0;
   for (let index = 0; index < mesh.positions.length / 3; index += 1) {
-    if (mesh.blends[index] <= 0.001) continue;
-    blendedVertexCount += 1;
-    const x = mesh.positions[index * 3];
-    const z = mesh.positions[index * 3 + 2];
+    const x = mesh.positions[index * 3] + Number(terrainOrigin[0] || 0);
+    const z = mesh.positions[index * 3 + 2] + Number(terrainOrigin[2] || 0);
+    const baseHeight = terrainService.elevationAt(x, z, { view: 'authored-natural' });
+    const sample = sampleScenePathTerrain(runtimes, baseHeight, x, z);
+    assert.equal(mesh.blends[index], 0, 'compiled road meshes must exclusively own path material');
+    if (!sample.terrainApplied || sample.influence <= 0.001) continue;
+    modifiedVertexCount += 1;
     assert.ok(x >= -35 && x <= 16, `path material escaped in X at ${x}`);
     assert.ok(z >= -38 && z <= 8, `path material escaped in Z at ${z}`);
   }
-  assert.ok(blendedVertexCount > 25);
+  assert.ok(modifiedVertexCount > 25);
 
-  const boundaryTolerance = 0.005;
-  const boundaryCells = new Map();
-  const cellKey = point => point.map(value => Math.floor(value / boundaryTolerance)).join(':');
-  for (let index = 0; index < mesh.positions.length; index += 3) {
-    const point = [mesh.positions[index], mesh.positions[index + 1], mesh.positions[index + 2]];
-    const key = cellKey(point);
-    if (!boundaryCells.has(key)) boundaryCells.set(key, []);
-    boundaryCells.get(key).push(point);
+  // Dense and transition terrain chunks intentionally duplicate their shared
+  // edge vertices. They must describe one surface and one lighting response;
+  // the removed overlay-stitch pass is no longer an expected boundary owner.
+  const sharedVertices = new Map();
+  for (let index = 0; index < mesh.positions.length / 3; index += 1) {
+    const x = mesh.positions[index * 3];
+    const y = mesh.positions[index * 3 + 1];
+    const z = mesh.positions[index * 3 + 2];
+    const key = `${x.toFixed(5)}:${z.toFixed(5)}`;
+    if (!sharedVertices.has(key)) sharedVertices.set(key, []);
+    sharedVertices.get(key).push({
+      y,
+      normal: [mesh.normals[index * 3], mesh.normals[index * 3 + 1], mesh.normals[index * 3 + 2]]
+    });
   }
-  const hasBoundaryVertex = target => {
-    const cell = target.map(value => Math.floor(value / boundaryTolerance));
-    for (let x = -1; x <= 1; x += 1) {
-      for (let y = -1; y <= 1; y += 1) {
-        for (let z = -1; z <= 1; z += 1) {
-          const candidates = boundaryCells.get(`${cell[0] + x}:${cell[1] + y}:${cell[2] + z}`) || [];
-          if (candidates.some(point => Math.hypot(
-            point[0] - target[0],
-            point[1] - target[1],
-            point[2] - target[2]
-          ) <= boundaryTolerance)) return true;
-        }
-      }
-    }
-    return false;
-  };
-  const terrainOrigin = fixture.terrain.transform?.position || [0, 0, 0];
-  for (const runtime of runtimes) {
-    const activeSegments = new Set(runtime.compiled.segments
-      .filter(segment => (
-        segment.crossSectionProfile.terrainModificationEnabled !== false
-        && !['bridge', 'tunnel', 'invalid'].includes(segment.construction.mode)
-      ))
-      .map(segment => segment.id));
-    for (const section of runtime.terrainModifier.crossSections) {
-      if (!activeSegments.has(section.segmentId)) continue;
-      for (const vertex of [section.outerLeft, section.outerRight]) {
-        const localVertex = vertex.map((value, axis) => Number(value) - Number(terrainOrigin[axis] || 0));
-        assert.equal(
-          hasBoundaryVertex(localVertex),
-          true,
-          `compiled construction boundary ${vertex.join(',')} was not stitched into the terrain mesh`
-        );
-      }
+  let sharedBoundaryCount = 0;
+  for (const values of sharedVertices.values()) {
+    if (values.length < 2) continue;
+    sharedBoundaryCount += 1;
+    const reference = values[0];
+    for (const value of values.slice(1)) {
+      assert.ok(Math.abs(value.y - reference.y) <= 0.005, 'shared terrain boundary opened vertically');
+      assert.ok(Math.hypot(
+        value.normal[0] - reference.normal[0],
+        value.normal[1] - reference.normal[1],
+        value.normal[2] - reference.normal[2]
+      ) <= 1e-6, 'shared terrain boundary retained a lighting seam');
     }
   }
+  assert.ok(sharedBoundaryCount > 100, 'fixture must exercise a meaningful number of shared terrain boundaries');
 });

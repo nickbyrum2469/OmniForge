@@ -1,5 +1,14 @@
 import earcut, { deviation as earcutDeviation } from '../vendor/earcut.js';
-import { bridgeMaterialForRole, resolveBridgeProfile } from './bridge-profiles.js';
+import {
+  bridgeCrossSectionState,
+  bridgeMaterialForRole,
+  resolveBridgeProfile
+} from './bridge-profiles.js';
+import { pathCrossSectionLayout } from './cross-section-profiles.js';
+import {
+  PATH_SURFACE_DETAIL_RENDER_COMPONENT_COUNT,
+  pathSurfaceDetailRenderData
+} from './surface-detail-profiles.js';
 
 const EPSILON = 1e-6;
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -24,6 +33,10 @@ const mix3 = (a, b, amount) => [
   lerp(a[1], b[1], amount),
   lerp(a[2], b[2], amount)
 ];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const ZERO_SURFACE_DETAIL = Object.freeze(
+  Array.from({ length: PATH_SURFACE_DETAIL_RENDER_COMPONENT_COUNT }, () => 0)
+);
 
 function createMeshBuilder(kind) {
   return {
@@ -33,17 +46,28 @@ function createMeshBuilder(kind) {
     indices: [],
     uvs: [],
     blends: [],
+    surfaceDetail0: [],
+    surfaceDetail1: [],
+    surfaceDetail2: [],
+    surfaceDetail3: [],
     roles: [],
     triangleRoles: []
   };
 }
 
-function pushVertex(builder, position, uv, blend, role) {
+function pushVertex(builder, position, uv, blend, role, surfaceDetail = ZERO_SURFACE_DETAIL) {
   const index = builder.positions.length / 3;
+  const detail = surfaceDetail?.length === PATH_SURFACE_DETAIL_RENDER_COMPONENT_COUNT
+    ? surfaceDetail
+    : ZERO_SURFACE_DETAIL;
   builder.positions.push(...position);
   builder.normals.push(0, 0, 0);
   builder.uvs.push(...uv);
   builder.blends.push(blend);
+  builder.surfaceDetail0.push(...detail.slice(0, 4));
+  builder.surfaceDetail1.push(...detail.slice(4, 8));
+  builder.surfaceDetail2.push(...detail.slice(8, 12));
+  builder.surfaceDetail3.push(...detail.slice(12, 16));
   builder.roles.push(role);
   return index;
 }
@@ -103,30 +127,68 @@ function finalizeMesh(builder) {
     indices: new Uint32Array(builder.indices),
     uvs: new Float32Array(builder.uvs),
     blends: new Float32Array(builder.blends),
+    surfaceDetail0: new Float32Array(builder.surfaceDetail0),
+    surfaceDetail1: new Float32Array(builder.surfaceDetail1),
+    surfaceDetail2: new Float32Array(builder.surfaceDetail2),
+    surfaceDetail3: new Float32Array(builder.surfaceDetail3),
     roles: builder.roles,
     groups
   };
 }
 
-function appendStrip(builder, rows, role, blendValues = [1, 1]) {
+function appendStrip(
+  builder,
+  rows,
+  role,
+  blendValues = [1, 1],
+  skipDegenerate = false,
+  surfaceDetail = null
+) {
   if (rows.length < 2) return;
-  const rowIndices = rows.map(row => row.positions.map((position, column) => pushVertex(
-    builder,
-    position,
-    [row.distance / Math.max(0.1, row.textureRepeatLength), column / Math.max(1, row.positions.length - 1)],
-    blendValues[Math.min(column, blendValues.length - 1)] ?? 1,
-    role
-  )));
+  const rowIndices = rows.map(row => {
+    const rowSurfaceDetail = row.surfaceDetail || surfaceDetail;
+    const longitudinal = rowSurfaceDetail
+      ? row.distance
+      : row.distance / Math.max(0.1, row.textureRepeatLength);
+    return row.positions.map((position, column) => pushVertex(
+      builder,
+      position,
+      [
+        longitudinal,
+        rowSurfaceDetail && Array.isArray(row.lateralDistances)
+          ? 0.5 + finite(row.lateralDistances[column]) / Math.max(0.1, finite(rowSurfaceDetail[15], 1))
+          : column / Math.max(1, row.positions.length - 1)
+      ],
+      blendValues[Math.min(column, blendValues.length - 1)] ?? 1,
+      role,
+      rowSurfaceDetail || ZERO_SURFACE_DETAIL
+    ));
+  });
   for (let row = 0; row < rowIndices.length - 1; row += 1) {
     for (let column = 0; column < rowIndices[row].length - 1; column += 1) {
       const a = rowIndices[row][column];
       const b = rowIndices[row + 1][column];
       const c = rowIndices[row][column + 1];
       const d = rowIndices[row + 1][column + 1];
-      pushTriangle(builder, a, b, c);
-      pushTriangle(builder, b, d, c);
+      const triangleArea = (first, second, third) => {
+        const point = index => builder.positions.slice(index * 3, index * 3 + 3);
+        return length3(cross3(
+          sub3(point(second), point(first)),
+          sub3(point(third), point(first))
+        ));
+      };
+      if (!skipDegenerate || triangleArea(a, b, c) >= 1e-8) pushTriangle(builder, a, b, c);
+      if (!skipDegenerate || triangleArea(b, d, c) >= 1e-8) pushTriangle(builder, b, d, c);
     }
   }
+}
+
+function rowsWithoutSurfaceDetail(rows) {
+  return rows.map(row => ({
+    ...row,
+    surfaceDetail: null,
+    lateralDistances: null
+  }));
 }
 
 function degreeMap(compiled) {
@@ -141,8 +203,11 @@ function degreeMap(compiled) {
 function trimSamplesForJunctions(segment, degree) {
   const samples = segment.samples;
   if (samples.length < 3) return { samples, fromPortal: null, toPortal: null };
-  const halfWidth = segment.crossSectionProfile.width * 0.5;
-  const trimDistance = Math.max(segment.crossSectionProfile.width * 1.15, halfWidth + 1);
+  const layout = pathCrossSectionLayout(segment.crossSectionProfile);
+  const trimDistance = Math.max(
+    segment.crossSectionProfile.width * 1.15,
+    layout.maximumOuterEdge + 1
+  );
   let first = 0;
   let last = samples.length - 1;
   if ((degree.get(segment.fromNode) || 0) > 2) {
@@ -153,41 +218,95 @@ function trimSamplesForJunctions(segment, degree) {
     while (last > first + 1 && total - samples[last].distance < trimDistance) last -= 1;
   }
   const trimmed = samples.slice(first, last + 1);
-  const portal = (sample, endpoint) => {
-    if (!sample) return null;
-    const left = add3(sample.position, scale3(sample.side, -halfWidth));
-    const right = add3(sample.position, scale3(sample.side, halfWidth));
-    return {
-      segmentId: segment.id,
-      endpoint,
-      center: [...sample.position],
-      left,
-      right,
-      direction: endpoint === 'from' ? scale3(sample.tangent, 1) : scale3(sample.tangent, -1),
-      width: segment.crossSectionProfile.width,
-      crownHeight: segment.crossSectionProfile.crownHeight
-    };
-  };
   return {
     samples: trimmed,
-    fromPortal: first > 0 ? portal(trimmed[0], 'from') : null,
-    toPortal: last < samples.length - 1 ? portal(trimmed.at(-1), 'to') : null
+    fromPortal: first > 0 ? portalForSample(segment, trimmed[0], 'from') : null,
+    toPortal: last < samples.length - 1 ? portalForSample(segment, trimmed.at(-1), 'to') : null
   };
 }
 
-function roadRows(segment, samples) {
-  const halfWidth = segment.crossSectionProfile.width * 0.5;
+function portalBoundary(sample, sideSign, side) {
+  const point = (distance, heightOffset = 0) => crossSectionPoint(
+    sample,
+    sideSign,
+    distance,
+    heightOffset
+  );
+  const edgeDrop = Math.max(0.06, side.layout.profile.terrainUnderlayClearance * 1.5);
+  return {
+    urban: side.urban,
+    roadEdge: point(side.roadEdge, side.roadEdgeHeight),
+    gutterOuter: point(side.gutterEdge, side.gutterOuterHeight),
+    curbInnerTop: point(side.gutterEdge, side.curbTopHeight),
+    curbOuterTop: point(side.curbEdge, side.curbTopHeight),
+    sidewalkOuterTop: point(side.sidewalkEdge, side.sidewalkOuterHeight),
+    sidewalkOuterBottom: point(side.sidewalkEdge, side.sidewalkOuterHeight - edgeDrop),
+    heights: {
+      roadEdge: side.roadEdgeHeight,
+      gutterOuter: side.gutterOuterHeight,
+      curbInnerTop: side.curbTopHeight,
+      curbOuterTop: side.curbTopHeight,
+      sidewalkOuterTop: side.sidewalkOuterHeight,
+      sidewalkOuterBottom: side.sidewalkOuterHeight - edgeDrop
+    }
+  };
+}
+
+function portalForSample(segment, sample, endpoint) {
+  if (!sample) return null;
+  const layout = pathCrossSectionLayout(segment.crossSectionProfile);
+  const leftSide = { ...layout.left, layout };
+  const rightSide = { ...layout.right, layout };
+  const travelLeft = portalBoundary(sample, -1, leftSide);
+  const travelRight = portalBoundary(sample, 1, rightSide);
+  // Junction left/right are relative to the direction travelling away from
+  // the node. A `to` endpoint therefore reverses the segment's authored
+  // travel direction and must swap its cross-section sides.
+  const left = endpoint === 'from' ? travelLeft : travelRight;
+  const right = endpoint === 'from' ? travelRight : travelLeft;
+  return {
+    segmentId: segment.id,
+    endpoint,
+    center: [...sample.position],
+    left: left.roadEdge,
+    right: right.roadEdge,
+    direction: endpoint === 'from' ? scale3(sample.tangent, 1) : scale3(sample.tangent, -1),
+    width: segment.crossSectionProfile.width,
+    crownHeight: segment.crossSectionProfile.crownHeight,
+    surfaceDetailProfile: segment.surfaceDetailProfile,
+    crossSectionProfile: segment.crossSectionProfile,
+    crossSection: { left, right }
+  };
+}
+
+function roadRows(segment, samples, sectionStateAt = null, surfaceDetail = null) {
+  const authoredHalfWidth = segment.crossSectionProfile.width * 0.5;
   const crown = segment.crossSectionProfile.crownHeight;
   const repeat = Math.max(0.25, segment.crossSectionProfile.textureRepeatLength || 5);
-  return samples.map(sample => ({
-    distance: sample.distance,
-    textureRepeatLength: repeat,
-    positions: [
-      add3(sample.position, scale3(sample.side, -halfWidth)),
-      add3(sample.position, scale3(sample.normal, crown)),
-      add3(sample.position, scale3(sample.side, halfWidth))
-    ]
-  }));
+  return samples.map(sample => {
+    const state = sectionStateAt?.(sample.distance) || {};
+    const halfWidth = Math.max(0.05, finite(state.roadHalfWidth, authoredHalfWidth));
+    const rowSurfaceDetail = surfaceDetail
+      ? new Float32Array(surfaceDetail)
+      : null;
+    if (rowSurfaceDetail) {
+      rowSurfaceDetail[15] = Math.max(
+        0.1,
+        finite(state.surfaceDetailRoadWidth, halfWidth * 2)
+      );
+    }
+    return {
+      distance: sample.distance,
+      textureRepeatLength: repeat,
+      lateralDistances: [-halfWidth, 0, halfWidth],
+      surfaceDetail: rowSurfaceDetail,
+      positions: [
+        crossSectionPoint(sample, -1, halfWidth, 0),
+        crossSectionPoint(sample, 0, 0, crown),
+        crossSectionPoint(sample, 1, halfWidth, 0)
+      ]
+    };
+  });
 }
 
 function interpolateRoadRow(rows, distance) {
@@ -268,16 +387,21 @@ function blockedCorridorGuide(segment) {
   };
 }
 
-function shoulderRows(segment, samples, sideSign) {
+function shoulderRows(segment, samples, sideSign, sectionStateAt = null) {
   const profile = segment.crossSectionProfile;
-  const halfWidth = profile.width * 0.5;
-  const outerDistance = halfWidth + profile.shoulderWidth;
+  const authoredHalfWidth = profile.width * 0.5;
   const repeat = Math.max(0.25, profile.textureRepeatLength || 5);
   return samples.map(sample => {
-    const inner = add3(sample.position, scale3(sample.side, sideSign * halfWidth));
-    const outer = add3(
-      add3(sample.position, scale3(sample.side, sideSign * outerDistance)),
-      [0, -profile.shoulderDrop, 0]
+    const state = sectionStateAt?.(sample.distance) || {};
+    const halfWidth = Math.max(0.05, finite(state.roadHalfWidth, authoredHalfWidth));
+    const accessoryScale = clamp(state.accessoryScale ?? 1, 0, 1);
+    const outerDistance = halfWidth + profile.shoulderWidth * accessoryScale;
+    const inner = crossSectionPoint(sample, sideSign, halfWidth, 0);
+    const outer = crossSectionPoint(
+      sample,
+      sideSign,
+      outerDistance,
+      -profile.shoulderDrop * accessoryScale
     );
     return {
     distance: sample.distance,
@@ -287,6 +411,176 @@ function shoulderRows(segment, samples, sideSign) {
       positions: sideSign < 0 ? [outer, inner] : [inner, outer]
     };
   });
+}
+
+function horizontalSide(sample) {
+  const authored = sample?.side || [0, 0, 0];
+  const projected = normalize3([authored[0], 0, authored[2]], [0, 0, 0]);
+  if (length3(projected) > EPSILON) return projected;
+  const tangent = sample?.tangent || [0, 0, 1];
+  return normalize3([-tangent[2], 0, tangent[0]], [1, 0, 0]);
+}
+
+function crossSectionPoint(sample, sideSign, distance, heightOffset = 0) {
+  // Cross-section elevations share the terrain modifier's world-Y authority.
+  // Applying crown/curb/sidewalk offsets along the transported road normal
+  // shifts X/Z on grades and makes render, collision, and terrain boundaries
+  // disagree even though they came from the same compiled station.
+  const side = horizontalSide(sample);
+  return add3(
+    add3(sample.position, scale3(side, sideSign * distance)),
+    [0, heightOffset, 0]
+  );
+}
+
+function scaledBandDistance(layout, authoredDistance, state = {}) {
+  const roadHalfWidth = Math.max(0.05, finite(state.roadHalfWidth, layout.halfRoad));
+  const accessoryScale = clamp(state.accessoryScale ?? 1, 0, 1);
+  return roadHalfWidth + Math.max(0, authoredDistance - layout.halfRoad) * accessoryScale;
+}
+
+function lateralBandRows(
+  segment,
+  samples,
+  sideSign,
+  innerDistance,
+  outerDistance,
+  innerHeight,
+  outerHeight,
+  sectionStateAt = null
+) {
+  if (outerDistance - innerDistance <= EPSILON) return [];
+  const layout = pathCrossSectionLayout(segment.crossSectionProfile);
+  const repeat = Math.max(0.25, segment.crossSectionProfile.textureRepeatLength || 5);
+  return samples.map(sample => {
+    const state = sectionStateAt?.(sample.distance) || {};
+    const accessoryScale = clamp(state.accessoryScale ?? 1, 0, 1);
+    const inner = crossSectionPoint(
+      sample,
+      sideSign,
+      scaledBandDistance(layout, innerDistance, state),
+      innerHeight * accessoryScale
+    );
+    const outer = crossSectionPoint(
+      sample,
+      sideSign,
+      scaledBandDistance(layout, outerDistance, state),
+      outerHeight * accessoryScale
+    );
+    return {
+      distance: sample.distance,
+      textureRepeatLength: repeat,
+      positions: sideSign < 0 ? [outer, inner] : [inner, outer]
+    };
+  });
+}
+
+function verticalBandRows(
+  segment,
+  samples,
+  sideSign,
+  distance,
+  bottomHeight,
+  topHeight,
+  face = 'inner',
+  sectionStateAt = null
+) {
+  if (topHeight - bottomHeight <= EPSILON) return [];
+  const layout = pathCrossSectionLayout(segment.crossSectionProfile);
+  const repeat = Math.max(0.25, segment.crossSectionProfile.textureRepeatLength || 5);
+  return samples.map(sample => {
+    const state = sectionStateAt?.(sample.distance) || {};
+    const accessoryScale = clamp(state.accessoryScale ?? 1, 0, 1);
+    const scaledDistance = scaledBandDistance(layout, distance, state);
+    const bottom = crossSectionPoint(sample, sideSign, scaledDistance, bottomHeight * accessoryScale);
+    const top = crossSectionPoint(sample, sideSign, scaledDistance, topHeight * accessoryScale);
+    const roadFacing = sideSign < 0 ? [top, bottom] : [bottom, top];
+    return {
+      distance: sample.distance,
+      textureRepeatLength: repeat,
+      positions: face === 'inner' ? roadFacing : [...roadFacing].reverse()
+    };
+  });
+}
+
+function urbanRows(segment, samples, sideSign, sectionStateAt = null) {
+  const layout = pathCrossSectionLayout(segment.crossSectionProfile);
+  const side = sideSign < 0 ? layout.left : layout.right;
+  if (!side.urban) return null;
+  const gutter = lateralBandRows(
+    segment,
+    samples,
+    sideSign,
+    side.roadEdge,
+    side.gutterEdge,
+    side.roadEdgeHeight,
+    side.gutterOuterHeight,
+    sectionStateAt
+  );
+  const curbTop = lateralBandRows(
+    segment,
+    samples,
+    sideSign,
+    side.gutterEdge,
+    side.curbEdge,
+    side.curbTopHeight,
+    side.curbTopHeight,
+    sectionStateAt
+  );
+  const curbInnerFace = verticalBandRows(
+    segment,
+    samples,
+    sideSign,
+    side.gutterEdge,
+    side.gutterOuterHeight,
+    side.curbTopHeight,
+    'inner',
+    sectionStateAt
+  );
+  const sidewalk = lateralBandRows(
+    segment,
+    samples,
+    sideSign,
+    side.curbEdge,
+    side.sidewalkEdge,
+    side.sidewalkInnerHeight,
+    side.sidewalkOuterHeight,
+    sectionStateAt
+  );
+  const edgeDrop = Math.max(0.06, segment.crossSectionProfile.terrainUnderlayClearance * 1.5);
+  const sidewalkOuterFace = verticalBandRows(
+    segment,
+    samples,
+    sideSign,
+    side.sidewalkEdge,
+    side.sidewalkOuterHeight - edgeDrop,
+    side.sidewalkOuterHeight,
+    'outer',
+    sectionStateAt
+  );
+  return { layout, side, gutter, curbTop, curbInnerFace, sidewalk, sidewalkOuterFace };
+}
+
+function appendUrbanCrossSection(
+  gutterBuilder,
+  curbBuilder,
+  sidewalkBuilder,
+  sidewalkEdgeBuilder,
+  segment,
+  samples,
+  sectionStateAt = null
+) {
+  for (const sideSign of [-1, 1]) {
+    const rows = urbanRows(segment, samples, sideSign, sectionStateAt);
+    if (!rows) continue;
+    const sideName = sideSign < 0 ? 'left' : 'right';
+    const tapered = typeof sectionStateAt === 'function';
+    appendStrip(gutterBuilder, rows.gutter, `${sideName}-gutter`, [1, 1], tapered);
+    appendStrip(curbBuilder, rows.curbTop, `${sideName}-curb-top`, [1, 1], tapered);
+    appendStrip(curbBuilder, rows.curbInnerFace, `${sideName}-curb-face`, [1, 1], tapered);
+    appendStrip(sidewalkBuilder, rows.sidewalk, `${sideName}-sidewalk`, [1, 1], tapered);
+    appendStrip(sidewalkEdgeBuilder, rows.sidewalkOuterFace, `${sideName}-sidewalk-edge`, [1, 1], tapered);
+  }
 }
 
 function lineIntersection2(a, directionA, b, directionB) {
@@ -318,6 +612,16 @@ function segmentsIntersect2(a, b, c, d) {
   return orientation(a, b, c) !== orientation(a, b, d) && orientation(c, d, a) !== orientation(c, d, b);
 }
 
+function segmentsProperlyIntersect2(a, b, c, d) {
+  const orientation = (p, q, r) => (
+    (q[0] - p[0]) * (r[1] - p[1])
+    - (q[1] - p[1]) * (r[0] - p[0])
+  );
+  const first = orientation(a, b, c) * orientation(a, b, d);
+  const second = orientation(c, d, a) * orientation(c, d, b);
+  return first < -1e-10 && second < -1e-10;
+}
+
 function ringSelfIntersects(ring) {
   const points = ring.map(point => [point[0], point[2]]);
   for (let a = 0; a < points.length; a += 1) {
@@ -345,11 +649,14 @@ function minimumHeadingSeparation(portals) {
   return minimum;
 }
 
-function convexHullXZ(points, y) {
+function convexHullXZ(points, fallbackY = null) {
   const unique = new Map();
   for (const point of points) {
     if (!point?.every(Number.isFinite)) continue;
-    unique.set(`${point[0].toFixed(6)}:${point[2].toFixed(6)}`, [point[0], y, point[2]]);
+    unique.set(
+      `${point[0].toFixed(6)}:${point[2].toFixed(6)}`,
+      [point[0], fallbackY === null ? point[1] : fallbackY, point[2]]
+    );
   }
   const sorted = [...unique.values()].sort((a, b) => a[0] - b[0] || a[2] - b[2]);
   if (sorted.length < 3) return [];
@@ -382,22 +689,30 @@ function quadratic3(start, control, end, t) {
   ];
 }
 
-function junctionRing(junction, portalsByNode, options) {
+function portalBoundaryPoint(portal, side, boundaryKey) {
+  const fallback = side === 'left' ? portal.left : portal.right;
+  return portal.crossSection?.[side]?.[boundaryKey] || fallback;
+}
+
+function junctionBoundaryRing(junction, portalsByNode, options, boundaryKey = 'roadEdge') {
   const portals = portalsByNode.get(junction.nodeId) || [];
   if (portals.length < 3) return { ring: [], portals, error: 'insufficient-portals' };
   const sorted = [...portals].sort((a, b) => (
     Math.atan2(a.direction[2], a.direction[0]) - Math.atan2(b.direction[2], b.direction[0])
   ));
-  const averageY = sorted.reduce((sum, portal) => sum + portal.center[1] + portal.crownHeight, 0) / sorted.length;
   const filletSteps = Math.max(2, Math.min(10, Math.round(options.junctionFilletSegments || 4)));
-  const maximumMiter = Math.max(...sorted.map(portal => portal.width)) * 2.5;
+  const maximumBoundaryRadius = Math.max(0.5, ...sorted.flatMap(portal => [
+    portalBoundaryPoint(portal, 'left', boundaryKey),
+    portalBoundaryPoint(portal, 'right', boundaryKey)
+  ]).map(point => Math.hypot(point[0] - junction.position[0], point[2] - junction.position[2])));
+  const maximumMiter = Math.max(...sorted.map(portal => portal.width), maximumBoundaryRadius) * 2.5;
   const ring = [];
   for (let index = 0; index < sorted.length; index += 1) {
     const current = sorted[index];
     const next = sorted[(index + 1) % sorted.length];
-    const currentRight = [current.right[0], averageY, current.right[2]];
-    const currentLeft = [current.left[0], averageY, current.left[2]];
-    const nextRight = [next.right[0], averageY, next.right[2]];
+    const currentRight = [...portalBoundaryPoint(current, 'right', boundaryKey)];
+    const currentLeft = [...portalBoundaryPoint(current, 'left', boundaryKey)];
+    const nextRight = [...portalBoundaryPoint(next, 'right', boundaryKey)];
     ring.push(currentRight, currentLeft);
     const intersection = lineIntersection2(
       [currentLeft[0], currentLeft[2]],
@@ -405,16 +720,17 @@ function junctionRing(junction, portalsByNode, options) {
       [nextRight[0], nextRight[2]],
       [next.direction[0], next.direction[2]]
     );
-    let control = intersection ? [intersection[0], averageY, intersection[1]] : [
+    const controlY = (currentLeft[1] + nextRight[1]) * 0.5;
+    let control = intersection ? [intersection[0], controlY, intersection[1]] : [
       (currentLeft[0] + nextRight[0]) * 0.5,
-      averageY,
+      controlY,
       (currentLeft[2] + nextRight[2]) * 0.5
     ];
     const node = junction.position;
     const distanceFromNode = Math.hypot(control[0] - node[0], control[2] - node[2]);
     if (distanceFromNode > maximumMiter) {
       const direction = normalize3([control[0] - node[0], 0, control[2] - node[2]]);
-      control = [node[0] + direction[0] * maximumMiter, averageY, node[2] + direction[2] * maximumMiter];
+      control = [node[0] + direction[0] * maximumMiter, controlY, node[2] + direction[2] * maximumMiter];
     }
     for (let step = 1; step < filletSteps; step += 1) {
       ring.push(quadratic3(currentLeft, control, nextRight, step / filletSteps));
@@ -431,47 +747,314 @@ function junctionRing(junction, portalsByNode, options) {
     if (minimumHeadingSeparation(sorted) < Math.PI / 18) {
       return { ring: sanitized, portals: sorted, error: 'self-intersection', fallback: null };
     }
-    const hull = convexHullXZ(sorted.flatMap(portal => [portal.left, portal.right]), averageY);
+    const hull = convexHullXZ(sorted.flatMap(portal => [
+      portalBoundaryPoint(portal, 'left', boundaryKey),
+      portalBoundaryPoint(portal, 'right', boundaryKey)
+    ]));
     if (hull.length >= 3 && !ringSelfIntersects(hull)) {
       return { ring: hull, portals: sorted, error: null, fallback: 'bounded-convex-hull' };
     }
     return { ring: sanitized, portals: sorted, error: 'self-intersection', fallback: null };
   }
-  return { ring: sanitized, portals: sorted, error: null, fallback: null };
+  return { ring: sanitized, portals: sorted, error: null, fallback: null, boundaryKey };
 }
 
-function appendJunction(builder, junction, portalsByNode, options) {
-  const generated = junctionRing(junction, portalsByNode, options);
+function pushUpwardTriangle(builder, a, b, c) {
+  const points = [a, b, c].map(index => builder.positions.slice(index * 3, index * 3 + 3));
+  const normal = cross3(sub3(points[1], points[0]), sub3(points[2], points[0]));
+  if (normal[1] < 0) pushTriangle(builder, a, c, b);
+  else pushTriangle(builder, a, b, c);
+}
+
+function appendTriangulatedPolygon(
+  builder,
+  junction,
+  generated,
+  role = 'junction',
+  surfaceDetailContext = null
+) {
   if (generated.error) return { ...generated, triangleCount: 0, deviation: Infinity };
   const flattened = generated.ring.flatMap(point => [point[0], point[2]]);
-  const triangles = earcut(flattened, null, 2);
-  const deviation = earcutDeviation(flattened, null, 2, triangles);
+  const triangles = generated.triangles?.length
+    ? generated.triangles
+    : earcut(flattened, null, 2);
+  const deviation = Number.isFinite(generated.deviation)
+    ? generated.deviation
+    : earcutDeviation(flattened, null, 2, triangles);
   if (!Number.isFinite(deviation) || deviation > 1e-6) {
     return { ...generated, error: 'triangulation-deviation', triangleCount: 0, deviation };
   }
   const base = builder.positions.length / 3;
   const origin = junction.position;
-  generated.ring.forEach(point => pushVertex(
-    builder,
-    point,
-    [(point[0] - origin[0]) * 0.1, (point[2] - origin[2]) * 0.1],
-    1,
-    'junction'
-  ));
+  generated.ring.forEach(point => {
+    const delta = sub3(point, origin);
+    const uv = surfaceDetailContext
+      ? [
+        dot3(delta, surfaceDetailContext.direction),
+        0.5 + dot3(delta, surfaceDetailContext.side) / surfaceDetailContext.roadWidth
+      ]
+      : [(point[0] - origin[0]) * 0.1, (point[2] - origin[2]) * 0.1];
+    pushVertex(
+      builder,
+      point,
+      uv,
+      1,
+      role,
+      surfaceDetailContext?.data || ZERO_SURFACE_DETAIL
+    );
+  });
   for (let index = 0; index < triangles.length; index += 3) {
-    pushTriangle(builder, base + triangles[index], base + triangles[index + 1], base + triangles[index + 2]);
+    pushUpwardTriangle(
+      builder,
+      base + triangles[index],
+      base + triangles[index + 1],
+      base + triangles[index + 2]
+    );
   }
   return { ...generated, triangleCount: triangles.length / 3, deviation };
 }
 
-function appendEndCap(builder, row, role) {
+/**
+ * Compile the exact validated road-junction rings before either terrain or
+ * render geometry consumes them. The returned portal and ring objects are the
+ * shared authority for fillets, triangulation, terrain support, material
+ * ownership, and foliage exclusion.
+ */
+export function compilePathJunctionAuthority(compiled, options = {}) {
+  if (!compiled?.diagnostics) throw new Error('A compiled path network is required.');
+  const surfaceSegments = (compiled.segments || []).filter(segment => segment.construction.mode !== 'invalid');
+  const surfaceCompiled = { ...compiled, segments: surfaceSegments };
+  const degree = degreeMap(surfaceCompiled);
+  const portalsByNode = new Map((compiled.nodes || []).map(node => [node.id, []]));
+  const preparedSegments = surfaceSegments.map(segment => {
+    const prepared = trimSamplesForJunctions(segment, degree);
+    if (prepared.fromPortal) portalsByNode.get(segment.fromNode)?.push(prepared.fromPortal);
+    if (prepared.toPortal) portalsByNode.get(segment.toNode)?.push(prepared.toPortal);
+    return { segment, ...prepared };
+  });
+  const junctions = [];
+  for (const junction of (compiled.junctions || []).filter(item => (degree.get(item.nodeId) || 0) >= 3)) {
+    const generated = junctionBoundaryRing(junction, portalsByNode, options, 'roadEdge');
+    const flattened = generated.ring.flatMap(point => [point[0], point[2]]);
+    const triangles = generated.error ? [] : earcut(flattened, null, 2);
+    const deviation = generated.error || !triangles.length
+      ? Infinity
+      : earcutDeviation(flattened, null, 2, triangles);
+    const error = generated.error
+      || (!Number.isFinite(deviation) || deviation > 1e-6 ? 'triangulation-deviation' : null);
+    junctions.push({
+      ...junction,
+      ...generated,
+      triangles: error ? [] : triangles,
+      triangleCount: error ? 0 : triangles.length / 3,
+      deviation,
+      error
+    });
+  }
+  return {
+    schemaVersion: 1,
+    sourceNetworkId: compiled.sourceNetworkId,
+    sourceRevision: compiled.sourceRevision,
+    generationRevision: compiled.generationRevision,
+    degree,
+    preparedSegments,
+    portalsByNode,
+    junctions,
+    junctionsByNode: new Map(junctions.map(junction => [junction.nodeId, junction])),
+    diagnostics: {
+      junctionCount: junctions.length,
+      validJunctionCount: junctions.filter(junction => !junction.error).length,
+      invalidJunctionCount: junctions.filter(junction => junction.error).length
+    }
+  };
+}
+
+function junctionSurfaceDetailContext(junction, portals = []) {
+  const primary = [...portals].sort((a, b) => (
+    finite(b.width) - finite(a.width)
+    || String(a.segmentId).localeCompare(String(b.segmentId))
+  ))[0];
+  if (!primary?.surfaceDetail) return null;
+  const direction = normalize3([primary.direction[0], 0, primary.direction[2]], [0, 0, 1]);
+  const side = normalize3([-direction[2], 0, direction[0]], [1, 0, 0]);
+  return {
+    data: primary.surfaceDetail,
+    direction,
+    side,
+    roadWidth: Math.max(0.1, finite(primary.surfaceDetail[15], primary.width))
+  };
+}
+
+function appendJunction(builder, junction, portalsByNode, options, sharedAuthority = null) {
+  const generated = sharedAuthority || junctionBoundaryRing(junction, portalsByNode, options, 'roadEdge');
+  return appendTriangulatedPolygon(
+    builder,
+    junction,
+    generated,
+    'junction',
+    junctionSurfaceDetailContext(junction, generated.portals)
+  );
+}
+
+function ringAreaXZ(ring) {
+  let area = 0;
+  for (let index = 0; index < ring.length; index += 1) {
+    const current = ring[index];
+    const next = ring[(index + 1) % ring.length];
+    area += current[0] * next[2] - next[0] * current[2];
+  }
+  return area * 0.5;
+}
+
+function appendJunctionBand(builder, junction, inner, outer, role) {
+  if (inner.error || outer.error) {
+    return {
+      role,
+      error: inner.error || outer.error,
+      triangleCount: 0,
+      deviation: Infinity
+    };
+  }
+  if (inner.ring.length !== outer.ring.length) {
+    return { role, error: 'boundary-topology-mismatch', triangleCount: 0, deviation: Infinity };
+  }
+  const innerArea = Math.abs(ringAreaXZ(inner.ring));
+  const outerArea = Math.abs(ringAreaXZ(outer.ring));
+  if (outerArea <= innerArea + 1e-5) {
+    return { role, error: 'invalid-band-area', triangleCount: 0, deviation: Infinity };
+  }
+  let triangleCount = 0;
+  for (let index = 0; index < inner.ring.length; index += 1) {
+    const next = (index + 1) % inner.ring.length;
+    const points = [inner.ring[index], outer.ring[index], outer.ring[next], inner.ring[next]];
+    const planar = points.map(point => [point[0], point[2]]);
+    if (
+      segmentsProperlyIntersect2(planar[0], planar[1], planar[2], planar[3])
+      || segmentsProperlyIntersect2(planar[1], planar[2], planar[3], planar[0])
+    ) return { role, error: 'self-intersecting-band', triangleCount: 0, deviation: Infinity };
+    const firstArea = length3(cross3(sub3(points[1], points[0]), sub3(points[3], points[0])));
+    const secondArea = length3(cross3(sub3(points[2], points[1]), sub3(points[3], points[1])));
+    if (firstArea < 1e-8 && secondArea < 1e-8) continue;
+    const base = builder.positions.length / 3;
+    points.forEach(point => pushVertex(
+      builder,
+      point,
+      [(point[0] - junction.position[0]) * 0.1, (point[2] - junction.position[2]) * 0.1],
+      1,
+      role
+    ));
+    if (firstArea >= 1e-8) {
+      pushUpwardTriangle(builder, base, base + 1, base + 3);
+      triangleCount += 1;
+    }
+    if (secondArea >= 1e-8) {
+      pushUpwardTriangle(builder, base + 1, base + 2, base + 3);
+      triangleCount += 1;
+    }
+  }
+  return triangleCount
+    ? { role, error: null, triangleCount, deviation: 0 }
+    : { role, error: 'empty-band', triangleCount: 0, deviation: Infinity };
+}
+
+function appendJunctionWall(builder, junction, lower, upper, role, facing = 'outward') {
+  if (lower.error || upper.error || lower.ring.length !== upper.ring.length) {
+    return {
+      role,
+      error: lower.error || upper.error || 'boundary-topology-mismatch',
+      triangleCount: 0
+    };
+  }
+  let triangleCount = 0;
+  for (let index = 0; index < lower.ring.length; index += 1) {
+    const next = (index + 1) % lower.ring.length;
+    const points = [lower.ring[index], lower.ring[next], upper.ring[index], upper.ring[next]];
+    const base = builder.positions.length / 3;
+    points.forEach((point, column) => pushVertex(builder, point, [column % 2, column > 1 ? 1 : 0], 1, role));
+    const normal = cross3(sub3(points[1], points[0]), sub3(points[2], points[0]));
+    const midpoint = scale3(add3(points[0], points[1]), 0.5);
+    const radial = [midpoint[0] - junction.position[0], 0, midpoint[2] - junction.position[2]];
+    const pointsOutward = dot3(normal, radial) >= 0;
+    const wantOutward = facing === 'outward';
+    if (pointsOutward === wantOutward) {
+      pushTriangle(builder, base, base + 1, base + 2);
+      pushTriangle(builder, base + 1, base + 3, base + 2);
+    } else {
+      pushTriangle(builder, base, base + 2, base + 1);
+      pushTriangle(builder, base + 1, base + 2, base + 3);
+    }
+    triangleCount += 2;
+  }
+  return { role, error: null, triangleCount };
+}
+
+function boundaryHasSpan(portals, innerKey, outerKey) {
+  return portals.every(portal => ['left', 'right'].every(side => {
+    const inner = portalBoundaryPoint(portal, side, innerKey);
+    const outer = portalBoundaryPoint(portal, side, outerKey);
+    return Math.hypot(outer[0] - inner[0], outer[2] - inner[2]) > EPSILON;
+  }));
+}
+
+function appendUrbanJunctionSurfaces(builders, junction, portalsByNode, options, roadReport) {
+  const portals = roadReport.portals || [];
+  if (!portals.length || !portals.every(portal => (
+    portal.crossSection?.left?.urban && portal.crossSection?.right?.urban
+  ))) return [];
+
+  const reports = [];
+  const ring = boundaryKey => junctionBoundaryRing(junction, portalsByNode, options, boundaryKey);
+  const road = { ...roadReport, boundaryKey: 'roadEdge' };
+  let gutter = null;
+  if (boundaryHasSpan(portals, 'roadEdge', 'gutterOuter')) {
+    gutter = ring('gutterOuter');
+    reports.push(appendJunctionBand(builders.gutter, junction, road, gutter, 'junction-gutter'));
+  }
+  if (gutter && boundaryHasSpan(portals, 'gutterOuter', 'curbOuterTop')) {
+    const curbInner = ring('curbInnerTop');
+    const curbOuter = ring('curbOuterTop');
+    reports.push(appendJunctionWall(builders.curb, junction, gutter, curbInner, 'junction-curb-face', 'inward'));
+    reports.push(appendJunctionBand(builders.curb, junction, curbInner, curbOuter, 'junction-curb-top'));
+
+    if (boundaryHasSpan(portals, 'curbOuterTop', 'sidewalkOuterTop')) {
+      const sidewalkTop = ring('sidewalkOuterTop');
+      const sidewalkBottom = ring('sidewalkOuterBottom');
+      reports.push(appendJunctionBand(
+        builders.sidewalk,
+        junction,
+        curbOuter,
+        sidewalkTop,
+        'junction-sidewalk'
+      ));
+      reports.push(appendJunctionWall(
+        builders.sidewalkEdge,
+        junction,
+        sidewalkBottom,
+        sidewalkTop,
+        'junction-sidewalk-edge',
+        'outward'
+      ));
+    }
+  }
+  return reports;
+}
+
+function junctionRing(junction, portalsByNode, options) {
+  return junctionBoundaryRing(junction, portalsByNode, options, 'roadEdge');
+}
+
+function appendEndCap(builder, row, role, surfaceDetail = null) {
   if (!row?.positions?.length) return;
   const indices = row.positions.map((position, column) => pushVertex(
     builder,
     position,
-    [column / Math.max(1, row.positions.length - 1), 0],
+    [
+      surfaceDetail ? finite(row.distance) : column / Math.max(1, row.positions.length - 1),
+      surfaceDetail ? column / Math.max(1, row.positions.length - 1) : 0
+    ],
     1,
-    role
+    role,
+    surfaceDetail || ZERO_SURFACE_DETAIL
   ));
   for (let index = 1; index < indices.length - 1; index += 1) {
     pushTriangle(builder, indices[0], indices[index + 1], indices[index]);
@@ -594,29 +1177,157 @@ function sectionIndicesAtSpacing(sections, spacing, includeEnds = false) {
   return result;
 }
 
-function appendBridgeDeck(builder, sections, thickness, role) {
+function sectionHorizontalSide(section) {
+  const vector = sub3(section.roadRight, section.roadLeft);
+  return normalize3([vector[0], 0, vector[2]], [1, 0, 0]);
+}
+
+function sectionLateralPoint(section, signedDistance, heightOffset = 0) {
+  const side = sectionHorizontalSide(section);
+  return [
+    section.center[0] + side[0] * signedDistance,
+    section.center[1] + heightOffset,
+    section.center[2] + side[2] * signedDistance
+  ];
+}
+
+function bridgeUrbanSidePoints(section, layoutSide, sideSign, roadHalfWidth) {
+  const points = [sectionLateralPoint(section, sideSign * roadHalfWidth, 0)];
+  let distance = roadHalfWidth;
+  if (layoutSide.gutterWidth > EPSILON) {
+    distance += layoutSide.gutterWidth;
+    points.push(sectionLateralPoint(section, sideSign * distance, layoutSide.gutterOuterHeight));
+  }
+  if (layoutSide.curbWidth > EPSILON) {
+    points.push(sectionLateralPoint(section, sideSign * distance, layoutSide.curbTopHeight));
+    distance += layoutSide.curbWidth;
+    points.push(sectionLateralPoint(section, sideSign * distance, layoutSide.curbTopHeight));
+  }
+  if (layoutSide.sidewalkWidth > EPSILON) {
+    distance += layoutSide.sidewalkWidth;
+    points.push(sectionLateralPoint(section, sideSign * distance, layoutSide.sidewalkOuterHeight));
+  }
+  return { points, outerDistance: distance };
+}
+
+function bridgeSectionsForProfile(segment, sections, profile, sectionStateAt = null) {
+  if (sections.length < 2) return [];
+  const layout = pathCrossSectionLayout(segment.crossSectionProfile);
+  const startDistance = sections[0].distance;
+  const endDistance = sections.at(-1).distance;
+  return sections.map(section => {
+    const sectionState = sectionStateAt?.(section.distance) || {};
+    const roadHalfWidth = Math.max(
+      0.05,
+      finite(sectionState.roadHalfWidth, profile.clearWidth * 0.5)
+    );
+    const edgeDistance = Math.min(
+      Math.max(0, section.distance - startDistance),
+      Math.max(0, endDistance - section.distance)
+    );
+    const overhangAmount = smoothstep01(
+      (edgeDistance - profile.abutmentSeatLength)
+      / Math.max(0.25, profile.approachTaperLength)
+    );
+    const roadLeft = sectionLateralPoint(section, -roadHalfWidth, 0);
+    const roadRight = sectionLateralPoint(section, roadHalfWidth, 0);
+    const roadCenter = [
+      section.center[0],
+      section.roadCenter?.[1] ?? section.center[1] + segment.crossSectionProfile.crownHeight,
+      section.center[2]
+    ];
+    const carriesUrban = profile.carrySidewalks && (layout.left.urban || layout.right.urban);
+    const left = carriesUrban
+      ? bridgeUrbanSidePoints(section, layout.left, -1, roadHalfWidth)
+      : { points: [roadLeft], outerDistance: roadHalfWidth };
+    const right = carriesUrban
+      ? bridgeUrbanSidePoints(section, layout.right, 1, roadHalfWidth)
+      : { points: [roadRight], outerDistance: roadHalfWidth };
+    const deckLeft = sectionLateralPoint(
+      section,
+      -(left.outerDistance + profile.deckEdgeOverhang * overhangAmount),
+      left.points.at(-1)[1] - section.center[1]
+    );
+    const deckRight = sectionLateralPoint(
+      section,
+      right.outerDistance + profile.deckEdgeOverhang * overhangAmount,
+      right.points.at(-1)[1] - section.center[1]
+    );
+    // The structural deck edge replaces (rather than duplicates) the outermost
+    // carried surface point. At the exact abutment boundary these points are
+    // coincident, so replacement keeps a single watertight seam and avoids
+    // unreferenced zero-area vertices with misleading fallback normals.
+    const leftTop = [deckLeft, ...left.points.slice(0, -1).reverse()];
+    const rightTop = [...right.points.slice(0, -1), deckRight];
+    return {
+      ...section,
+      roadLeft,
+      roadCenter,
+      roadRight,
+      deckLeft,
+      deckRight,
+      roadHalfWidth,
+      deckLeftWidth: left.outerDistance + profile.deckEdgeOverhang * overhangAmount,
+      deckRightWidth: right.outerDistance + profile.deckEdgeOverhang * overhangAmount,
+      approachAmount: overhangAmount,
+      deckTopPositions: [...leftTop, roadCenter, ...rightTop]
+    };
+  });
+}
+
+function bridgeNavigationRows(sections) {
+  return sections.map(section => ({
+    distance: section.distance,
+    textureRepeatLength: 4,
+    positions: [section.roadLeft, section.roadCenter, section.roadRight]
+  }));
+}
+
+function bridgeSidewalkNavigationRows(segment, sections, sideSign) {
+  const layout = pathCrossSectionLayout(segment.crossSectionProfile);
+  const side = sideSign < 0 ? layout.left : layout.right;
+  if (!side.urban || side.sidewalkWidth <= EPSILON) return [];
+  return sections.map(section => {
+    const innerDistance = section.roadHalfWidth + side.gutterWidth + side.curbWidth;
+    const outerDistance = innerDistance + side.sidewalkWidth;
+    return {
+      distance: section.distance,
+      textureRepeatLength: 4,
+      positions: [
+        sectionLateralPoint(section, sideSign * innerDistance, side.curbTopHeight),
+        sectionLateralPoint(section, sideSign * outerDistance, side.sidewalkOuterHeight)
+      ]
+    };
+  });
+}
+
+function appendBridgeDeck(builder, sections, thickness, role, surfaceDetail = null) {
   const top = sections.map(section => ({
     distance: section.distance,
     textureRepeatLength: 4,
-    positions: [
-      [...section.roadLeft],
-      [...(section.roadCenter || section.center)],
-      [...section.roadRight]
-    ]
+    lateralDistances: (section.deckTopPositions || [
+      section.roadLeft,
+      section.roadCenter || section.center,
+      section.roadRight
+    ]).map(point => dot3(sub3(point, section.center), sectionHorizontalSide(section))),
+    positions: (section.deckTopPositions || [
+      section.roadLeft,
+      section.roadCenter || section.center,
+      section.roadRight
+    ]).map(point => [...point])
   }));
-  const bottom = sections.map(section => ({
+  const bottom = sections.map((section, index) => ({
     distance: section.distance,
     textureRepeatLength: 4,
-    positions: (section.roadCenter
-      ? [section.roadLeft, section.roadCenter, section.roadRight]
-      : [section.roadLeft, section.center, section.roadRight]
-    ).map(point => [point[0], point[1] - thickness, point[2]])
+    positions: top[index].positions.map(point => [point[0], point[1] - thickness, point[2]])
   }));
-  appendStrip(builder, top, `${role}-top`, [1, 1]);
+  appendStrip(builder, top, `${role}-top`, [1, 1], true, surfaceDetail);
   appendStrip(builder, bottom.map(row => ({
     ...row,
-    positions: [row.positions[1], row.positions[0]]
-  })), `${role}-underside`, [1, 1]);
+    // Reverse the complete authored cross-section so every deck family keeps
+    // both underside halves and outward winding on grades and urban sections.
+    positions: [...row.positions].reverse()
+  })), `${role}-underside`, [1, 1], true);
   appendStrip(builder, sections.map((section, index) => ({
     distance: section.distance,
     textureRepeatLength: 4,
@@ -625,37 +1336,41 @@ function appendBridgeDeck(builder, sections, thickness, role) {
   appendStrip(builder, sections.map((section, index) => ({
     distance: section.distance,
     textureRepeatLength: 4,
-    positions: [top[index].positions[1], bottom[index].positions[1]]
+    positions: [top[index].positions.at(-1), bottom[index].positions.at(-1)]
   })), `${role}-right-edge`, [1, 1]);
-  appendQuad(
-    builder,
-    top[0].positions[1], top[0].positions[0],
-    bottom[0].positions[1], bottom[0].positions[0],
-    `${role}-start-face`
+  const capQuadHasArea = (a, b, c, d) => (
+    length3(cross3(sub3(b, a), sub3(c, a))) >= 1e-8
+    || length3(cross3(sub3(d, b), sub3(c, b))) >= 1e-8
   );
-  appendQuad(
-    builder,
-    top[0].positions[2], top[0].positions[1],
-    bottom[0].positions[2], bottom[0].positions[1],
-    `${role}-start-face`
-  );
-  appendQuad(
-    builder,
-    top.at(-1).positions[0], top.at(-1).positions[1],
-    bottom.at(-1).positions[0], bottom.at(-1).positions[1],
-    `${role}-end-face`
-  );
-  appendQuad(
-    builder,
-    top.at(-1).positions[1], top.at(-1).positions[2],
-    bottom.at(-1).positions[1], bottom.at(-1).positions[2],
-    `${role}-end-face`
-  );
+  for (let column = 1; column < top[0].positions.length; column += 1) {
+    const startCap = [
+      top[0].positions[column], top[0].positions[column - 1],
+      bottom[0].positions[column], bottom[0].positions[column - 1]
+    ];
+    if (capQuadHasArea(...startCap)) {
+      appendQuad(
+        builder,
+        ...startCap,
+        `${role}-start-face`
+      );
+    }
+    const endCap = [
+      top.at(-1).positions[column - 1], top.at(-1).positions[column],
+      bottom.at(-1).positions[column - 1], bottom.at(-1).positions[column]
+    ];
+    if (capQuadHasArea(...endCap)) {
+      appendQuad(
+        builder,
+        ...endCap,
+        `${role}-end-face`
+      );
+    }
+  }
 }
 
 function appendBridgeRailings(builder, sections, role) {
   const indices = sectionIndicesAtSpacing(sections, 2.5, true);
-  for (const sideKey of ['roadLeft', 'roadRight']) {
+  for (const sideKey of ['deckLeft', 'deckRight']) {
     const railPoints = [];
     for (const index of indices) {
       const section = sections[index];
@@ -672,6 +1387,7 @@ function appendBridgeRailings(builder, sections, role) {
 }
 
 function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materialRole = 'bridge-concrete') {
+  const structuralWidth = Math.max(profile.deckWidth, profile.clearWidth, profile.width);
   for (const index of [0, sections.length - 1]) {
     const section = sections[index];
     const frame = sectionFrame(sections, index);
@@ -681,8 +1397,8 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
     const up = [0, 1, 0];
     const terrainSamples = [
       section.center,
-      add3(section.center, scale3(horizontalSide, profile.width * 0.5 + 0.65)),
-      add3(section.center, scale3(horizontalSide, -(profile.width * 0.5 + 0.65)))
+      add3(section.center, scale3(horizontalSide, structuralWidth * 0.5 + 0.65)),
+      add3(section.center, scale3(horizontalSide, -(structuralWidth * 0.5 + 0.65)))
     ].map(point => finite(
       baseHeightAt(point[0], point[2]),
       section.center[1] - profile.deckThickness - 0.5
@@ -691,7 +1407,8 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
     const seatY = section.center[1] - profile.deckThickness;
     const wallHeight = clamp(seatY - terrainY, 1.1, 14);
     const wallBottomY = seatY - wallHeight;
-    const backCenter = add3(section.center, scale3(horizontalTangent, direction * 0.62));
+    const seatLength = Math.max(0.4, finite(profile.abutmentSeatLength, 1.2));
+    const backCenter = add3(section.center, scale3(horizontalTangent, direction * seatLength * 0.5));
     const footingCenter = [
       backCenter[0],
       Math.min(terrainY - 0.22, wallBottomY - 0.22),
@@ -703,7 +1420,7 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
       horizontalTangent,
       horizontalSide,
       up,
-      [2.8, profile.width + 3.2, 0.52],
+      [seatLength + 1.6, structuralWidth + 3.2, 0.52],
       `${materialRole}-abutment-footing`
     );
     appendOrientedBox(
@@ -716,14 +1433,14 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
       horizontalTangent,
       horizontalSide,
       up,
-      [1.05, profile.width + 2.2, wallHeight],
+      [Math.max(1.05, seatLength * 0.7), structuralWidth + 2.2, wallHeight],
       `${materialRole}-abutment-backwall`
     );
     for (const sign of [-1, 1]) {
       const wingHeight = Math.max(0.9, Math.min(4, wallHeight * 0.72));
       const wingCenter = add3(
         add3(backCenter, scale3(horizontalTangent, direction * 1.45)),
-        scale3(horizontalSide, sign * (profile.width * 0.5 + 0.82))
+        scale3(horizontalSide, sign * (structuralWidth * 0.5 + 0.82))
       );
       wingCenter[1] = seatY - wingHeight * 0.5 - 0.08;
       appendOrientedBox(
@@ -739,10 +1456,10 @@ function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materia
   }
 }
 
-function appendTimberTrestle(builder, segment, sections, baseHeightAt, profile) {
-  appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-timber-deck');
+function appendTimberTrestle(builder, segment, sections, baseHeightAt, profile, surfaceDetail = null) {
+  appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-timber-deck', surfaceDetail);
   for (let index = 1; index < sections.length; index += 1) {
-    for (const key of ['roadLeft', 'roadRight']) {
+    for (const key of ['deckLeft', 'deckRight']) {
       const start = [...sections[index - 1][key]];
       const end = [...sections[index][key]];
       start[1] -= profile.deckThickness + 0.18;
@@ -764,7 +1481,7 @@ function appendTimberTrestle(builder, segment, sections, baseHeightAt, profile) 
     const posts = [];
     for (const sign of [-1, 1]) {
       const top = add3(
-        add3(section.center, scale3(frame.side, sign * profile.width * 0.34)),
+        add3(section.center, scale3(frame.side, sign * profile.deckWidth * 0.34)),
         scale3(frame.up, -profile.deckThickness)
       );
       const groundY = finite(baseHeightAt(top[0], top[2]), top[1] - 1);
@@ -779,11 +1496,11 @@ function appendTimberTrestle(builder, segment, sections, baseHeightAt, profile) 
   if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-timber-railing');
 }
 
-function appendStoneArch(builder, segment, sections, baseHeightAt, profile) {
-  appendBridgeDeck(builder, sections, profile.deckThickness + 0.18, 'bridge-stone-deck');
+function appendStoneArch(builder, segment, sections, baseHeightAt, profile, surfaceDetail = null) {
+  appendBridgeDeck(builder, sections, profile.deckThickness + 0.18, 'bridge-stone-deck', surfaceDetail);
   const firstDistance = sections[0].distance;
   const span = Math.max(EPSILON, sections.at(-1).distance - firstDistance);
-  for (const key of ['roadLeft', 'roadRight']) {
+  for (const key of ['deckLeft', 'deckRight']) {
     const arch = sections.map(section => {
       const fraction = clamp((section.distance - firstDistance) / span, 0, 1);
       const edge = section[key];
@@ -811,14 +1528,14 @@ function appendStoneArch(builder, segment, sections, baseHeightAt, profile) {
   if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-stone-parapet');
 }
 
-function appendSteelGirder(builder, segment, sections, baseHeightAt, profile) {
-  appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-concrete-deck');
-  const girderCount = clamp(Math.round(profile.width / 2) + 2, 3, 8);
+function appendSteelGirder(builder, segment, sections, baseHeightAt, profile, surfaceDetail = null) {
+  appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-concrete-deck', surfaceDetail);
+  const girderCount = clamp(Math.round(profile.deckWidth / 2) + 2, 3, 8);
   for (let index = 1; index < sections.length; index += 1) {
     for (let girder = 0; girder < girderCount; girder += 1) {
       const amount = girderCount === 1 ? 0.5 : girder / (girderCount - 1);
-      const start = mix3(sections[index - 1].roadLeft, sections[index - 1].roadRight, amount);
-      const end = mix3(sections[index].roadLeft, sections[index].roadRight, amount);
+      const start = mix3(sections[index - 1].deckLeft, sections[index - 1].deckRight, amount);
+      const end = mix3(sections[index].deckLeft, sections[index].deckRight, amount);
       start[1] -= profile.deckThickness + 0.45;
       end[1] -= profile.deckThickness + 0.45;
       appendBeamBetween(builder, start, end, 0.24, 0.72, 'bridge-steel-main-girder');
@@ -844,11 +1561,11 @@ function appendSteelGirder(builder, segment, sections, baseHeightAt, profile) {
       frame.tangent,
       frame.side,
       frame.up,
-      [2.4, Math.max(2.6, profile.width + 1.8), 0.48],
+      [2.4, Math.max(2.6, profile.deckWidth + 1.8), 0.48],
       'bridge-concrete-pier-footing'
     );
-    const lowerSpread = Math.max(0.9, profile.width * 0.28);
-    const upperSpread = Math.max(1.15, profile.width * 0.4);
+    const lowerSpread = Math.max(0.9, profile.deckWidth * 0.28);
+    const upperSpread = Math.max(1.15, profile.deckWidth * 0.4);
     const columnWidth = clamp(0.7 + height * 0.035, 0.9, 1.7);
     const columnDepth = clamp(0.85 + height * 0.025, 1.05, 1.55);
     const columnEnds = [];
@@ -891,11 +1608,11 @@ function appendSteelGirder(builder, segment, sections, baseHeightAt, profile) {
     }
     const capLeft = add3(
       [section.center[0], capY, section.center[2]],
-      scale3(frame.side, -(profile.width * 0.5 + 0.7))
+      scale3(frame.side, -(profile.deckWidth * 0.5 + 0.7))
     );
     const capRight = add3(
       [section.center[0], capY, section.center[2]],
-      scale3(frame.side, profile.width * 0.5 + 0.7)
+      scale3(frame.side, profile.deckWidth * 0.5 + 0.7)
     );
     appendBeamBetween(
       builder,
@@ -910,9 +1627,9 @@ function appendSteelGirder(builder, segment, sections, baseHeightAt, profile) {
   if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-steel-railing');
 }
 
-function appendMasonryCauseway(builder, segment, sections, baseHeightAt, profile) {
-  appendBridgeDeck(builder, sections, profile.deckThickness + 0.2, 'bridge-masonry-deck');
-  for (const key of ['roadLeft', 'roadRight']) {
+function appendMasonryCauseway(builder, segment, sections, baseHeightAt, profile, surfaceDetail = null) {
+  appendBridgeDeck(builder, sections, profile.deckThickness + 0.2, 'bridge-masonry-deck', surfaceDetail);
+  for (const key of ['deckLeft', 'deckRight']) {
     appendStrip(builder, sections.map(section => {
       const top = section[key];
       return {
@@ -936,7 +1653,7 @@ function appendRopeFootbridge(builder, segment, sections, baseHeightAt, profile)
       frame.tangent,
       frame.side,
       frame.up,
-      [0.46, profile.width, 0.14],
+      [0.46, profile.clearWidth, 0.14],
       'bridge-timber-deck-slat'
     );
   }
@@ -962,7 +1679,7 @@ function appendRopeFootbridge(builder, segment, sections, baseHeightAt, profile)
   for (const section of [sections[0], sections.at(-1)]) {
     const frame = sectionFrame(sections, sections.indexOf(section));
     for (const sign of [-1, 1]) {
-      const foot = add3(section.center, scale3(frame.side, sign * profile.width * 0.6));
+      const foot = add3(section.center, scale3(frame.side, sign * profile.deckWidth * 0.6));
       const top = add3(foot, scale3(frame.up, 1.5));
       appendBeamBetween(builder, foot, top, 0.24, 0.24, 'bridge-timber-anchor-post');
     }
@@ -989,12 +1706,12 @@ function appendEarthwork(builder, segment, sections) {
     distance: section.distance,
     textureRepeatLength: repeat,
     positions: [section.outerLeft, section.shoulderLeft]
-  })), 'left-earthwork', [0, 0.45]);
+  })), 'left-earthwork', [0, 0.45], true);
   appendStrip(builder, sections.map(section => ({
     distance: section.distance,
     textureRepeatLength: repeat,
     positions: [section.shoulderRight, section.outerRight]
-  })), 'right-earthwork', [0.45, 0]);
+  })), 'right-earthwork', [0.45, 0], true);
 }
 
 function appendRetainingWalls(builder, segment, sections) {
@@ -1018,19 +1735,53 @@ function appendRetainingWalls(builder, segment, sections) {
   }
 }
 
-function appendBridge(builder, segment, sections, baseHeightAt) {
+function appendBridge(
+  builder,
+  navigationBuilder,
+  segment,
+  sections,
+  baseHeightAt,
+  resolvedProfile = null,
+  surfaceDetail = null,
+  sectionStateAt = null
+) {
   if (segment.construction.mode !== 'bridge' || sections.length < 2) return null;
-  const profile = resolveBridgeProfile(segment, sections, baseHeightAt);
+  const profile = resolvedProfile || resolveBridgeProfile(segment, sections, baseHeightAt);
+  const bridgeSections = bridgeSectionsForProfile(segment, sections, profile, sectionStateAt);
+  const bridgeSurfaceDetail = surfaceDetail
+    ? new Float32Array(surfaceDetail)
+    : null;
+  if (bridgeSurfaceDetail) bridgeSurfaceDetail[15] = profile.clearWidth;
+  appendStrip(
+    navigationBuilder,
+    bridgeNavigationRows(bridgeSections),
+    'navigation-bridge-deck',
+    [1, 1, 1]
+  );
+  if (profile.carrySidewalks) {
+    for (const sideSign of [-1, 1]) {
+      const rows = bridgeSidewalkNavigationRows(segment, bridgeSections, sideSign);
+      if (rows.length) {
+        appendStrip(
+          navigationBuilder,
+          rows,
+          'navigation-bridge-sidewalk',
+          [1, 1],
+          true
+        );
+      }
+    }
+  }
   if (profile.bridgeStyle === 'timber-trestle') {
-    appendTimberTrestle(builder, segment, sections, baseHeightAt, profile);
+    appendTimberTrestle(builder, segment, bridgeSections, baseHeightAt, profile, bridgeSurfaceDetail);
   } else if (profile.bridgeStyle === 'stone-arch') {
-    appendStoneArch(builder, segment, sections, baseHeightAt, profile);
+    appendStoneArch(builder, segment, bridgeSections, baseHeightAt, profile, bridgeSurfaceDetail);
   } else if (profile.bridgeStyle === 'steel-girder') {
-    appendSteelGirder(builder, segment, sections, baseHeightAt, profile);
+    appendSteelGirder(builder, segment, bridgeSections, baseHeightAt, profile, bridgeSurfaceDetail);
   } else if (profile.bridgeStyle === 'masonry-causeway') {
-    appendMasonryCauseway(builder, segment, sections, baseHeightAt, profile);
+    appendMasonryCauseway(builder, segment, bridgeSections, baseHeightAt, profile, bridgeSurfaceDetail);
   } else if (profile.bridgeStyle === 'rope-footbridge') {
-    appendRopeFootbridge(builder, segment, sections, baseHeightAt, profile);
+    appendRopeFootbridge(builder, segment, bridgeSections, baseHeightAt, profile);
   } else {
     throw new Error(`Unsupported bridge profile ${profile.bridgeStyle}.`);
   }
@@ -1059,16 +1810,180 @@ function appendTunnel(builder, segment) {
 }
 
 function sampleAtDistance(samples, target) {
+  if (!samples.length) return null;
+  if (target <= samples[0].distance + EPSILON) return samples[0];
+  if (target >= samples.at(-1).distance - EPSILON) return samples.at(-1);
   let index = 1;
   while (index < samples.length - 1 && samples[index].distance < target) index += 1;
   const start = samples[index - 1];
   const end = samples[index];
+  if (Math.abs(start.distance - target) <= EPSILON) return start;
+  if (Math.abs(end.distance - target) <= EPSILON) return end;
   const t = clamp((target - start.distance) / Math.max(EPSILON, end.distance - start.distance), 0, 1);
   return {
+    ...start,
+    t: lerp(finite(start.t), finite(end.t, start.t), t),
     position: add3(start.position, scale3(sub3(end.position, start.position), t)),
-    side: normalize3(add3(start.side, scale3(sub3(end.side, start.side), t))),
+    baseY: lerp(finite(start.baseY, start.position[1]), finite(end.baseY, end.position[1]), t),
+    terrainNormal: normalize3(mix3(start.terrainNormal, end.terrainNormal, t), [0, 1, 0]),
+    tangent: normalize3(mix3(start.tangent, end.tangent, t), start.tangent),
+    side: normalize3(mix3(start.side, end.side, t), start.side),
+    normal: normalize3(mix3(start.normal, end.normal, t), start.normal),
+    curveTangent: normalize3(mix3(start.curveTangent, end.curveTangent, t), start.curveTangent),
+    curvature: lerp(finite(start.curvature), finite(end.curvature), t),
     distance: target
   };
+}
+
+function samplesForInterval(samples, interval) {
+  if (!samples?.length) return [];
+  const startDistance = clamp(
+    finite(interval?.startDistance, samples[0].distance),
+    samples[0].distance,
+    samples.at(-1).distance
+  );
+  const endDistance = clamp(
+    finite(interval?.endDistance, samples.at(-1).distance),
+    startDistance,
+    samples.at(-1).distance
+  );
+  if (endDistance - startDistance <= EPSILON) return [];
+  const result = [sampleAtDistance(samples, startDistance)];
+  result.push(...samples.filter(sample => (
+    sample.distance > startDistance + EPSILON
+    && sample.distance < endDistance - EPSILON
+  )));
+  const end = sampleAtDistance(samples, endDistance);
+  if (Math.abs(end.distance - result.at(-1).distance) > EPSILON) result.push(end);
+  return result;
+}
+
+const CROSS_SECTION_VECTOR_KEYS = Object.freeze([
+  'center',
+  'roadLeft',
+  'roadCenter',
+  'roadRight',
+  'shoulderLeft',
+  'shoulderRight',
+  'terrainShoulderLeft',
+  'terrainShoulderRight',
+  'outerLeft',
+  'outerRight'
+]);
+
+function crossSectionAtDistance(sections, target) {
+  if (!sections.length) return null;
+  if (target <= sections[0].distance + EPSILON) return sections[0];
+  if (target >= sections.at(-1).distance - EPSILON) return sections.at(-1);
+  let index = 1;
+  while (index < sections.length - 1 && sections[index].distance < target) index += 1;
+  const start = sections[index - 1];
+  const end = sections[index];
+  if (Math.abs(start.distance - target) <= EPSILON) return start;
+  if (Math.abs(end.distance - target) <= EPSILON) return end;
+  const amount = clamp(
+    (target - start.distance) / Math.max(EPSILON, end.distance - start.distance),
+    0,
+    1
+  );
+  const result = { ...start, distance: target };
+  for (const key of CROSS_SECTION_VECTOR_KEYS) {
+    if (Array.isArray(start[key]) && Array.isArray(end[key])) {
+      result[key] = mix3(start[key], end[key], amount);
+    }
+  }
+  result.outerBoundaryKeys = [
+    `${start.segmentId}:${target.toFixed(5)}:left`,
+    `${start.segmentId}:${target.toFixed(5)}:right`
+  ];
+  return result;
+}
+
+function smoothstep01(value) {
+  const amount = clamp(value, 0, 1);
+  return amount * amount * (3 - 2 * amount);
+}
+
+function directJunctionBridgeSeams(prepared, range, profile) {
+  const startDistance = finite(range?.startDistance);
+  const endDistance = Math.max(startDistance, finite(range?.endDistance, startDistance));
+  const availableLength = Math.max(0, endDistance - startDistance);
+  if (availableLength <= EPSILON) return [];
+  const candidates = [];
+  const add = (endpoint, portal, station, nodeId) => {
+    if (!portal) return;
+    const portalWidth = distance3(portal.left, portal.right);
+    candidates.push({
+      endpoint,
+      nodeId,
+      station,
+      portal,
+      portalWidth,
+      portalHalfWidth: portalWidth * 0.5
+    });
+  };
+  if (
+    prepared.fromPortal
+    && Math.abs(startDistance - finite(prepared.samples?.[0]?.distance)) <= EPSILON
+  ) {
+    add('from', prepared.fromPortal, startDistance, prepared.segment.fromNode);
+  }
+  if (
+    prepared.toPortal
+    && Math.abs(endDistance - finite(prepared.samples?.at(-1)?.distance)) <= EPSILON
+  ) {
+    add('to', prepared.toPortal, endDistance, prepared.segment.toNode);
+  }
+  const maximumPerSeam = availableLength / Math.max(1, candidates.length);
+  const transitionLength = Math.max(
+    0.05,
+    Math.min(finite(profile?.approachTaperLength, 5), maximumPerSeam)
+  );
+  return candidates.map(seam => Object.freeze({ ...seam, transitionLength }));
+}
+
+function bridgeCrossSectionStateWithJunctionSeams(
+  crossSectionProfile,
+  distance,
+  bridgeAuthorities
+) {
+  const base = bridgeCrossSectionState(crossSectionProfile, distance, bridgeAuthorities);
+  let selected = null;
+  let amount = 0;
+  for (const authority of bridgeAuthorities || []) {
+    for (const seam of authority.junctionSeams || []) {
+      const inwardDistance = seam.endpoint === 'from'
+        ? distance - seam.station
+        : seam.station - distance;
+      if (inwardDistance < -EPSILON || inwardDistance > seam.transitionLength + EPSILON) continue;
+      const candidate = 1 - smoothstep01(inwardDistance / Math.max(EPSILON, seam.transitionLength));
+      if (
+        candidate > amount
+        || (
+          Math.abs(candidate - amount) <= 1e-9
+          && String(seam.nodeId).localeCompare(String(selected?.nodeId || '')) < 0
+        )
+      ) {
+        selected = seam;
+        amount = candidate;
+      }
+    }
+  }
+  if (!selected || amount <= EPSILON) return base;
+  const roadHalfWidth = lerp(base.roadHalfWidth, selected.portalHalfWidth, amount);
+  const widthDelta = roadHalfWidth - base.roadHalfWidth;
+  return Object.freeze({
+    ...base,
+    roadHalfWidth,
+    roadWidth: roadHalfWidth * 2,
+    surfaceDetailRoadWidth: roadHalfWidth * 2,
+    leftOuterEdge: Math.max(roadHalfWidth, base.leftOuterEdge + widthDelta),
+    rightOuterEdge: Math.max(roadHalfWidth, base.rightOuterEdge + widthDelta),
+    maximumOuterEdge: Math.max(roadHalfWidth, base.maximumOuterEdge + widthDelta),
+    exclusionHalfWidth: Math.max(roadHalfWidth, base.exclusionHalfWidth + widthDelta),
+    junctionSeamAmount: amount,
+    junctionSeam: selected
+  });
 }
 
 function appendStairs(builder, segment, engineering) {
@@ -1109,10 +2024,7 @@ function appendStairs(builder, segment, engineering) {
 }
 
 function intervalSegment(segment, interval, availableSamples = segment.samples) {
-  const samples = availableSamples.filter(sample => (
-    sample.distance >= interval.startDistance - EPSILON
-    && sample.distance <= interval.endDistance + EPSILON
-  ));
+  const samples = samplesForInterval(availableSamples, interval);
   return {
     ...segment,
     samples,
@@ -1125,10 +2037,26 @@ function intervalSegment(segment, interval, availableSamples = segment.samples) 
 }
 
 function sectionsForInterval(sections, interval) {
-  return sections.filter(section => (
-    section.distance >= interval.startDistance - EPSILON
-    && section.distance <= interval.endDistance + EPSILON
-  ));
+  if (!sections?.length) return [];
+  const startDistance = clamp(
+    finite(interval?.startDistance, sections[0].distance),
+    sections[0].distance,
+    sections.at(-1).distance
+  );
+  const endDistance = clamp(
+    finite(interval?.endDistance, sections.at(-1).distance),
+    startDistance,
+    sections.at(-1).distance
+  );
+  if (endDistance - startDistance <= EPSILON) return [];
+  const result = [crossSectionAtDistance(sections, startDistance)];
+  result.push(...sections.filter(section => (
+    section.distance > startDistance + EPSILON
+    && section.distance < endDistance - EPSILON
+  )));
+  const end = crossSectionAtDistance(sections, endDistance);
+  if (Math.abs(end.distance - result.at(-1).distance) > EPSILON) result.push(end);
+  return result;
 }
 
 function constructionIntervalsForSurface(segment) {
@@ -1183,32 +2111,69 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
   if (!compiled?.diagnostics) throw new Error('A compiled path network is required.');
   const road = createMeshBuilder('road');
   const shoulder = createMeshBuilder('shoulder');
+  const gutter = createMeshBuilder('gutter');
+  const curb = createMeshBuilder('curb');
+  const sidewalk = createMeshBuilder('sidewalk');
+  const sidewalkEdge = createMeshBuilder('sidewalk-edge');
   const earthwork = createMeshBuilder('earthwork');
   const structure = createMeshBuilder('structure');
+  const navigationSurface = createMeshBuilder('navigation-surface');
   const guides = { center: [], edges: [], construction: [], blockedCorridors: [] };
   // Invalid construction stays visible through the guide overlay but must not
   // create traversable render/collision/navigation surfaces. Valid segments in
   // the same connected graph remain usable instead of disappearing with the
   // invalid branch.
-  const surfaceSegments = compiled.segments.filter(segment => segment.construction.mode !== 'invalid');
-  const surfaceCompiled = { ...compiled, segments: surfaceSegments };
-  const degree = degreeMap(surfaceCompiled);
+  const junctionAuthority = options.terrainModifier?.junctionAuthority
+    || compilePathJunctionAuthority(compiled, options);
+  const degree = junctionAuthority.degree;
   const sectionsBySegment = crossSectionsBySegment(options.terrainModifier);
   const baseHeightAt = options.terrainModifier?.baseHeightAt || (() => 0);
-  const portalsByNode = new Map((compiled.nodes || []).map(node => [node.id, []]));
+  const portalsByNode = junctionAuthority.portalsByNode;
   const preparedSegments = [];
   const bridgeSelections = [];
 
-  for (const segment of surfaceSegments) {
-    const prepared = trimSamplesForJunctions(segment, degree);
-    preparedSegments.push({ segment, ...prepared });
-    if (prepared.fromPortal) portalsByNode.get(segment.fromNode)?.push(prepared.fromPortal);
-    if (prepared.toPortal) portalsByNode.get(segment.toNode)?.push(prepared.toPortal);
+  for (const authoritySegment of junctionAuthority.preparedSegments) {
+    const { segment } = authoritySegment;
+    const prepared = authoritySegment;
+    const surfaceDetail = pathSurfaceDetailRenderData(segment.surfaceDetailProfile, {
+      pathId: compiled.sourceNetworkId,
+      segmentId: segment.id,
+      roadWidth: segment.crossSectionProfile.width
+    });
+    preparedSegments.push({ segment, surfaceDetail, ...prepared });
+    if (prepared.fromPortal) prepared.fromPortal.surfaceDetail = surfaceDetail;
+    if (prepared.toPortal) prepared.toPortal.surfaceDetail = surfaceDetail;
   }
 
   for (const prepared of preparedSegments) {
-    const { segment, samples } = prepared;
+    const { segment, samples, surfaceDetail } = prepared;
     const constructionSections = sectionsBySegment.get(segment.id) || [];
+    const bridgeAuthorities = [];
+    for (const interval of constructionIntervalsForSurface(segment).filter(item => item.mode === 'bridge')) {
+      const localSegment = intervalSegment(segment, interval, samples);
+      if (localSegment.samples.length < 2) continue;
+      const range = {
+        ...interval,
+        startDistance: localSegment.samples[0].distance,
+        endDistance: localSegment.samples.at(-1).distance
+      };
+      const localSections = sectionsForInterval(constructionSections, range);
+      if (localSections.length < 2) continue;
+      const profile = resolveBridgeProfile(localSegment, localSections, baseHeightAt);
+      const authority = {
+        interval,
+        startDistance: range.startDistance,
+        endDistance: range.endDistance,
+        profile
+      };
+      authority.junctionSeams = directJunctionBridgeSeams(prepared, range, profile);
+      bridgeAuthorities.push(authority);
+    }
+    const sectionStateAt = distance => bridgeCrossSectionStateWithJunctionSeams(
+      segment.crossSectionProfile,
+      distance,
+      bridgeAuthorities
+    );
     const intervalSurfaces = [];
     for (const interval of constructionIntervalsForSurface(segment)) {
       const localSegment = intervalSegment(segment, interval, samples);
@@ -1220,26 +2185,90 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
       };
       const localSections = sectionsForInterval(constructionSections, localRange);
       if (intervalOwnsRoadSurface(interval.mode)) {
-        appendStrip(road, roadRows(localSegment, localSegment.samples), 'road-core', [1, 1, 1]);
+        const surfaceRows = roadRows(localSegment, localSegment.samples, sectionStateAt, surfaceDetail);
+        appendStrip(road, surfaceRows, 'road-core', [1, 1, 1], false, surfaceDetail);
         appendStrip(
-          shoulder,
-          shoulderRows(localSegment, localSegment.samples, -1),
-          'left-shoulder',
-          [0.45, 1]
+          navigationSurface,
+          rowsWithoutSurfaceDetail(surfaceRows),
+          'navigation-road',
+          [1, 1, 1]
         );
-        appendStrip(
-          shoulder,
-          shoulderRows(localSegment, localSegment.samples, 1),
-          'right-shoulder',
-          [1, 0.45]
+        const layout = pathCrossSectionLayout(localSegment.crossSectionProfile);
+        if (!layout.left.urban && layout.left.shoulderWidth > EPSILON) {
+          appendStrip(
+            shoulder,
+            shoulderRows(localSegment, localSegment.samples, -1, sectionStateAt),
+            'left-shoulder',
+            [0.45, 1],
+            true
+          );
+        }
+        if (!layout.right.urban && layout.right.shoulderWidth > EPSILON) {
+          appendStrip(
+            shoulder,
+            shoulderRows(localSegment, localSegment.samples, 1, sectionStateAt),
+            'right-shoulder',
+            [1, 0.45],
+            true
+          );
+        }
+        appendUrbanCrossSection(
+          gutter,
+          curb,
+          sidewalk,
+          sidewalkEdge,
+          localSegment,
+          localSegment.samples,
+          sectionStateAt
         );
+        for (const sideSign of [-1, 1]) {
+          const rows = urbanRows(localSegment, localSegment.samples, sideSign, sectionStateAt);
+          if (rows?.sidewalk?.length) {
+            appendStrip(
+              navigationSurface,
+              rows.sidewalk,
+              'navigation-sidewalk',
+              [1, 1],
+              true
+            );
+          }
+        }
       } else if (interval.mode === 'stairs') {
         appendStairs(road, localSegment, compiled.engineering);
+        appendStairs(navigationSurface, localSegment, compiled.engineering);
       }
       appendEarthwork(earthwork, localSegment, localSections);
       appendRetainingWalls(structure, localSegment, localSections);
-      const bridgeProfile = appendBridge(structure, localSegment, localSections, baseHeightAt);
+      const bridgeAuthority = bridgeAuthorities.find(authority => (
+        Math.abs(authority.startDistance - localRange.startDistance) <= EPSILON
+        && Math.abs(authority.endDistance - localRange.endDistance) <= EPSILON
+      ));
+      const bridgeProfile = appendBridge(
+        structure,
+        navigationSurface,
+        localSegment,
+        localSections,
+        baseHeightAt,
+        bridgeAuthority?.profile,
+        surfaceDetail,
+        sectionStateAt
+      );
       if (bridgeProfile) {
+        const junctionSeams = (bridgeAuthority?.junctionSeams || []).map(seam => {
+          const state = sectionStateAt(seam.station);
+          const surfaceWidth = state.roadWidth;
+          const widthDelta = surfaceWidth - seam.portalWidth;
+          return {
+            endpoint: seam.endpoint,
+            nodeId: seam.nodeId,
+            station: seam.station,
+            transitionLength: seam.transitionLength,
+            portalWidth: seam.portalWidth,
+            surfaceWidth,
+            widthDelta,
+            compatible: Math.abs(widthDelta) <= 1e-5
+          };
+        });
         bridgeSelections.push({
           segmentId: segment.id,
           startDistance: interval.startDistance,
@@ -1248,14 +2277,24 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
           label: bridgeProfile.label,
           span: bridgeProfile.span,
           width: bridgeProfile.width,
+          clearWidth: bridgeProfile.clearWidth,
+          deckWidth: bridgeProfile.deckWidth,
+          deckThickness: bridgeProfile.deckThickness,
+          approachTaperLength: bridgeProfile.approachTaperLength,
+          abutmentSeatLength: bridgeProfile.abutmentSeatLength,
+          carrySidewalks: bridgeProfile.carrySidewalks,
           maximumClearance: bridgeProfile.maximumClearance,
-          supportSpacing: bridgeProfile.supportSpacing
+          supportSpacing: bridgeProfile.supportSpacing,
+          junctionSeams,
+          valid: bridgeProfile.valid,
+          compatibilityDiagnostics: bridgeProfile.compatibilityDiagnostics
         });
       }
       appendTunnel(structure, localSegment);
       intervalSurfaces.push({
         mode: interval.mode,
-        rows: roadRows(localSegment, localSegment.samples)
+        rows: roadRows(localSegment, localSegment.samples, sectionStateAt, surfaceDetail),
+        surfaceDetail
       });
     }
     const isFromDeadEnd = (degree.get(segment.fromNode) || 0) === 1;
@@ -1263,10 +2302,10 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
     const firstSurface = intervalSurfaces[0];
     const lastSurface = intervalSurfaces.at(-1);
     if (isFromDeadEnd && intervalOwnsRoadSurface(firstSurface?.mode)) {
-      appendEndCap(road, firstSurface.rows[0], 'dead-end-cap');
+      appendEndCap(road, firstSurface.rows[0], 'dead-end-cap', firstSurface.surfaceDetail);
     }
     if (isToDeadEnd && intervalOwnsRoadSurface(lastSurface?.mode)) {
-      appendEndCap(road, lastSurface.rows.at(-1), 'dead-end-cap');
+      appendEndCap(road, lastSurface.rows.at(-1), 'dead-end-cap', lastSurface.surfaceDetail);
     }
   }
 
@@ -1287,8 +2326,26 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
   }
 
   const junctionReports = [];
-  for (const junction of (compiled.junctions || []).filter(item => (degree.get(item.nodeId) || 0) >= 3)) {
-    const report = appendJunction(road, junction, portalsByNode, options);
+  for (const sharedJunction of junctionAuthority.junctions) {
+    const junction = sharedJunction;
+    const report = appendJunction(road, junction, portalsByNode, options, sharedJunction);
+    const navigationReport = report.error
+      ? { ...report, triangleCount: 0 }
+      : appendTriangulatedPolygon(
+        navigationSurface,
+        junction,
+        sharedJunction,
+        'navigation-junction'
+      );
+    const surfaceReports = report.error
+      ? []
+      : appendUrbanJunctionSurfaces(
+        { gutter, curb, sidewalk, sidewalkEdge },
+        junction,
+        portalsByNode,
+        options,
+        report
+      );
     junctionReports.push({
       nodeId: junction.nodeId,
       portalCount: report.portals.length,
@@ -1296,7 +2353,10 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
       triangleCount: report.triangleCount,
       deviation: report.deviation,
       fallback: report.fallback || null,
-      error: report.error
+      error: report.error,
+      navigationTriangleCount: navigationReport.triangleCount,
+      navigationError: navigationReport.error || null,
+      surfaceReports
     });
     if (!report.error) {
       for (let index = 0; index < report.ring.length; index += 1) {
@@ -1309,22 +2369,71 @@ export function buildPathNetworkGeometry(compiled, options = {}) {
   const meshes = {
     road: finalizeMesh(road),
     shoulder: finalizeMesh(shoulder),
+    gutter: finalizeMesh(gutter),
+    curb: finalizeMesh(curb),
+    sidewalk: finalizeMesh(sidewalk),
+    sidewalkEdge: finalizeMesh(sidewalkEdge),
     earthwork: finalizeMesh(earthwork),
     structure: finalizeMesh(structure)
   };
-  const validation = validatePathNetworkGeometry(meshes);
+  const navigationMeshes = {
+    surface: finalizeMesh(navigationSurface)
+  };
+  const validation = validatePathNetworkGeometry({
+    ...meshes,
+    'navigation-surface': navigationMeshes.surface
+  });
   const junctionErrors = junctionReports.filter(report => report.error);
+  const junctionSurfaceErrors = junctionReports.flatMap(report => (
+    report.surfaceReports || []
+  ).filter(surface => surface.error).map(surface => ({ ...surface, nodeId: report.nodeId })));
   if (junctionErrors.length) {
     validation.valid = false;
     validation.errors.push(...junctionErrors.map(report => `Junction ${report.nodeId} failed: ${report.error}.`));
+  }
+  if (junctionSurfaceErrors.length) {
+    validation.valid = false;
+    validation.errors.push(...junctionSurfaceErrors.map(report => (
+      `Junction ${report.nodeId} ${report.role} failed: ${report.error}.`
+    )));
+  }
+  const junctionNavigationErrors = junctionReports.filter(report => report.navigationError);
+  if (junctionNavigationErrors.length) {
+    validation.valid = false;
+    validation.errors.push(...junctionNavigationErrors.map(report => (
+      `Junction ${report.nodeId} navigation failed: ${report.navigationError}.`
+    )));
+  }
+  const incompatibleBridges = bridgeSelections.filter(selection => !selection.valid);
+  if (incompatibleBridges.length) {
+    validation.valid = false;
+    validation.errors.push(...incompatibleBridges.map(selection => (
+      `Bridge ${selection.segmentId} ${selection.bridgeStyle} is incompatible: ${selection.compatibilityDiagnostics
+        .map(diagnostic => diagnostic.message)
+        .join(' ')}`
+    )));
+  }
+  const incompatibleBridgeJunctionSeams = bridgeSelections.flatMap(selection => (
+    (selection.junctionSeams || [])
+      .filter(seam => !seam.compatible)
+      .map(seam => ({ segmentId: selection.segmentId, ...seam }))
+  ));
+  if (incompatibleBridgeJunctionSeams.length) {
+    validation.valid = false;
+    validation.errors.push(...incompatibleBridgeJunctionSeams.map(seam => (
+      `Bridge ${seam.segmentId} does not share junction ${seam.nodeId} portal width `
+      + `(${seam.surfaceWidth} m surface versus ${seam.portalWidth} m portal).`
+    )));
   }
   return {
     schemaVersion: 1,
     sourceNetworkId: compiled.sourceNetworkId,
     sourceRevision: compiled.sourceRevision,
     meshes,
+    navigationMeshes,
     guides,
     portalsByNode,
+    junctionAuthority,
     junctions: junctionReports,
     bridgeSelections,
     validation

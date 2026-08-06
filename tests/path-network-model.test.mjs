@@ -327,3 +327,133 @@ test('manual handles reject junction ambiguity and zero-length vectors', () => {
     }]
   }), /non-zero length/);
 });
+
+test('path transactions apply city cross-sections atomically and undo to dirt defaults', () => {
+  const original = normalizePathNetwork({
+    id: 'street-profile',
+    nodes: [
+      { id: 'a', position: [0, 0, 0] },
+      { id: 'b', position: [20, 0, 0] }
+    ],
+    segments: [{ id: 'ab', fromNode: 'a', toNode: 'b' }]
+  });
+  const result = applyPathNetworkTransaction(original, {
+    label: 'Apply city local street',
+    operations: [{
+      type: 'set-segment-cross-section',
+      segmentId: 'ab',
+      profileId: 'city-local-street',
+      crossSectionProfile: { sidewalkLeftWidth: 2.2 }
+    }]
+  });
+  assert.equal(original.segments[0].crossSectionProfile.profileId, 'dirt-road');
+  assert.equal(original.segments[0].crossSectionProfile.sidewalkLeftWidth, 0);
+  assert.equal(result.network.segments[0].crossSectionProfile.profileId, 'city-local-street');
+  assert.equal(result.network.segments[0].crossSectionProfile.sidewalkLeftWidth, 2.2);
+  assert.ok(result.network.segments[0].crossSectionProfile.sidewalkRightWidth > 0);
+  assert.deepEqual(result.inverse.replaceNetwork, original);
+});
+
+test('manual cross-section edits preserve the selected profile and reject unknown profiles', () => {
+  const network = normalizePathNetwork({
+    id: 'street-profile',
+    nodes: [
+      { id: 'a', position: [0, 0, 0] },
+      { id: 'b', position: [20, 0, 0] }
+    ],
+    segments: [{
+      id: 'ab',
+      fromNode: 'a',
+      toNode: 'b',
+      crossSectionProfile: { profileId: 'city-local-street' }
+    }]
+  });
+  const edited = applyPathNetworkTransaction(network, {
+    operations: [{
+      type: 'set-segment-cross-section',
+      segmentId: 'ab',
+      crossSectionProfile: { sidewalkRightWidth: 2.6 }
+    }]
+  });
+  assert.equal(edited.network.segments[0].crossSectionProfile.profileId, 'city-local-street');
+  assert.equal(edited.network.segments[0].crossSectionProfile.sidewalkRightWidth, 2.6);
+  assert.throws(() => applyPathNetworkTransaction(network, {
+    operations: [{
+      type: 'set-segment-cross-section',
+      segmentId: 'ab',
+      profileId: 'placeholder-street'
+    }]
+  }), /Unknown path cross-section profile/);
+});
+
+test('mixed network defaults and explicit segment profiles normalize without preset leakage', () => {
+  const network = normalizePathNetwork({
+    id: 'mixed-street-profiles',
+    defaults: {
+      crossSectionProfile: {
+        profileId: 'city-local-street',
+        width: 8.4,
+        sidewalkLeftWidth: 2.5
+      }
+    },
+    nodes: [
+      { id: 'a', position: [0, 0, 0] },
+      { id: 'b', position: [20, 0, 0] },
+      { id: 'c', position: [40, 0, 0] }
+    ],
+    segments: [
+      { id: 'inherits-city', fromNode: 'a', toNode: 'b' },
+      {
+        id: 'explicit-dirt',
+        fromNode: 'b',
+        toNode: 'c',
+        crossSectionProfile: { profileId: 'dirt-road', width: 4.5 }
+      }
+    ]
+  });
+  const inherited = network.segments.find(segment => segment.id === 'inherits-city').crossSectionProfile;
+  const dirt = network.segments.find(segment => segment.id === 'explicit-dirt').crossSectionProfile;
+  assert.equal(inherited.profileId, 'city-local-street');
+  assert.equal(inherited.width, 8.4);
+  assert.equal(inherited.sidewalkLeftWidth, 2.5);
+  assert.equal(dirt.profileId, 'dirt-road');
+  assert.equal(dirt.width, 4.5);
+  assert.equal(dirt.curbStyle, 'none');
+  assert.equal(dirt.gutterWidth, 0);
+  assert.equal(dirt.sidewalkLeftWidth, 0);
+});
+
+test('mixed cross-section profiles remain stable through a save-like JSON roundtrip', () => {
+  const first = normalizePathNetwork({
+    id: 'saved-street-profiles',
+    defaults: {
+      crossSectionProfile: { profileId: 'dirt-road', width: 3.8 }
+    },
+    nodes: [
+      { id: 'a', position: [0, 0, 0] },
+      { id: 'b', position: [20, 0, 0] },
+      { id: 'c', position: [40, 0, 0] }
+    ],
+    segments: [
+      { id: 'inherits-dirt', fromNode: 'a', toNode: 'b' },
+      {
+        id: 'explicit-city',
+        fromNode: 'b',
+        toNode: 'c',
+        crossSectionProfile: {
+          profileId: 'city-local-street',
+          sidewalkRightWidth: 2.3,
+          curbHeight: 0.21
+        }
+      }
+    ]
+  });
+  const saved = JSON.parse(JSON.stringify(first));
+  const reloaded = normalizePathNetwork(saved);
+  assert.deepEqual(reloaded, first);
+  const city = reloaded.segments.find(segment => segment.id === 'explicit-city').crossSectionProfile;
+  assert.equal(city.width, 7);
+  assert.equal(city.shoulderWidth, 0);
+  assert.equal(city.sidewalkRightWidth, 2.3);
+  assert.equal(city.curbHeight, 0.21);
+});

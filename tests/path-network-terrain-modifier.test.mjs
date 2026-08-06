@@ -6,6 +6,7 @@ import {
   compilePathTerrainModifier,
   pathTerrainHeightAt,
   pathTerrainNormalAt,
+  samplePathExclusionField,
   samplePathTerrainModifier
 } from '../app/path-network/terrain-modifier.js';
 
@@ -43,6 +44,69 @@ function modifierFor(constructionMode = 'cut-fill', options = {}) {
     ...options
   });
   return compilePathTerrainModifier(compiled, { baseHeightAt: terrain, chunkSize: 8 });
+}
+
+function cityModifier() {
+  const network = normalizePathNetwork({
+    id: 'city-terrain',
+    engineering: { maxCutDepth: 4, maxFillDepth: 3 },
+    nodes: [
+      { id: 'a', position: [0, 3, 0], heightMode: 'absolute' },
+      { id: 'b', position: [40, 3, 0], heightMode: 'absolute' }
+    ],
+    defaults: { crossSectionProfile: { profileId: 'city-local-street' } },
+    segments: [{
+      id: 'street',
+      fromNode: 'a',
+      toNode: 'b',
+      constructionMode: 'cut-fill',
+      constructionLocked: true
+    }]
+  });
+  const compiled = compilePathNetwork(network, {
+    terrainHeightAt: terrain,
+    terrainNormalAt: normal,
+    spacing: 1
+  });
+  return compilePathTerrainModifier(compiled, { baseHeightAt: terrain, chunkSize: 8 });
+}
+
+function automaticBridgeModifier() {
+  const baseHeightAt = x => x >= 20 && x <= 40 ? -8 : 0;
+  const network = normalizePathNetwork({
+    id: 'automatic-bridge-terrain',
+    engineering: {
+      civilAssist: true,
+      maxCutDepth: 6,
+      maxFillDepth: 2,
+      bridgeClearanceThreshold: 3,
+      minimumBridgeLength: 8,
+      maximumBridgeSpan: 40
+    },
+    nodes: [
+      { id: 'a', position: [0, 0, 0], heightMode: 'absolute' },
+      { id: 'b', position: [60, 0, 0], heightMode: 'absolute' }
+    ],
+    segments: [{
+      id: 'road',
+      fromNode: 'a',
+      toNode: 'b',
+      constructionMode: 'auto',
+      constructionLocked: false,
+      crossSectionProfile: { width: 4 },
+      structureProfile: { bridgeStyle: 'auto' }
+    }]
+  });
+  const compiled = compilePathNetwork(network, {
+    terrainHeightAt: baseHeightAt,
+    terrainNormalAt: normal,
+    spacing: 1
+  });
+  return {
+    compiled,
+    modifier: compilePathTerrainModifier(compiled, { baseHeightAt, chunkSize: 8 }),
+    baseHeightAt
+  };
 }
 
 test('explicit local modifier preserves base terrain exactly outside dirty corridor chunks', () => {
@@ -135,4 +199,187 @@ test('modified normal remains finite and normalized', () => {
   const value = pathTerrainNormalAt(modifier, 20, 2.5);
   assert.ok(value.every(Number.isFinite));
   assert.ok(Math.abs(Math.hypot(...value) - 1) < 1e-6);
+});
+
+test('city street terrain support uses the same gutter, curb, sidewalk, and feather field as geometry', () => {
+  const modifier = cityModifier();
+  const road = samplePathTerrainModifier(modifier, 20, 0);
+  const gutter = samplePathTerrainModifier(modifier, 20, 3.6);
+  const curb = samplePathTerrainModifier(modifier, 20, 3.9);
+  const sidewalk = samplePathTerrainModifier(modifier, 20, 4.5);
+  const blend = samplePathTerrainModifier(modifier, 20, 6);
+  const terrainOnly = samplePathTerrainModifier(modifier, 20, 8);
+
+  assert.equal(road.zone, 'road');
+  assert.equal(gutter.zone, 'gutter');
+  assert.equal(curb.zone, 'curb');
+  assert.equal(sidewalk.zone, 'sidewalk');
+  assert.equal(blend.zone, 'blend');
+  assert.equal(terrainOnly.zone, 'terrain');
+  assert.equal(gutter.materialWeights.gutter, 1);
+  assert.equal(curb.materialWeights.curb, 1);
+  assert.equal(sidewalk.materialWeights.sidewalk, 1);
+  assert.ok(curb.surfaceHeight > gutter.surfaceHeight);
+  assert.ok(sidewalk.surfaceHeight > gutter.surfaceHeight);
+  assert.equal(terrainOnly.height, terrainOnly.baseHeight);
+});
+
+test('sloped terrain normals never shift cross-section profile elevations sideways', () => {
+  const network = normalizePathNetwork({
+    id: 'world-y-cross-section',
+    nodes: [
+      { id: 'a', position: [0, 2, 0], heightMode: 'absolute' },
+      { id: 'b', position: [20, 5, 0], heightMode: 'absolute' }
+    ],
+    segments: [{
+      id: 'grade',
+      fromNode: 'a',
+      toNode: 'b',
+      constructionMode: 'cut-fill',
+      constructionLocked: true,
+      crossSectionProfile: { profileId: 'city-local-street' }
+    }]
+  });
+  const compiled = compilePathNetwork(network, {
+    terrainHeightAt: () => 0,
+    terrainNormalAt: () => [0.32, 0.91, 0.26],
+    spacing: 1
+  });
+  const modifier = compilePathTerrainModifier(compiled, { baseHeightAt: () => 0, chunkSize: 8 });
+  const section = modifier.crossSections[Math.floor(modifier.crossSections.length / 2)];
+  assert.ok(section);
+  assert.equal(section.roadCenter[0], section.center[0]);
+  assert.equal(section.roadCenter[2], section.center[2]);
+  assert.ok(Math.abs(section.roadCenter[1] - section.center[1] - 0.08) < 1e-8);
+  assert.ok(Math.abs(section.roadLeft[1] - section.center[1]) < 1e-8);
+  assert.ok(Math.abs(section.roadRight[1] - section.center[1]) < 1e-8);
+});
+
+test('automatic bridge portals use the resolved bridge family while retaining an open terrain span', () => {
+  const { compiled, modifier, baseHeightAt } = automaticBridgeModifier();
+  const interval = compiled.segments[0].constructionIntervals.find(entry => entry.mode === 'bridge');
+  const bridgeEntries = modifier.entries.filter(entry => entry.construction.mode === 'bridge');
+  assert.deepEqual([interval.startDistance, interval.endDistance], [19, 41]);
+  assert.ok(bridgeEntries.length > 2);
+  assert.equal(bridgeEntries.every(entry => entry.bridgeProfile.bridgeStyle === 'stone-arch'), true);
+  assert.equal(bridgeEntries.every(entry => entry.bridgeSeatLength === 1.8), true);
+
+  const beforePortal = samplePathTerrainModifier(modifier, interval.startDistance - 1e-6, 0);
+  const afterPortal = samplePathTerrainModifier(modifier, interval.startDistance + 1e-6, 0);
+  assert.ok(Math.abs(beforePortal.height - afterPortal.height) < 1e-4, 'portal support opened a height seam');
+  assert.ok(afterPortal.longitudinalSupportWeight > 0.999);
+
+  const centerDistance = (interval.startDistance + interval.endDistance) * 0.5;
+  const center = samplePathTerrainModifier(modifier, centerDistance, 0);
+  assert.equal(center.constructionMode, 'bridge');
+  assert.equal(center.longitudinalSupportWeight, 0);
+  assert.equal(center.influence, 0);
+  assert.equal(center.height, baseHeightAt(centerDistance, 0));
+  assert.equal(modifier.terrainDirtyChunkKeys.some(key => key.startsWith('3:')), false);
+  assert.ok(modifier.diagnostics.bridgeSeatEntryCount > 0);
+});
+
+test('bridge portal seats are clamped so even a short authored span retains open terrain', () => {
+  const network = normalizePathNetwork({
+    id: 'short-bridge-seat',
+    nodes: [
+      { id: 'a', position: [0, 3, 0], heightMode: 'absolute' },
+      { id: 'b', position: [4, 3, 0], heightMode: 'absolute' }
+    ],
+    segments: [{
+      id: 'short',
+      fromNode: 'a',
+      toNode: 'b',
+      constructionMode: 'bridge',
+      constructionLocked: true,
+      crossSectionProfile: { width: 4 },
+      structureProfile: { bridgeStyle: 'steel-girder' }
+    }]
+  });
+  const compiled = compilePathNetwork(network, {
+    terrainHeightAt: () => 0,
+    terrainNormalAt: normal,
+    spacing: 0.5
+  });
+  const modifier = compilePathTerrainModifier(compiled, { baseHeightAt: () => 0, chunkSize: 4 });
+  const entry = modifier.entries.find(candidate => candidate.construction.mode === 'bridge');
+  assert.ok(entry.bridgeSeatLength < entry.bridgeProfile.abutmentSeatLength);
+  assert.ok(entry.bridgeSeatLength * 2 + entry.bridgeProfile.minimumOpenTerrainSpan <= 4 + 1e-8);
+  const center = samplePathTerrainModifier(modifier, 2, 0);
+  assert.equal(center.longitudinalSupportWeight, 0);
+  assert.equal(center.height, 0);
+});
+
+test('padded exclusion uses a neighboring-chunk capsule without widening terrain modification', () => {
+  const modifier = modifierFor('cut-fill');
+  const entry = modifier.entries.find(candidate => candidate.pairIndex === 8);
+  const outsideZ = entry.extents.rightOuterEdge + 0.4;
+  for (const x of [7.9, 8.1]) {
+    const strictTerrain = samplePathTerrainModifier(modifier, x, outsideZ);
+    const unpadded = samplePathExclusionField(modifier, x, outsideZ, 0);
+    const padded = samplePathExclusionField(modifier, x, outsideZ, 1);
+    assert.equal(strictTerrain.terrainApplied, false);
+    assert.equal(unpadded.excluded, false);
+    assert.equal(padded.excluded, true);
+    assert.ok(Math.abs(padded.clearance - 0.4) < 1e-6);
+  }
+
+  const endpointOutside = samplePathExclusionField(
+    modifier,
+    40 + entry.extents.outerEdge + 0.4,
+    0,
+    1
+  );
+  assert.equal(endpointOutside.excluded, true, 'endpoint exclusion must be a capsule rather than an infinite strip');
+});
+
+test('bridge exclusion follows its resolved deck safety width while tunnel and invalid spans remain clear', () => {
+  const { modifier } = automaticBridgeModifier();
+  const bridgeEntry = modifier.entries.find(entry => entry.construction.mode === 'bridge');
+  const centerX = (bridgeEntry.intervalStartDistance + bridgeEntry.intervalEndDistance) * 0.5;
+  const inside = samplePathExclusionField(
+    modifier,
+    centerX,
+    bridgeEntry.bridgeExclusionHalfWidth - 0.05,
+    0
+  );
+  const outside = samplePathExclusionField(
+    modifier,
+    centerX,
+    bridgeEntry.bridgeExclusionHalfWidth + 0.4,
+    0
+  );
+  assert.equal(inside.excluded, true);
+  assert.equal(inside.bridgeStyle, 'stone-arch');
+  assert.equal(outside.excluded, false);
+  assert.equal(samplePathExclusionField(modifierFor('tunnel'), 20, 0, 5).excluded, false);
+  const invalidNetwork = normalizePathNetwork({
+    id: 'invalid-exclusion',
+    nodes: [
+      { id: 'a', position: [0, 0, 0], heightMode: 'absolute' },
+      { id: 'b', position: [20, 0, 0], heightMode: 'absolute' }
+    ],
+    segments: [{ id: 'blocked', fromNode: 'a', toNode: 'b' }]
+  });
+  const invalidCompiled = compilePathNetwork(invalidNetwork, {
+    terrainHeightAt: () => 0,
+    terrainNormalAt: normal,
+    spacing: 1
+  });
+  const invalidSegment = invalidCompiled.segments[0];
+  invalidSegment.construction = { mode: 'invalid', reason: 'test-blocked' };
+  invalidSegment.constructionIntervals = [{
+    segmentId: invalidSegment.id,
+    startDistance: 0,
+    endDistance: invalidSegment.samples.at(-1).distance,
+    startSampleIndex: 0,
+    endSampleIndex: invalidSegment.samples.length - 1,
+    mode: 'invalid',
+    reason: 'test-blocked'
+  }];
+  const invalidModifier = compilePathTerrainModifier(invalidCompiled, {
+    baseHeightAt: () => 0,
+    chunkSize: 8
+  });
+  assert.equal(samplePathExclusionField(invalidModifier, 10, 0, 5).excluded, false);
 });

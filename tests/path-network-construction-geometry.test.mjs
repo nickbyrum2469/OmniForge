@@ -111,6 +111,25 @@ test('bridge solids retain outward top, side, and underside winding', () => {
   assert.ok(girder.some(normal => normal[1] > 0.9), 'girder must have a top face');
   assert.ok(girder.some(normal => normal[1] < -0.9), 'girder must have an underside face');
   assert.ok(girder.some(normal => Math.abs(normal[1]) < 0.1), 'girder must have side faces');
+
+  const positionsForRole = role => {
+    const result = [];
+    for (let index = 0; index < mesh.roles.length; index += 1) {
+      if (mesh.roles[index] !== role) continue;
+      result.push(Array.from(mesh.positions.slice(index * 3, index * 3 + 3)));
+    }
+    return result;
+  };
+  const undersidePositions = positionsForRole('bridge-concrete-deck-underside');
+  const leftEdgePositions = positionsForRole('bridge-concrete-deck-left-edge');
+  const rightEdgePositions = positionsForRole('bridge-concrete-deck-right-edge');
+  const undersideLateral = undersidePositions.map(point => point[2]);
+  assert.ok(Math.min(...undersideLateral) < -4.4, 'underside must reach one outer deck edge');
+  assert.ok(Math.max(...undersideLateral) > 4.4, 'underside must reach the other outer deck edge');
+  assert.ok(leftEdgePositions.length > 0 && rightEdgePositions.length > 0);
+  const leftMean = leftEdgePositions.reduce((sum, point) => sum + point[2], 0) / leftEdgePositions.length;
+  const rightMean = rightEdgePositions.reduce((sum, point) => sum + point[2], 0) / rightEdgePositions.length;
+  assert.ok(Math.abs(leftMean - rightMean) > 8.8, 'outer walls must remain on opposite deck edges');
 });
 
 test('bridge abutments stay bounded around their approach portals', () => {

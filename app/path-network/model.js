@@ -1,4 +1,6 @@
 import { normalizeBridgeProfile, PATH_BRIDGE_STYLES } from './bridge-profiles.js';
+import { normalizePathCrossSection } from './cross-section-profiles.js';
+import { normalizePathSurfaceDetail } from './surface-detail-profiles.js';
 
 const PATH_NETWORK_SCHEMA_VERSION = 2;
 
@@ -42,25 +44,17 @@ function uniqueId(requested, used, fallback) {
   return result;
 }
 
-function defaultCrossSection(source = {}) {
+function defaultCrossSection(source = {}, fallback = {}) {
+  return normalizePathCrossSection(source, fallback);
+}
+
+function defaultMaterialProfile(source = {}, fallback = {}) {
   return {
-    width: clamp(source.width ?? 3, 0.1, 200),
-    laneCount: Math.round(clamp(source.laneCount ?? 1, 1, 12)),
-    laneWidth: clamp(source.laneWidth ?? 2.4, 0.5, 8),
-    crownHeight: clamp(source.crownHeight ?? 0.06, -1, 2),
-    shoulderWidth: clamp(source.shoulderWidth ?? 0.8, 0, 20),
-    shoulderDrop: clamp(source.shoulderDrop ?? 0.08, 0, 2),
-    curbHeight: clamp(source.curbHeight ?? 0, 0, 1),
-    ditchDepth: clamp(source.ditchDepth ?? 0.2, 0, 5),
-    drainageEnabled: source.drainageEnabled !== false,
-    cutSlopeRatio: clamp(source.cutSlopeRatio ?? 1.5, 0.25, 10),
-    fillSlopeRatio: clamp(source.fillSlopeRatio ?? 2, 0.25, 10),
-    blendDistance: clamp(source.blendDistance ?? 2.5, 0.05, 200),
-    // The road/shoulder meshes own the visible construction surface. Keep the
-    // supporting terrain slightly below them so the two independently
-    // tessellated surfaces cannot z-fight or intermittently bury the road.
-    terrainUnderlayClearance: clamp(source.terrainUnderlayClearance ?? 0.04, 0.005, 0.25),
-    terrainModificationEnabled: source.terrainModificationEnabled !== false
+    surfaceMaterialId: source?.surfaceMaterialId ?? fallback?.surfaceMaterialId ?? null,
+    shoulderMaterialId: source?.shoulderMaterialId ?? fallback?.shoulderMaterialId ?? null,
+    curbMaterialId: source?.curbMaterialId ?? fallback?.curbMaterialId ?? null,
+    sidewalkMaterialId: source?.sidewalkMaterialId ?? fallback?.sidewalkMaterialId ?? null,
+    structureMaterialId: source?.structureMaterialId ?? fallback?.structureMaterialId ?? null
   };
 }
 
@@ -120,12 +114,15 @@ export function normalizePathNetwork(input = {}, options = {}) {
     curveType: source?.curveType === 'linear' ? 'linear' : 'hermite',
     constructionMode: PATH_CONSTRUCTION_MODES.includes(source?.constructionMode) ? source.constructionMode : 'auto',
     constructionLocked: source?.constructionLocked === true,
-    crossSectionProfile: defaultCrossSection(source?.crossSectionProfile || input.defaults?.crossSectionProfile),
-    materialProfile: {
-      surfaceMaterialId: source?.materialProfile?.surfaceMaterialId ?? input.defaults?.materialProfile?.surfaceMaterialId ?? null,
-      shoulderMaterialId: source?.materialProfile?.shoulderMaterialId ?? input.defaults?.materialProfile?.shoulderMaterialId ?? null,
-      structureMaterialId: source?.materialProfile?.structureMaterialId ?? input.defaults?.materialProfile?.structureMaterialId ?? null
-    },
+    crossSectionProfile: defaultCrossSection(
+      source?.crossSectionProfile,
+      input.defaults?.crossSectionProfile
+    ),
+    materialProfile: defaultMaterialProfile(source?.materialProfile, input.defaults?.materialProfile),
+    surfaceDetailProfile: normalizePathSurfaceDetail(
+      source?.surfaceDetailProfile,
+      input.defaults?.surfaceDetailProfile
+    ),
     structureProfile: normalizeBridgeProfile(source?.structureProfile || input.defaults?.structureProfile),
     gameplayRules: defaultGameplayRules(source?.gameplayRules || input.defaults?.gameplayRules),
     costBreakdown: source?.costBreakdown ? structuredClone(source.costBreakdown) : null
@@ -144,11 +141,8 @@ export function normalizePathNetwork(input = {}, options = {}) {
     segments,
     defaults: {
       crossSectionProfile: defaultCrossSection(input.defaults?.crossSectionProfile),
-      materialProfile: {
-        surfaceMaterialId: input.defaults?.materialProfile?.surfaceMaterialId ?? null,
-        shoulderMaterialId: input.defaults?.materialProfile?.shoulderMaterialId ?? null,
-        structureMaterialId: input.defaults?.materialProfile?.structureMaterialId ?? null
-      },
+      materialProfile: defaultMaterialProfile(input.defaults?.materialProfile),
+      surfaceDetailProfile: normalizePathSurfaceDetail(input.defaults?.surfaceDetailProfile),
       structureProfile: normalizeBridgeProfile(input.defaults?.structureProfile),
       gameplayRules: defaultGameplayRules(input.defaults?.gameplayRules)
     },
@@ -249,12 +243,17 @@ export function migrateLegacyPathObject(pathObject, options = {}) {
     curveType: properties.spline === false ? 'linear' : 'hermite',
     constructionMode: 'auto',
     constructionLocked: false,
-    crossSectionProfile: defaultCrossSection(properties),
+    crossSectionProfile: defaultCrossSection({ ...properties, profileId: 'dirt-road' }),
     materialProfile: {
       surfaceMaterialId: properties.materialId ?? null,
       shoulderMaterialId: null,
+      curbMaterialId: null,
+      sidewalkMaterialId: null,
       structureMaterialId: null
     },
+    surfaceDetailProfile: normalizePathSurfaceDetail({
+      profileId: properties.width <= 1.8 ? 'walked-footpath' : 'weathered-dirt-road'
+    }),
     gameplayRules: defaultGameplayRules(properties)
   }));
   const network = normalizePathNetwork({
@@ -262,8 +261,11 @@ export function migrateLegacyPathObject(pathObject, options = {}) {
     nodes,
     segments,
     defaults: {
-      crossSectionProfile: defaultCrossSection(properties),
+      crossSectionProfile: defaultCrossSection({ ...properties, profileId: 'dirt-road' }),
       materialProfile: { surfaceMaterialId: properties.materialId ?? null },
+      surfaceDetailProfile: normalizePathSurfaceDetail({
+        profileId: properties.width <= 1.8 ? 'walked-footpath' : 'weathered-dirt-road'
+      }),
       gameplayRules: defaultGameplayRules(properties)
     },
     engineering: defaultEngineering(properties),

@@ -143,6 +143,95 @@ function showToast(message, type='') {
   toastTimer = setTimeout(()=>ui.viewportToast.className='viewport-toast',2400);
 }
 
+const visualTestClickTargets=Object.freeze({
+  hierarchy:'[data-left-tab="hierarchy"]',
+  create:'[data-left-tab="create"]',
+  assets:'[data-left-tab="assets"]',
+  integrations:'[data-left-tab="integrations"]',
+  world:'[data-left-tab="world"]',
+  ai:'[data-bottom-tab="ai"]',
+  console:'[data-bottom-tab="console"]',
+  jobs:'[data-bottom-tab="jobs"]',
+  worldSettings:'[data-bottom-tab="world"]',
+  pathEdit:'#v011SplineEdit',
+  save:'#saveButton'
+});
+
+function visualTestKeyboardEvent(type,code){
+  const key=({KeyW:'w',KeyA:'a',KeyS:'s',KeyD:'d',Space:' ',ControlLeft:'Control',ShiftLeft:'Shift'})[code]||code;
+  document.dispatchEvent(new KeyboardEvent(type,{bubbles:true,cancelable:true,code,key,shiftKey:code==='ShiftLeft',ctrlKey:code==='ControlLeft'}));
+}
+
+async function runVisualTestActions(actions=[]){
+  const telemetry=[];
+  for(const rawAction of Array.isArray(actions)?actions:[]){
+    const action=rawAction&&typeof rawAction==='object'?rawAction:{};
+    const type=String(action.type||'').trim();
+    const started=performance.now();
+    let result={};
+    if(type==='wait'){
+      await sleep(clamp(Number(action.ms||100),0,5000));
+    }else if(type==='click'){
+      const selector=visualTestClickTargets[String(action.target||'')];
+      const element=selector?$(selector):null;
+      if(!element)throw new Error(`Visual test click target is unavailable: ${String(action.target||'unknown')}.`);
+      element.click();
+      await sleep(clamp(Number(action.waitMs||120),40,2000));
+      result={target:String(action.target),selectedLeftTab:state?.editor?.leftTab||null,selectedBottomTab:state?.editor?.bottomTab||null};
+    }else if(type==='select'){
+      const objectId=String(action.objectId||'');
+      if(!scene.objects.some(object=>object.id===objectId))throw new Error(`Visual test object is unavailable: ${objectId}.`);
+      await selectObject(objectId,false);
+      await sleep(clamp(Number(action.waitMs||120),40,2000));
+      result={objectId:selectedId};
+    }else if(type==='viewport-navigate'){
+      const before=cloneCamera(camera);
+      const rect=ui.viewport.getBoundingClientRect();
+      const centerX=rect.left+rect.width*.5,centerY=rect.top+rect.height*.5;
+      const codes=(Array.isArray(action.keys)?action.keys:['KeyW']).map(String).slice(0,4);
+      const durationMs=clamp(Number(action.durationMs||450),80,3000);
+      ui.viewport.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,button:2,buttons:2,clientX:centerX,clientY:centerY}));
+      await sleep(40);
+      for(const code of codes)visualTestKeyboardEvent('keydown',code);
+      document.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,cancelable:true,buttons:2,clientX:centerX+clamp(Number(action.lookX||24),-240,240),clientY:centerY+clamp(Number(action.lookY||-8),-180,180)}));
+      await sleep(durationMs);
+      for(const code of codes)visualTestKeyboardEvent('keyup',code);
+      window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,button:2,buttons:0,clientX:centerX,clientY:centerY}));
+      await sleep(80);
+      const moved=Math.hypot(...camera.position.map((value,index)=>value-before.position[index]));
+      const looked=Math.hypot(camera.yaw-before.yaw,camera.pitch-before.pitch);
+      if(moved<.001&&looked<.0001)throw new Error('Visual test viewport navigation did not change the live camera.');
+      result={before,after:cloneCamera(camera),moved,looked};
+    }else if(type==='path-transaction'){
+      const path=scene.objects.find(object=>object.id===String(action.pathId||'path-main')&&object.type==='path');
+      if(!path?.properties?.pathNetwork)throw new Error('Visual test Path Network is unavailable.');
+      const beforeRevision=Number(path.properties.pathNetwork.revision||0);
+      const payload=await api(`/api/v012/path/${encodeURIComponent(path.id)}/transaction`,{method:'POST',body:{
+        label:String(action.label||'Packaged interaction evidence').slice(0,120),
+        expectedRevision:beforeRevision,
+        operations:Array.isArray(action.operations)?action.operations:[]
+      }});
+      applyState(payload.state,{forceSelection:true,preserveCamera:true});
+      result={pathId:path.id,beforeRevision,afterRevision:Number(payload.network?.revision||0),validation:payload.validation||null};
+    }else if(type==='path-undo'){
+      const path=scene.objects.find(object=>object.id===String(action.pathId||'path-main')&&object.type==='path');
+      if(!path?.properties?.pathNetwork)throw new Error('Visual test Path Network is unavailable for Undo.');
+      const beforeRevision=Number(path.properties.pathNetwork.revision||0);
+      const payload=await api(`/api/v012/path/${encodeURIComponent(path.id)}/undo`,{method:'POST',body:{expectedRevision:beforeRevision}});
+      applyState(payload.state,{forceSelection:true,preserveCamera:true});
+      result={pathId:path.id,beforeRevision,afterRevision:Number(payload.network?.revision||0)};
+    }else if(type==='save'){
+      const beforeRevision=Number(state?.engine?.revision||0);
+      await saveScene(String(action.message||'Packaged interaction evidence saved'));
+      result={beforeRevision,afterRevision:Number(state?.engine?.revision||0),saveState:ui.saveState?.textContent||''};
+    }else{
+      throw new Error(`Unsupported visual test action: ${type||'missing type'}.`);
+    }
+    telemetry.push({type,durationMs:performance.now()-started,result});
+  }
+  return telemetry;
+}
+
 async function captureVisualTestFrame(options={}) {
   if(!ui.viewport||!camera||!scene)throw new Error('Viewport is not ready for visual capture.');
   const originalCamera=cloneCamera(camera);
@@ -150,6 +239,7 @@ async function captureVisualTestFrame(options={}) {
   const originalSplines=scene.settings.splinesVisible;
   const originalSelectedId=selectedId;
   try{
+    const interactionTelemetry=await runVisualTestActions(options.actions);
     const minimumRevision=Math.max(0,Number(options.minimumRevision||0));
     if(minimumRevision>Number(state?.engine?.revision||0)){
       const deadline=performance.now()+Math.max(1000,Math.min(12000,Number(options.revisionTimeoutMs||8000)));
@@ -178,7 +268,8 @@ async function captureVisualTestFrame(options={}) {
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
     return {
       dataUrl:ui.viewport.toDataURL('image/png'),
-      renderTelemetry:renderer?.getRenderDiagnostics?.()||null
+      renderTelemetry:renderer?.getRenderDiagnostics?.()||null,
+      interactionTelemetry
     };
   }finally{
     camera=originalCamera;

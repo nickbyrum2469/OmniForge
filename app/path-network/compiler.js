@@ -662,6 +662,7 @@ function compileSegment(segment, network, positions, adjacency, nodeMap, options
     constructionIntervals,
     crossSectionProfile: segment.crossSectionProfile,
     materialProfile: segment.materialProfile,
+    surfaceDetailProfile: segment.surfaceDetailProfile,
     structureProfile: segment.structureProfile,
     gameplayRules: segment.gameplayRules
   };

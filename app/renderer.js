@@ -43,6 +43,10 @@ layout(location=4) in vec4 aInstance0;
 layout(location=5) in vec4 aInstance1;
 layout(location=6) in vec4 aInstance2;
 layout(location=7) in vec4 aInstance3;
+layout(location=8) in vec4 aSurfaceDetail0;
+layout(location=9) in vec4 aSurfaceDetail1;
+layout(location=10) in vec4 aSurfaceDetail2;
+layout(location=11) in vec4 aSurfaceDetail3;
 uniform mat4 uModel;
 uniform float uInstanced;
 uniform float uTime;
@@ -59,6 +63,10 @@ out vec3 vNormal;
 out vec3 vWorld;
 out vec2 vUV;
 out float vBlend;
+flat out vec4 vSurfaceDetail0;
+flat out vec4 vSurfaceDetail1;
+flat out vec4 vSurfaceDetail2;
+flat out vec4 vSurfaceDetail3;
 out vec4 vShadowCoord;
 void main(){
   mat4 instanceModel=mat4(aInstance0,aInstance1,aInstance2,aInstance3);
@@ -76,6 +84,10 @@ void main(){
   vNormal=normalize(uInstanced>.5?mat3(model)*aNormal:uNormalMat*aNormal);
   vUV=aUV;
   vBlend=aBlend;
+  vSurfaceDetail0=aSurfaceDetail0;
+  vSurfaceDetail1=aSurfaceDetail1;
+  vSurfaceDetail2=aSurfaceDetail2;
+  vSurfaceDetail3=aSurfaceDetail3;
   vShadowCoord=uLightViewProj*world;
   gl_Position=uViewProj*world;
 }`;
@@ -85,6 +97,10 @@ in vec3 vNormal;
 in vec3 vWorld;
 in vec2 vUV;
 in float vBlend;
+flat in vec4 vSurfaceDetail0;
+flat in vec4 vSurfaceDetail1;
+flat in vec4 vSurfaceDetail2;
+flat in vec4 vSurfaceDetail3;
 in vec4 vShadowCoord;
 out vec4 outColor;
 uniform vec3 uBaseColor;
@@ -192,6 +208,106 @@ float hash21(vec2 p){
 float noise2(vec2 p){
   vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
   return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x),mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x),f.y);
+}
+float softPatternChance(float randomValue,float coverage){
+  float enabled=smoothstep(0.0,.015,coverage);
+  return smoothstep(1.0-coverage-.075,1.0-coverage+.075,randomValue)*enabled;
+}
+vec4 pathSurfaceDetailMasks(
+  vec2 uv,
+  vec4 detail0,
+  vec4 detail1,
+  vec4 detail2,
+  vec4 detail3,
+  float weatherWetness,
+  out float erosionMask,
+  out vec2 detailNormalXY
+){
+  float profile=detail0.x;
+  float roadWidth=max(.1,detail3.w);
+  erosionMask=0.0;
+  detailNormalXY=vec2(0.0);
+  if(profile<.5)return vec4(0.0);
+
+  float seed=detail0.y*65535.0+profile*37.17;
+  float puddleCoverage=clamp(detail0.z,0.0,.75);
+  float puddleScale=max(.25,detail0.w);
+  float puddleDepth=clamp(detail1.x,0.0,.15);
+  float rutStrength=clamp(detail1.y,0.0,1.0);
+  float wheelGauge=max(.3,detail1.z);
+  float rutWidth=max(.03,detail1.w);
+  float hoofDensity=clamp(detail2.x,0.0,1.0);
+  float hoofScale=max(.03,detail2.y);
+  float bootDensity=clamp(detail2.z,0.0,1.0);
+  float bootScale=max(.03,detail2.w);
+  float erosionStrength=clamp(detail3.x,0.0,1.0);
+  float detailNormalStrength=clamp(detail3.y,0.0,2.0);
+  float weatherResponse=clamp(detail3.z,0.0,3.0);
+
+  float longitudinalMeters=uv.x;
+  float lateralMeters=(uv.y-.5)*roadWidth;
+  float edgeDistance=roadWidth*.5-abs(lateralMeters);
+  float edgeFade=max(.04,min(.22,roadWidth*.045));
+  float roadMask=smoothstep(-edgeFade,edgeFade,edgeDistance);
+  float wet=smoothstep(0.0,1.0,clamp(weatherWetness*weatherResponse,0.0,1.0));
+
+  float halfGauge=min(wheelGauge*.5,max(.05,roadWidth*.46-rutWidth));
+  float rutDistance=min(abs(lateralMeters-halfGauge),abs(lateralMeters+halfGauge));
+  float rutAA=max(fwidth(rutDistance),.003);
+  float rutLines=1.0-smoothstep(rutWidth*.5-rutAA,rutWidth*.5+rutAA,rutDistance);
+  float rutBreakup=.48+.52*noise2(vec2(longitudinalMeters*.31+seed,lateralMeters*1.9+seed*.07));
+  float ruts=rutLines*rutBreakup*rutStrength*roadMask;
+
+  vec2 puddleGrid=vec2(
+    longitudinalMeters/max(.25,puddleScale*1.35),
+    lateralMeters/max(.25,puddleScale*.68)
+  );
+  vec2 puddleCell=floor(puddleGrid);
+  vec2 puddleLocal=fract(puddleGrid);
+  vec2 puddleCenter=vec2(
+    .18+.64*hash21(puddleCell+vec2(seed,3.1)),
+    .18+.64*hash21(puddleCell+vec2(7.7,seed))
+  );
+  vec2 puddleDelta=(puddleLocal-puddleCenter)*vec2(.76,1.58);
+  float puddleDistance=length(puddleDelta);
+  float puddleAA=max(fwidth(puddleDistance),.006);
+  float puddleShape=1.0-smoothstep(.22-puddleAA,.43+puddleAA,puddleDistance);
+  float puddleFill=clamp(puddleCoverage*(.28+.72*wet)+wet*.18,0.0,.82);
+  float puddleChance=softPatternChance(hash21(puddleCell+vec2(seed,seed*.37)),puddleFill);
+  float puddleDepthFactor=smoothstep(0.0,.035,puddleDepth);
+  float puddles=puddleShape*puddleChance*(.22+.78*wet)*puddleDepthFactor*roadMask;
+
+  float hoofStride=max(.22,hoofScale*4.1);
+  float hoofStep=floor(longitudinalMeters/hoofStride+seed*.013);
+  float hoofPhase=fract(longitudinalMeters/hoofStride+seed*.013)-.5;
+  float hoofSide=(mod(hoofStep,2.0)<1.0?-1.0:1.0)*min(roadWidth*.16,.42);
+  vec2 hoofDelta=vec2(hoofPhase*hoofStride/hoofScale,(lateralMeters-hoofSide)/hoofScale);
+  float hoofDistance=length(hoofDelta*vec2(1.0,.82));
+  float hoofShape=1.0-smoothstep(.72,1.18,hoofDistance);
+  float hoofChance=softPatternChance(hash21(vec2(hoofStep,seed+11.0)),hoofDensity);
+  float hoof=hoofShape*hoofChance*roadMask;
+
+  float bootStride=max(.24,bootScale*4.6);
+  float bootStep=floor(longitudinalMeters/bootStride+seed*.021);
+  float bootPhase=fract(longitudinalMeters/bootStride+seed*.021)-.5;
+  float bootSide=(mod(bootStep,2.0)<1.0?-1.0:1.0)*min(roadWidth*.12,.3);
+  vec2 bootDelta=vec2(bootPhase*bootStride/(bootScale*1.45),(lateralMeters-bootSide)/bootScale);
+  float bootDistance=length(bootDelta);
+  float bootShape=1.0-smoothstep(.68,1.1,bootDistance);
+  float bootChance=softPatternChance(hash21(vec2(bootStep+23.0,seed)),bootDensity);
+  float boots=bootShape*bootChance*roadMask;
+
+  float edgeWear=1.0-smoothstep(0.0,max(.18,roadWidth*.22),max(0.0,edgeDistance));
+  float erosionNoise=.3+.7*noise2(vec2(longitudinalMeters*.18+seed*.11,lateralMeters*.52-seed*.03));
+  erosionMask=clamp(erosionStrength*erosionNoise*(.3+.7*edgeWear)*roadMask,0.0,1.0);
+  float relief=ruts*.7+puddles*puddleDepth*24.0+hoof*.42+boots*.34+erosionMask*.38;
+  vec2 grain=vec2(
+    noise2(vec2(longitudinalMeters*1.7+seed,lateralMeters*2.1))-.5,
+    noise2(vec2(lateralMeters*2.3-seed,longitudinalMeters*1.5))-.5
+  );
+  float rutSide=sign(lateralMeters)*(1.0-smoothstep(0.0,max(.02,rutWidth),rutDistance));
+  detailNormalXY=(grain*relief+vec2(0.0,rutSide*ruts*.32))*detailNormalStrength*roadMask;
+  return clamp(vec4(puddles,ruts,hoof,boots),0.0,1.0);
 }
 float shadowFactor(){
   if(uShadowEnabled<0.5)return 1.0;
@@ -314,7 +430,26 @@ void main(){
   float recipeLight=max(dot(geometricN,normalize(-uLightDir)),0.0);
   baseLinear=applySurfaceRecipe(baseLinear,uBaseSurfaceLayers,uBaseSurfaceExtra,uBaseSurfaceMasks,uBaseSurfaceMasks2,uBaseSurfaceMasks3,uBaseWeatherResponse,uBaseAdvanced,uBaseDirtColor,uBaseMossColor,uBaseSnowColor,uBaseDamageColor,geometricN,baseUV,recipeLight);
   pathLinear=applySurfaceRecipe(pathLinear,uPathSurfaceLayers,uPathSurfaceExtra,uPathSurfaceMasks,uPathSurfaceMasks2,uPathSurfaceMasks3,uPathWeatherResponse,uPathAdvanced,uPathDirtColor,uPathMossColor,uPathSnowColor,uPathDamageColor,geometricN,pathUV,recipeLight);
-  if(uIsTerrain>.5)baseLinear=mix(baseLinear,pathLinear,blend);
+  float pathErosion=0.0;
+  vec2 pathDetailNormalXY=vec2(0.0);
+  vec4 pathDetail=pathSurfaceDetailMasks(
+    vUV,
+    vSurfaceDetail0,
+    vSurfaceDetail1,
+    vSurfaceDetail2,
+    vSurfaceDetail3,
+    uEnvironmentState.y,
+    pathErosion,
+    pathDetailNormalXY
+  );
+  float pathDetailActive=step(.5,vSurfaceDetail0.x);
+  float trafficWear=max(pathDetail.y,max(pathDetail.z,pathDetail.w));
+  vec3 detailedSurface=uIsTerrain>.5?pathLinear:baseLinear;
+  detailedSurface*=1.0-trafficWear*.19-pathErosion*.11;
+  detailedSurface=mix(detailedSurface,detailedSurface*.24+vec3(.004,.006,.008),pathDetail.x*.78);
+  detailedSurface=mix(detailedSurface,uPathDirtColor,pathErosion*.18);
+  if(uIsTerrain>.5)baseLinear=mix(baseLinear,detailedSurface,blend);
+  else baseLinear=mix(baseLinear,detailedSurface,pathDetailActive);
 
   vec3 n=geometricN;
   if(uIsTerrain>.5){
@@ -326,6 +461,9 @@ void main(){
     vec3 baseN=texture(uBaseNormalTexture,baseUV).xyz*2.0-1.0;
     n=applyWorldNormal(n,baseN,uBaseNormalStrength);
   }
+  if(pathDetailActive>.5){
+    n=applyWorldNormal(n,normalize(vec3(pathDetailNormalXY,1.0)),1.0);
+  }
 
   float roughness=clamp(uRoughness,0.03,1.0);
   float baseR=(uUseBaseRoughness>.5?texture(uBaseRoughnessTexture,baseUV).r:roughness)*uBaseRoughnessMultiplier;
@@ -333,6 +471,9 @@ void main(){
   baseR=clamp(baseR,.03,1.0);pathR=clamp(pathR,.03,1.0);
   roughness=uIsTerrain>.5?mix(baseR,pathR,blend):baseR;
   float roughVariation=uIsTerrain>.5?mix(uBaseSurfaceExtra.w,uPathSurfaceExtra.w,blend):uBaseSurfaceExtra.w;roughness=clamp(roughness+(noise2(vWorld.xz*.31)-.5)*roughVariation,.03,1.0);
+  roughness=mix(roughness,.14,pathDetail.x*.9);
+  roughness=mix(roughness,.92,trafficWear*.42);
+  roughness=mix(roughness,.96,pathErosion*.28);
   vec4 recipeLayers=uIsTerrain>.5?mix(uBaseSurfaceLayers,uPathSurfaceLayers,blend):uBaseSurfaceLayers;
   roughness=mix(roughness,.18,clamp(recipeLayers.z,0.0,1.0)*.72);
   roughness=mix(roughness,.88,clamp(recipeLayers.w,0.0,1.0)*smoothstep(.2,.9,n.y));
@@ -456,82 +597,401 @@ function cylinderMesh(seg=32){
 
 export function terrainHeight(terrain,x,z,paths=[]){return sharedTerrainHeightAt(terrain,x,z,paths);}
 export function pathBlendAt(paths,x,z){return sharedPathBlendAt(paths,x,z);}
-function activePathChunkKeys(pathRuntimes,chunkSize){
+export function activePathChunkKeys(pathRuntimes,chunkSize){
   const active=new Set();
-  for(const runtime of pathRuntimes||[])for(const entry of runtime?.terrainModifier?.entries||[]){
-    const mode=entry?.construction?.mode;
-    if(entry?.profile?.terrainModificationEnabled===false||['bridge','tunnel','invalid'].includes(mode))continue;
-    const minX=Math.floor(entry.bounds.minX/chunkSize),maxX=Math.floor(entry.bounds.maxX/chunkSize);
-    const minZ=Math.floor(entry.bounds.minZ/chunkSize),maxZ=Math.floor(entry.bounds.maxZ/chunkSize);
-    for(let x=minX;x<=maxX;x++)for(let z=minZ;z<=maxZ;z++)active.add(`${x}:${z}`);
+  for(const runtime of pathRuntimes||[]){
+    const modifier=runtime?.terrainModifier;
+    if(!modifier)continue;
+    if(Math.abs(Number(modifier.chunkSize)-chunkSize)<1e-7){
+      for(const key of modifier.terrainDirtyChunkKeys||[])active.add(key);
+      continue;
+    }
+    // A caller may intentionally compile paths at a different streaming tile
+    // size. Remap only the modifier's explicit terrain-active bounds; never
+    // infer terrain ownership from bridge/tunnel mode in the renderer.
+    for(const entry of modifier.terrainEntries||[])for(const bounds of entry.terrainBounds||[]){
+      const minX=Math.floor(bounds.minX/chunkSize),maxX=Math.floor(bounds.maxX/chunkSize);
+      const minZ=Math.floor(bounds.minZ/chunkSize),maxZ=Math.floor(bounds.maxZ/chunkSize);
+      for(let x=minX;x<=maxX;x++)for(let z=minZ;z<=maxZ;z++)active.add(`${x}:${z}`);
+    }
+    // Junction terrain is compiled from the shared validated junction polygon
+    // rather than a segment corridor. When the renderer streams at a
+    // different chunk size, include those explicit polygon bounds as well so
+    // the junction underlay cannot silently fall back to coarse authored
+    // terrain and poke through the finished intersection.
+    for(const entry of modifier.junctionEntries||[]){
+      const bounds=entry?.bounds;
+      if(!bounds)continue;
+      const minX=Math.floor(bounds.minX/chunkSize),maxX=Math.floor(bounds.maxX/chunkSize);
+      const minZ=Math.floor(bounds.minZ/chunkSize),maxZ=Math.floor(bounds.maxZ/chunkSize);
+      for(let x=minX;x<=maxX;x++)for(let z=minZ;z<=maxZ;z++)active.add(`${x}:${z}`);
+    }
   }
   return active;
 }
+function rendererTerrainSamplingRuntimes(pathRuntimes,chunkSize){
+  // Terrain modifiers are compiled at the world streaming chunk size (often
+  // 64 m). Querying that broad entry bucket for every 0.625 m terrain vertex
+  // repeatedly normalized every cross section in the chunk and blocked the
+  // renderer thread for seconds. Build an immutable renderer-local fine index
+  // over the modifier's explicit terrain-active bounds. Sampling still uses
+  // samplePathTerrainModifier through sampleScenePathTerrain, so the height
+  // result is unchanged; only unrelated entries are removed from each query.
+  const fineChunkSize=clamp((Number(chunkSize)||64)/16,1,4),result=[];
+  let indexedEntryCount=0,indexedCellReferenceCount=0;
+  for(const runtime of pathRuntimes||[]){
+    const modifier=runtime?.terrainModifier;
+    if(!modifier)continue;
+    const chunks=new Map();
+    const register=(entry,boundsList)=>{
+      const visited=new Set();
+      for(const bounds of boundsList||[]){
+        if(!bounds)continue;
+        const minX=Math.floor(bounds.minX/fineChunkSize),maxX=Math.floor(bounds.maxX/fineChunkSize);
+        const minZ=Math.floor(bounds.minZ/fineChunkSize),maxZ=Math.floor(bounds.maxZ/fineChunkSize);
+        for(let x=minX;x<=maxX;x++)for(let z=minZ;z<=maxZ;z++){
+          const key=`${x}:${z}`;
+          if(visited.has(key))continue;
+          visited.add(key);
+          if(!chunks.has(key))chunks.set(key,[]);
+          chunks.get(key).push(entry);indexedCellReferenceCount+=1;
+        }
+      }
+      if(visited.size)indexedEntryCount+=1;
+    };
+    for(const entry of modifier.terrainEntries||[])register(entry,entry.terrainBounds||[]);
+    for(const entry of modifier.junctionEntries||[])register(entry,[entry.bounds]);
+    if(chunks.size)result.push({...runtime,terrainModifier:{...modifier,chunkSize:fineChunkSize,chunks}});
+  }
+  result.samplingDiagnostics={fineChunkSize,indexedEntryCount,indexedCellReferenceCount,queryCount:0,fastRejectCount:0};
+  return result;
+}
 function pathTerrainVertexSample(object,pathRuntimes,x,z){
   const baseY=terrainBaseHeightAt(object,x,z),pathSample=sampleScenePathTerrain(pathRuntimes,baseY,x,z);
+  const diagnostics=pathRuntimes?.samplingDiagnostics;
+  if(diagnostics){diagnostics.queryCount+=1;if(!pathSample.terrainApplied)diagnostics.fastRejectCount+=1;}
   return {
     height:pathSample.height,
-    blend:['road','shoulder'].includes(pathSample.zone)?1-pathSample.materialWeights.terrain:0
+    // Path Network v2 renders the road, shoulder, gutter, curb, sidewalk, and
+    // earthwork as their own compiled surfaces. Painting the supporting
+    // terrain with the road material created a second, nearly coplanar road
+    // layer and the colliding textures reported on the target PC. The terrain
+    // mesh now owns only terrain material; the compiled surface owns the path.
+    blend:0
   };
 }
-function appendPathTerrainBoundaryStitches({object,pathRuntimes,bounds,origin,positions,normals,indices,uvs,blends}){
-  const [ox,oy,oz]=origin;
-  let vertexCount=0,triangleCount=0,maximumWidth=0;
-  const addVertex=point=>{
-    const index=positions.length/3;
-    positions.push(point[0]-ox,point[1]-oy,point[2]-oz);
-    normals.push(0,1,0);
-    uvs.push(
-      (point[0]-bounds.minX)/Math.max(1e-6,bounds.maxX-bounds.minX),
-      (point[2]-bounds.minZ)/Math.max(1e-6,bounds.maxZ-bounds.minZ)
-    );
-    blends.push(0);
-    vertexCount+=1;
-    return index;
-  };
-  const addTriangle=(a,b,c)=>{
-    const point=index=>positions.slice(index*3,index*3+3);
-    const A=point(a),B=point(b),C=point(c),face=cross(sub(B,A),sub(C,A));
-    if(face[1]<0)indices.push(a,c,b);else indices.push(a,b,c);
-    triangleCount+=1;
-  };
-  const addQuad=(a,b,c,d)=>{
-    const ia=addVertex(a),ib=addVertex(b),ic=addVertex(c),id=addVertex(d);
-    addTriangle(ia,ib,ic);
-    addTriangle(ib,id,ic);
-  };
-  for(const runtime of pathRuntimes||[]){
-    const segments=new Map((runtime?.compiled?.segments||[]).map(segment=>[segment.id,segment]));
-    const sectionsBySegment=new Map();
-    for(const section of runtime?.terrainModifier?.crossSections||[]){
-      if(!sectionsBySegment.has(section.segmentId))sectionsBySegment.set(section.segmentId,[]);
-      sectionsBySegment.get(section.segmentId).push(section);
-    }
-    for(const [segmentId,sections] of sectionsBySegment){
-      const segment=segments.get(segmentId);
-      if(!segment||segment.crossSectionProfile?.terrainModificationEnabled===false)continue;
-      const width=clamp(Math.max(.35,Number(segment.crossSectionProfile?.blendDistance||2.5)*.2),.35,.9);
-      maximumWidth=Math.max(maximumWidth,width);
-      const outside=(section,key)=>{
-        const inner=section[key],dx=inner[0]-section.center[0],dz=inner[2]-section.center[2],length=Math.hypot(dx,dz)||1;
-        const x=inner[0]+dx/length*width,z=inner[2]+dz/length*width;
-        return [x,terrainBaseHeightAt(object,x,z)-.015,z];
-      };
-      for(let index=0;index<sections.length-1;index+=1){
-        const current=sections[index],next=sections[index+1];
-        if(current.distance>next.distance)continue;
-        const currentMode=current.construction?.mode;
-        const nextMode=next.construction?.mode;
-        if(
-          ['bridge','tunnel','invalid'].includes(currentMode)
-          || ['bridge','tunnel','invalid'].includes(nextMode)
-        )continue;
-        addQuad(outside(current,'outerLeft'),current.outerLeft,outside(next,'outerLeft'),next.outerLeft);
-        addQuad(current.outerRight,outside(current,'outerRight'),next.outerRight,outside(next,'outerRight'));
-      }
+const TERRAIN_PATH_SURFACE_CLEARANCE=.002;
+const TERRAIN_CLIP_EPSILON=1e-7;
+const TERRAIN_CLIP_BOUNDARY_GUARD=.00025;
+function polygonAreaXZ(polygon){
+  let area=0;
+  for(let index=0;index<polygon.length;index+=1){
+    const current=polygon[index],next=polygon[(index+1)%polygon.length];
+    area+=current[0]*next[1]-next[0]*current[1];
+  }
+  return area*.5;
+}
+function cleanPolygonXZ(polygon,tolerance=1e-7){
+  const cleaned=[];
+  for(const point of polygon||[]){
+    if(!cleaned.length||Math.hypot(point[0]-cleaned.at(-1)[0],point[1]-cleaned.at(-1)[1])>tolerance)cleaned.push(point);
+  }
+  if(cleaned.length>2&&Math.hypot(cleaned[0][0]-cleaned.at(-1)[0],cleaned[0][1]-cleaned.at(-1)[1])<=tolerance)cleaned.pop();
+  let changed=true;
+  while(changed&&cleaned.length>3){
+    changed=false;
+    for(let index=0;index<cleaned.length;index+=1){
+      const previous=cleaned[(index+cleaned.length-1)%cleaned.length],current=cleaned[index],next=cleaned[(index+1)%cleaned.length];
+      const turn=(current[0]-previous[0])*(next[1]-current[1])-(current[1]-previous[1])*(next[0]-current[0]);
+      if(Math.abs(turn)<=tolerance){cleaned.splice(index,1);changed=true;break;}
     }
   }
-  return {vertexCount,triangleCount,maximumWidth};
+  return cleaned;
+}
+function clipPolygonByLineXZ(polygon,start,end,keepInside=true,outsideGuard=0){
+  if(polygon.length<3)return [];
+  const side=point=>(end[0]-start[0])*(point[1]-start[1])-(end[1]-start[1])*(point[0]-start[0]);
+  const outsideThreshold=-Math.hypot(end[0]-start[0],end[1]-start[1])*outsideGuard;
+  const output=[];
+  for(let index=0;index<polygon.length;index+=1){
+    const current=polygon[index],next=polygon[(index+1)%polygon.length];
+    const currentSide=side(current),nextSide=side(next),threshold=keepInside?-TERRAIN_CLIP_EPSILON:outsideThreshold;
+    const currentInside=keepInside?currentSide>=threshold:currentSide<=threshold;
+    const nextInside=keepInside?nextSide>=threshold:nextSide<=threshold;
+    if(currentInside)output.push(current);
+    if(currentInside!==nextInside){
+      const amount=(currentSide-threshold)/(currentSide-nextSide||1);
+      output.push([lerp(current[0],next[0],amount),lerp(current[1],next[1],amount)]);
+    }
+  }
+  return cleanPolygonXZ(output);
+}
+function intersectConvexPolygonsXZ(subject,clip){
+  let result=[...subject],boundary=polygonAreaXZ(clip)<0?[...clip].reverse():clip;
+  for(let index=0;index<boundary.length&&result.length>=3;index+=1){
+    result=clipPolygonByLineXZ(result,boundary[index],boundary[(index+1)%boundary.length],true);
+  }
+  return result;
+}
+function subtractConvexPolygonXZ(subject,clip){
+  const boundary=polygonAreaXZ(clip)<0?[...clip].reverse():clip;
+  let inside=[subject],outside=[];
+  for(let index=0;index<boundary.length&&inside.length;index+=1){
+    const nextInside=[];
+    for(const polygon of inside){
+      // Keep the visible terrain a sub-millimetre beyond the travel-surface
+      // boundary. Without this guard, Float32 upload can round an exactly
+      // shared edge back through the road and produce flickering hairline
+      // slivers even though the double-precision clipping result is exact.
+      const retained=clipPolygonByLineXZ(polygon,boundary[index],boundary[(index+1)%boundary.length],false,TERRAIN_CLIP_BOUNDARY_GUARD);
+      const candidate=clipPolygonByLineXZ(polygon,boundary[index],boundary[(index+1)%boundary.length],true);
+      if(retained.length>=3&&Math.abs(polygonAreaXZ(retained))>TERRAIN_CLIP_EPSILON)outside.push(retained);
+      if(candidate.length>=3&&Math.abs(polygonAreaXZ(candidate))>TERRAIN_CLIP_EPSILON)nextInside.push(candidate);
+    }
+    inside=nextInside;
+  }
+  return outside;
+}
+function barycentricXZ(point,triangle){
+  const [a,b,c]=triangle,denominator=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);
+  if(Math.abs(denominator)<=TERRAIN_CLIP_EPSILON)return [1,0,0];
+  const first=((b[1]-c[1])*(point[0]-c[0])+(c[0]-b[0])*(point[1]-c[1]))/denominator;
+  const second=((c[1]-a[1])*(point[0]-c[0])+(a[0]-c[0])*(point[1]-c[1]))/denominator;
+  return [first,second,1-first-second];
+}
+function interpolateTriangleValueXZ(point,triangle,values){
+  const weights=barycentricXZ(point,triangle);
+  return values[0]*weights[0]+values[1]*weights[1]+values[2]*weights[2];
+}
+function clipPolygonBySurfacePenetration(polygon,terrainTriangle,surfaceTriangle,clearance){
+  if(polygon.length<3)return [];
+  const value=point=>interpolateTriangleValueXZ(point,terrainTriangle.points,terrainTriangle.heights)
+    -interpolateTriangleValueXZ(point,surfaceTriangle.points,surfaceTriangle.heights)+clearance;
+  const output=[];
+  for(let index=0;index<polygon.length;index+=1){
+    const current=polygon[index],next=polygon[(index+1)%polygon.length],currentValue=value(current),nextValue=value(next);
+    const currentInside=currentValue>=-TERRAIN_CLIP_EPSILON,nextInside=nextValue>=-TERRAIN_CLIP_EPSILON;
+    if(currentInside)output.push(current);
+    if(currentInside!==nextInside){
+      const amount=currentValue/(currentValue-nextValue||1);
+      output.push([lerp(current[0],next[0],amount),lerp(current[1],next[1],amount)]);
+    }
+  }
+  return cleanPolygonXZ(output);
+}
+function pointSegmentDistanceSquaredXZ(point,start,end){
+  const dx=end[0]-start[0],dz=end[2]-start[2],denominator=dx*dx+dz*dz;
+  const amount=denominator>1e-12?clamp(((point[0]-start[0])*dx+(point[1]-start[2])*dz)/denominator,0,1):0;
+  const offsetX=point[0]-lerp(start[0],end[0],amount),offsetZ=point[1]-lerp(start[2],end[2],amount);
+  return offsetX*offsetX+offsetZ*offsetZ;
+}
+function pathSurfaceConstructionClassifier(runtime,chunkSize){
+  const segments=runtime?.compiled?.segments||[],modes=new Set();
+  for(const segment of segments)for(const interval of segment.constructionIntervals||[])modes.add(interval.mode);
+  const disallowed=new Set(['tunnel','invalid']);
+  if(![...modes].some(mode=>disallowed.has(mode)))return {allows:()=>true,kind:'all-visible',queryCount:0,pairTestCount:0};
+  if(modes.size&&[...modes].every(mode=>disallowed.has(mode)))return {allows:()=>false,kind:'all-hidden',queryCount:0,pairTestCount:0};
+
+  // Mixed construction needs per-triangle classification, but it does not
+  // need the full terrain modifier sampler (which normalizes cross sections
+  // and searches every corridor). Index the already-compiled station pairs
+  // once and resolve the nearest pair in a compact grid.
+  const cellSize=clamp(Number(chunkSize)||8,4,16),cells=new Map(),pairs=[];
+  const registerPair=pair=>{
+    pair.id=pairs.length;pairs.push(pair);
+    const minX=Math.floor((Math.min(pair.start[0],pair.end[0])-cellSize)/cellSize),maxX=Math.floor((Math.max(pair.start[0],pair.end[0])+cellSize)/cellSize);
+    const minZ=Math.floor((Math.min(pair.start[2],pair.end[2])-cellSize)/cellSize),maxZ=Math.floor((Math.max(pair.start[2],pair.end[2])+cellSize)/cellSize);
+    for(let x=minX;x<=maxX;x++)for(let z=minZ;z<=maxZ;z++){
+      const key=`${x}:${z}`;if(!cells.has(key))cells.set(key,[]);cells.get(key).push(pair);
+    }
+  };
+  for(const segment of segments){
+    const samples=segment.samples||[],intervals=segment.constructionIntervals||[];
+    const modeAt=distance=>intervals.find(interval=>distance>=interval.startDistance-1e-6&&distance<=interval.endDistance+1e-6)?.mode||segment.construction?.mode||'invalid';
+    for(let index=0;index<samples.length-1;index+=1){
+      const start=samples[index],end=samples[index+1],distance=(Number(start.distance||0)+Number(end.distance||0))*.5;
+      registerPair({start:start.position,end:end.position,mode:modeAt(distance)});
+    }
+  }
+  const classifier={kind:'mixed',queryCount:0,pairTestCount:0};
+  classifier.allows=point=>{
+    classifier.queryCount+=1;
+    const candidates=cells.get(`${Math.floor(point[0]/cellSize)}:${Math.floor(point[1]/cellSize)}`)||pairs;
+    let nearest=null,nearestDistance=Infinity;
+    for(const pair of candidates){
+      classifier.pairTestCount+=1;
+      const distance=pointSegmentDistanceSquaredXZ(point,pair.start,pair.end);
+      if(distance<nearestDistance){nearestDistance=distance;nearest=pair;}
+    }
+    return nearest&&!disallowed.has(nearest.mode);
+  };
+  return classifier;
+}
+function pathTerrainSurfaceMasks(pathRuntimes,chunkSize){
+  // Only horizontal travel surfaces own visibility against terrain. Earthwork
+  // deliberately meets the authored terrain at its outer boundary, while
+  // curb/edge meshes are vertical closures and must not cut extra holes.
+  const triangles=[],chunks=new Map(),renderMeshes=['road','shoulder','gutter','sidewalk'];
+  const bounds={minX:Infinity,maxX:-Infinity,minZ:Infinity,maxZ:-Infinity};
+  let consideredTriangleCount=0,constructionRejectedTriangleCount=0,constructionClassifierQueryCount=0,constructionClassifierPairTestCount=0;
+  const register=triangle=>{
+    triangle.id=triangles.length;triangles.push(triangle);
+    bounds.minX=Math.min(bounds.minX,triangle.bounds.minX);bounds.maxX=Math.max(bounds.maxX,triangle.bounds.maxX);
+    bounds.minZ=Math.min(bounds.minZ,triangle.bounds.minZ);bounds.maxZ=Math.max(bounds.maxZ,triangle.bounds.maxZ);
+    const minChunkX=Math.floor(triangle.bounds.minX/chunkSize),maxChunkX=Math.floor(triangle.bounds.maxX/chunkSize);
+    const minChunkZ=Math.floor(triangle.bounds.minZ/chunkSize),maxChunkZ=Math.floor(triangle.bounds.maxZ/chunkSize);
+    for(let x=minChunkX;x<=maxChunkX;x++)for(let z=minChunkZ;z<=maxChunkZ;z++){
+      const key=`${x}:${z}`;if(!chunks.has(key))chunks.set(key,[]);chunks.get(key).push(triangle);
+    }
+  };
+  for(const runtime of pathRuntimes||[]){
+    const classifier=pathSurfaceConstructionClassifier(runtime,chunkSize);
+    const meshes=runtime?.geometry?.meshes||{};
+    for(const meshName of [...renderMeshes,'structure']){
+      const mesh=meshes[meshName];if(!mesh?.indices?.length)continue;
+      for(let offset=0;offset<mesh.indices.length;offset+=3){
+        consideredTriangleCount+=1;
+        const vertexIndices=[mesh.indices[offset],mesh.indices[offset+1],mesh.indices[offset+2]];
+        const role=mesh.roles?.[vertexIndices[0]]||'';
+        if(meshName==='structure'&&!/^bridge-.*deck/.test(role))continue;
+        const vertices=vertexIndices.map(index=>Array.from(mesh.positions.slice(index*3,index*3+3)));
+        const face=cross(sub(vertices[1],vertices[0]),sub(vertices[2],vertices[0]));
+        if(face[1]<=TERRAIN_CLIP_EPSILON)continue;
+        const points=vertices.map(point=>[point[0],point[2]]);
+        if(Math.abs(polygonAreaXZ(points))<=TERRAIN_CLIP_EPSILON)continue;
+        const centerX=(vertices[0][0]+vertices[1][0]+vertices[2][0])/3,centerZ=(vertices[0][2]+vertices[1][2]+vertices[2][2])/3;
+        // A tunnel's visible floor is intentionally below untouched terrain;
+        // its projected footprint must never punch a skylight through the
+        // terrain above it. Invalid work likewise has no production surface.
+        if(meshName!=='structure'&&!classifier.allows([centerX,centerZ])){constructionRejectedTriangleCount+=1;continue;}
+        register({
+          points:polygonAreaXZ(points)<0?[...points].reverse():points,
+          heights:polygonAreaXZ(points)<0?vertices.map(point=>point[1]).reverse():vertices.map(point=>point[1]),
+          bounds:{
+            minX:Math.min(...points.map(point=>point[0])),maxX:Math.max(...points.map(point=>point[0])),
+            minZ:Math.min(...points.map(point=>point[1])),maxZ:Math.max(...points.map(point=>point[1]))
+          }
+        });
+      }
+    }
+    constructionClassifierQueryCount+=classifier.queryCount;
+    constructionClassifierPairTestCount+=classifier.pairTestCount;
+  }
+  return {
+    triangles,chunks,chunkSize,bounds,
+    consideredTriangleCount,
+    constructionRejectedTriangleCount,
+    constructionClassifierQueryCount,
+    constructionClassifierPairTestCount,
+    nextQueryId:1
+  };
+}
+function maskTrianglesForBounds(mask,bounds){
+  const candidates=[],queryId=mask.nextQueryId++,minChunkX=Math.floor(bounds.minX/mask.chunkSize),maxChunkX=Math.floor(bounds.maxX/mask.chunkSize),minChunkZ=Math.floor(bounds.minZ/mask.chunkSize),maxChunkZ=Math.floor(bounds.maxZ/mask.chunkSize);
+  for(let x=minChunkX;x<=maxChunkX;x++)for(let z=minChunkZ;z<=maxChunkZ;z++)for(const triangle of mask.chunks.get(`${x}:${z}`)||[]){
+    if(triangle.lastQueryId===queryId)continue;
+    triangle.lastQueryId=queryId;candidates.push(triangle);
+  }
+  return candidates;
+}
+function clipTerrainTrianglesAgainstPathSurfaces({positions,indices,uvs,blends,origin,pathRuntimes,chunkSize}){
+  // The terrain streaming chunk is deliberately coarse. A separate compact
+  // surface-mask grid prevents every terrain triangle from testing hundreds
+  // of unrelated road triangles in that chunk.
+  const startedAt=globalThis.performance?.now?.()??Date.now();
+  const mask=pathTerrainSurfaceMasks(pathRuntimes,clamp(chunkSize/16,1,4)),maskBuiltAt=globalThis.performance?.now?.()??Date.now(),originalTriangleCount=indices.length/3;
+  const emptyResult={
+    maskTriangleCount:0,inputTriangleCount:originalTriangleCount,outputTriangleCount:originalTriangleCount,clippedTriangleCount:0,removedTriangleCount:0,addedVertexCount:0,
+    terrainTriangleFastRejectCount:originalTriangleCount,terrainTriangleCandidateQueryCount:0,surfaceTriangleBoundsTestCount:0,surfaceTriangleIntersectionTestCount:0,
+    consideredSurfaceTriangleCount:mask.consideredTriangleCount,constructionRejectedSurfaceTriangleCount:mask.constructionRejectedTriangleCount,
+    constructionClassifierQueryCount:mask.constructionClassifierQueryCount,constructionClassifierPairTestCount:mask.constructionClassifierPairTestCount,
+    maskBuildDurationMs:maskBuiltAt-startedAt,clipDurationMs:0
+  };
+  if(!mask.triangles.length)return emptyResult;
+  const [ox,oy,oz]=origin,nextIndices=[];let clippedTriangleCount=0,removedTriangleCount=0,addedVertexCount=0,terrainTriangleFastRejectCount=0,terrainTriangleCandidateQueryCount=0,surfaceTriangleBoundsTestCount=0,surfaceTriangleIntersectionTestCount=0;
+  const pointForIndex=index=>[positions[index*3]+ox,positions[index*3+1]+oy,positions[index*3+2]+oz];
+  for(let offset=0;offset<indices.length;offset+=3){
+    const sourceIndices=[indices[offset],indices[offset+1],indices[offset+2]];
+    const ia=sourceIndices[0]*3,ib=sourceIndices[1]*3,ic=sourceIndices[2]*3;
+    const ax=positions[ia]+ox,az=positions[ia+2]+oz,bx=positions[ib]+ox,bz=positions[ib+2]+oz,cx=positions[ic]+ox,cz=positions[ic+2]+oz;
+    const bounds={minX:Math.min(ax,bx,cx),maxX:Math.max(ax,bx,cx),minZ:Math.min(az,bz,cz),maxZ:Math.max(az,bz,cz)};
+    if(mask.bounds.maxX<bounds.minX||mask.bounds.minX>bounds.maxX||mask.bounds.maxZ<bounds.minZ||mask.bounds.minZ>bounds.maxZ){
+      nextIndices.push(...sourceIndices);terrainTriangleFastRejectCount+=1;continue;
+    }
+    const candidates=maskTrianglesForBounds(mask,bounds);terrainTriangleCandidateQueryCount+=1;
+    if(!candidates.length){nextIndices.push(...sourceIndices);terrainTriangleFastRejectCount+=1;continue;}
+    const vertices=sourceIndices.map(pointForIndex),points=[[ax,az],[bx,bz],[cx,cz]];
+    const signedArea=polygonAreaXZ(points);
+    if(Math.abs(signedArea)<=TERRAIN_CLIP_EPSILON)continue;
+    const triangle={points,heights:vertices.map(point=>point[1])};
+    let fragments=[signedArea<0?[...points].reverse():points],clipped=false;
+    for(const surface of candidates){
+      surfaceTriangleBoundsTestCount+=1;
+      if(surface.bounds.maxX<bounds.minX||surface.bounds.minX>bounds.maxX||surface.bounds.maxZ<bounds.minZ||surface.bounds.minZ>bounds.maxZ)continue;
+      const nextFragments=[];
+      for(const fragment of fragments){
+        surfaceTriangleIntersectionTestCount+=1;
+        const overlap=intersectConvexPolygonsXZ(fragment,surface.points);
+        if(overlap.length<3||Math.abs(polygonAreaXZ(overlap))<=TERRAIN_CLIP_EPSILON){nextFragments.push(fragment);continue;}
+        const penetration=clipPolygonBySurfacePenetration(overlap,triangle,surface,TERRAIN_PATH_SURFACE_CLEARANCE);
+        if(penetration.length<3||Math.abs(polygonAreaXZ(penetration))<=TERRAIN_CLIP_EPSILON){nextFragments.push(fragment);continue;}
+        nextFragments.push(...subtractConvexPolygonXZ(fragment,penetration));clipped=true;
+      }
+      fragments=nextFragments;if(!fragments.length)break;
+    }
+    if(!clipped){nextIndices.push(...sourceIndices);continue;}
+    clippedTriangleCount+=1;
+    if(!fragments.length){removedTriangleCount+=1;continue;}
+    const sourceUV=sourceIndices.map(index=>[uvs[index*2],uvs[index*2+1]]),sourceBlend=sourceIndices.map(index=>blends[index]);
+    for(const fragment of fragments){
+      const polygon=cleanPolygonXZ(fragment);
+      if(polygon.length<3||Math.abs(polygonAreaXZ(polygon))<=TERRAIN_CLIP_EPSILON)continue;
+      const fragmentIndices=polygon.map(point=>{
+        const weights=barycentricXZ(point,triangle.points),index=positions.length/3;
+        const worldY=triangle.heights[0]*weights[0]+triangle.heights[1]*weights[1]+triangle.heights[2]*weights[2];
+        positions.push(point[0]-ox,worldY-oy,point[1]-oz);
+        uvs.push(
+          sourceUV[0][0]*weights[0]+sourceUV[1][0]*weights[1]+sourceUV[2][0]*weights[2],
+          sourceUV[0][1]*weights[0]+sourceUV[1][1]*weights[1]+sourceUV[2][1]*weights[2]
+        );
+        blends.push(sourceBlend[0]*weights[0]+sourceBlend[1]*weights[1]+sourceBlend[2]*weights[2]);
+        addedVertexCount+=1;return index;
+      });
+      // Counter-clockwise X/Z winding points down in this Y-up coordinate
+      // system. Emit the fan in reverse order to preserve upward terrain faces.
+      for(let index=1;index<fragmentIndices.length-1;index+=1)nextIndices.push(fragmentIndices[0],fragmentIndices[index+1],fragmentIndices[index]);
+    }
+  }
+  indices.length=nextIndices.length;
+  for(let index=0;index<nextIndices.length;index+=1)indices[index]=nextIndices[index];
+  if(clippedTriangleCount){
+    const remap=new Map(),compactPositions=[],compactUVs=[],compactBlends=[];
+    for(let offset=0;offset<indices.length;offset+=1){
+      const sourceIndex=indices[offset];
+      let targetIndex=remap.get(sourceIndex);
+      if(targetIndex===undefined){
+        targetIndex=compactPositions.length/3;remap.set(sourceIndex,targetIndex);
+        compactPositions.push(...positions.slice(sourceIndex*3,sourceIndex*3+3));
+        compactUVs.push(...uvs.slice(sourceIndex*2,sourceIndex*2+2));
+        compactBlends.push(blends[sourceIndex]);
+      }
+      indices[offset]=targetIndex;
+    }
+    positions.length=compactPositions.length;
+    for(let index=0;index<compactPositions.length;index+=1)positions[index]=compactPositions[index];
+    uvs.length=compactUVs.length;
+    for(let index=0;index<compactUVs.length;index+=1)uvs[index]=compactUVs[index];
+    blends.length=compactBlends.length;
+    for(let index=0;index<compactBlends.length;index+=1)blends[index]=compactBlends[index];
+  }
+  const completedAt=globalThis.performance?.now?.()??Date.now();
+  return {
+    maskTriangleCount:mask.triangles.length,inputTriangleCount:originalTriangleCount,outputTriangleCount:indices.length/3,clippedTriangleCount,removedTriangleCount,addedVertexCount,
+    terrainTriangleFastRejectCount,terrainTriangleCandidateQueryCount,surfaceTriangleBoundsTestCount,surfaceTriangleIntersectionTestCount,
+    consideredSurfaceTriangleCount:mask.consideredTriangleCount,constructionRejectedSurfaceTriangleCount:mask.constructionRejectedTriangleCount,
+    constructionClassifierQueryCount:mask.constructionClassifierQueryCount,constructionClassifierPairTestCount:mask.constructionClassifierPairTestCount,
+    maskBuildDurationMs:maskBuiltAt-startedAt,clipDurationMs:completedAt-maskBuiltAt
+  };
 }
 function coarseTerrainEdgeSample(object,tile,edge,t,steps){
   steps=Math.max(1,steps);
@@ -546,25 +1006,69 @@ function coarseTerrainEdgeSample(object,tile,edge,t,steps){
     blend:0
   };
 }
+function weldedTerrainNormals(positions,indices,tolerance=1e-4){
+  const accumulated=new Float64Array(positions.length),groups=new Map();
+  for(let t=0;t<indices.length;t+=3){
+    const ia=indices[t]*3,ib=indices[t+1]*3,ic=indices[t+2]*3;
+    const A=[positions[ia],positions[ia+1],positions[ia+2]],B=[positions[ib],positions[ib+1],positions[ib+2]],C=[positions[ic],positions[ic+1],positions[ic+2]];
+    const face=cross(sub(B,A),sub(C,A));
+    if(length(face)<=1e-12)continue;
+    for(const offset of [ia,ib,ic]){
+      accumulated[offset]+=face[0];accumulated[offset+1]+=face[1];accumulated[offset+2]+=face[2];
+    }
+  }
+  for(let offset=0;offset<positions.length;offset+=3){
+    const key=`${Math.round(positions[offset]/tolerance)}:${Math.round(positions[offset+1]/tolerance)}:${Math.round(positions[offset+2]/tolerance)}`;
+    let group=groups.get(key);
+    if(!group){group={offsets:[],sum:[0,0,0]};groups.set(key,group);}
+    group.offsets.push(offset);
+    group.sum[0]+=accumulated[offset];group.sum[1]+=accumulated[offset+1];group.sum[2]+=accumulated[offset+2];
+  }
+  const normals=new Float32Array(positions.length);
+  for(const group of groups.values()){
+    const normal=length(group.sum)>1e-12?normalize(group.sum):[0,1,0];
+    for(const offset of group.offsets){normals[offset]=normal[0];normals[offset+1]=normal[1];normals[offset+2]=normal[2];}
+  }
+  return normals;
+}
 export function terrainMesh(object,paths,pathRuntimes=[]){
   const props=normalizeTerrainProperties(object.properties||{},object.transform||{}),resX=clamp(Math.round(Number(props.resolutionX||props.resolution||128)),8,256),resZ=clamp(Math.round(Number(props.resolutionZ||props.resolution||128)),8,256),bounds=props.bounds,p=[],n=[],idx=[],uv=[],blends=[];
   const ox=Number(object.transform.position?.[0]||0),oy=Number(object.transform.position?.[1]||0),oz=Number(object.transform.position?.[2]||0);
-  if(!pathRuntimes.length){
+  const chunkSize=clamp(Number(props.chunkSize||64),8,512);
+  const activeTerrainKeys=pathRuntimes.length?activePathChunkKeys(pathRuntimes,chunkSize):new Set();
+  const terrainSamplingRuntimes=pathRuntimes.length?rendererTerrainSamplingRuntimes(pathRuntimes,chunkSize):[];
+  const authoredBaseOnly=pathRuntimes.length>0&&activeTerrainKeys.size===0;
+  terrainMesh.lastPathDetail=null;
+  if(!pathRuntimes.length||authoredBaseOnly){
     for(let z=0;z<=resZ;z++)for(let x=0;x<=resX;x++){
-      const wx=lerp(bounds.minX,bounds.maxX,x/resX),wz=lerp(bounds.minZ,bounds.maxZ,z/resZ),wy=terrainHeight(object,wx,wz,paths);
-      p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push(x/resX,z/resZ);blends.push(pathBlendAt(paths,wx,wz));
+      const wx=lerp(bounds.minX,bounds.maxX,x/resX),wz=lerp(bounds.minZ,bounds.maxZ,z/resZ);
+      // A bridge, tunnel, or invalid path has no terrain authority. Preserve
+      // the exact authored terrain grid rather than changing topology merely
+      // because a non-terrain path runtime exists in the scene.
+      const wy=authoredBaseOnly?terrainBaseHeightAt(object,wx,wz):terrainHeight(object,wx,wz,paths);
+      p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push(x/resX,z/resZ);blends.push(authoredBaseOnly?0:pathBlendAt(paths,wx,wz));
     }
     for(let z=0;z<resZ;z++)for(let x=0;x<resX;x++){const a=z*(resX+1)+x,b=a+resX+1;idx.push(a,b,a+1,b,b+1,a+1);}
+    if(authoredBaseOnly)terrainMesh.lastPathDetail={
+      strategy:'authored-base-no-terrain-modifier',
+      tileCount:1,
+      highTileCount:0,
+      transitionTileCount:0,
+      targetSpacing:null,
+      transitionSpacing:null,
+      maximumBoundaryMismatch:0,
+      boundaryStitches:{vertexCount:0,triangleCount:0,maximumWidth:0},
+      baseCellSize:[(bounds.maxX-bounds.minX)/resX,(bounds.maxZ-bounds.minZ)/resZ]
+    };
   }else{
     // Path construction is rendered through complete terrain chunks. Modifier
     // chunks use fine geometry, a one-chunk transition ring absorbs the density
     // change, and untouched chunks keep the authored world budget. Every denser
     // edge is projected to its path-aware coarser neighbor, so adjacent tiers
     // describe the same boundary without a floating patch, curtain, or hole.
-    const chunkSize=clamp(Number(props.chunkSize||64),8,512);
     const minChunkX=Math.floor(bounds.minX/chunkSize),maxChunkX=Math.ceil(bounds.maxX/chunkSize)-1;
     const minChunkZ=Math.floor(bounds.minZ/chunkSize),maxChunkZ=Math.ceil(bounds.maxZ/chunkSize)-1;
-    const highKeys=activePathChunkKeys(pathRuntimes,chunkSize),transitionKeys=new Set(highKeys),tiles=new Map();
+    const highKeys=activeTerrainKeys,transitionKeys=new Set(highKeys),tiles=new Map();
     for(const key of highKeys){
       const [cx,cz]=key.split(':').map(Number);
       for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)transitionKeys.add(`${cx+dx}:${cz+dz}`);
@@ -610,7 +1114,7 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
         // conservative modifier bounds, so sampling the authored terrain there
         // avoids tens of thousands of pointless corridor searches per edit.
         const direct=transition===null
-          ?(tile.tier==='high'?pathTerrainVertexSample(object,pathRuntimes,wx,wz):{height:terrainBaseHeightAt(object,wx,wz),blend:0})
+          ?(tile.tier==='high'?pathTerrainVertexSample(object,terrainSamplingRuntimes,wx,wz):{height:terrainBaseHeightAt(object,wx,wz),blend:0})
           :null;
         const wy=transition===null?direct.height:transition.height;
         // The compiled road, shoulder, and earthwork meshes own the visible
@@ -627,9 +1131,6 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
         idx.push(a,b,a+1,b,b+1,a+1);
       }
     }
-    const boundaryStitches=appendPathTerrainBoundaryStitches({
-      object,pathRuntimes,bounds,origin:[ox,oy,oz],positions:p,normals:n,indices:idx,uvs:uv,blends
-    });
     terrainMesh.lastPathDetail={
       strategy:'watertight-chunks',
       tileCount:tiles.size,
@@ -638,13 +1139,24 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
       targetSpacing:.625,
       transitionSpacing:2,
       maximumBoundaryMismatch,
-      boundaryStitches,
+      // The former boundary-stitch pass appended nearly coplanar terrain
+      // quads beside the exact path geometry. Those duplicate surfaces were a
+      // source of texture collision and have no ownership in Path Network v2.
+      boundaryStitches:{vertexCount:0,triangleCount:0,maximumWidth:0},
+      terrainSampling:{...terrainSamplingRuntimes.samplingDiagnostics},
       baseCellSize:[baseStepX,baseStepZ]
     };
   }
-  const normals=new Float32Array(p.length);
-  for(let t=0;t<idx.length;t+=3){const ia=idx[t]*3,ib=idx[t+1]*3,ic=idx[t+2]*3,A=[p[ia],p[ia+1],p[ia+2]],B=[p[ib],p[ib+1],p[ib+2]],C=[p[ic],p[ic+1],p[ic+2]],fn=normalize(cross(sub(B,A),sub(C,A)));for(const ii of [ia,ib,ic]){normals[ii]+=fn[0];normals[ii+1]+=fn[1];normals[ii+2]+=fn[2];}}
-  for(let k=0;k<normals.length;k+=3){const q=normalize([normals[k],normals[k+1],normals[k+2]]);normals[k]=q[0];normals[k+1]=q[1];normals[k+2]=q[2];}
+  if(pathRuntimes.length){
+    const surfaceClipping=clipTerrainTrianglesAgainstPathSurfaces({
+      positions:p,indices:idx,uvs:uv,blends,origin:[ox,oy,oz],pathRuntimes,chunkSize
+    });
+    if(terrainMesh.lastPathDetail)terrainMesh.lastPathDetail.surfaceClipping=surfaceClipping;
+  }
+  // Chunk tiles intentionally duplicate their boundary vertices. Weld their
+  // accumulated normals by position so the same geometric boundary cannot
+  // acquire two lighting responses and appear as a crack.
+  const normals=weldedTerrainNormals(p,idx);
   return {positions:new Float32Array(p),normals,indices:new Uint32Array(idx),uvs:new Float32Array(uv),blends:new Float32Array(blends)};
 }
 function pathLineData(object,terrain,paths){
@@ -654,7 +1166,19 @@ function pathLineData(object,terrain,paths){
 function createBufferMesh(gl,data){
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);const buffers=[];
   const bind=(location,size,array)=>{const b=gl.createBuffer();buffers.push(b);gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,array,gl.STATIC_DRAW);gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,size,gl.FLOAT,false,0,0);};
+  const vertexCount=data.positions.length/3;
+  const detailStream=name=>{
+    const source=data[name];
+    if(source&&source.length!==vertexCount*4)throw new Error(`${name} must contain four values per vertex.`);
+    return source instanceof Float32Array
+      ?source
+      :new Float32Array(source||vertexCount*4);
+  };
   bind(0,3,data.positions);bind(1,3,data.normals);bind(2,2,data.uvs);bind(3,1,data.blends);
+  bind(8,4,detailStream('surfaceDetail0'));
+  bind(9,4,detailStream('surfaceDetail1'));
+  bind(10,4,detailStream('surfaceDetail2'));
+  bind(11,4,detailStream('surfaceDetail3'));
   const ib=gl.createBuffer();buffers.push(ib);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,data.indices,gl.STATIC_DRAW);gl.bindVertexArray(null);
   return {vao,count:data.indices.length,indexType:gl.UNSIGNED_INT,indexStride:4,buffers,groups:Array.isArray(data.groups)?data.groups:[],sourceMaterials:Array.isArray(data.sourceMaterials)?data.sourceMaterials:[],sourceMaterial:data.material||null};
 }
@@ -1010,8 +1534,30 @@ export class Renderer3D{
         if(pathSurfaceCullMode(kind)==='double-sided')gl.disable(gl.CULL_FACE);
         else{gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);}
         const terrainMaterial={materialId:terrain.properties?.materialId||null,color:terrain.properties?.color||'#35522f'};
-        const proxy={id:`path-network-v2:${kind}:${pathObject.id}`,type:structural?'model':'terrain',visible:true,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},properties:{...pathObject.properties,...terrainMaterial,materialId:structural?(segmentProfile.structureMaterialId||pathObject.properties?.structureMaterialId||null):(kind==='road'?(segmentProfile.surfaceMaterialId||pathObject.properties?.materialId||null):terrainMaterial.materialId),color:structural?(pathObject.properties?.structureColor||'#596168'):(kind==='road'?(pathObject.properties?.color||'#73573d'):terrainMaterial.color),opacity:1,castsShadows:true,receivesShadows:true}};
-        this.drawMesh(proxy,mesh,viewProj,lightViewProj,scene,false,camera,lights,null,structural?null:pathObject);
+        const roadLike=kind==='road'||kind==='gutter';
+        const curbLike=kind==='curb';
+        const sidewalkLike=kind==='sidewalk'||kind==='sidewalkEdge';
+        const objectSurface=structural||curbLike||sidewalkLike;
+        const materialId=structural
+          ?(segmentProfile.structureMaterialId||pathObject.properties?.structureMaterialId||null)
+          :curbLike
+            ?(segmentProfile.curbMaterialId||pathObject.properties?.curbMaterialId||null)
+            :sidewalkLike
+              ?(segmentProfile.sidewalkMaterialId||pathObject.properties?.sidewalkMaterialId||null)
+              :roadLike
+                ?(segmentProfile.surfaceMaterialId||pathObject.properties?.materialId||null)
+                :terrainMaterial.materialId;
+        const color=structural
+          ?(pathObject.properties?.structureColor||'#596168')
+          :curbLike
+            ?(pathObject.properties?.curbColor||'#9a9b96')
+            :sidewalkLike
+              ?(pathObject.properties?.sidewalkColor||'#777c80')
+              :roadLike
+                ?(pathObject.properties?.color||'#73573d')
+                :terrainMaterial.color;
+        const proxy={id:`path-network-v2:${kind}:${pathObject.id}`,type:objectSurface?'model':'terrain',visible:true,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},properties:{...pathObject.properties,...terrainMaterial,materialId,color,opacity:1,castsShadows:true,receivesShadows:true}};
+        this.drawMesh(proxy,mesh,viewProj,lightViewProj,scene,false,camera,lights,null,objectSurface?null:pathObject);
       }
     }
     gl.disable(gl.POLYGON_OFFSET_FILL);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);

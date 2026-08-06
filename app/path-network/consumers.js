@@ -1,4 +1,7 @@
-import { samplePathTerrainModifier } from './terrain-modifier.js';
+import {
+  samplePathExclusionField,
+  samplePathTerrainModifier
+} from './terrain-modifier.js';
 
 function enabledSegmentIds(runtime, key) {
   return runtime.compiled.segments
@@ -21,11 +24,19 @@ export function connectPathRuntimeConsumers(runtime) {
     collision: {
       segmentIds: colliderSegmentIds,
       roadMesh: runtime.geometry.meshes.road,
+      gutterMesh: runtime.geometry.meshes.gutter,
+      curbMesh: runtime.geometry.meshes.curb,
+      sidewalkMesh: runtime.geometry.meshes.sidewalk,
+      sidewalkEdgeMesh: runtime.geometry.meshes.sidewalkEdge,
       structureMesh: runtime.geometry.meshes.structure
     },
     navigation: {
       segmentIds: navigationSegmentIds,
-      surfaceMesh: runtime.geometry.meshes.road
+      // Navigation is compiled once from road, stair, sidewalk, and bridge
+      // deck tops. It remains outside `geometry.meshes`, so the renderer never
+      // draws a duplicate surface over the visible construction geometry.
+      surfaceMesh: runtime.geometry.navigationMeshes?.surface || runtime.geometry.meshes.road,
+      sidewalkMesh: runtime.geometry.meshes.sidewalk
     },
     foliage: {
       terrainModifier: runtime.terrainModifier,
@@ -76,9 +87,12 @@ export function connectScenePathRuntimeConsumers(runtimes = []) {
 }
 
 export function pathFoliageExcluded(consumers, x, z, padding = 0) {
-  const sample = samplePathTerrainModifier(consumers.foliage.terrainModifier, x, z);
-  return sample.constructionMode !== 'invalid'
-    && sample.signedDistance <= Math.max(0, Number(padding) || 0);
+  return samplePathExclusionField(
+    consumers.foliage.terrainModifier,
+    x,
+    z,
+    padding
+  ).excluded;
 }
 
 export function scenePathFoliageExcluded(sceneConsumers, x, z, padding = 0) {
@@ -90,7 +104,7 @@ export function scenePathFoliageExcluded(sceneConsumers, x, z, padding = 0) {
 export function pathGroundingSample(consumers, x, z, options = {}) {
   const sample = samplePathTerrainModifier(consumers.grounding.terrainModifier, x, z);
   const constructionSurface = options.includeConstructionSurface !== false
-    && ['road', 'shoulder'].includes(sample.zone)
+    && ['road', 'shoulder', 'gutter', 'curb', 'sidewalk'].includes(sample.zone)
     && sample.constructionMode !== 'invalid';
   return {
     ...sample,
@@ -112,7 +126,7 @@ export function sampleSceneGroundSurface(sceneConsumers, terrainHeight, x, z, op
     const sample = samplePathTerrainModifier(entry.runtime.terrainModifier, x, z);
     if (
       sample.constructionMode === 'invalid'
-      || !['road', 'shoulder'].includes(sample.zone)
+      || !['road', 'shoulder', 'gutter', 'curb', 'sidewalk'].includes(sample.zone)
       || !Number.isFinite(Number(sample.surfaceHeight))
     ) continue;
     const height = Number(sample.surfaceHeight);
@@ -143,7 +157,15 @@ export function sampleSceneGroundSurface(sceneConsumers, terrainHeight, x, z, op
     sourceNetworkId: null,
     sourceRevision: null,
     generationRevision: Number(sceneConsumers?.generationRevision || 0),
-    materialWeights: { terrain: 1, road: 0, shoulder: 0, earthwork: 0 }
+    materialWeights: {
+      terrain: 1,
+      road: 0,
+      shoulder: 0,
+      gutter: 0,
+      curb: 0,
+      sidewalk: 0,
+      earthwork: 0
+    }
   };
   const terrainEligible = !hasReference || fallbackHeight <= referenceY + snapTolerance;
   const eligible = [...surfaceCandidates, ...(terrainEligible ? [terrainCandidate] : [])];

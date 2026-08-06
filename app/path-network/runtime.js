@@ -93,7 +93,8 @@ export function compilePathObjectRuntime(pathObject, terrain, options = {}) {
   });
   const terrainModifier = compilePathTerrainModifier(compiled, {
     baseHeightAt,
-    chunkSize: options.chunkSize ?? terrain.properties?.chunkSize ?? 64
+    chunkSize: options.chunkSize ?? terrain.properties?.chunkSize ?? 64,
+    junctionFilletSegments: options.junctionFilletSegments
   });
   const geometry = buildPathNetworkGeometry(compiled, {
     terrainModifier,

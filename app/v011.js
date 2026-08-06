@@ -3,6 +3,8 @@ import { trailArchetypes } from './path-network/archetypes.js';
 import { trailCandidateToPathNetwork } from './path-network/trail-solver.js';
 import { nearestCompiledStation } from './path-network/compiler.js';
 import { PATH_BRIDGE_STYLES } from './path-network/model.js';
+import { pathCrossSectionProfiles } from './path-network/cross-section-profiles.js';
+import { pathSurfaceDetailProfiles } from './path-network/surface-detail-profiles.js';
 import {
   advancePathNodeDragGesture,
   createPathNodeDragGesture,
@@ -28,6 +30,7 @@ let overlayFrame = 0;
 let foundationRefreshPromise = null;
 let foundationSignature = '';
 let selectedPathNodeId = null;
+let selectedPathSegmentId = null;
 let routeGenerationRevision = 0;
 let routeGenerationPool = null;
 let pathDragPreviewFrame = 0;
@@ -138,6 +141,20 @@ function pathNodeSelection(object) {
   const node = nodes[index] || { id: null, position: [0, 0, 0], heightMode: 'terrain', heightOffset: 0 };
   selectedPathNodeId = node.id;
   return { index, node, point: node.position };
+}
+
+function pathSegmentSelection(object, node = null) {
+  const network = object?.properties?.pathNetwork;
+  const segments = network?.segments || [];
+  let segment = selectedPathSegmentId
+    ? segments.find(item => item.id === selectedPathSegmentId)
+    : null;
+  if (!segment && node?.id) {
+    segment = segments.find(item => item.fromNode === node.id || item.toNode === node.id) || null;
+  }
+  segment ||= segments[0] || null;
+  selectedPathSegmentId = segment?.id || null;
+  return { segment, segments };
 }
 
 function routeDraft(object) {
@@ -271,7 +288,13 @@ function pathPanel(object) {
     .map(segment => segment.construction.reason)
     .filter((reason, index, reasons) => reasons.indexOf(reason) === index)
     .join(' · ');
-  const selectedSegment = network.segments.find(segment => segment.fromNode === selectedNode.id || segment.toNode === selectedNode.id) || network.segments[0];
+  const { segment: selectedSegment } = pathSegmentSelection(object, selectedNode);
+  const nodeIndexById = new Map(network.nodes.map((node, index) => [node.id, index + 1]));
+  const segmentOptions = network.segments.map((segment, index) => {
+    const from = nodeIndexById.get(segment.fromNode) || '?';
+    const to = nodeIndexById.get(segment.toNode) || '?';
+    return `<option value="${escapeHtml(segment.id)}" ${segment.id === selectedSegment?.id ? 'selected' : ''}>Segment ${index + 1} · node ${from} → ${to}</option>`;
+  }).join('');
   const draft = routeDraft(object);
   const generation = routeGenerationState.pathId === object.id ? routeGenerationState : { status: 'idle', candidates: [], selectedCandidate: 0, durationMs: 0, error: '' };
   const candidate = generation.candidates[generation.selectedCandidate];
@@ -279,6 +302,23 @@ function pathPanel(object) {
   const archetypeOptions = trailArchetypes().map(item => `<option value="${escapeHtml(item.id)}" ${item.id === draft.archetype ? 'selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
   const constructionOptions = ['auto', 'conform', 'cut-fill', 'retaining-wall', 'bridge', 'tunnel', 'stairs']
     .map(mode => `<option value="${mode}" ${mode === selectedSegment?.constructionMode ? 'selected' : ''}>${mode}</option>`).join('');
+  const crossSectionProfiles = pathCrossSectionProfiles();
+  const selectedCrossSectionProfile = selectedSegment?.crossSectionProfile?.profileId || 'dirt-road';
+  const crossSectionOptions = crossSectionProfiles
+    .map(profile => `<option value="${escapeHtml(profile.id)}" ${profile.id === selectedCrossSectionProfile ? 'selected' : ''}>${escapeHtml(profile.label)}</option>`)
+    .join('');
+  const selectedProfileDefinition = crossSectionProfiles.find(profile => profile.id === selectedCrossSectionProfile)
+    || crossSectionProfiles.find(profile => profile.id === 'dirt-road');
+  const surfaceDetailProfiles = pathSurfaceDetailProfiles();
+  const selectedSurfaceDetailProfile = selectedSegment?.surfaceDetailProfile?.profileId || 'weathered-dirt-road';
+  const surfaceDetailOptions = surfaceDetailProfiles
+    .map(profile => `<option value="${escapeHtml(profile.id)}" ${profile.id === selectedSurfaceDetailProfile ? 'selected' : ''}>${escapeHtml(profile.label)}</option>`)
+    .join('');
+  const selectedSurfaceDetailDefinition = surfaceDetailProfiles.find(profile => profile.id === selectedSurfaceDetailProfile)
+    || surfaceDetailProfiles.find(profile => profile.id === 'weathered-dirt-road');
+  const selectedSurfaceDetail = selectedSegment?.surfaceDetailProfile
+    || selectedSurfaceDetailDefinition?.values
+    || {};
   const bridgeLabels = {
     auto: 'Auto — match span and path type',
     'timber-trestle': 'Timber trestle',
@@ -315,6 +355,35 @@ function pathPanel(object) {
       <span>${runtimeState === 'blocked'
         ? `${invalidSegments.length} invalid segment${invalidSegments.length === 1 ? '' : 's'} · ${escapeHtml(failureReasons || 'construction validation failed')}`
         : `${escapeHtml(constructionSummary)}${compilerDiagnostics ? ` · max grade ${Number(compilerDiagnostics.maximumGradePercent || 0).toFixed(1)}%` : ''}`}</span>
+    </div>
+    <div class="v012-cross-section-editor">
+      <div class="v011-panel-title"><div><small>ROAD PROFILE</small><strong>One cross-section authority</strong></div><span>${escapeHtml(selectedCrossSectionProfile)}</span></div>
+      <label class="v011-field"><span>Editing segment</span><select id="v012SelectedSegment">${segmentOptions}</select></label>
+      <label class="v011-field"><span>Street or trail type</span><select id="v012CrossSectionProfile">${crossSectionOptions}</select></label>
+      <p id="v012CrossSectionDescription" class="v011-note">${escapeHtml(selectedProfileDefinition?.description || '')}</p>
+      <div class="v011-actions v012-action-row"><button id="v012ApplySegmentProfile" type="button">Apply to selected segment</button><button id="v012ApplyNetworkProfile" class="primary" type="button">Apply to whole path</button></div>
+      <p class="v011-note">The same profile drives the visible surface, terrain support, gutters, curbs, sidewalks, collision, navigation, foliage clearance, and saved project state.</p>
+      <label class="v011-field"><span>Surface character</span><select id="v012SurfaceDetailProfile">${surfaceDetailOptions}</select></label>
+      <p id="v012SurfaceDetailDescription" class="v011-note">${escapeHtml(selectedSurfaceDetailDefinition?.description || '')}</p>
+      <details class="v012-surface-detail-editor">
+        <summary>Fine tune surface details</summary>
+        <div class="v011-grid">
+          <label class="v011-field"><span>Pattern seed</span><input id="v012SurfaceSeed" type="number" step="1" value="${Number(selectedSurfaceDetail.seed ?? 2718)}"></label>
+          <label class="v011-field"><span>Puddle coverage</span><input id="v012PuddleCoverage" type="number" min="0" max="0.75" step="0.01" value="${Number(selectedSurfaceDetail.puddleCoverage ?? 0.04)}"></label>
+          <label class="v011-field"><span>Puddle size (m)</span><input id="v012PuddleScale" type="number" min="0.25" max="100" step="0.1" value="${Number(selectedSurfaceDetail.puddleScale ?? 3.5)}"></label>
+          <label class="v011-field"><span>Puddle depth (m)</span><input id="v012PuddleDepth" type="number" min="0" max="0.15" step="0.002" value="${Number(selectedSurfaceDetail.puddleDepth ?? 0.012)}"></label>
+          <label class="v011-field"><span>Wheel-rut strength</span><input id="v012WheelRutStrength" type="number" min="0" max="1" step="0.05" value="${Number(selectedSurfaceDetail.wheelRutStrength ?? 0.18)}"></label>
+          <label class="v011-field"><span>Wheel gauge (m)</span><input id="v012WheelTrackGauge" type="number" min="0.3" max="4" step="0.05" value="${Number(selectedSurfaceDetail.wheelTrackGauge ?? 1.45)}"></label>
+          <label class="v011-field"><span>Rut width (m)</span><input id="v012WheelRutWidth" type="number" min="0.03" max="0.75" step="0.01" value="${Number(selectedSurfaceDetail.wheelRutWidth ?? 0.16)}"></label>
+          <label class="v011-field"><span>Hoof-print density</span><input id="v012HoofPrintDensity" type="number" min="0" max="1" step="0.05" value="${Number(selectedSurfaceDetail.hoofPrintDensity ?? 0)}"></label>
+          <label class="v011-field"><span>Boot-print density</span><input id="v012BootPrintDensity" type="number" min="0" max="1" step="0.05" value="${Number(selectedSurfaceDetail.bootPrintDensity ?? 0.04)}"></label>
+          <label class="v011-field"><span>Erosion strength</span><input id="v012ErosionStrength" type="number" min="0" max="1" step="0.05" value="${Number(selectedSurfaceDetail.erosionStrength ?? 0.12)}"></label>
+          <label class="v011-field"><span>Relief strength</span><input id="v012DetailNormalStrength" type="number" min="0" max="2" step="0.05" value="${Number(selectedSurfaceDetail.detailNormalStrength ?? 0.35)}"></label>
+          <label class="v011-field"><span>Weather response</span><input id="v012WeatherResponse" type="number" min="0" max="3" step="0.05" value="${Number(selectedSurfaceDetail.weatherResponse ?? 1)}"></label>
+        </div>
+      </details>
+      <div class="v011-actions v012-action-row"><button id="v012ApplySegmentSurfaceDetail" type="button">Apply detail to segment</button><button id="v012ApplyNetworkSurfaceDetail" type="button">Apply detail to whole path</button></div>
+      <p class="v011-note">Surface details are deterministic and weather-aware: puddles, wheel ruts, hoof impressions, boot traffic, and erosion remain tied to the compiled road instead of floating decals.</p>
     </div>
     <button id="v011SplineEdit" class="button ${splineEditPathId === object.id ? 'primary' : 'subtle'}" type="button">${splineEditPathId === object.id ? 'Finish spline editing' : 'Edit nodes in viewport'}</button>
     <p class="v011-note"><strong>Viewport:</strong> left-drag moves a node over terrain. Shift-drag raises or lowers it. Right-click inserts a node into the nearest compiled segment.</p>
@@ -403,7 +472,7 @@ function enhanceInspector() {
   const container = $('#inspectorContent');
   const object = selectedObject();
   if (!container || !object) return;
-  const signature = `${object.id}:${currentSnapshot()?.state?.engine?.revision || 0}:${foundation?.terrainDiagnostics?.checkedAt || ''}:${splineEditPathId || ''}:${selectedPathNodeId || ''}:${terrainSculptMode?.terrainId || ''}:${routeGenerationRevision}:${routeGenerationState.status}:${routeGenerationState.selectedCandidate}`;
+  const signature = `${object.id}:${currentSnapshot()?.state?.engine?.revision || 0}:${foundation?.terrainDiagnostics?.checkedAt || ''}:${splineEditPathId || ''}:${selectedPathNodeId || ''}:${selectedPathSegmentId || ''}:${terrainSculptMode?.terrainId || ''}:${routeGenerationRevision}:${routeGenerationState.status}:${routeGenerationState.selectedCandidate}`;
   if (container.dataset.v011Signature === signature && container.querySelector('[data-v011-panel]')) return;
   const selectedNode = pathNodeSelection(object);
   container.dataset.v011Signature = signature;
@@ -411,6 +480,7 @@ function enhanceInspector() {
   const reference = referencePanel(object);
   if (object.type === 'terrain') container.insertAdjacentHTML('beforeend', terrainPanel(object));
   if (object.type === 'path') container.insertAdjacentHTML('beforeend', pathPanel(object));
+  const selectedSegment = object.type === 'path' ? pathSegmentSelection(object, selectedNode.node).segment : null;
   if (reference) container.insertAdjacentHTML('beforeend', reference);
 
   if (['terrain', 'path'].includes(object.type)) {
@@ -450,10 +520,47 @@ function enhanceInspector() {
     ...object.properties.pathNetwork,
     editor: { ...object.properties.pathNetwork.editor, showGrade: event.target.checked }
   }, 'Toggle route cost overlay'));
-  $('#v012ConstructionMode')?.addEventListener('change', () => updateSelectedConstruction(object, selectedNode.node));
-  $('#v012ConstructionLocked')?.addEventListener('change', () => updateSelectedConstruction(object, selectedNode.node));
-  $('#v012BridgeStyle')?.addEventListener('change', () => updateSelectedStructure(object, selectedNode.node));
-  $('#v012BridgeRailings')?.addEventListener('change', () => updateSelectedStructure(object, selectedNode.node));
+  $('#v012SelectedSegment')?.addEventListener('change', event => {
+    selectedPathSegmentId = event.target.value || null;
+    enhanceInspector();
+  });
+  $('#v012ConstructionMode')?.addEventListener('change', () => updateSelectedConstruction(object, selectedSegment));
+  $('#v012ConstructionLocked')?.addEventListener('change', () => updateSelectedConstruction(object, selectedSegment));
+  $('#v012CrossSectionProfile')?.addEventListener('change', event => {
+    const profile = pathCrossSectionProfiles().find(item => item.id === event.target.value);
+    const description = $('#v012CrossSectionDescription');
+    if (description) description.textContent = profile?.description || '';
+  });
+  $('#v012ApplySegmentProfile')?.addEventListener('click', () => updateSelectedCrossSection(object, selectedSegment, false));
+  $('#v012ApplyNetworkProfile')?.addEventListener('click', () => updateSelectedCrossSection(object, selectedSegment, true));
+  $('#v012SurfaceDetailProfile')?.addEventListener('change', event => {
+    const profile = pathSurfaceDetailProfiles().find(item => item.id === event.target.value);
+    const description = $('#v012SurfaceDetailDescription');
+    if (description) description.textContent = profile?.description || '';
+    const values = profile?.values || {};
+    const assignments = {
+      v012SurfaceSeed: values.seed,
+      v012PuddleCoverage: values.puddleCoverage,
+      v012PuddleScale: values.puddleScale,
+      v012PuddleDepth: values.puddleDepth,
+      v012WheelRutStrength: values.wheelRutStrength,
+      v012WheelTrackGauge: values.wheelTrackGauge,
+      v012WheelRutWidth: values.wheelRutWidth,
+      v012HoofPrintDensity: values.hoofPrintDensity,
+      v012BootPrintDensity: values.bootPrintDensity,
+      v012ErosionStrength: values.erosionStrength,
+      v012DetailNormalStrength: values.detailNormalStrength,
+      v012WeatherResponse: values.weatherResponse
+    };
+    for (const [id, value] of Object.entries(assignments)) {
+      const input = $(`#${id}`);
+      if (input && Number.isFinite(Number(value))) input.value = String(value);
+    }
+  });
+  $('#v012ApplySegmentSurfaceDetail')?.addEventListener('click', () => updateSelectedSurfaceDetail(object, selectedSegment, false));
+  $('#v012ApplyNetworkSurfaceDetail')?.addEventListener('click', () => updateSelectedSurfaceDetail(object, selectedSegment, true));
+  $('#v012BridgeStyle')?.addEventListener('change', () => updateSelectedStructure(object, selectedSegment));
+  $('#v012BridgeRailings')?.addEventListener('change', () => updateSelectedStructure(object, selectedSegment));
   $('#v012CivilAssist')?.addEventListener('change', event => replacePathNetwork(object, {
     ...object.properties.pathNetwork,
     engineering: { ...object.properties.pathNetwork.engineering, civilAssist: event.target.checked }
@@ -654,9 +761,7 @@ function applySelectedNodeHandles(object, node) {
   });
 }
 
-function updateSelectedConstruction(object, node) {
-  const segment = object.properties.pathNetwork.segments.find(item => item.fromNode === node.id || item.toNode === node.id)
-    || object.properties.pathNetwork.segments[0];
+function updateSelectedConstruction(object, segment) {
   if (!segment) return;
   return transactPathNetwork(object, {
     label: 'Update construction mode',
@@ -669,9 +774,62 @@ function updateSelectedConstruction(object, node) {
   });
 }
 
-function updateSelectedStructure(object, node) {
-  const segment = object.properties.pathNetwork.segments.find(item => item.fromNode === node.id || item.toNode === node.id)
-    || object.properties.pathNetwork.segments[0];
+function updateSelectedCrossSection(object, selectedSegment, wholeNetwork = false) {
+  const network = object.properties.pathNetwork;
+  if (!selectedSegment) return;
+  const profileId = $('#v012CrossSectionProfile')?.value || selectedSegment.crossSectionProfile?.profileId || 'dirt-road';
+  const segments = wholeNetwork ? network.segments : [selectedSegment];
+  const operations = segments.map(segment => ({
+    type: 'set-segment-cross-section',
+    segmentId: segment.id,
+    profileId
+  }));
+  if (wholeNetwork) operations.push({ type: 'set-default-cross-section', profileId });
+  return transactPathNetwork(object, {
+    label: wholeNetwork ? `Apply ${profileId} to whole path` : `Apply ${profileId} to segment`,
+    operations
+  });
+}
+
+function updateSelectedSurfaceDetail(object, selectedSegment, wholeNetwork = false) {
+  const network = object.properties.pathNetwork;
+  if (!selectedSegment) return;
+  const profileId = $('#v012SurfaceDetailProfile')?.value
+    || selectedSegment.surfaceDetailProfile?.profileId
+    || 'weathered-dirt-road';
+  const numberValue = (id, fallback) => {
+    const value = Number($(`#${id}`)?.value);
+    return Number.isFinite(value) ? value : fallback;
+  };
+  const surfaceDetailProfile = {
+    seed: Math.trunc(numberValue('v012SurfaceSeed', selectedSegment.surfaceDetailProfile?.seed ?? 2718)),
+    puddleCoverage: numberValue('v012PuddleCoverage', selectedSegment.surfaceDetailProfile?.puddleCoverage ?? 0.04),
+    puddleScale: numberValue('v012PuddleScale', selectedSegment.surfaceDetailProfile?.puddleScale ?? 3.5),
+    puddleDepth: numberValue('v012PuddleDepth', selectedSegment.surfaceDetailProfile?.puddleDepth ?? 0.012),
+    wheelRutStrength: numberValue('v012WheelRutStrength', selectedSegment.surfaceDetailProfile?.wheelRutStrength ?? 0.18),
+    wheelTrackGauge: numberValue('v012WheelTrackGauge', selectedSegment.surfaceDetailProfile?.wheelTrackGauge ?? 1.45),
+    wheelRutWidth: numberValue('v012WheelRutWidth', selectedSegment.surfaceDetailProfile?.wheelRutWidth ?? 0.16),
+    hoofPrintDensity: numberValue('v012HoofPrintDensity', selectedSegment.surfaceDetailProfile?.hoofPrintDensity ?? 0),
+    bootPrintDensity: numberValue('v012BootPrintDensity', selectedSegment.surfaceDetailProfile?.bootPrintDensity ?? 0.04),
+    erosionStrength: numberValue('v012ErosionStrength', selectedSegment.surfaceDetailProfile?.erosionStrength ?? 0.12),
+    detailNormalStrength: numberValue('v012DetailNormalStrength', selectedSegment.surfaceDetailProfile?.detailNormalStrength ?? 0.35),
+    weatherResponse: numberValue('v012WeatherResponse', selectedSegment.surfaceDetailProfile?.weatherResponse ?? 1)
+  };
+  const segments = wholeNetwork ? network.segments : [selectedSegment];
+  const operations = segments.map(segment => ({
+    type: 'set-segment-surface-detail',
+    segmentId: segment.id,
+    profileId,
+    surfaceDetailProfile
+  }));
+  if (wholeNetwork) operations.push({ type: 'set-default-surface-detail', profileId, surfaceDetailProfile });
+  return transactPathNetwork(object, {
+    label: wholeNetwork ? `Apply ${profileId} detail to whole path` : `Apply ${profileId} detail to segment`,
+    operations
+  });
+}
+
+function updateSelectedStructure(object, segment) {
   if (!segment) return;
   return transactPathNetwork(object, {
     label: 'Update bridge family',

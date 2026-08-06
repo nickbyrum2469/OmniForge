@@ -58,3 +58,73 @@ test('spline drag instrumentation uses the runtime diagnostics API that exists i
     assert.ok(source.includes(`window.__omniforgeDiagnostics?.log?.('${eventName}'`));
   }
 });
+
+test('Pathway Studio applies shared road profiles through one undoable Path Network transaction', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'app', 'v011.js'), 'utf8');
+  const panelStart = source.indexOf('function pathPanel');
+  const panelEnd = source.indexOf('function referencePanel', panelStart);
+  const panel = source.slice(panelStart, panelEnd);
+  const updateStart = source.indexOf('function updateSelectedCrossSection');
+  const updateEnd = source.indexOf('function updateSelectedStructure', updateStart);
+  const update = source.slice(updateStart, updateEnd);
+
+  assert.match(panel, /id="v012CrossSectionProfile"/);
+  assert.match(panel, /id="v012ApplySegmentProfile"/);
+  assert.match(panel, /id="v012ApplyNetworkProfile"/);
+  assert.match(update, /type: 'set-segment-cross-section'/);
+  assert.match(update, /return transactPathNetwork\(object/);
+  assert.doesNotMatch(update, /replacePathNetwork\(/);
+});
+
+test('branch editing targets an explicit selected segment instead of the first edge touching a node', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'app', 'v011.js'), 'utf8');
+  const panelStart = source.indexOf('function pathPanel');
+  const panelEnd = source.indexOf('function referencePanel', panelStart);
+  const panel = source.slice(panelStart, panelEnd);
+  const updateStart = source.indexOf('function updateSelectedConstruction');
+  const updateEnd = source.indexOf('function captureRouteDraft', updateStart);
+  const updates = source.slice(updateStart, updateEnd);
+
+  assert.match(source, /let selectedPathSegmentId = null/);
+  assert.match(source, /function pathSegmentSelection/);
+  assert.match(panel, /id="v012SelectedSegment"/);
+  assert.match(source, /selectedPathSegmentId = event\.target\.value/);
+  assert.match(updates, /function updateSelectedConstruction\(object, segment\)/);
+  assert.match(updates, /function updateSelectedCrossSection\(object, selectedSegment/);
+  assert.match(updates, /function updateSelectedStructure\(object, segment\)/);
+  assert.doesNotMatch(updates, /fromNode === node\.id \|\| item\.toNode === node\.id/);
+});
+
+test('surface character controls use the selected compiled segment and one transactional authority', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'app', 'v011.js'), 'utf8');
+  const panelStart = source.indexOf('function pathPanel');
+  const panelEnd = source.indexOf('function referencePanel', panelStart);
+  const panel = source.slice(panelStart, panelEnd);
+  const updateStart = source.indexOf('function updateSelectedSurfaceDetail');
+  const updateEnd = source.indexOf('function updateSelectedStructure', updateStart);
+  const update = source.slice(updateStart, updateEnd);
+
+  assert.match(panel, /id="v012SurfaceDetailProfile"/);
+  assert.match(panel, /id="v012ApplySegmentSurfaceDetail"/);
+  assert.match(panel, /id="v012ApplyNetworkSurfaceDetail"/);
+  for (const id of [
+    'v012PuddleCoverage',
+    'v012PuddleScale',
+    'v012PuddleDepth',
+    'v012WheelRutStrength',
+    'v012WheelTrackGauge',
+    'v012WheelRutWidth',
+    'v012HoofPrintDensity',
+    'v012BootPrintDensity',
+    'v012ErosionStrength',
+    'v012DetailNormalStrength',
+    'v012WeatherResponse'
+  ]) assert.match(panel, new RegExp(`id="${id}"`));
+  assert.match(panel, /puddles, wheel ruts, hoof impressions, boot traffic, and erosion/);
+  assert.match(update, /type: 'set-segment-surface-detail'/);
+  assert.match(update, /type: 'set-default-surface-detail'/);
+  assert.match(update, /surfaceDetailProfile/);
+  assert.match(update, /segmentId: segment\.id/);
+  assert.match(update, /return transactPathNetwork\(object/);
+  assert.doesNotMatch(update, /replacePathNetwork\(/);
+});

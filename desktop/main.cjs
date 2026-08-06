@@ -76,6 +76,124 @@ async function recoverRendererProcess(kind, details={}) {
 
 
 
+const visualInputDelay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+async function visualPathNodeSnapshot(contents, pathId, nodeIndex, selector) {
+  const input = JSON.stringify({ pathId, nodeIndex, selector });
+  return contents.executeJavaScript(`(async()=>{
+    const input=${input};
+    const response=await fetch('/api/state');
+    if(!response.ok)throw new Error('Visual input state request failed: '+response.status);
+    const payload=await response.json();
+    const state=payload.state||payload;
+    const scene=(state.scenes||[]).find(item=>item.id===state.activeSceneId);
+    const path=(scene?.objects||[]).find(item=>item.id===input.pathId&&item.type==='path');
+    const network=path?.properties?.pathNetwork;
+    const node=network?.nodes?.[input.nodeIndex];
+    const element=document.querySelector(input.selector);
+    if(!network||!node)throw new Error('Visual input Path Network node is unavailable.');
+    if(!element)throw new Error('Visual input spline handle is unavailable: '+input.selector);
+    const rect=element.getBoundingClientRect();
+    const style=getComputedStyle(element);
+    if(element.hidden||style.display==='none'||style.visibility==='hidden'||rect.width<1||rect.height<1){
+      throw new Error('Visual input spline handle is not visible: '+input.selector);
+    }
+    return {
+      revision:Number(network.revision||0),
+      nodeId:String(node.id),
+      position:(node.position||[]).map(Number),
+      heightMode:String(node.heightMode||'terrain'),
+      rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height}
+    };
+  })()`, true);
+}
+
+async function visualElementBounds(contents, selector) {
+  const encoded = JSON.stringify(selector);
+  return contents.executeJavaScript(`(()=>{
+    const element=document.querySelector(${encoded});
+    if(!element)throw new Error('Visual input control is unavailable: '+${encoded});
+    const rect=element.getBoundingClientRect();
+    const style=getComputedStyle(element);
+    if(element.hidden||style.display==='none'||style.visibility==='hidden'||rect.width<1||rect.height<1){
+      throw new Error('Visual input control is not visible: '+${encoded});
+    }
+    return {x:rect.x,y:rect.y,width:rect.width,height:rect.height};
+  })()`, true);
+}
+
+function visualPositionDelta(left, right) {
+  return Math.hypot(...left.map((value,index)=>Number(value)-Number(right[index]||0)));
+}
+
+async function waitForVisualPathRevision(contents, action, selector, minimumRevision, timeoutMs=12000) {
+  const deadline=Date.now()+timeoutMs;
+  let latest=null;
+  while(Date.now()<deadline){
+    await visualInputDelay(80);
+    latest=await visualPathNodeSnapshot(contents,action.pathId,action.nodeIndex,selector);
+    if(latest.revision>minimumRevision)return latest;
+  }
+  throw new Error(`Visual input timed out waiting for Path Network revision after ${action.vertical?'vertical':'horizontal'} node drag.`);
+}
+
+async function sendVisualClick(contents, bounds, modifiers=[]) {
+  const x=Math.round(bounds.x+bounds.width*.5),y=Math.round(bounds.y+bounds.height*.5);
+  contents.sendInputEvent({type:'mouseDown',x,y,button:'left',clickCount:1,modifiers});
+  await visualInputDelay(35);
+  contents.sendInputEvent({type:'mouseUp',x,y,button:'left',clickCount:1,modifiers});
+}
+
+async function performVisualInputActions(contents, actions=[]) {
+  const telemetry=[];
+  for(const rawAction of Array.isArray(actions)?actions:[]){
+    const action=rawAction&&typeof rawAction==='object'?rawAction:{};
+    if(String(action.type||'')!=='path-node-drag')throw new Error(`Unsupported packaged native input action: ${String(action.type||'missing type')}.`);
+    const pathId=String(action.pathId||'path-main');
+    const nodeIndex=Math.max(0,Math.min(128,Number.parseInt(String(action.nodeIndex??0),10)||0));
+    const selector=`#splineNodeOverlay [data-spline-node="${nodeIndex}"]`;
+    const normalized={...action,pathId,nodeIndex};
+    const before=await visualPathNodeSnapshot(contents,pathId,nodeIndex,selector);
+    const startX=Math.round(before.rect.x+before.rect.width*.5),startY=Math.round(before.rect.y+before.rect.height*.5);
+    const dx=Math.max(-240,Math.min(240,Number(action.dx??(action.vertical?0:54))));
+    const dy=Math.max(-180,Math.min(180,Number(action.dy??(action.vertical?-48:12))));
+    const modifiers=action.vertical?['shift']:[];
+    const started=Date.now();
+    contents.sendInputEvent({type:'mouseDown',x:startX,y:startY,button:'left',clickCount:1,modifiers});
+    for(let step=1;step<=8;step++){
+      await visualInputDelay(24);
+      contents.sendInputEvent({
+        type:'mouseMove',x:Math.round(startX+dx*step/8),y:Math.round(startY+dy*step/8),
+        button:'left',clickCount:1,modifiers
+      });
+    }
+    contents.sendInputEvent({type:'mouseUp',x:Math.round(startX+dx),y:Math.round(startY+dy),button:'left',clickCount:1,modifiers});
+    const after=await waitForVisualPathRevision(contents,normalized,selector,before.revision);
+    const horizontalDelta=Math.hypot(after.position[0]-before.position[0],after.position[2]-before.position[2]);
+    const verticalDelta=Math.abs(after.position[1]-before.position[1]);
+    if(action.vertical){
+      if(verticalDelta<0.01||after.heightMode!=='absolute')throw new Error('Shift-drag did not raise/lower the authored 3D Path Network node.');
+    }else if(horizontalDelta<0.01){
+      throw new Error('Horizontal spline-handle drag did not move the authored Path Network node over terrain.');
+    }
+    let restored=null;
+    if(action.undo!==false){
+      const undoBounds=await visualElementBounds(contents,'#v012UndoPath');
+      await sendVisualClick(contents,undoBounds);
+      restored=await waitForVisualPathRevision(contents,normalized,selector,after.revision);
+      if(visualPositionDelta(restored.position,before.position)>0.005){
+        throw new Error('The real Undo path edit control did not restore the dragged node position.');
+      }
+    }
+    telemetry.push({
+      type:'path-node-drag',pathId,nodeIndex,nodeId:before.nodeId,vertical:Boolean(action.vertical),
+      durationMs:Date.now()-started,before,after,restored,
+      horizontalDelta,verticalDelta,undoVerified:Boolean(restored)
+    });
+  }
+  return telemetry;
+}
+
 function installVisualCaptureWatcher() {
   if(!VISUAL_CAPTURE_DIR||!mainWindow||mainWindow.isDestroyed())return;
   fs.mkdirSync(VISUAL_CAPTURE_DIR,{recursive:true});
@@ -89,13 +207,15 @@ function installVisualCaptureWatcher() {
       fs.renameSync(requestFile,processingFile);
       const request=readJson(processingFile,{});
       const id=String(request.id||Date.now()).replace(/[^a-z0-9_-]/gi,'-');
-      const options=JSON.stringify(request.options||{});
+      const requestOptions=request.options||{};
+      const nativeInputTelemetry=await performVisualInputActions(mainWindow.webContents,requestOptions.nativeInputActions);
+      const options=JSON.stringify(requestOptions);
       const captureResult=await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestCapture(${options})`,true);
       const dataUrl=typeof captureResult==='string'?captureResult:captureResult?.dataUrl;
       const match=/^data:image\/png;base64,(.+)$/s.exec(String(dataUrl||''));
       if(!match)throw new Error('Renderer did not return a PNG data URL.');
       fs.writeFileSync(path.join(VISUAL_CAPTURE_DIR,`${id}.png`),Buffer.from(match[1],'base64'));
-      writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:true,id,at:new Date().toISOString(),renderTelemetry:captureResult?.renderTelemetry||null});
+      writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:true,id,at:new Date().toISOString(),renderTelemetry:captureResult?.renderTelemetry||null,interactionTelemetry:captureResult?.interactionTelemetry||[],nativeInputTelemetry});
     }catch(error){
       const request=readJson(processingFile,{});const id=String(request.id||'capture-error').replace(/[^a-z0-9_-]/gi,'-');
       writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:false,id,error:error.message,stack:error.stack||''});
