@@ -127,6 +127,7 @@ function Get-LookCamera([double[]]$Position,[double[]]$Target,[double]$Fov=62) {
 
 function New-ExpectedPathFixture(
   [string]$PathId,
+  [string]$NetworkId,
   [string]$BridgeStyle,
   [int]$MinimumNetworkRevision=0,
   [string]$SurfaceProfileId='muddy-wagon-road',
@@ -134,7 +135,7 @@ function New-ExpectedPathFixture(
 ) {
   @{
     pathId=$PathId
-    networkId="$PathId`:network"
+    networkId=$NetworkId
     nodeIds=@('approach-west','approach-east')
     segmentIds=@('bridge-showcase')
     minimumNetworkRevision=$MinimumNetworkRevision
@@ -374,7 +375,7 @@ try {
     }
   }
   $revision = [int64]$networkResult.state.engine.revision
-  $fixtureExpectation = New-ExpectedPathFixture $path.id 'steel-girder' ([int]$networkResult.network.revision)
+  $fixtureExpectation = New-ExpectedPathFixture $path.id ([string]$networkResult.network.id) 'steel-girder' ([int]$networkResult.network.revision)
   Invoke-Api $port '/api/selection' 'POST' @{objectId=$path.id} | Out-Null
   $worldResult = Invoke-Api $port '/api/v010/world' 'PATCH' @{
     lookPreset='clear-day';time=@{hours=12};weather=@{preset='clear';fog=0;wetness=.32}
@@ -521,7 +522,7 @@ try {
       }
     }
     $revision = [int64]$familyNetwork.state.engine.revision
-    $fixtureExpectation = New-ExpectedPathFixture $path.id $fixture.style ([int]$familyNetwork.network.revision) 'weathered-dirt-road' ([double]$fixture.width)
+    $fixtureExpectation = New-ExpectedPathFixture $path.id ([string]$familyNetwork.network.id) $fixture.style ([int]$familyNetwork.network.revision) 'weathered-dirt-road' ([double]$fixture.width)
     foreach ($familyView in @(
       @{suffix='approach';camera=(Get-LookCamera ([double[]]@(-36,3.4,10)) $target 65)},
       @{suffix='side';camera=(Get-LookCamera ([double[]]@(0,10,29)) $target 62)},
@@ -573,7 +574,7 @@ try {
     }
   }
   $revision = [int64]$restoredSteel.state.engine.revision
-  $fixtureExpectation = New-ExpectedPathFixture $path.id 'steel-girder' ([int]$restoredSteel.network.revision)
+  $fixtureExpectation = New-ExpectedPathFixture $path.id ([string]$restoredSteel.network.id) 'steel-girder' ([int]$restoredSteel.network.revision)
   $surfaceCapture = Request-Capture $captureDir '10-surface-details-close' @{
     camera=(Get-LookCamera ([double[]]@(-42,2.6,5.5)) ([double[]]@(-25,0,0)) 66)
     hideGuides=$true;hideEditorReferences=$true;waitMs=1400;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
@@ -603,7 +604,7 @@ try {
       })
     }
     $revision = [int64]$surfaceResult.state.engine.revision
-    $fixtureExpectation = New-ExpectedPathFixture $path.id 'steel-girder' ([int]$surfaceResult.network.revision) $surfaceFixture.profileId 6
+    $fixtureExpectation = New-ExpectedPathFixture $path.id ([string]$surfaceResult.network.id) 'steel-girder' ([int]$surfaceResult.network.revision) $surfaceFixture.profileId 6
     $surfaceId = "surface-$($surfaceFixture.slug)"
     $surfaceRecord = Request-Capture $captureDir $surfaceId @{
       camera=(Get-LookCamera ([double[]]@(-36,8.5,9.5)) ([double[]]@(-25,0,0)) 54)
@@ -628,7 +629,7 @@ try {
     })
   }
   $revision = [int64]$restoredSurface.state.engine.revision
-  $fixtureExpectation = New-ExpectedPathFixture $path.id 'steel-girder' ([int]$restoredSurface.network.revision)
+  $fixtureExpectation = New-ExpectedPathFixture $path.id ([string]$restoredSurface.network.id) 'steel-girder' ([int]$restoredSurface.network.revision)
 
   $interactionWatch = [Diagnostics.Stopwatch]::StartNew()
   $cycle = 0

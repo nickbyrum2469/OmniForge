@@ -66,6 +66,8 @@ test('packaged evidence renders every bridge family at a compatible span and wid
   assert.match(script, /Restore primary packaged steel bridge fixture/);
   assert.match(script, /New-ExpectedPathFixture/);
   assert.match(script, /expectedPathNetwork=\$fixtureExpectation/);
+  assert.match(script, /networkId=\$NetworkId/);
+  assert.match(script, /New-ExpectedPathFixture \$path\.id \(\[string\]\$networkResult\.network\.id\)/);
   assert.match(app, /Visual capture fixture mismatch/);
   assert.match(app, /Visual capture render fixture mismatch/);
   assert.match(app, /minimumBridgeIntervalCount/);
