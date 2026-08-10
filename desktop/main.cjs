@@ -301,17 +301,23 @@ async function performVisualInputActions(contents, actions=[]) {
     const startX=Math.round(before.rect.x+before.rect.width*.5),startY=Math.round(before.rect.y+before.rect.height*.5);
     const dx=Math.max(-240,Math.min(240,Number(action.dx??(action.vertical?0:54))));
     const dy=Math.max(-180,Math.min(180,Number(action.dy??(action.vertical?-48:12))));
-    const modifiers=action.vertical?['shift']:[];
+    // Electron's mouseMove input does not infer the held-button bit from an
+    // earlier mouseDown. Chromium therefore emitted PointerEvent.buttons=0,
+    // and the real editor correctly cancelled the drag as a released button.
+    // Carry the native left-button modifier through each move, then remove it
+    // on mouseUp so the visible packaged app receives a genuine drag gesture.
+    const heldModifiers=action.vertical?['shift','leftButtonDown']:['leftButtonDown'];
+    const releasedModifiers=action.vertical?['shift']:[];
     const started=Date.now();
-    contents.sendInputEvent({type:'mouseDown',x:startX,y:startY,button:'left',clickCount:1,modifiers});
+    contents.sendInputEvent({type:'mouseDown',x:startX,y:startY,button:'left',clickCount:1,modifiers:heldModifiers});
     for(let step=1;step<=8;step++){
       await visualInputDelay(24);
       contents.sendInputEvent({
         type:'mouseMove',x:Math.round(startX+dx*step/8),y:Math.round(startY+dy*step/8),
-        button:'left',clickCount:1,modifiers
+        button:'left',clickCount:1,modifiers:heldModifiers
       });
     }
-    contents.sendInputEvent({type:'mouseUp',x:Math.round(startX+dx),y:Math.round(startY+dy),button:'left',clickCount:1,modifiers});
+    contents.sendInputEvent({type:'mouseUp',x:Math.round(startX+dx),y:Math.round(startY+dy),button:'left',clickCount:1,modifiers:releasedModifiers});
     const after=await waitForVisualPathRevision(contents,normalized,selector,before.revision);
     const horizontalDelta=Math.hypot(after.position[0]-before.position[0],after.position[2]-before.position[2]);
     const verticalDelta=Math.abs(after.position[1]-before.position[1]);

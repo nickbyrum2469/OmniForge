@@ -145,7 +145,11 @@ test('packaged gate drives real horizontal and Shift-vertical spline handles and
   assert.match(desktop, /Visual input spline handle is covered by/);
   assert.match(desktop, /sendInputEvent\(\{type:'mouseDown'/);
   assert.match(desktop, /type:'mouseMove'/);
-  assert.match(desktop, /modifiers=action\.vertical\?\['shift'\]:\[\]/);
+  assert.match(desktop, /leftButtonDown/);
+  assert.match(desktop, /modifiers:heldModifiers/);
+  assert.match(desktop, /modifiers:releasedModifiers/);
+  assert.match(desktop, /heldModifiers=action\.vertical\?\['shift','leftButtonDown'\]:\['leftButtonDown'\]/);
+  assert.match(desktop, /releasedModifiers=action\.vertical\?\['shift'\]:\[\]/);
   assert.match(desktop, /#v012UndoPath/);
   assert.match(desktop, /did not restore the dragged node position/);
 });
