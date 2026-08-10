@@ -435,6 +435,8 @@ try {
   if (@($nativeHorizontalRecord.response.nativeInputTelemetry).Count -ne 1) { throw 'The packaged native-input gate did not report the horizontal spline-node drag.' }
   $horizontalTelemetry = @($nativeHorizontalRecord.response.nativeInputTelemetry)[0]
   if ([double]$horizontalTelemetry.horizontalDelta -lt 0.01) { throw 'The packaged horizontal spline-node drag did not move its authored node.' }
+  $horizontalPosition = @($horizontalTelemetry.after.position | ForEach-Object { [double]$_ })
+  if ($horizontalPosition.Count -ne 3) { throw 'The packaged horizontal spline-node drag did not report one finite 3D node position.' }
   $fixtureExpectation.minimumNetworkRevision = [int]$nativeHorizontalRecord.response.fixtureTelemetry.networkRevision
   Assert-ExactPathRenderRevision $nativeHorizontalRecord $path.id ([int]$fixtureExpectation.minimumNetworkRevision) | Out-Null
   $interactionRecords.Add([ordered]@{
@@ -444,9 +446,9 @@ try {
   })
 
   $nativeVerticalRecord = Request-Capture $captureDir '08b-native-vertical-moved' @{
-    camera=(Get-LookCamera ([double[]]@(48,22,30)) ([double[]]@(48,0,0)) 68)
+    camera=(Get-LookCamera ([double[]]@($horizontalPosition[0],$horizontalPosition[1]+22,$horizontalPosition[2]+30)) ([double[]]$horizontalPosition) 68)
     hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
-    nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeIndex=1;dx=0;dy=-48;vertical=$true;undo=$false})
+    nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeIndex=0;dx=0;dy=-48;vertical=$true;undo=$false})
   }
   $records.Add($nativeVerticalRecord)
   if (@($nativeVerticalRecord.response.nativeInputTelemetry).Count -ne 1) { throw 'The packaged native-input gate did not report the vertical spline-node drag.' }
@@ -464,7 +466,7 @@ try {
     camera=(Get-LookCamera ([double[]]@(0,62,55)) $target 82)
     hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     nativeInputActions=@(
-      @{type='path-undo';pathId=$path.id;nodeIndex=1;expectedPosition=@(55,0,0)},
+      @{type='path-undo';pathId=$path.id;nodeIndex=0;expectedPosition=$horizontalPosition},
       @{type='path-undo';pathId=$path.id;nodeIndex=0;expectedPosition=@(-55,0,0)}
     )
   }

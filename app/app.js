@@ -291,7 +291,7 @@ function applyVisualTestCamera(requestedCamera){
 }
 
 function visualTestNeedsInputCamera(options={}){
-  return Array.isArray(options.nativeInputActions)&&options.nativeInputActions.some(action=>String(action?.type||'')==='path-node-drag');
+  return Array.isArray(options.nativeInputActions)&&options.nativeInputActions.some(action=>['path-node-drag','path-undo'].includes(String(action?.type||'')));
 }
 
 async function synchronizeVisualTestState(options={}) {

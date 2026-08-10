@@ -87,7 +87,7 @@ test('packaged evidence renders every bridge family at a compatible span and wid
   assert.match(app, /validateVisualCaptureRenderFixture\(options\.expectedPathNetwork,renderTelemetry,currentFixture\)/);
   assert.match(app, /function applyVisualTestCamera/);
   assert.match(app, /function visualTestNeedsInputCamera/);
-  assert.match(app, /String\(action\?\.type\|\|''\)==='path-node-drag'/);
+  assert.match(app, /\['path-node-drag','path-undo'\]\.includes\(String\(action\?\.type\|\|''\)\)/);
   assert.match(app, /visualTestNeedsInputCamera\(options\)&&applyVisualTestCamera\(options\.camera\)/);
   assert.match(app, /applyVisualTestCamera\(options\.camera\)/);
   assert.match(app, /normalizedVisualTestCamera\(options\.restoreCamera,camera\)/);
@@ -135,7 +135,7 @@ test('packaged gate drives real horizontal and Shift-vertical spline handles and
   assert.match(script, /nativeInputActions=@\(/);
   assert.match(script, /type='path-node-drag'.*vertical=\$false.*undo=\$false/);
   assert.match(script, /type='path-node-drag'.*vertical=\$true.*undo=\$false/);
-  assert.match(script, /type='path-undo'.*expectedPosition=@\(55,0,0\)/);
+  assert.match(script, /type='path-undo'.*expectedPosition=\$horizontalPosition/);
   assert.match(script, /type='path-undo'.*expectedPosition=@\(-55,0,0\)/);
   assert.match(script, /nativeInputTelemetry/);
   assert.match(script, /undoVerified/);
