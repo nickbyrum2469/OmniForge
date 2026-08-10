@@ -56,6 +56,13 @@ test('packaged evidence renders every bridge family at a compatible span and wid
   assert.match(script, /suffix='underside'/);
   assert.match(script, /bridgeFamilies=\$bridgeFamilyRecords/);
   assert.match(script, /Restore primary packaged steel bridge fixture/);
+  assert.match(script, /New-ExpectedPathFixture/);
+  assert.match(script, /expectedPathNetwork=\$fixtureExpectation/);
+  assert.match(app, /Visual capture fixture mismatch/);
+  assert.match(app, /Visual capture render fixture mismatch/);
+  assert.match(app, /minimumBridgeIntervalCount/);
+  assert.match(app, /expected nodes/);
+  assert.match(app, /expected segments/);
 });
 
 test('packaged evidence inspects every production path-surface character in world', () => {
@@ -92,7 +99,13 @@ test('packaged gate drives real horizontal and Shift-vertical spline handles and
   assert.match(desktop, /#splineNodeOverlay \[data-spline-node=/);
   assert.match(desktop, /dismissVisualFirstUseTutorial/);
   assert.match(desktop, /#skipTutorialButton/);
+  assert.match(desktop, /#dismissIntegrationSetupButton/);
   assert.match(desktop, /firstUseComplete/);
+  assert.match(desktop, /integrationState/);
+  assert.match(desktop, /current\.integrationOpen&&current\.integrationState==='pending'&&!dismissedIntegration/);
+  assert.match(desktop, /current\.integrationOpen\|\|current\.integrationState==='pending'/);
+  assert.match(desktop, /window\.__omniforgeVisualTestSynchronize/);
+  assert.match(desktop, /nativeSynchronizationTelemetry/);
   assert.match(desktop, /appearanceDeadline/);
   assert.match(desktop, /hitTargetMatches/);
   assert.match(desktop, /Visual input spline handle is covered by/);

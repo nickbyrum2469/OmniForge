@@ -49,6 +49,19 @@ function Get-LookCamera([double[]]$Position,[double[]]$Target,[double]$Fov=62) {
   }
 }
 
+function New-ExpectedPathFixture([string]$PathId,[string]$BridgeStyle,[int]$MinimumNetworkRevision=0) {
+  @{
+    pathId=$PathId
+    networkId="$PathId`:network"
+    nodeIds=@('approach-west','approach-east')
+    segmentIds=@('bridge-showcase')
+    minimumNetworkRevision=$MinimumNetworkRevision
+    valid=$true
+    minimumBridgeIntervalCount=1
+    bridgeStyle=$BridgeStyle
+  }
+}
+
 function Request-Capture([string]$CaptureDir,[string]$Id,[hashtable]$Options,[int]$TimeoutSeconds=60) {
   $requestFile = Join-Path $CaptureDir 'capture-request.json'
   $temporaryFile = Join-Path $CaptureDir 'capture-request.tmp.json'
@@ -172,6 +185,7 @@ try {
     }
   }
   $revision = [int64]$networkResult.state.engine.revision
+  $fixtureExpectation = New-ExpectedPathFixture $path.id 'steel-girder' ([int]$networkResult.network.revision)
   Invoke-Api $port '/api/selection' 'POST' @{objectId=$path.id} | Out-Null
   $worldResult = Invoke-Api $port '/api/v010/world' 'PATCH' @{
     lookPreset='clear-day';time=@{hours=12};weather=@{preset='clear';fog=0;wetness=.32}
@@ -193,7 +207,7 @@ try {
   foreach ($view in $views) {
     $captureOptions = @{
       camera=$view.camera;hideGuides=(-not $view.guides);hideEditorReferences=$true;waitMs=1400
-      minimumRevision=$revision;revisionTimeoutMs=20000
+      minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     }
     if ($view.id -eq '01-approach') {
       # The isolated data root represents a genuine first launch. Dismiss the
@@ -214,7 +228,7 @@ try {
 
   $guideRecord = Request-Capture $captureDir '07-editor-guides-elevated' @{
     camera=(Get-LookCamera ([double[]]@(0,42,22)) $target 58);hideGuides=$false;hideEditorReferences=$true;waitMs=900
-    minimumRevision=$revision;revisionTimeoutMs=20000
+    minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     actions=@(
       @{type='select';objectId=$path.id;waitMs=180},
       @{type='click';target='pathEdit';waitMs=350}
@@ -223,7 +237,7 @@ try {
   $records.Add($guideRecord)
 
   $nativeDragRecord = Request-Capture $captureDir '08-native-node-drag-undo' @{
-    hideGuides=$false;hideEditorReferences=$false;waitMs=700;minimumRevision=$revision;revisionTimeoutMs=20000
+    hideGuides=$false;hideEditorReferences=$false;waitMs=700;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     nativeInputActions=@(
       @{type='path-node-drag';pathId=$path.id;nodeIndex=0;dx=54;dy=10;vertical=$false;undo=$true},
       @{type='path-node-drag';pathId=$path.id;nodeIndex=1;dx=0;dy=-48;vertical=$true;undo=$true}
@@ -281,6 +295,7 @@ try {
       }
     }
     $revision = [int64]$familyNetwork.state.engine.revision
+    $fixtureExpectation = New-ExpectedPathFixture $path.id $fixture.style ([int]$familyNetwork.network.revision)
     foreach ($familyView in @(
       @{suffix='approach';camera=(Get-LookCamera ([double[]]@(-36,3.4,10)) $target 65)},
       @{suffix='side';camera=(Get-LookCamera ([double[]]@(0,10,29)) $target 62)},
@@ -289,7 +304,7 @@ try {
       $familyId = "family-$($fixture.slug)-$($familyView.suffix)"
       $familyCapture = Request-Capture $captureDir $familyId @{
         camera=$familyView.camera;hideGuides=$true;hideEditorReferences=$true;waitMs=1100
-        minimumRevision=$revision;revisionTimeoutMs=20000
+        minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
       }
       $records.Add($familyCapture)
       $bridgeFamilyRecords.Add([ordered]@{
@@ -332,9 +347,10 @@ try {
     }
   }
   $revision = [int64]$restoredSteel.state.engine.revision
+  $fixtureExpectation = New-ExpectedPathFixture $path.id 'steel-girder' ([int]$restoredSteel.network.revision)
   $surfaceCapture = Request-Capture $captureDir '10-surface-details-close' @{
     camera=(Get-LookCamera ([double[]]@(-42,2.6,5.5)) ([double[]]@(-25,0,0)) 66)
-    hideGuides=$true;hideEditorReferences=$true;waitMs=1400;minimumRevision=$revision;revisionTimeoutMs=20000
+    hideGuides=$true;hideEditorReferences=$true;waitMs=1400;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
   }
   $records.Add($surfaceCapture)
   Assert-ProcessResponsive $process $port 'surface detail close-up' | Out-Null
@@ -361,10 +377,11 @@ try {
       })
     }
     $revision = [int64]$surfaceResult.state.engine.revision
+    $fixtureExpectation = New-ExpectedPathFixture $path.id 'steel-girder' ([int]$surfaceResult.network.revision)
     $surfaceId = "surface-$($surfaceFixture.slug)"
     $surfaceRecord = Request-Capture $captureDir $surfaceId @{
       camera=(Get-LookCamera ([double[]]@(-36,8.5,9.5)) ([double[]]@(-25,0,0)) 54)
-      hideGuides=$true;hideEditorReferences=$true;waitMs=1100;minimumRevision=$revision;revisionTimeoutMs=20000
+      hideGuides=$true;hideEditorReferences=$true;waitMs=1100;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     }
     $records.Add($surfaceRecord)
     $surfaceProfileRecords.Add([ordered]@{
@@ -385,6 +402,7 @@ try {
     })
   }
   $revision = [int64]$restoredSurface.state.engine.revision
+  $fixtureExpectation = New-ExpectedPathFixture $path.id 'steel-girder' ([int]$restoredSurface.network.revision)
 
   $interactionWatch = [Diagnostics.Stopwatch]::StartNew()
   $cycle = 0
@@ -411,7 +429,7 @@ try {
     }
     $id = 'interaction-{0:d2}' -f $cycle
     $record = Request-Capture $captureDir $id @{
-      hideGuides=$false;hideEditorReferences=$true;waitMs=260;minimumRevision=$revision;revisionTimeoutMs=20000;actions=$actions.ToArray()
+      hideGuides=$false;hideEditorReferences=$true;waitMs=260;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation;actions=$actions.ToArray()
     }
     $records.Add($record)
     $interactionRecords.Add([ordered]@{
@@ -431,7 +449,7 @@ try {
   $finalActions.Add(@{type='save';message='Packaged path evidence saved'})
   $finalRecord = Request-Capture $captureDir '09-restored-and-saved' @{
     camera=(Get-LookCamera ([double[]]@(0,18,36)) $target 62);hideGuides=$true;hideEditorReferences=$true;waitMs=1000
-    minimumRevision=$revision;revisionTimeoutMs=20000;actions=$finalActions.ToArray()
+    minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation;actions=$finalActions.ToArray()
   }
   $records.Add($finalRecord)
   Assert-ProcessResponsive $process $port 'final save' | Out-Null

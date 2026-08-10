@@ -122,26 +122,41 @@ async function dismissVisualFirstUseTutorial(contents) {
     const payload=await response.json();
     const state=payload.state||payload;
     return {
-      open:Boolean(document.querySelector('#tutorialDialog')?.open),
-      complete:Boolean(state?.editor?.firstUseComplete)
+      tutorialOpen:Boolean(document.querySelector('#tutorialDialog')?.open),
+      tutorialComplete:Boolean(state?.editor?.firstUseComplete),
+      integrationOpen:Boolean(document.querySelector('#integrationSetupDialog')?.open),
+      integrationState:String(state?.settings?.integrations?.setupState||'pending')
     };
   })()`,true);
-  const appearanceDeadline=Date.now()+12000;
+  const appearanceDeadline=Date.now()+20000;
+  let dismissedTutorial=false;
+  let dismissedIntegration=false;
   while(Date.now()<appearanceDeadline){
     const current=await status();
-    if(current.complete&&!current.open)return {type:'dismiss-first-use-tutorial',dismissed:false,alreadyClosed:true};
-    if(!current.open){await visualInputDelay(80);continue;}
-    const bounds=await visualElementBounds(contents,'#skipTutorialButton');
-    await sendVisualClick(contents,bounds);
-    const closeDeadline=Date.now()+5000;
-    while(Date.now()<closeDeadline){
-      await visualInputDelay(60);
-      const settled=await status();
-      if(!settled.open&&settled.complete)return {type:'dismiss-first-use-tutorial',dismissed:true,alreadyClosed:false};
+    if(current.tutorialOpen){
+      await sendVisualClick(contents,await visualElementBounds(contents,'#skipTutorialButton'));
+      dismissedTutorial=true;
+      await visualInputDelay(80);
+      continue;
     }
-    throw new Error('The first-use tutorial remained open or unpersisted after its real Skip control was clicked.');
+    if(!current.tutorialComplete){await visualInputDelay(80);continue;}
+    if(current.integrationOpen&&current.integrationState==='pending'&&!dismissedIntegration){
+      await sendVisualClick(contents,await visualElementBounds(contents,'#dismissIntegrationSetupButton'));
+      dismissedIntegration=true;
+      await visualInputDelay(80);
+      continue;
+    }
+    if(current.integrationOpen||current.integrationState==='pending'){await visualInputDelay(80);continue;}
+    return {
+      type:'dismiss-first-use-tutorial',
+      dismissed:dismissedTutorial||dismissedIntegration,
+      dismissedTutorial,
+      dismissedIntegration,
+      alreadyClosed:!dismissedTutorial&&!dismissedIntegration,
+      integrationState:current.integrationState
+    };
   }
-  throw new Error('The first-use tutorial never appeared and did not report completion before native editor input.');
+  throw new Error('First-use onboarding did not settle before native editor input.');
 }
 
 async function visualElementBounds(contents, selector) {
@@ -149,10 +164,17 @@ async function visualElementBounds(contents, selector) {
   return contents.executeJavaScript(`(()=>{
     const element=document.querySelector(${encoded});
     if(!element)throw new Error('Visual input control is unavailable: '+${encoded});
+    element.scrollIntoView({block:'center',inline:'center',behavior:'auto'});
     const rect=element.getBoundingClientRect();
     const style=getComputedStyle(element);
     if(element.hidden||style.display==='none'||style.visibility==='hidden'||rect.width<1||rect.height<1){
       throw new Error('Visual input control is not visible: '+${encoded});
+    }
+    const centerX=rect.x+rect.width*.5,centerY=rect.y+rect.height*.5;
+    const topElement=document.elementFromPoint(centerX,centerY);
+    if(topElement!==element&&!element.contains(topElement)){
+      const blocker=topElement?.id||topElement?.className||topElement?.tagName||'unknown element';
+      throw new Error('Visual input control is covered by '+blocker+': '+${encoded});
     }
     return {x:rect.x,y:rect.y,width:rect.width,height:rect.height};
   })()`, true);
@@ -255,6 +277,11 @@ function installVisualCaptureWatcher() {
       const request=readJson(processingFile,{});
       const id=String(request.id||Date.now()).replace(/[^a-z0-9_-]/gi,'-');
       const requestOptions=request.options||{};
+      let nativeSynchronizationTelemetry=null;
+      if(Array.isArray(requestOptions.nativeInputActions)&&requestOptions.nativeInputActions.length){
+        const synchronizeOptions=JSON.stringify(requestOptions);
+        nativeSynchronizationTelemetry=await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestSynchronize(${synchronizeOptions})`,true);
+      }
       const nativeInputTelemetry=await performVisualInputActions(mainWindow.webContents,requestOptions.nativeInputActions);
       const options=JSON.stringify(requestOptions);
       const captureResult=await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestCapture(${options})`,true);
@@ -262,7 +289,7 @@ function installVisualCaptureWatcher() {
       const match=/^data:image\/png;base64,(.+)$/s.exec(String(dataUrl||''));
       if(!match)throw new Error('Renderer did not return a PNG data URL.');
       fs.writeFileSync(path.join(VISUAL_CAPTURE_DIR,`${id}.png`),Buffer.from(match[1],'base64'));
-      writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:true,id,at:new Date().toISOString(),renderTelemetry:captureResult?.renderTelemetry||null,interactionTelemetry:captureResult?.interactionTelemetry||[],nativeInputTelemetry});
+      writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:true,id,at:new Date().toISOString(),renderTelemetry:captureResult?.renderTelemetry||null,synchronizationTelemetry:captureResult?.synchronizationTelemetry||null,fixtureTelemetry:captureResult?.fixtureTelemetry||null,nativeSynchronizationTelemetry,interactionTelemetry:captureResult?.interactionTelemetry||[],nativeInputTelemetry});
     }catch(error){
       const request=readJson(processingFile,{});const id=String(request.id||'capture-error').replace(/[^a-z0-9_-]/gi,'-');
       writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:false,id,error:error.message,stack:error.stack||''});

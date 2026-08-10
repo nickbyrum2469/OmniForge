@@ -131,14 +131,17 @@ test('solar-eclipse silhouette is constrained to daylight and no longer blacks o
 
 test('packaged visual QA can request actual canvas PNG evidence', () => {
   assert.match(app, /window\.__omniforgeVisualTestCapture=captureVisualTestFrame/);
-  assert.match(app, /renderTelemetry:renderer\?\.getRenderDiagnostics\?\.\(\)\|\|null/);
+  assert.match(app, /window\.__omniforgeVisualTestSynchronize=synchronizeVisualTestState/);
+  assert.match(app, /const renderTelemetry=renderer\?\.getRenderDiagnostics\?\.\(\)\|\|null/);
+  assert.match(app, /applyState\(authoritativeState,\{forceSelection:false,preserveCamera:true\}\)/);
+  assert.doesNotMatch(app, /if\(minimumRevision>Number\(state\?\.engine\?\.revision\|\|0\)\)/);
   assert.match(app, /ui\.viewport\.toDataURL\('image\/png'\)/);
   assert.match(app, /minimumRevision/);
   assert.match(app, /Visual capture timed out waiting for authoritative revision/);
   assert.match(desktop, /OMNIFORGE_CAPTURE_DIR/);
   assert.match(desktop, /installVisualCaptureWatcher/);
   assert.match(desktop, /capture-request\.json/);
-  assert.match(desktop, /renderTelemetry:captureResult\?\.renderTelemetry\|\|null/);
+  assert.match(desktop, /fixtureTelemetry:captureResult\?\.fixtureTelemetry\|\|null/);
   assert.match(captureScript, /minimumRevision=\$MinimumRevision/);
   assert.match(captureScript, /\$response\.state\.engine\.revision/);
   assert.match(captureScript, /starIntensity=\.24;starDensity=\.72/);

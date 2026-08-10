@@ -232,6 +232,84 @@ async function runVisualTestActions(actions=[]){
   return telemetry;
 }
 
+function visualCaptureSceneFixture(expected={}) {
+  const pathId=String(expected?.pathId||'');
+  if(!pathId)return null;
+  const activeScene=(state?.scenes||[]).find(item=>item.id===state.activeSceneId);
+  const path=(activeScene?.objects||[]).find(item=>item.id===pathId&&item.type==='path');
+  const network=path?.properties?.pathNetwork;
+  if(!network)throw new Error(`Visual capture fixture path is unavailable: ${pathId}.`);
+  const fail=message=>{throw new Error(`Visual capture fixture mismatch for ${pathId}: ${message}`);};
+  const actualNodeIds=(network.nodes||[]).map(node=>String(node.id));
+  const actualSegmentIds=(network.segments||[]).map(segment=>String(segment.id));
+  const expectedNodeIds=(expected.nodeIds||[]).map(String);
+  const expectedSegmentIds=(expected.segmentIds||[]).map(String);
+  if(expected.networkId&&String(network.id)!==String(expected.networkId))fail(`expected network ${expected.networkId}, received ${network.id}.`);
+  if(expectedNodeIds.length&&JSON.stringify(actualNodeIds)!==JSON.stringify(expectedNodeIds))fail(`expected nodes ${expectedNodeIds.join(', ')}, received ${actualNodeIds.join(', ')}.`);
+  if(expectedSegmentIds.length&&JSON.stringify(actualSegmentIds)!==JSON.stringify(expectedSegmentIds))fail(`expected segments ${expectedSegmentIds.join(', ')}, received ${actualSegmentIds.join(', ')}.`);
+  const minimumNetworkRevision=Math.max(0,Number(expected.minimumNetworkRevision||0));
+  if(Number(network.revision||0)<minimumNetworkRevision)fail(`expected network revision >= ${minimumNetworkRevision}, received ${Number(network.revision||0)}.`);
+  const expectedBridgeStyle=String(expected.bridgeStyle||'');
+  if(expectedBridgeStyle){
+    const segment=(network.segments||[]).find(item=>String(item.id)===String(expectedSegmentIds[0]||actualSegmentIds[0]||''));
+    const actualBridgeStyle=String(segment?.structureProfile?.bridgeStyle||'');
+    if(actualBridgeStyle!==expectedBridgeStyle)fail(`expected bridge style ${expectedBridgeStyle}, received ${actualBridgeStyle||'none'}.`);
+  }
+  return {
+    pathId,
+    networkId:String(network.id||''),
+    networkRevision:Number(network.revision||0),
+    nodeIds:actualNodeIds,
+    segmentIds:actualSegmentIds,
+    bridgeStyle:expectedBridgeStyle
+  };
+}
+
+async function synchronizeVisualTestState(options={}) {
+  const minimumRevision=Math.max(0,Number(options.minimumRevision||0));
+  const requiresAuthoritativeState=minimumRevision>0||Boolean(options.expectedPathNetwork?.pathId);
+  if(requiresAuthoritativeState){
+    const deadline=performance.now()+Math.max(1000,Math.min(20000,Number(options.revisionTimeoutMs||8000)));
+    let authoritativeState=null;
+    while(performance.now()<deadline){
+      const remote=await api('/api/state');
+      if(Number(remote?.engine?.revision||0)>=minimumRevision){authoritativeState=remote;break;}
+      await sleep(80);
+    }
+    if(!authoritativeState){
+      throw new Error(`Visual capture timed out waiting for authoritative revision ${minimumRevision}.`);
+    }
+    // Global revision ordering cannot prove that a renderer contains the same
+    // scene payload. Always apply the fetched authority before native input or
+    // visual evidence instead of trusting a numerically newer local revision.
+    applyState(authoritativeState,{forceSelection:false,preserveCamera:true});
+  }
+  const fixture=visualCaptureSceneFixture(options.expectedPathNetwork);
+  return {engineRevision:Number(state?.engine?.revision||0),fixture};
+}
+
+function validateVisualCaptureRenderFixture(expected,renderTelemetry,sceneFixture) {
+  if(!expected?.pathId)return sceneFixture||null;
+  const corridor=(renderTelemetry?.pathwayCorridors||[]).find(item=>String(item.id)===String(expected.pathId));
+  if(!corridor)throw new Error(`Visual capture renderer did not compile expected path ${expected.pathId}.`);
+  const fail=message=>{throw new Error(`Visual capture render fixture mismatch for ${expected.pathId}: ${message}`);};
+  if(Number(corridor.compiler?.nodeCount||0)!==Number(sceneFixture?.nodeIds?.length||0))fail('compiled node count differs from authoritative scene.');
+  if(Number(corridor.compiler?.segmentCount||0)!==Number(sceneFixture?.segmentIds?.length||0))fail('compiled segment count differs from authoritative scene.');
+  if(Object.hasOwn(expected,'valid')&&Boolean(corridor.valid)!==Boolean(expected.valid))fail(`expected valid=${Boolean(expected.valid)}, received ${Boolean(corridor.valid)}.`);
+  const minimumBridgeIntervalCount=Math.max(0,Number(expected.minimumBridgeIntervalCount||0));
+  if(Number(corridor.terrain?.bridgeIntervalCount||0)<minimumBridgeIntervalCount){
+    fail(`expected at least ${minimumBridgeIntervalCount} bridge interval(s), received ${Number(corridor.terrain?.bridgeIntervalCount||0)}.`);
+  }
+  return {
+    ...sceneFixture,
+    valid:Boolean(corridor.valid),
+    compiledNodeCount:Number(corridor.compiler?.nodeCount||0),
+    compiledSegmentCount:Number(corridor.compiler?.segmentCount||0),
+    bridgeIntervalCount:Number(corridor.terrain?.bridgeIntervalCount||0),
+    structureVertexCount:Number(corridor.geometry?.meshes?.structure?.vertexCount||0)
+  };
+}
+
 async function captureVisualTestFrame(options={}) {
   if(!ui.viewport||!camera||!scene)throw new Error('Viewport is not ready for visual capture.');
   const originalCamera=cloneCamera(camera);
@@ -239,22 +317,8 @@ async function captureVisualTestFrame(options={}) {
   const originalSplines=scene.settings.splinesVisible;
   const originalSelectedId=selectedId;
   try{
+    const synchronizationTelemetry=await synchronizeVisualTestState(options);
     const interactionTelemetry=await runVisualTestActions(options.actions);
-    const minimumRevision=Math.max(0,Number(options.minimumRevision||0));
-    if(minimumRevision>Number(state?.engine?.revision||0)){
-      const deadline=performance.now()+Math.max(1000,Math.min(12000,Number(options.revisionTimeoutMs||8000)));
-      while(performance.now()<deadline){
-        const remote=await api('/api/state');
-        if(Number(remote?.engine?.revision||0)>=minimumRevision){
-          applyState(remote,{forceSelection:false,preserveCamera:true});
-          break;
-        }
-        await sleep(80);
-      }
-      if(Number(state?.engine?.revision||0)<minimumRevision){
-        throw new Error(`Visual capture timed out waiting for authoritative revision ${minimumRevision}; renderer has ${Number(state?.engine?.revision||0)}.`);
-      }
-    }
     if(options.camera){
       const next=cloneCamera(camera);
       if(Array.isArray(options.camera.position)&&options.camera.position.length===3)next.position=options.camera.position.map(Number);
@@ -266,9 +330,13 @@ async function captureVisualTestFrame(options={}) {
     const waitMs=Math.max(80,Math.min(3000,Number(options.waitMs||500)));
     await sleep(waitMs);
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    const renderTelemetry=renderer?.getRenderDiagnostics?.()||null;
+    const fixtureTelemetry=validateVisualCaptureRenderFixture(options.expectedPathNetwork,renderTelemetry,synchronizationTelemetry.fixture);
     return {
       dataUrl:ui.viewport.toDataURL('image/png'),
-      renderTelemetry:renderer?.getRenderDiagnostics?.()||null,
+      renderTelemetry,
+      synchronizationTelemetry,
+      fixtureTelemetry,
       interactionTelemetry
     };
   }finally{
@@ -280,6 +348,7 @@ async function captureVisualTestFrame(options={}) {
   }
 }
 window.__omniforgeVisualTestCapture=captureVisualTestFrame;
+window.__omniforgeVisualTestSynchronize=synchronizeVisualTestState;
 
 function objectIcon(type) {
   return ({box:'▣',sphere:'●',cylinder:'⬭',plane:'▱',terrain:'⌁',path:'⌇',model:'◆',decal:'◫',directionalLight:'☀',pointLight:'✦',empty:'＋'})[type] || '◇';
