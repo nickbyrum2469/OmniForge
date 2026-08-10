@@ -290,6 +290,10 @@ function applyVisualTestCamera(requestedCamera){
   return true;
 }
 
+function visualTestNeedsInputCamera(options={}){
+  return Array.isArray(options.nativeInputActions)&&options.nativeInputActions.some(action=>String(action?.type||'')==='path-node-drag');
+}
+
 async function synchronizeVisualTestState(options={}) {
   const minimumRevision=Math.max(0,Number(options.minimumRevision||0));
   const requiresAuthoritativeState=minimumRevision>0||Boolean(options.expectedPathNetwork?.pathId);
@@ -314,7 +318,7 @@ async function synchronizeVisualTestState(options={}) {
   // Native spline input runs before the PNG capture. Frame its requested
   // camera now, then let two real animation frames reconcile HTML handles to
   // the WebGL projection before Electron hit-tests and drags them.
-  if(applyVisualTestCamera(options.camera)){
+  if(visualTestNeedsInputCamera(options)&&applyVisualTestCamera(options.camera)){
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   }
   const fixture=visualCaptureSceneFixture(options.expectedPathNetwork);

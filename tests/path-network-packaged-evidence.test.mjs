@@ -86,6 +86,9 @@ test('packaged evidence renders every bridge family at a compatible span and wid
   assert.match(app, /const currentFixture=visualCaptureSceneFixture\(options\.expectedPathNetwork\)/);
   assert.match(app, /validateVisualCaptureRenderFixture\(options\.expectedPathNetwork,renderTelemetry,currentFixture\)/);
   assert.match(app, /function applyVisualTestCamera/);
+  assert.match(app, /function visualTestNeedsInputCamera/);
+  assert.match(app, /String\(action\?\.type\|\|''\)==='path-node-drag'/);
+  assert.match(app, /visualTestNeedsInputCamera\(options\)&&applyVisualTestCamera\(options\.camera\)/);
   assert.match(app, /applyVisualTestCamera\(options\.camera\)/);
   assert.match(app, /normalizedVisualTestCamera\(options\.restoreCamera,camera\)/);
   assert.match(app, /__omniforgeVisualTestCameraSnapshot/);
