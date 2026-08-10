@@ -134,7 +134,7 @@ test('packaged gate drives real horizontal and Shift-vertical spline handles and
   assert.match(script, /type='dismiss-first-use-tutorial'/);
   assert.match(script, /nativeInputActions=@\(/);
   assert.match(script, /type='path-node-drag'.*vertical=\$false.*undo=\$false/);
-  assert.match(script, /type='path-node-drag'.*vertical=\$true.*undo=\$false/);
+  assert.match(script, /type='path-node-drag'.*dy=-16.*vertical=\$true.*undo=\$false/);
   assert.match(script, /type='path-undo'.*expectedPosition=\$horizontalPosition/);
   assert.match(script, /type='path-undo'.*expectedPosition=@\(-55,0,0\)/);
   assert.match(script, /nativeInputTelemetry/);

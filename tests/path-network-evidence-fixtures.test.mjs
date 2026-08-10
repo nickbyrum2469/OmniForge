@@ -144,6 +144,40 @@ test('every packaged-evidence bridge family fixture compiles a real compatible s
   }
 });
 
+test('the exact packaged native horizontal plus 2.4 metre vertical edit remains Civil-Assist-valid', () => {
+  const terrain = evidenceTerrain({ radius: 18, depth: 12, suffix: 'native-edit' });
+  const path = evidencePath({
+    suffix: 'native-edit',
+    bridgeStyle: 'steel-girder',
+    width: 6,
+    vehicleClass: 'mixed',
+    minimumBridgeRunLength: 7,
+    surfaceDetailProfile: {
+      profileId: 'muddy-wagon-road',
+      seed: 8128,
+      puddleCoverage: 0.28,
+      wheelRutStrength: 0.62,
+      hoofPrintDensity: 0.18,
+      bootPrintDensity: 0.12,
+      weatherResponse: 0.78
+    }
+  });
+  const network = path.properties.pathNetwork;
+  network.nodes[0].position = [-50.272233051681035, 2.4, 0.6663010475217277];
+  Object.assign(network.segments[0].crossSectionProfile, {
+    shoulderWidth: 0.9,
+    blendDistance: 3.4,
+    depth: 0.24
+  });
+
+  const runtime = compilePathObjectRuntime(path, terrain, { useStableCache: false });
+  assert.equal(runtime.diagnostics.valid, true, 'the native evidence edit must not disappear as an invalid route');
+  assert.equal(runtime.diagnostics.terrain.bridgeIntervalCount, 1);
+  assert.equal(runtime.diagnostics.bridgeSelections.length, 1);
+  assert.equal(runtime.diagnostics.bridgeSelections[0].bridgeStyle, 'steel-girder');
+  assert.ok(runtime.diagnostics.meshStats.structure.indexCount > 0);
+});
+
 test('every packaged-evidence surface profile reaches both road and bridge GPU-facing vertex streams', () => {
   const packedPayloads = new Set();
   for (const fixture of SURFACE_FIXTURES) {

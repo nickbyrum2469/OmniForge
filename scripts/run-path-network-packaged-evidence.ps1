@@ -448,7 +448,10 @@ try {
   $nativeVerticalRecord = Request-Capture $captureDir '08b-native-vertical-moved' @{
     camera=(Get-LookCamera ([double[]]@($horizontalPosition[0],$horizontalPosition[1]+22,$horizontalPosition[2]+30)) ([double[]]$horizontalPosition) 68)
     hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
-    nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeIndex=0;dx=0;dy=-48;vertical=$true;undo=$false})
+    # Sixteen native pixels maps to +2.4 m in the viewport's vertical gizmo.
+    # The exact evidence fixture remains Civil-Assist-valid at this height while
+    # still producing an unmistakable authored elevation change in the capture.
+    nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeIndex=0;dx=0;dy=-16;vertical=$true;undo=$false})
   }
   $records.Add($nativeVerticalRecord)
   if (@($nativeVerticalRecord.response.nativeInputTelemetry).Count -ne 1) { throw 'The packaged native-input gate did not report the vertical spline-node drag.' }
