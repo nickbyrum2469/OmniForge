@@ -133,7 +133,7 @@ test('packaged visual QA can request actual canvas PNG evidence', () => {
   assert.match(app, /window\.__omniforgeVisualTestCapture=captureVisualTestFrame/);
   assert.match(app, /window\.__omniforgeVisualTestSynchronize=synchronizeVisualTestState/);
   assert.match(app, /const renderTelemetry=renderer\?\.getRenderDiagnostics\?\.\(\)\|\|null/);
-  assert.match(app, /applyState\(authoritativeState,\{forceSelection:false,preserveCamera:true\}\)/);
+  assert.match(app, /applyState\(authoritativeState,\{forceSelection:Boolean\(expectedPathId\),preserveCamera:true\}\)/);
   assert.doesNotMatch(app, /if\(minimumRevision>Number\(state\?\.engine\?\.revision\|\|0\)\)/);
   assert.match(app, /ui\.viewport\.toDataURL\('image\/png'\)/);
   assert.match(app, /minimumRevision/);

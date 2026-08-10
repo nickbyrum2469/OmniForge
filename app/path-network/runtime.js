@@ -100,6 +100,19 @@ export function compilePathObjectRuntime(pathObject, terrain, options = {}) {
     terrainModifier,
     junctionFilletSegments: options.junctionFilletSegments
   });
+  const meshStats = Object.fromEntries(Object.entries(geometry.meshes).map(([name, mesh]) => [name, {
+    vertexCount: Math.floor((mesh?.positions?.length || 0) / 3),
+    indexCount: mesh?.indices?.length || 0,
+    triangleCount: Math.floor((mesh?.indices?.length || 0) / 3)
+  }]));
+  const segmentEvidence = (migration.network.segments || []).map(segment => ({
+    id: String(segment.id),
+    fromNode: String(segment.fromNode),
+    toNode: String(segment.toNode),
+    width: Number(segment.crossSectionProfile?.width || 0),
+    bridgeStyle: String(segment.structureProfile?.bridgeStyle || 'auto'),
+    surfaceProfileId: String(segment.surfaceDetailProfile?.profileId || '')
+  }));
   const runtime = {
     schemaVersion: 1,
     pathObjectId: pathObject.id,
@@ -114,9 +127,24 @@ export function compilePathObjectRuntime(pathObject, terrain, options = {}) {
     geometry,
     diagnostics: {
       valid: compiled.diagnostics.valid && geometry.validation.valid,
+      sourceNetworkId: compiled.sourceNetworkId,
+      sourceRevision: compiled.sourceRevision,
+      generationRevision: compiled.generationRevision,
+      nodeIds: (migration.network.nodes || []).map(node => String(node.id)),
+      segmentIds: (migration.network.segments || []).map(segment => String(segment.id)),
+      segments: segmentEvidence,
       compiler: compiled.diagnostics,
       terrain: terrainModifier.diagnostics,
       geometry: geometry.validation,
+      meshStats,
+      bridgeSelections: geometry.bridgeSelections.map(selection => ({
+        segmentId: String(selection.segmentId),
+        bridgeStyle: String(selection.bridgeStyle),
+        span: Number(selection.span || 0),
+        width: Number(selection.width || 0),
+        deckWidth: Number(selection.deckWidth || 0),
+        valid: Boolean(selection.valid)
+      })),
       construction: compiled.constructionIntervals
     }
   };

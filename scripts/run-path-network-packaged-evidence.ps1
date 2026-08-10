@@ -26,14 +26,90 @@ function Get-FreePort {
   finally { $listener.Stop() }
 }
 
-function Wait-Health([int]$Port,[int]$TimeoutSeconds=60) {
+function Read-JsonFile([string]$Path,[switch]$AllowMissing) {
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    if ($AllowMissing) { return $null }
+    throw "Required JSON file is missing: $Path"
+  }
+  try { return (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json) }
+  catch { throw "Could not read JSON from $Path`: $($_.Exception.Message)" }
+}
+
+function Test-PortBindable([int]$Port) {
+  $listener = $null
+  try {
+    $listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, $Port)
+    $listener.Start()
+    return $true
+  } catch { return $false }
+  finally { if ($null -ne $listener) { try { $listener.Stop() } catch {} } }
+}
+
+function Assert-RuntimeIdentity($Health,$Marker,[int]$Port,[string]$Stage) {
+  if ($null -eq $Marker) { throw "Runtime identity marker is unavailable during $Stage." }
+  if ([int]$Marker.port -ne $Port -or [int]$Health.port -ne $Port) {
+    throw "Runtime port identity mismatch during $Stage (expected $Port, marker $($Marker.port), health $($Health.port))."
+  }
+  if (-not [string]$Marker.sessionToken -or [string]$Marker.sessionToken -ne [string]$Health.sessionToken) {
+    throw "Runtime session-token identity mismatch during $Stage."
+  }
+  if ([int]$Marker.pid -le 0 -or [int]$Marker.pid -ne [int]$Health.pid) {
+    throw "Runtime PID identity mismatch during $Stage (marker $($Marker.pid), health $($Health.pid))."
+  }
+}
+
+function Wait-PackagedHealth($Process,[int]$Port,[string]$RuntimeRoot,[int]$TimeoutSeconds=60) {
+  $runtimeFile = Join-Path $RuntimeRoot 'sessions\runtime.json'
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  $lastFailure = 'runtime marker and health endpoint were not ready'
   while ((Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 300
-    try { return Invoke-Api $Port '/api/health' 'GET' $null 2 }
-    catch {}
+    if ($null -ne $Process -and $Process.HasExited) {
+      throw "Packaged OmniForge exited before becoming healthy with code $($Process.ExitCode)."
+    }
+    try {
+      $marker = Read-JsonFile $runtimeFile -AllowMissing
+      if ($null -eq $marker) { $lastFailure = 'runtime marker was not written'; continue }
+      $health = Invoke-Api $Port '/api/health' 'GET' $null 2
+      Assert-RuntimeIdentity $health $marker $Port 'packaged startup'
+      return [ordered]@{ health=$health;runtime=$marker;desktopProcessId=$Process.Id }
+    } catch { $lastFailure = $_.Exception.Message }
   }
-  throw "Packaged OmniForge did not become healthy on port $Port."
+  throw "Packaged OmniForge did not become healthy with a matching isolated runtime identity on port $Port`: $lastFailure"
+}
+
+function Get-SourceTreeDigest([string]$RepositoryRoot,[string]$PackageAppRoot) {
+  $sourceFolders = @('app','server','bridge','desktop','workers','assets','docs','scripts','tests','resources')
+  $packagePrefix = [IO.Path]::GetFullPath($PackageAppRoot).TrimEnd('\') + '\'
+  $trackedFiles = @(& git -C $RepositoryRoot ls-tree -r --name-only HEAD -- @sourceFolders)
+  if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate the authoritative Git source tree.' }
+  $sourceFiles = @{}
+  $records = New-Object System.Collections.Generic.List[string]
+  foreach ($trackedFile in $trackedFiles) {
+    $relative = ([string]$trackedFile).Trim().Replace('\','/')
+    if (-not $relative) { continue }
+    $packagedFile = Join-Path $PackageAppRoot $relative.Replace('/','\')
+    if (-not (Test-Path -LiteralPath $packagedFile -PathType Leaf)) { throw "Packaged source file is missing: $relative" }
+    $expectedBlob = ([string](& git -C $RepositoryRoot rev-parse "HEAD`:$relative")).Trim()
+    if ($LASTEXITCODE -ne 0 -or $expectedBlob -notmatch '^[0-9a-f]{40,64}$') { throw "Could not resolve authoritative Git blob for $relative." }
+    $packagedBlob = ([string](& git hash-object -- $packagedFile)).Trim()
+    if ($LASTEXITCODE -ne 0 -or $packagedBlob -ne $expectedBlob) { throw "Packaged source hash mismatch for $relative." }
+    $sourceFiles[$relative] = $expectedBlob
+    $records.Add("$relative`t$expectedBlob")
+  }
+  foreach ($folder in $sourceFolders) {
+    $packagedFolder = Join-Path $PackageAppRoot $folder
+    if (-not (Test-Path -LiteralPath $packagedFolder -PathType Container)) { continue }
+    foreach ($file in Get-ChildItem -LiteralPath $packagedFolder -File -Recurse) {
+      $relative = $file.FullName.Substring($packagePrefix.Length).Replace('\','/')
+      if (-not $sourceFiles.ContainsKey($relative)) { throw "Packaged source contains a stale extra file: $relative" }
+    }
+  }
+  $digestInput = [Text.Encoding]::UTF8.GetBytes((($records | Sort-Object) -join "`n"))
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try { $digest = -join ($sha.ComputeHash($digestInput) | ForEach-Object { $_.ToString('x2') }) }
+  finally { $sha.Dispose() }
+  return [ordered]@{ algorithm='SHA256-over-Git-blob-inventory';digest=$digest;fileCount=$records.Count;folders=$sourceFolders }
 }
 
 function Get-LookCamera([double[]]$Position,[double[]]$Target,[double]$Fov=62) {
@@ -49,7 +125,13 @@ function Get-LookCamera([double[]]$Position,[double[]]$Target,[double]$Fov=62) {
   }
 }
 
-function New-ExpectedPathFixture([string]$PathId,[string]$BridgeStyle,[int]$MinimumNetworkRevision=0) {
+function New-ExpectedPathFixture(
+  [string]$PathId,
+  [string]$BridgeStyle,
+  [int]$MinimumNetworkRevision=0,
+  [string]$SurfaceProfileId='muddy-wagon-road',
+  [double]$Width=6
+) {
   @{
     pathId=$PathId
     networkId="$PathId`:network"
@@ -59,6 +141,8 @@ function New-ExpectedPathFixture([string]$PathId,[string]$BridgeStyle,[int]$Mini
     valid=$true
     minimumBridgeIntervalCount=1
     bridgeStyle=$BridgeStyle
+    surfaceProfileId=$SurfaceProfileId
+    width=$Width
   }
 }
 
@@ -85,13 +169,109 @@ function Request-Capture([string]$CaptureDir,[string]$Id,[hashtable]$Options,[in
   throw "Packaged capture $Id timed out after $TimeoutSeconds seconds."
 }
 
-function Assert-ProcessResponsive($Process,[int]$Port,[string]$Stage) {
+function Assert-ExactPathRenderRevision($Record,[string]$PathId,[int]$ExpectedRevision) {
+  $fixture = $Record.response.fixtureTelemetry
+  if ($null -eq $fixture -or [int]$fixture.networkRevision -ne $ExpectedRevision -or [int]$fixture.sourceRevision -ne $ExpectedRevision) {
+    throw "Capture $($Record.id) did not prove exact authoritative/compiled Path Network revision $ExpectedRevision."
+  }
+  $corridor = @($Record.response.renderTelemetry.pathwayCorridors | Where-Object { [string]$_.id -eq $PathId })[0]
+  if ($null -eq $corridor -or [int]$corridor.sourceRevision -ne $ExpectedRevision -or [int]$corridor.renderer.sourceRevision -ne $ExpectedRevision) {
+    throw "Capture $($Record.id) did not upload exact Path Network revision $ExpectedRevision to the packaged renderer."
+  }
+  return $true
+}
+
+function Assert-ProcessResponsive($Process,[int]$Port,[string]$RuntimeRoot,[string]$Stage) {
   if ($Process.HasExited) { throw "Packaged OmniForge exited during $Stage with code $($Process.ExitCode)." }
   $watch = [Diagnostics.Stopwatch]::StartNew()
-  Invoke-Api $Port '/api/health' 'GET' $null 4 | Out-Null
+  $health = Invoke-Api $Port '/api/health' 'GET' $null 4
+  $marker = Read-JsonFile (Join-Path $RuntimeRoot 'sessions\runtime.json')
+  Assert-RuntimeIdentity $health $marker $Port $Stage
   $watch.Stop()
   if ($watch.Elapsed.TotalMilliseconds -gt 4000) { throw "Health request exceeded four seconds during $Stage." }
   return $watch.Elapsed.TotalMilliseconds
+}
+
+function Wait-HealthOffline([int]$Port,[int]$TimeoutSeconds=20) {
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  $consecutiveOfflineProbes = 0
+  while ((Get-Date) -lt $deadline) {
+    $portBindable = Test-PortBindable $Port
+    $healthOnline = $false
+    if (-not $portBindable) {
+      try { Invoke-Api $Port '/api/health' 'GET' $null 1 | Out-Null; $healthOnline = $true } catch {}
+    }
+    if (-not $healthOnline -and $portBindable) { $consecutiveOfflineProbes++ }
+    else { $consecutiveOfflineProbes = 0 }
+    if ($consecutiveOfflineProbes -ge 4) {
+      return [ordered]@{port=$Port;consecutiveOfflineProbes=$consecutiveOfflineProbes;portBindable=$true}
+    }
+    Start-Sleep -Milliseconds 150
+  }
+  throw "Packaged OmniForge server did not remain offline with a bindable port after its editor window closed on port $Port."
+}
+
+function Close-PackagedGracefully($Process,[int]$Port,[string]$RuntimeRoot,[string]$Stage) {
+  if ($null -eq $Process) { throw "No packaged process was available during $Stage." }
+  if ($Process.HasExited) { throw "Packaged OmniForge had already exited before $Stage with code $($Process.ExitCode)." }
+  $processId = $Process.Id
+  $requestedAt = (Get-Date).ToUniversalTime()
+  if (-not $Process.CloseMainWindow()) { throw "Packaged OmniForge did not accept a graceful window close during $Stage." }
+  if (-not $Process.WaitForExit(20000)) { throw "Packaged OmniForge did not exit within 20 seconds during $Stage." }
+  $offline = Wait-HealthOffline $Port 20
+  if ([int]$Process.ExitCode -ne 0) { throw "Packaged OmniForge exited non-cleanly during $Stage with code $($Process.ExitCode)." }
+  $lifecycleFile = Join-Path $RuntimeRoot 'sessions\lifecycle.json'
+  $lifecycle = Read-JsonFile $lifecycleFile
+  if ([int]$lifecycle.pid -ne $processId -or $lifecycle.cleanShutdown -ne $true -or -not [string]$lifecycle.endedAt) {
+    throw "Packaged OmniForge did not record a clean lifecycle marker for desktop PID $processId during $Stage."
+  }
+  [ordered]@{
+    stage=$Stage;processId=$processId;requestedAt=$requestedAt.ToString('o')
+    exitedAt=(Get-Date).ToUniversalTime().ToString('o');exitCode=$Process.ExitCode
+    lifecycle=$lifecycle;offline=$offline
+  }
+}
+
+function Stop-PackagedProcessTree($Process,[int]$Port,[string]$RuntimeRoot) {
+  $runtimeMarker = Read-JsonFile (Join-Path $RuntimeRoot 'sessions\runtime.json') -AllowMissing
+  $processIds = New-Object 'System.Collections.Generic.HashSet[int]'
+  if ($null -ne $Process) { [void]$processIds.Add([int]$Process.Id) }
+  if ($null -ne $runtimeMarker -and [int]$runtimeMarker.pid -gt 0) { [void]$processIds.Add([int]$runtimeMarker.pid) }
+  $taskkill = Join-Path $env:SystemRoot 'System32\taskkill.exe'
+  foreach ($processId in $processIds) {
+    if ($processId -le 0 -or $processId -eq $PID) { continue }
+    $target = Get-Process -Id $processId -ErrorAction SilentlyContinue
+    if ($null -eq $target) { continue }
+    $killer = Start-Process -FilePath $taskkill -ArgumentList @('/PID',"$processId",'/T','/F') -WindowStyle Hidden -Wait -PassThru
+    if ($killer.ExitCode -notin @(0,128)) { Write-Warning "taskkill returned $($killer.ExitCode) for packaged process tree $processId." }
+  }
+  if ($null -ne $Process -and -not $Process.HasExited) { [void]$Process.WaitForExit(10000) }
+  return Wait-HealthOffline $Port 20
+}
+
+function Assert-PersistedPathFixture($State,[string]$PathId,[int]$MinimumNetworkRevision=0) {
+  $activeScene = @($State.scenes | Where-Object { $_.id -eq $State.activeSceneId })[0]
+  $pathObject = @($activeScene.objects | Where-Object { $_.id -eq $PathId -and $_.type -eq 'path' })[0]
+  if ($null -eq $pathObject) { throw "Persisted Path Network fixture $PathId is missing." }
+  $network = $pathObject.properties.pathNetwork
+  $nodeIds = @($network.nodes | ForEach-Object { [string]$_.id })
+  $segmentIds = @($network.segments | ForEach-Object { [string]$_.id })
+  if (($nodeIds -join ',') -ne 'approach-west,approach-east') { throw "Persisted Path Network nodes changed: $($nodeIds -join ', ')." }
+  if (($segmentIds -join ',') -ne 'bridge-showcase') { throw "Persisted Path Network segment changed: $($segmentIds -join ', ')." }
+  if ([int]$network.revision -lt $MinimumNetworkRevision) { throw "Persisted Path Network revision $($network.revision) is older than $MinimumNetworkRevision." }
+  $expectedPositions = @{ 'approach-west'=@(-55.0,0.0,0.0); 'approach-east'=@(55.0,0.0,0.0) }
+  foreach ($node in @($network.nodes)) {
+    $expected = $expectedPositions[[string]$node.id]
+    for ($axis=0; $axis -lt 3; $axis++) {
+      if ([Math]::Abs([double]$node.position[$axis] - [double]$expected[$axis]) -gt 0.005) {
+        throw "Persisted node $($node.id) did not retain its restored authored position."
+      }
+    }
+  }
+  $segment = @($network.segments)[0]
+  if ([string]$segment.structureProfile.bridgeStyle -ne 'steel-girder') { throw 'Persisted bridge family is not steel-girder.' }
+  if ([string]$segment.surfaceDetailProfile.profileId -ne 'muddy-wagon-road') { throw 'Persisted path surface profile is not muddy-wagon-road.' }
+  return $pathObject
 }
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -107,11 +287,18 @@ if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') { throw 'Could not
 $packageRoot = Join-Path $root 'dist\OmniForge-win32-x64'
 $executable = Join-Path $packageRoot 'OmniForge.exe'
 $sourceCommitFile = Join-Path $packageRoot 'source-commit'
+$sourceTreeFile = Join-Path $packageRoot 'source-tree'
 if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw "Packaged executable is missing: $executable" }
 if (-not (Test-Path -LiteralPath $sourceCommitFile -PathType Leaf)) { throw "Packaged source-commit is missing: $sourceCommitFile" }
+if (-not (Test-Path -LiteralPath $sourceTreeFile -PathType Leaf)) { throw "Packaged source-tree is missing: $sourceTreeFile" }
 $packagedCommit = (Get-Content -LiteralPath $sourceCommitFile -Raw).Trim()
+$packagedSourceTree = (Get-Content -LiteralPath $sourceTreeFile -Raw).Trim()
+$headSourceTree = ([string](& git rev-parse 'HEAD^{tree}')).Trim()
+if ($LASTEXITCODE -ne 0 -or $headSourceTree -notmatch '^[0-9a-f]{40,64}$') { throw 'Could not resolve the authoritative Git source tree.' }
 if ($packagedCommit -eq 'source-archive') { throw 'The package was built from source-archive instead of a real Git commit.' }
 if ($packagedCommit -ne $head) { throw "Package identity mismatch: packaged $packagedCommit, repository $head." }
+if ($packagedSourceTree -ne $headSourceTree) { throw "Package source-tree mismatch: packaged $packagedSourceTree, repository $headSourceTree." }
+$packagedSourceAudit = Get-SourceTreeDigest $root (Join-Path $packageRoot 'resources\app')
 
 $shortHead = $head.Substring(0,12)
 $evidenceRoot = Join-Path $root "output\path-network-packaged-evidence\$shortHead"
@@ -126,6 +313,8 @@ $records = New-Object System.Collections.Generic.List[object]
 $interactionRecords = New-Object System.Collections.Generic.List[object]
 $bridgeFamilyRecords = New-Object System.Collections.Generic.List[object]
 $surfaceProfileRecords = New-Object System.Collections.Generic.List[object]
+$restartRecord = $null
+$cleanupFailure = $null
 $startedAt = (Get-Date).ToUniversalTime()
 $oldDataRoot = $env:OMNIFORGE_DATA_ROOT
 $oldPort = $env:OMNIFORGE_PORT
@@ -138,7 +327,7 @@ try {
   $env:OMNIFORGE_CAPTURE_DIR = $captureDir
   if ($Diagnostics) { $env:OMNIFORGE_DIAGNOSTICS = '1' } else { Remove-Item Env:OMNIFORGE_DIAGNOSTICS -ErrorAction SilentlyContinue }
   $process = Start-Process -FilePath $executable -WorkingDirectory $packageRoot -PassThru
-  $health = Wait-Health $port
+  $health = Wait-PackagedHealth $process $port $runtimeRoot
   Start-Sleep -Seconds 3
 
   $state = Invoke-Api $port '/api/state'
@@ -223,7 +412,7 @@ try {
         view=$view.id;capture=$record.file
       })
     }
-    Assert-ProcessResponsive $process $port $view.id | Out-Null
+    Assert-ProcessResponsive $process $port $runtimeRoot $view.id | Out-Null
   }
 
   $guideRecord = Request-Capture $captureDir '07-editor-guides-elevated' @{
@@ -236,23 +425,60 @@ try {
   }
   $records.Add($guideRecord)
 
-  $nativeDragRecord = Request-Capture $captureDir '08-native-node-drag-undo' @{
-    hideGuides=$false;hideEditorReferences=$false;waitMs=700;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
+  $nativeHorizontalRecord = Request-Capture $captureDir '08a-native-horizontal-moved' @{
+    camera=(Get-LookCamera ([double[]]@(0,40,28)) $target 58)
+    hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
+    nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeIndex=0;dx=54;dy=10;vertical=$false;undo=$false})
+  }
+  $records.Add($nativeHorizontalRecord)
+  if (@($nativeHorizontalRecord.response.nativeInputTelemetry).Count -ne 1) { throw 'The packaged native-input gate did not report the horizontal spline-node drag.' }
+  $horizontalTelemetry = @($nativeHorizontalRecord.response.nativeInputTelemetry)[0]
+  if ([double]$horizontalTelemetry.horizontalDelta -lt 0.01) { throw 'The packaged horizontal spline-node drag did not move its authored node.' }
+  $fixtureExpectation.minimumNetworkRevision = [int]$nativeHorizontalRecord.response.fixtureTelemetry.networkRevision
+  Assert-ExactPathRenderRevision $nativeHorizontalRecord $path.id ([int]$fixtureExpectation.minimumNetworkRevision) | Out-Null
+  $interactionRecords.Add([ordered]@{
+    id='08a-native-horizontal-moved';elapsedMs=$nativeHorizontalRecord.elapsedMs
+    healthMs=(Assert-ProcessResponsive $process $port $runtimeRoot 'native horizontal node drag')
+    telemetry=$nativeHorizontalRecord.response.nativeInputTelemetry
+  })
+
+  $nativeVerticalRecord = Request-Capture $captureDir '08b-native-vertical-moved' @{
+    camera=(Get-LookCamera ([double[]]@(0,24,34)) $target 62)
+    hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
+    nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeIndex=1;dx=0;dy=-48;vertical=$true;undo=$false})
+  }
+  $records.Add($nativeVerticalRecord)
+  if (@($nativeVerticalRecord.response.nativeInputTelemetry).Count -ne 1) { throw 'The packaged native-input gate did not report the vertical spline-node drag.' }
+  $verticalTelemetry = @($nativeVerticalRecord.response.nativeInputTelemetry)[0]
+  if ([double]$verticalTelemetry.verticalDelta -lt 0.01) { throw 'The packaged vertical spline-node drag did not raise or lower its authored node.' }
+  $fixtureExpectation.minimumNetworkRevision = [int]$nativeVerticalRecord.response.fixtureTelemetry.networkRevision
+  Assert-ExactPathRenderRevision $nativeVerticalRecord $path.id ([int]$fixtureExpectation.minimumNetworkRevision) | Out-Null
+  $interactionRecords.Add([ordered]@{
+    id='08b-native-vertical-moved';elapsedMs=$nativeVerticalRecord.elapsedMs
+    healthMs=(Assert-ProcessResponsive $process $port $runtimeRoot 'native vertical node drag')
+    telemetry=$nativeVerticalRecord.response.nativeInputTelemetry
+  })
+
+  $nativeRestoreRecord = Request-Capture $captureDir '08c-native-drag-restored' @{
+    camera=(Get-LookCamera ([double[]]@(0,40,28)) $target 58)
+    hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     nativeInputActions=@(
-      @{type='path-node-drag';pathId=$path.id;nodeIndex=0;dx=54;dy=10;vertical=$false;undo=$true},
-      @{type='path-node-drag';pathId=$path.id;nodeIndex=1;dx=0;dy=-48;vertical=$true;undo=$true}
+      @{type='path-undo';pathId=$path.id;nodeIndex=1;expectedPosition=@(55,0,0)},
+      @{type='path-undo';pathId=$path.id;nodeIndex=0;expectedPosition=@(-55,0,0)}
     )
   }
-  $records.Add($nativeDragRecord)
-  $interactionRecords.Add([ordered]@{
-    id='08-native-node-drag-undo';elapsedMs=$nativeDragRecord.elapsedMs
-    healthMs=(Assert-ProcessResponsive $process $port 'native node drag and Undo')
-    telemetry=$nativeDragRecord.response.nativeInputTelemetry
-  })
-  if (@($nativeDragRecord.response.nativeInputTelemetry).Count -ne 2) { throw 'The packaged native-input gate did not report both horizontal and vertical spline-node drags.' }
-  foreach ($nativeResult in @($nativeDragRecord.response.nativeInputTelemetry)) {
+  $records.Add($nativeRestoreRecord)
+  if (@($nativeRestoreRecord.response.nativeInputTelemetry).Count -ne 2) { throw 'The packaged native-input gate did not report both real Undo controls.' }
+  foreach ($nativeResult in @($nativeRestoreRecord.response.nativeInputTelemetry)) {
     if (-not $nativeResult.undoVerified) { throw 'The packaged native-input gate did not prove Undo restored a dragged spline node.' }
   }
+  $fixtureExpectation.minimumNetworkRevision = [int]$nativeRestoreRecord.response.fixtureTelemetry.networkRevision
+  Assert-ExactPathRenderRevision $nativeRestoreRecord $path.id ([int]$fixtureExpectation.minimumNetworkRevision) | Out-Null
+  $interactionRecords.Add([ordered]@{
+    id='08c-native-drag-restored';elapsedMs=$nativeRestoreRecord.elapsedMs
+    healthMs=(Assert-ProcessResponsive $process $port $runtimeRoot 'native path Undo restoration')
+    telemetry=$nativeRestoreRecord.response.nativeInputTelemetry
+  })
 
   # Each production bridge family gets its own span/width-appropriate scene in
   # the same exact packaged executable. This is visual evidence, not a mock
@@ -261,7 +487,7 @@ try {
   $familyFixtures = @(
     @{slug='timber-trestle';style='timber-trestle';radius=7.0;depth=7.0;width=4.5;vehicleClass='mixed';profileId='dirt-road'},
     @{slug='stone-arch';style='stone-arch';radius=10.0;depth=8.0;width=7.0;vehicleClass='mixed';profileId='dirt-road'},
-    @{slug='masonry-causeway';style='masonry-causeway';radius=5.0;depth=4.5;width=6.0;vehicleClass='mixed';profileId='dirt-road'},
+    @{slug='masonry-causeway';style='masonry-causeway';radius=8.0;depth=6.0;width=6.0;vehicleClass='mixed';profileId='dirt-road'},
     @{slug='rope-footbridge';style='rope-footbridge';radius=11.0;depth=9.0;width=2.1;vehicleClass='pedestrian';profileId='natural-trail'}
   )
   foreach ($fixture in $familyFixtures) {
@@ -295,7 +521,7 @@ try {
       }
     }
     $revision = [int64]$familyNetwork.state.engine.revision
-    $fixtureExpectation = New-ExpectedPathFixture $path.id $fixture.style ([int]$familyNetwork.network.revision)
+    $fixtureExpectation = New-ExpectedPathFixture $path.id $fixture.style ([int]$familyNetwork.network.revision) 'weathered-dirt-road' ([double]$fixture.width)
     foreach ($familyView in @(
       @{suffix='approach';camera=(Get-LookCamera ([double[]]@(-36,3.4,10)) $target 65)},
       @{suffix='side';camera=(Get-LookCamera ([double[]]@(0,10,29)) $target 62)},
@@ -311,7 +537,7 @@ try {
         style=$fixture.style;spanRadius=$fixture.radius;width=$fixture.width;vehicleClass=$fixture.vehicleClass
         view=$familyView.suffix;capture=$familyCapture.file
       })
-      Assert-ProcessResponsive $process $port $familyId | Out-Null
+      Assert-ProcessResponsive $process $port $runtimeRoot $familyId | Out-Null
     }
   }
 
@@ -353,7 +579,7 @@ try {
     hideGuides=$true;hideEditorReferences=$true;waitMs=1400;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
   }
   $records.Add($surfaceCapture)
-  Assert-ProcessResponsive $process $port 'surface detail close-up' | Out-Null
+  Assert-ProcessResponsive $process $port $runtimeRoot 'surface detail close-up' | Out-Null
 
   # Surface character is inspected on the real compiled approach rather than
   # in an isolated material sphere. Each profile uses deterministic authored
@@ -377,7 +603,7 @@ try {
       })
     }
     $revision = [int64]$surfaceResult.state.engine.revision
-    $fixtureExpectation = New-ExpectedPathFixture $path.id 'steel-girder' ([int]$surfaceResult.network.revision)
+    $fixtureExpectation = New-ExpectedPathFixture $path.id 'steel-girder' ([int]$surfaceResult.network.revision) $surfaceFixture.profileId 6
     $surfaceId = "surface-$($surfaceFixture.slug)"
     $surfaceRecord = Request-Capture $captureDir $surfaceId @{
       camera=(Get-LookCamera ([double[]]@(-36,8.5,9.5)) ([double[]]@(-25,0,0)) 54)
@@ -387,7 +613,7 @@ try {
     $surfaceProfileRecords.Add([ordered]@{
       profileId=$surfaceFixture.profileId;capture=$surfaceRecord.file;parameters=$profileValues
     })
-    Assert-ProcessResponsive $process $port $surfaceId | Out-Null
+    Assert-ProcessResponsive $process $port $runtimeRoot $surfaceId | Out-Null
   }
 
   # Leave the sustained-edit and persistence gate on the deliberately rich
@@ -432,9 +658,20 @@ try {
       hideGuides=$false;hideEditorReferences=$true;waitMs=260;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation;actions=$actions.ToArray()
     }
     $records.Add($record)
+    $pathActionTelemetry = @($record.response.interactionTelemetry | Where-Object { $_.type -in @('path-transaction','path-undo') })
+    if ($pathActionTelemetry.Count -ne 1) { throw "Interaction cycle $cycle did not report exactly one Path Network mutation." }
+    $postActionNetwork = Invoke-Api $port "/api/v012/path/$($path.id)/network"
+    $postActionRevision = [int]$postActionNetwork.network.revision
+    if ([int]$pathActionTelemetry[0].result.afterRevision -ne $postActionRevision) {
+      throw "Interaction cycle $cycle reported revision $($pathActionTelemetry[0].result.afterRevision), but authority is revision $postActionRevision."
+    }
+    $postActionState = Invoke-Api $port '/api/state'
+    $revision = [int64]$postActionState.engine.revision
+    $fixtureExpectation.minimumNetworkRevision = $postActionRevision
+    Assert-ExactPathRenderRevision $record $path.id $postActionRevision | Out-Null
     $interactionRecords.Add([ordered]@{
-      id=$id;elapsedMs=$record.elapsedMs;healthMs=(Assert-ProcessResponsive $process $port $id)
-      telemetry=$record.response.interactionTelemetry
+      id=$id;elapsedMs=$record.elapsedMs;healthMs=(Assert-ProcessResponsive $process $port $runtimeRoot $id)
+      telemetry=$record.response.interactionTelemetry;renderProof=$record.file;exactNetworkRevision=$postActionRevision
     })
     if ($record.elapsedMs -gt 20000) { throw "Interaction cycle $cycle exceeded the 20-second responsiveness ceiling." }
     if ($interactionWatch.Elapsed.TotalSeconds -lt $DurationSeconds) { Start-Sleep -Seconds 4 }
@@ -443,34 +680,70 @@ try {
 
   $state = Invoke-Api $port '/api/state'
   $revision = [int64]$state.engine.revision
-  $finalActions = New-Object System.Collections.Generic.List[object]
-  if ($pathIsMoved) { $finalActions.Add(@{type='path-undo';pathId=$path.id}) }
-  $finalActions.Add(@{type='click';target='save';waitMs=250})
-  $finalActions.Add(@{type='save';message='Packaged path evidence saved'})
+  if ($pathIsMoved) {
+    $currentNetwork = Invoke-Api $port "/api/v012/path/$($path.id)/network"
+    $restoredInteraction = Invoke-Api $port "/api/v012/path/$($path.id)/undo" 'POST' @{
+      expectedRevision=[int]$currentNetwork.network.revision
+    }
+    $revision = [int64]$restoredInteraction.state.engine.revision
+    $fixtureExpectation.minimumNetworkRevision = [int]$restoredInteraction.network.revision
+    $pathIsMoved = $false
+  }
   $finalRecord = Request-Capture $captureDir '09-restored-and-saved' @{
     camera=(Get-LookCamera ([double[]]@(0,18,36)) $target 62);hideGuides=$true;hideEditorReferences=$true;waitMs=1000
-    minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation;actions=$finalActions.ToArray()
+    minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
+    nativeInputActions=@(@{type='click-control';selector='#saveButton';label='Save';waitMs=1400})
   }
   $records.Add($finalRecord)
-  Assert-ProcessResponsive $process $port 'final save' | Out-Null
+  $saveTelemetry = @($finalRecord.response.nativeInputTelemetry | Where-Object { $_.type -eq 'click-control' -and $_.selector -eq '#saveButton' })
+  if ($saveTelemetry.Count -ne 1 -or $saveTelemetry[0].saveVerified -ne $true) {
+    throw 'The final packaged Save gate did not prove exactly one native Save click.'
+  }
+  if ([int64]$saveTelemetry[0].saveAfter.revision -le [int64]$saveTelemetry[0].saveBefore.revision -or
+      -not [string]$saveTelemetry[0].saveAfter.activityId -or
+      [string]$saveTelemetry[0].saveAfter.badgeText -ne 'Saved') {
+    throw 'The final packaged Save gate did not prove /api/scene/save revision, activity, and Saved badge evidence.'
+  }
+  Assert-ProcessResponsive $process $port $runtimeRoot 'final save' | Out-Null
 
   $finalState = Invoke-Api $port '/api/state'
-  $finalPath = @((@($finalState.scenes | Where-Object { $_.id -eq $finalState.activeSceneId })[0]).objects | Where-Object { $_.id -eq $path.id })[0]
+  $finalPath = Assert-PersistedPathFixture $finalState $path.id ([int]$fixtureExpectation.minimumNetworkRevision)
   $east = @($finalPath.properties.pathNetwork.nodes | Where-Object { $_.id -eq 'approach-east' })[0]
   if ([Math]::Abs([double]$east.position[2]) -gt 0.001) { throw 'The interaction loop did not restore the authored bridge endpoint before Save.' }
 
+  $savedNetworkRevision = [int]$finalPath.properties.pathNetwork.revision
+  $initialCloseRecord = Close-PackagedGracefully $process $port $runtimeRoot 'saved editor restart gate'
+  $process = $null
+  $process = Start-Process -FilePath $executable -WorkingDirectory $packageRoot -PassThru
+  $restartHealth = Wait-PackagedHealth $process $port $runtimeRoot
+  Start-Sleep -Seconds 3
+  $restartState = Invoke-Api $port '/api/state'
+  $restartPath = Assert-PersistedPathFixture $restartState $path.id $savedNetworkRevision
+  $fixtureExpectation.minimumNetworkRevision = [int]$restartPath.properties.pathNetwork.revision
+  $restartRecord = Request-Capture $captureDir '11-restarted-persisted' @{
+    camera=(Get-LookCamera ([double[]]@(0,18,36)) $target 62);hideGuides=$true;hideEditorReferences=$true;waitMs=1400
+    minimumRevision=[int64]$restartState.engine.revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
+  }
+  $records.Add($restartRecord)
+  Assert-ProcessResponsive $process $port $runtimeRoot 'restarted persisted fixture' | Out-Null
+  $restartCloseRecord = Close-PackagedGracefully $process $port $runtimeRoot 'completed restarted evidence'
+  $process = $null
+
   $manifest = [ordered]@{
-    repositoryRoot=$root;branch=$branch;sourceCommit=$head;packagedSourceCommit=$packagedCommit
+    repositoryRoot=$root;branch=$branch;sourceCommit=$head;sourceTree=$headSourceTree
+    packagedSourceCommit=$packagedCommit;packagedSourceTree=$packagedSourceTree;packagedSourceAudit=$packagedSourceAudit
     executable=$executable;port=$port;startedAt=$startedAt.ToString('o');finishedAt=(Get-Date).ToUniversalTime().ToString('o')
     diagnosticMode=[bool]$Diagnostics;durationSeconds=$interactionWatch.Elapsed.TotalSeconds
     fixture=@{terrainId=$terrain.id;pathId=$path.id;gap=@{center=@(0,0);radius=18;depth=12};bridgeStyle='steel-girder'}
     captures=$records;interactions=$interactionRecords;bridgeFamilies=$bridgeFamilyRecords;surfaceProfiles=$surfaceProfileRecords
-    finalNetworkRevision=[int]$finalPath.properties.pathNetwork.revision;finalEndpoint=@($east.position)
-    health=$health
+    finalNetworkRevision=[int]$finalPath.properties.pathNetwork.revision;finalEndpoint=@($east.position);saveEvidence=$saveTelemetry[0]
+    health=$health;restartHealth=$restartHealth;restartCapture=$restartRecord
+    gracefulShutdowns=@($initialCloseRecord,$restartCloseRecord)
   }
   $manifest | ConvertTo-Json -Depth 64 | Set-Content -LiteralPath (Join-Path $evidenceRoot 'manifest.json') -Encoding UTF8
 } finally {
-  if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+  try { Stop-PackagedProcessTree $process $port $runtimeRoot | Out-Null }
+  catch { $cleanupFailure = $_.Exception.Message; Write-Warning "Packaged process-tree cleanup failed: $cleanupFailure" }
   $runtimeEvidence = Join-Path $evidenceRoot 'runtime-evidence'
   New-Item -ItemType Directory -Force -Path $runtimeEvidence | Out-Null
   foreach ($name in @('logs','incidents','crashes','sessions')) {
@@ -483,5 +756,7 @@ try {
   if ($null -eq $oldDiagnostics) { Remove-Item Env:OMNIFORGE_DIAGNOSTICS -ErrorAction SilentlyContinue } else { $env:OMNIFORGE_DIAGNOSTICS=$oldDiagnostics }
   Remove-Item -LiteralPath $runtimeRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+if ($cleanupFailure) { throw "Packaged evidence cleanup did not complete: $cleanupFailure" }
 
 Write-Host "Packaged Path Network evidence written to $evidenceRoot"

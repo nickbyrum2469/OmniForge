@@ -250,10 +250,18 @@ function visualCaptureSceneFixture(expected={}) {
   const minimumNetworkRevision=Math.max(0,Number(expected.minimumNetworkRevision||0));
   if(Number(network.revision||0)<minimumNetworkRevision)fail(`expected network revision >= ${minimumNetworkRevision}, received ${Number(network.revision||0)}.`);
   const expectedBridgeStyle=String(expected.bridgeStyle||'');
+  const expectedSurfaceProfileId=String(expected.surfaceProfileId||'');
+  const expectedWidth=Number(expected.width);
   if(expectedBridgeStyle){
     const segment=(network.segments||[]).find(item=>String(item.id)===String(expectedSegmentIds[0]||actualSegmentIds[0]||''));
     const actualBridgeStyle=String(segment?.structureProfile?.bridgeStyle||'');
     if(actualBridgeStyle!==expectedBridgeStyle)fail(`expected bridge style ${expectedBridgeStyle}, received ${actualBridgeStyle||'none'}.`);
+    if(expectedSurfaceProfileId&&String(segment?.surfaceDetailProfile?.profileId||'')!==expectedSurfaceProfileId){
+      fail(`expected surface profile ${expectedSurfaceProfileId}, received ${String(segment?.surfaceDetailProfile?.profileId||'none')}.`);
+    }
+    if(Number.isFinite(expectedWidth)&&Math.abs(Number(segment?.crossSectionProfile?.width||0)-expectedWidth)>.001){
+      fail(`expected width ${expectedWidth}, received ${Number(segment?.crossSectionProfile?.width||0)}.`);
+    }
   }
   return {
     pathId,
@@ -261,7 +269,9 @@ function visualCaptureSceneFixture(expected={}) {
     networkRevision:Number(network.revision||0),
     nodeIds:actualNodeIds,
     segmentIds:actualSegmentIds,
-    bridgeStyle:expectedBridgeStyle
+    bridgeStyle:expectedBridgeStyle,
+    surfaceProfileId:expectedSurfaceProfileId,
+    width:Number.isFinite(expectedWidth)?expectedWidth:null
   };
 }
 
@@ -282,7 +292,9 @@ async function synchronizeVisualTestState(options={}) {
     // Global revision ordering cannot prove that a renderer contains the same
     // scene payload. Always apply the fetched authority before native input or
     // visual evidence instead of trusting a numerically newer local revision.
-    applyState(authoritativeState,{forceSelection:false,preserveCamera:true});
+    const expectedPathId=String(options.expectedPathNetwork?.pathId||'');
+    applyState(authoritativeState,{forceSelection:Boolean(expectedPathId),preserveCamera:true});
+    if(expectedPathId)await selectObject(expectedPathId,false);
   }
   const fixture=visualCaptureSceneFixture(options.expectedPathNetwork);
   return {engineRevision:Number(state?.engine?.revision||0),fixture};
@@ -295,18 +307,49 @@ function validateVisualCaptureRenderFixture(expected,renderTelemetry,sceneFixtur
   const fail=message=>{throw new Error(`Visual capture render fixture mismatch for ${expected.pathId}: ${message}`);};
   if(Number(corridor.compiler?.nodeCount||0)!==Number(sceneFixture?.nodeIds?.length||0))fail('compiled node count differs from authoritative scene.');
   if(Number(corridor.compiler?.segmentCount||0)!==Number(sceneFixture?.segmentIds?.length||0))fail('compiled segment count differs from authoritative scene.');
+  if(String(corridor.sourceNetworkId||'')!==String(sceneFixture?.networkId||''))fail(`expected compiled network ${sceneFixture?.networkId}, received ${corridor.sourceNetworkId||'none'}.`);
+  if(Number(corridor.sourceRevision||0)!==Number(sceneFixture?.networkRevision||0))fail(`compiled revision ${Number(corridor.sourceRevision||0)} differs from authoritative revision ${Number(sceneFixture?.networkRevision||0)}.`);
+  if(JSON.stringify(corridor.nodeIds||[])!==JSON.stringify(sceneFixture?.nodeIds||[]))fail('compiled node identities differ from authoritative scene.');
+  if(JSON.stringify(corridor.segmentIds||[])!==JSON.stringify(sceneFixture?.segmentIds||[]))fail('compiled segment identities differ from authoritative scene.');
+  const rendererCorridor=corridor.renderer||{};
+  if(String(rendererCorridor.sourceNetworkId||'')!==String(sceneFixture?.networkId||''))fail(`uploaded network is ${rendererCorridor.sourceNetworkId||'none'}, expected ${sceneFixture?.networkId}.`);
+  if(Number(rendererCorridor.sourceRevision||0)!==Number(sceneFixture?.networkRevision||0))fail(`uploaded revision ${Number(rendererCorridor.sourceRevision||0)} differs from authoritative revision ${Number(sceneFixture?.networkRevision||0)}.`);
+  if(JSON.stringify(rendererCorridor.nodeIds||[])!==JSON.stringify(sceneFixture?.nodeIds||[]))fail('uploaded node identities differ from authoritative scene.');
+  if(JSON.stringify(rendererCorridor.segmentIds||[])!==JSON.stringify(sceneFixture?.segmentIds||[]))fail('uploaded segment identities differ from authoritative scene.');
   if(Object.hasOwn(expected,'valid')&&Boolean(corridor.valid)!==Boolean(expected.valid))fail(`expected valid=${Boolean(expected.valid)}, received ${Boolean(corridor.valid)}.`);
   const minimumBridgeIntervalCount=Math.max(0,Number(expected.minimumBridgeIntervalCount||0));
   if(Number(corridor.terrain?.bridgeIntervalCount||0)<minimumBridgeIntervalCount){
     fail(`expected at least ${minimumBridgeIntervalCount} bridge interval(s), received ${Number(corridor.terrain?.bridgeIntervalCount||0)}.`);
   }
+  const segmentId=String(sceneFixture?.segmentIds?.[0]||'');
+  const compiledSegment=(rendererCorridor.segments||[]).find(item=>String(item.id)===segmentId);
+  if(!compiledSegment)fail(`compiled segment evidence is unavailable for ${segmentId||'expected segment'}.`);
+  if(expected.bridgeStyle&&String(compiledSegment.bridgeStyle)!==String(expected.bridgeStyle))fail(`compiled bridge style is ${compiledSegment.bridgeStyle||'none'}, expected ${expected.bridgeStyle}.`);
+  if(expected.surfaceProfileId&&String(compiledSegment.surfaceProfileId)!==String(expected.surfaceProfileId))fail(`compiled surface profile is ${compiledSegment.surfaceProfileId||'none'}, expected ${expected.surfaceProfileId}.`);
+  if(Number.isFinite(Number(expected.width))&&Math.abs(Number(compiledSegment.width||0)-Number(expected.width))>.001)fail(`compiled width is ${Number(compiledSegment.width||0)}, expected ${Number(expected.width)}.`);
+  const bridgeSelection=(rendererCorridor.bridgeSelections||[]).find(item=>String(item.segmentId)===segmentId);
+  if(minimumBridgeIntervalCount>0&&!bridgeSelection)fail(`compiled bridge selection is unavailable for ${segmentId}.`);
+  if(bridgeSelection&&expected.bridgeStyle&&String(bridgeSelection.bridgeStyle)!==String(expected.bridgeStyle))fail(`resolved bridge family is ${bridgeSelection.bridgeStyle||'none'}, expected ${expected.bridgeStyle}.`);
+  const structureVertexCount=Number(corridor.meshStats?.structure?.vertexCount||0);
+  const uploadedStructure=rendererCorridor.uploadedMeshes?.structure;
+  const drawnStructure=rendererCorridor.drawnMeshes?.structure;
+  const capturedFrameIndex=Number(renderTelemetry?.lastFrameReport?.frameIndex||0);
+  if(minimumBridgeIntervalCount>0&&(!uploadedStructure?.present||Number(uploadedStructure.indexCount||0)<3))fail(`expected uploaded bridge structure geometry, received ${Number(uploadedStructure?.indexCount||0)} uploaded indices.`);
+  if(minimumBridgeIntervalCount>0&&(!drawnStructure?.present||Number(drawnStructure.indexCount||0)<3))fail(`expected drawn bridge structure geometry, received ${Number(drawnStructure?.indexCount||0)} drawn indices.`);
+  if(minimumBridgeIntervalCount>0&&Number(drawnStructure?.frameIndex||0)!==capturedFrameIndex)fail(`bridge structure was last drawn in frame ${Number(drawnStructure?.frameIndex||0)}, expected captured frame ${capturedFrameIndex}.`);
   return {
     ...sceneFixture,
     valid:Boolean(corridor.valid),
     compiledNodeCount:Number(corridor.compiler?.nodeCount||0),
     compiledSegmentCount:Number(corridor.compiler?.segmentCount||0),
     bridgeIntervalCount:Number(corridor.terrain?.bridgeIntervalCount||0),
-    structureVertexCount:Number(corridor.geometry?.meshes?.structure?.vertexCount||0)
+    sourceRevision:Number(corridor.sourceRevision||0),
+    bridgeStyle:String(bridgeSelection?.bridgeStyle||compiledSegment.bridgeStyle||''),
+    surfaceProfileId:String(compiledSegment.surfaceProfileId||''),
+    width:Number(compiledSegment.width||0),
+    structureVertexCount,
+    uploadedStructureIndexCount:Number(uploadedStructure?.indexCount||0),
+    drawnStructureIndexCount:Number(drawnStructure?.indexCount||0)
   };
 }
 
@@ -331,7 +374,10 @@ async function captureVisualTestFrame(options={}) {
     await sleep(waitMs);
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
     const renderTelemetry=renderer?.getRenderDiagnostics?.()||null;
-    const fixtureTelemetry=validateVisualCaptureRenderFixture(options.expectedPathNetwork,renderTelemetry,synchronizationTelemetry.fixture);
+    // Actions can change the network revision and geometry. Validate the frame
+    // against the post-action authority rather than the earlier sync snapshot.
+    const currentFixture=visualCaptureSceneFixture(options.expectedPathNetwork);
+    const fixtureTelemetry=validateVisualCaptureRenderFixture(options.expectedPathNetwork,renderTelemetry,currentFixture);
     return {
       dataUrl:ui.viewport.toDataURL('image/png'),
       renderTelemetry,
@@ -343,7 +389,7 @@ async function captureVisualTestFrame(options={}) {
     camera=originalCamera;
     scene.settings.gridVisible=originalGrid;
     scene.settings.splinesVisible=originalSplines;
-    selectedId=originalSelectedId;
+    await selectObject(originalSelectedId&&scene.objects.some(object=>object.id===originalSelectedId)?originalSelectedId:null,false);
     visualCaptureHideEditorReferences=false;
   }
 }

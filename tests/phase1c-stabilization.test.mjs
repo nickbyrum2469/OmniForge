@@ -115,7 +115,7 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(app, /finally\{[\s\S]*requestAnimationFrame\(animationLoop\)/);
   assert.match(app, /sanitizeCameraState/);
   assert.match(app, /selectedId=null/);
-  assert.match(app, /selectedId=originalSelectedId/);
+  assert.match(app, /await selectObject\(originalSelectedId&&scene\.objects\.some/);
   assert.match(desktop, /INCIDENT_DIR/);
   assert.match(desktop, /recoverRendererProcess/);
   assert.match(desktop, /gpu-process-gone/);

@@ -1189,6 +1189,26 @@ export function pathSurfaceCullMode(kind){
   return kind==='structure'?'double-sided':'front-face';
 }
 
+export function uploadedPathMeshDiagnostics(meshes={}){
+  return Object.fromEntries(Object.entries(meshes).map(([kind,mesh])=>{
+    const indexCount=Math.max(0,Number(mesh?.count||0));
+    return [kind,{
+      present:Boolean(mesh?.vao)&&indexCount>0,
+      indexCount,
+      triangleCount:Math.floor(indexCount/3)
+    }];
+  }));
+}
+
+export function pathSurfaceRendererDiagnostics(entry={}){
+  return {
+    signature:String(entry.signature||''),
+    ...(entry.renderIdentity||{}),
+    uploadedMeshes:structuredClone(entry.uploadedMeshes||{}),
+    drawnMeshes:structuredClone(entry.drawnMeshes||{})
+  };
+}
+
 export class Renderer3D{
   constructor(canvas){
     this.canvas=canvas;this.gl=canvas.getContext('webgl2',{antialias:true,alpha:false,preserveDrawingBuffer:true,premultipliedAlpha:false});
@@ -1317,7 +1337,23 @@ export class Renderer3D{
     for(const [name,data] of Object.entries(runtime.geometry.meshes)){
       if(data.indices.length)meshes[name]=createBufferMesh(this.gl,data);
     }
-    this.pathSurfaces.set(pathObject.id,{signature,meshes,diagnostics});return meshes;
+    const renderIdentity={
+      sourceNetworkId:String(diagnostics.sourceNetworkId||''),
+      sourceRevision:Number(diagnostics.sourceRevision||0),
+      generationRevision:Number(diagnostics.generationRevision||0),
+      nodeIds:[...(diagnostics.nodeIds||[])],
+      segmentIds:[...(diagnostics.segmentIds||[])],
+      segments:(diagnostics.segments||[]).map(segment=>({...segment})),
+      bridgeSelections:(diagnostics.bridgeSelections||[]).map(selection=>({...selection}))
+    };
+    this.pathSurfaces.set(pathObject.id,{
+      signature,
+      meshes,
+      diagnostics,
+      renderIdentity,
+      uploadedMeshes:uploadedPathMeshDiagnostics(meshes),
+      drawnMeshes:{}
+    });return meshes;
   }
   scenePathRuntimes(scene){
     const terrain=scene?.objects?.find(object=>object.type==='terrain'&&object.visible!==false),paths=(scene?.objects||[]).filter(object=>object.type==='path'&&object.visible!==false);
@@ -1527,6 +1563,7 @@ export class Renderer3D{
     gl.disable(gl.BLEND);gl.depthMask(true);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);
     for(const pathObject of paths){
       const meshes=this.pathSurfaceFor(pathObject,pathScene);if(!meshes)continue;
+      const surfaceEntry=this.pathSurfaces.get(pathObject.id);
       const segmentProfile=pathObject.properties?.pathNetwork?.segments?.[0]?.materialProfile||{};
       for(const [kind,mesh] of Object.entries(meshes)){
         if(!mesh)continue;
@@ -1558,6 +1595,12 @@ export class Renderer3D{
                 :terrainMaterial.color;
         const proxy={id:`path-network-v2:${kind}:${pathObject.id}`,type:objectSurface?'model':'terrain',visible:true,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},properties:{...pathObject.properties,...terrainMaterial,materialId,color,opacity:1,castsShadows:true,receivesShadows:true}};
         this.drawMesh(proxy,mesh,viewProj,lightViewProj,scene,false,camera,lights,null,objectSurface?null:pathObject);
+        if(surfaceEntry)surfaceEntry.drawnMeshes[kind]={
+          present:true,
+          indexCount:Number(mesh.count||0),
+          triangleCount:Math.floor(Number(mesh.count||0)/3),
+          frameIndex:this.frameCounter
+        };
       }
     }
     gl.disable(gl.POLYGON_OFFSET_FILL);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
@@ -1597,7 +1640,7 @@ export class Renderer3D{
     window.__omniforgeDiagnostics?.event?.('webgl-context-restored',{recoveryMode:this.capabilities.contextRecoveryMode,contextGeneration:this.frameResources.contextGeneration});
     setTimeout(()=>globalThis.location?.reload?.(),0);
   }
-  getRenderDiagnostics(){return {capabilities:this.capabilities,frameResources:this.frameResources.snapshot(),hdrPipeline:this.hdrPipeline.snapshot(),renderGraph:this.renderGraph.diagnosticsSnapshot(),lastFrameReport:this.lastFrameReport,terrainSampling:this.lastTerrainSamplingDiagnostics,pathSurfaceCount:this.pathSurfaces.size,pathwayCorridors:[...this.pathSurfaces.entries()].map(([id,entry])=>({id,...(entry.diagnostics||{})}))};}
+  getRenderDiagnostics(){return {capabilities:this.capabilities,frameResources:this.frameResources.snapshot(),hdrPipeline:this.hdrPipeline.snapshot(),renderGraph:this.renderGraph.diagnosticsSnapshot(),lastFrameReport:this.lastFrameReport,terrainSampling:this.lastTerrainSamplingDiagnostics,pathSurfaceCount:this.pathSurfaces.size,pathwayCorridors:[...this.pathSurfaces.entries()].map(([id,entry])=>({id,...(entry.diagnostics||{}),renderer:pathSurfaceRendererDiagnostics(entry)}))};}
   dispose(){
     this.resizeObserver?.disconnect?.();this.canvas.removeEventListener('webglcontextlost',this.boundContextLost,false);this.canvas.removeEventListener('webglcontextrestored',this.boundContextRestored,false);this.renderGraph?.dispose?.();this.hdrPipeline?.dispose?.();
   }

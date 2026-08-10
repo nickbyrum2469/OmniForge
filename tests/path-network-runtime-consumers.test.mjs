@@ -11,7 +11,11 @@ import {
   pathFoliageExcluded,
   pathGroundingSample
 } from '../app/path-network/consumers.js';
-import { terrainMesh } from '../app/renderer.js';
+import {
+  pathSurfaceRendererDiagnostics,
+  terrainMesh,
+  uploadedPathMeshDiagnostics
+} from '../app/renderer.js';
 import { normalizePathNetwork } from '../app/path-network/model.js';
 
 function sceneFixture() {
@@ -62,6 +66,44 @@ test('one cached runtime bundle owns compile, terrain, geometry, and diagnostics
   assert.strictEqual(first.terrainModifier.sourceNetworkId, first.compiled.sourceNetworkId);
   assert.equal(first.diagnostics.valid, true);
   assert.equal(first.migratedFromLegacy, true);
+  assert.equal(first.diagnostics.sourceNetworkId, first.compiled.sourceNetworkId);
+  assert.equal(first.diagnostics.sourceRevision, first.compiled.sourceRevision);
+  assert.deepEqual(first.diagnostics.nodeIds, first.network.nodes.map(node => node.id));
+  assert.deepEqual(first.diagnostics.segmentIds, first.network.segments.map(segment => segment.id));
+  assert.deepEqual(first.diagnostics.segments.map(segment => segment.id), first.diagnostics.segmentIds);
+  assert.ok(first.diagnostics.meshStats.road.vertexCount > 0);
+  assert.ok(first.diagnostics.meshStats.road.triangleCount > 0);
+});
+
+test('renderer evidence distinguishes uploaded and absent path meshes and preserves upload identity', () => {
+  const uploadedMeshes = uploadedPathMeshDiagnostics({
+    road: { vao: {}, count: 18 },
+    structure: { vao: {}, count: 12 },
+    empty: { vao: {}, count: 0 },
+    missingVao: { vao: null, count: 9 }
+  });
+  assert.deepEqual(uploadedMeshes.road, { present: true, indexCount: 18, triangleCount: 6 });
+  assert.deepEqual(uploadedMeshes.structure, { present: true, indexCount: 12, triangleCount: 4 });
+  assert.equal(uploadedMeshes.empty.present, false);
+  assert.equal(uploadedMeshes.missingVao.present, false);
+
+  const evidence = pathSurfaceRendererDiagnostics({
+    signature: '9:9:0',
+    renderIdentity: {
+      sourceNetworkId: 'network:path',
+      sourceRevision: 9,
+      nodeIds: ['west', 'east'],
+      segmentIds: ['bridge'],
+      segments: [{ id: 'bridge', width: 6, bridgeStyle: 'steel-girder', surfaceProfileId: 'muddy-wagon-road' }]
+    },
+    uploadedMeshes,
+    drawnMeshes: { structure: { present: true, indexCount: 12, triangleCount: 4, frameIndex: 72 } }
+  });
+  assert.equal(evidence.sourceRevision, 9);
+  assert.equal(evidence.segments[0].bridgeStyle, 'steel-girder');
+  assert.equal(evidence.segments[0].surfaceProfileId, 'muddy-wagon-road');
+  assert.equal(evidence.uploadedMeshes.structure.present, true);
+  assert.equal(evidence.drawnMeshes.structure.frameIndex, 72);
 });
 
 test('state replacement reuses unchanged path runtimes and recompiles only the edited network', () => {

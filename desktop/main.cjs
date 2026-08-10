@@ -192,7 +192,45 @@ async function waitForVisualPathRevision(contents, action, selector, minimumRevi
     latest=await visualPathNodeSnapshot(contents,action.pathId,action.nodeIndex,selector);
     if(latest.revision>minimumRevision)return latest;
   }
-  throw new Error(`Visual input timed out waiting for Path Network revision after ${action.vertical?'vertical':'horizontal'} node drag.`);
+  const actionLabel=String(action.type||'')==='path-undo'
+    ?'native Undo'
+    :(action.vertical?'vertical':'horizontal')+' node drag';
+  throw new Error(`Visual input timed out waiting for Path Network revision after ${actionLabel}.`);
+}
+
+async function visualSaveSnapshot(contents) {
+  return contents.executeJavaScript(`(async()=>{
+    const response=await fetch('/api/state',{cache:'no-store'});
+    if(!response.ok)throw new Error('Visual Save state request failed: '+response.status);
+    const payload=await response.json();
+    const state=payload.state||payload;
+    const activity=(state.activity||[]).find(item=>item?.type==='scene'&&String(item.message||'').startsWith('Saved scene '))||null;
+    const badge=document.querySelector('#saveStateBadge');
+    return {
+      revision:Number(state?.engine?.revision||0),
+      activityId:activity?.id?String(activity.id):null,
+      activityMessage:activity?.message?String(activity.message):null,
+      activityCreatedAt:activity?.createdAt?String(activity.createdAt):null,
+      badgeText:String(badge?.textContent||'').trim(),
+      badgeClass:String(badge?.className||'')
+    };
+  })()`, true);
+}
+
+async function waitForVisualSave(contents, before, timeoutMs=12000) {
+  const deadline=Date.now()+timeoutMs;
+  let latest=null;
+  while(Date.now()<deadline){
+    await visualInputDelay(80);
+    latest=await visualSaveSnapshot(contents);
+    if(/\berror\b/.test(latest.badgeClass)||latest.badgeText==='Save error'){
+      throw new Error('The native Save control reported a save error.');
+    }
+    const freshActivity=Boolean(latest.activityId)&&latest.activityId!==before.activityId&&String(latest.activityMessage||'').startsWith('Saved scene ');
+    const savedBadge=/\bsaved\b/.test(latest.badgeClass)&&latest.badgeText==='Saved';
+    if(latest.revision>before.revision&&freshActivity&&savedBadge)return latest;
+  }
+  throw new Error(`Native Save was not proven by /api/scene/save activity, revision advance, and the Saved badge (before=${before.revision}, after=${latest?.revision??'unavailable'}).`);
 }
 
 async function sendVisualClick(contents, bounds, modifiers=[]) {
@@ -211,6 +249,43 @@ async function performVisualInputActions(contents, actions=[]) {
       const started=Date.now();
       const result=await dismissVisualFirstUseTutorial(contents);
       telemetry.push({...result,durationMs:Date.now()-started});
+      continue;
+    }
+    if(actionType==='click-control'){
+      const selector=String(action.selector||'');
+      if(!['#saveButton','#playButton','#captureButton'].includes(selector)){
+        throw new Error(`Unsupported packaged native control selector: ${selector||'missing selector'}.`);
+      }
+      const started=Date.now();
+      const saveBefore=selector==='#saveButton'?await visualSaveSnapshot(contents):null;
+      await sendVisualClick(contents,await visualElementBounds(contents,selector));
+      const saveAfter=saveBefore?await waitForVisualSave(contents,saveBefore):null;
+      await visualInputDelay(Math.max(50,Math.min(3000,Number(action.waitMs||250))));
+      telemetry.push({
+        type:'click-control',selector,label:String(action.label||selector),durationMs:Date.now()-started,
+        saveVerified:Boolean(saveAfter),saveBefore,saveAfter
+      });
+      continue;
+    }
+    if(actionType==='path-undo'){
+      const pathId=String(action.pathId||'path-main');
+      const nodeIndex=Math.max(0,Math.min(128,Number.parseInt(String(action.nodeIndex??0),10)||0));
+      const selector=`#splineNodeOverlay [data-spline-node="${nodeIndex}"]`;
+      const normalized={...action,type:'path-undo',pathId,nodeIndex};
+      const before=await visualPathNodeSnapshot(contents,pathId,nodeIndex,selector);
+      const started=Date.now();
+      await sendVisualClick(contents,await visualElementBounds(contents,'#v012UndoPath'));
+      const after=await waitForVisualPathRevision(contents,normalized,selector,before.revision);
+      const expectedPosition=Array.isArray(action.expectedPosition)
+        ?action.expectedPosition.slice(0,3).map(Number)
+        :null;
+      if(expectedPosition&&visualPositionDelta(after.position,expectedPosition)>0.005){
+        throw new Error('The real Undo path edit control did not restore the expected authored node position.');
+      }
+      telemetry.push({
+        type:'path-undo',pathId,nodeIndex,nodeId:before.nodeId,durationMs:Date.now()-started,
+        before,after,expectedPosition,undoVerified:Boolean(expectedPosition)
+      });
       continue;
     }
     if(actionType!=='path-node-drag')throw new Error(`Unsupported packaged native input action: ${actionType||'missing type'}.`);
