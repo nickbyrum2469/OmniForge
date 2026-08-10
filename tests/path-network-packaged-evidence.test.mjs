@@ -92,6 +92,8 @@ test('packaged gate drives real horizontal and Shift-vertical spline handles and
   assert.match(desktop, /#splineNodeOverlay \[data-spline-node=/);
   assert.match(desktop, /dismissVisualFirstUseTutorial/);
   assert.match(desktop, /#skipTutorialButton/);
+  assert.match(desktop, /firstUseComplete/);
+  assert.match(desktop, /appearanceDeadline/);
   assert.match(desktop, /hitTargetMatches/);
   assert.match(desktop, /Visual input spline handle is covered by/);
   assert.match(desktop, /sendInputEvent\(\{type:'mouseDown'/);

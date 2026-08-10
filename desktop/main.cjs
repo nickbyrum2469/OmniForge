@@ -116,17 +116,32 @@ async function visualPathNodeSnapshot(contents, pathId, nodeIndex, selector) {
 }
 
 async function dismissVisualFirstUseTutorial(contents) {
-  const open=await contents.executeJavaScript(`Boolean(document.querySelector('#tutorialDialog')?.open)`,true);
-  if(!open)return {type:'dismiss-first-use-tutorial',dismissed:false,alreadyClosed:true};
-  const bounds=await visualElementBounds(contents,'#skipTutorialButton');
-  await sendVisualClick(contents,bounds);
-  const deadline=Date.now()+5000;
-  while(Date.now()<deadline){
-    await visualInputDelay(60);
-    const closed=await contents.executeJavaScript(`!document.querySelector('#tutorialDialog')?.open`,true);
-    if(closed)return {type:'dismiss-first-use-tutorial',dismissed:true,alreadyClosed:false};
+  const status=()=>contents.executeJavaScript(`(async()=>{
+    const response=await fetch('/api/state');
+    if(!response.ok)throw new Error('First-use state request failed: '+response.status);
+    const payload=await response.json();
+    const state=payload.state||payload;
+    return {
+      open:Boolean(document.querySelector('#tutorialDialog')?.open),
+      complete:Boolean(state?.editor?.firstUseComplete)
+    };
+  })()`,true);
+  const appearanceDeadline=Date.now()+12000;
+  while(Date.now()<appearanceDeadline){
+    const current=await status();
+    if(current.complete&&!current.open)return {type:'dismiss-first-use-tutorial',dismissed:false,alreadyClosed:true};
+    if(!current.open){await visualInputDelay(80);continue;}
+    const bounds=await visualElementBounds(contents,'#skipTutorialButton');
+    await sendVisualClick(contents,bounds);
+    const closeDeadline=Date.now()+5000;
+    while(Date.now()<closeDeadline){
+      await visualInputDelay(60);
+      const settled=await status();
+      if(!settled.open&&settled.complete)return {type:'dismiss-first-use-tutorial',dismissed:true,alreadyClosed:false};
+    }
+    throw new Error('The first-use tutorial remained open or unpersisted after its real Skip control was clicked.');
   }
-  throw new Error('The first-use tutorial remained open after its real Skip control was clicked.');
+  throw new Error('The first-use tutorial never appeared and did not report completion before native editor input.');
 }
 
 async function visualElementBounds(contents, selector) {
