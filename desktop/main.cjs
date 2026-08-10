@@ -353,13 +353,16 @@ function installVisualCaptureWatcher() {
     if(visualCaptureInFlight||!mainWindow||mainWindow.isDestroyed()||!fs.existsSync(requestFile))return;
     visualCaptureInFlight=true;
     const processingFile=path.join(VISUAL_CAPTURE_DIR,`capture-processing-${process.pid}.json`);
+    let nativeCameraRestore=null;
     try{
       fs.renameSync(requestFile,processingFile);
       const request=readJson(processingFile,{});
       const id=String(request.id||Date.now()).replace(/[^a-z0-9_-]/gi,'-');
-      const requestOptions=request.options||{};
+      const requestOptions={...(request.options||{})};
       let nativeSynchronizationTelemetry=null;
       if(Array.isArray(requestOptions.nativeInputActions)&&requestOptions.nativeInputActions.length){
+        nativeCameraRestore=await mainWindow.webContents.executeJavaScript('window.__omniforgeVisualTestCameraSnapshot()',true);
+        requestOptions.restoreCamera=nativeCameraRestore;
         const synchronizeOptions=JSON.stringify(requestOptions);
         nativeSynchronizationTelemetry=await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestSynchronize(${synchronizeOptions})`,true);
       }
@@ -376,6 +379,10 @@ function installVisualCaptureWatcher() {
       writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:false,id,error:error.message,stack:error.stack||''});
       writeIncident('visual-capture-failed',{id,message:error.message,stack:error.stack||''});
     }finally{
+      if(nativeCameraRestore&&mainWindow&&!mainWindow.isDestroyed()){
+        const restoreCamera=JSON.stringify(nativeCameraRestore);
+        await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestRestoreCamera(${restoreCamera})`,true).catch(()=>{});
+      }
       fs.rmSync(processingFile,{force:true});visualCaptureInFlight=false;
     }
   },180);

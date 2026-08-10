@@ -275,12 +275,18 @@ function visualCaptureSceneFixture(expected={}) {
   };
 }
 
-function applyVisualTestCamera(requestedCamera){
-  if(!requestedCamera||!camera)return false;
-  const next=cloneCamera(camera);
+function normalizedVisualTestCamera(requestedCamera,fallback=camera){
+  if(!requestedCamera||!fallback)return null;
+  const next=cloneCamera(fallback);
   if(Array.isArray(requestedCamera.position)&&requestedCamera.position.length===3)next.position=requestedCamera.position.map(Number);
   for(const key of ['yaw','pitch','fov'])if(Number.isFinite(Number(requestedCamera[key])))next[key]=Number(requestedCamera[key]);
-  camera=sanitizeCameraState(next,camera);
+  return sanitizeCameraState(next,fallback);
+}
+
+function applyVisualTestCamera(requestedCamera){
+  const next=normalizedVisualTestCamera(requestedCamera);
+  if(!next)return false;
+  camera=next;
   return true;
 }
 
@@ -370,7 +376,10 @@ function validateVisualCaptureRenderFixture(expected,renderTelemetry,sceneFixtur
 
 async function captureVisualTestFrame(options={}) {
   if(!ui.viewport||!camera||!scene)throw new Error('Viewport is not ready for visual capture.');
-  const originalCamera=cloneCamera(camera);
+  // Native input is preceded by a camera-framing synchronization. Desktop
+  // passes the camera from before that synchronization so the evidence camera
+  // cannot leak into later editing or the persisted editor camera.
+  const originalCamera=normalizedVisualTestCamera(options.restoreCamera,camera)||cloneCamera(camera);
   const originalGrid=scene.settings.gridVisible;
   const originalSplines=scene.settings.splinesVisible;
   const originalSelectedId=selectedId;
@@ -405,6 +414,11 @@ async function captureVisualTestFrame(options={}) {
 }
 window.__omniforgeVisualTestCapture=captureVisualTestFrame;
 window.__omniforgeVisualTestSynchronize=synchronizeVisualTestState;
+window.__omniforgeVisualTestCameraSnapshot=()=>cloneCamera(camera);
+window.__omniforgeVisualTestRestoreCamera=requestedCamera=>{
+  applyVisualTestCamera(requestedCamera);
+  return cloneCamera(camera);
+};
 
 function objectIcon(type) {
   return ({box:'▣',sphere:'●',cylinder:'⬭',plane:'▱',terrain:'⌁',path:'⌇',model:'◆',decal:'◫',directionalLight:'☀',pointLight:'✦',empty:'＋'})[type] || '◇';

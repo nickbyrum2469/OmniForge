@@ -427,7 +427,7 @@ try {
   $records.Add($guideRecord)
 
   $nativeHorizontalRecord = Request-Capture $captureDir '08a-native-horizontal-moved' @{
-    camera=(Get-LookCamera ([double[]]@(0,40,28)) $target 58)
+    camera=(Get-LookCamera ([double[]]@(-55,22,30)) ([double[]]@(-55,0,0)) 68)
     hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeIndex=0;dx=54;dy=10;vertical=$false;undo=$false})
   }
