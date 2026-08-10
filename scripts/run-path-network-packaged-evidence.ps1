@@ -191,10 +191,17 @@ try {
     @{id='06-player-level';camera=(Get-LookCamera ([double[]]@(-46,2.1,4)) ([double[]]@(4,0,0)) 72);guides=$false}
   )
   foreach ($view in $views) {
-    $record = Request-Capture $captureDir $view.id @{
+    $captureOptions = @{
       camera=$view.camera;hideGuides=(-not $view.guides);hideEditorReferences=$true;waitMs=1400
       minimumRevision=$revision;revisionTimeoutMs=20000
     }
+    if ($view.id -eq '01-approach') {
+      # The isolated data root represents a genuine first launch. Dismiss the
+      # tutorial through its real native Skip button before any native spline
+      # input so the proof run exercises the editor rather than its backdrop.
+      $captureOptions.nativeInputActions = @(@{type='dismiss-first-use-tutorial'})
+    }
+    $record = Request-Capture $captureDir $view.id $captureOptions
     $records.Add($record)
     if ($view.id -in @('01-approach','02-side','05-underside')) {
       $bridgeFamilyRecords.Add([ordered]@{

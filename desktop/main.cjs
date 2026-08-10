@@ -98,14 +98,35 @@ async function visualPathNodeSnapshot(contents, pathId, nodeIndex, selector) {
     if(element.hidden||style.display==='none'||style.visibility==='hidden'||rect.width<1||rect.height<1){
       throw new Error('Visual input spline handle is not visible: '+input.selector);
     }
+    const centerX=rect.x+rect.width*.5;
+    const centerY=rect.y+rect.height*.5;
+    const topElement=document.elementFromPoint(centerX,centerY);
+    const openDialog=document.querySelector('dialog[open]');
     return {
       revision:Number(network.revision||0),
       nodeId:String(node.id),
       position:(node.position||[]).map(Number),
       heightMode:String(node.heightMode||'terrain'),
-      rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height}
+      rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},
+      hitTargetMatches:topElement===element||element.contains(topElement),
+      topElement:topElement?.id||topElement?.className||topElement?.tagName||null,
+      openDialog:openDialog?.id||null
     };
   })()`, true);
+}
+
+async function dismissVisualFirstUseTutorial(contents) {
+  const open=await contents.executeJavaScript(`Boolean(document.querySelector('#tutorialDialog')?.open)`,true);
+  if(!open)return {type:'dismiss-first-use-tutorial',dismissed:false,alreadyClosed:true};
+  const bounds=await visualElementBounds(contents,'#skipTutorialButton');
+  await sendVisualClick(contents,bounds);
+  const deadline=Date.now()+5000;
+  while(Date.now()<deadline){
+    await visualInputDelay(60);
+    const closed=await contents.executeJavaScript(`!document.querySelector('#tutorialDialog')?.open`,true);
+    if(closed)return {type:'dismiss-first-use-tutorial',dismissed:true,alreadyClosed:false};
+  }
+  throw new Error('The first-use tutorial remained open after its real Skip control was clicked.');
 }
 
 async function visualElementBounds(contents, selector) {
@@ -148,12 +169,23 @@ async function performVisualInputActions(contents, actions=[]) {
   const telemetry=[];
   for(const rawAction of Array.isArray(actions)?actions:[]){
     const action=rawAction&&typeof rawAction==='object'?rawAction:{};
-    if(String(action.type||'')!=='path-node-drag')throw new Error(`Unsupported packaged native input action: ${String(action.type||'missing type')}.`);
+    const actionType=String(action.type||'');
+    if(actionType==='dismiss-first-use-tutorial'){
+      const started=Date.now();
+      const result=await dismissVisualFirstUseTutorial(contents);
+      telemetry.push({...result,durationMs:Date.now()-started});
+      continue;
+    }
+    if(actionType!=='path-node-drag')throw new Error(`Unsupported packaged native input action: ${actionType||'missing type'}.`);
     const pathId=String(action.pathId||'path-main');
     const nodeIndex=Math.max(0,Math.min(128,Number.parseInt(String(action.nodeIndex??0),10)||0));
     const selector=`#splineNodeOverlay [data-spline-node="${nodeIndex}"]`;
     const normalized={...action,pathId,nodeIndex};
     const before=await visualPathNodeSnapshot(contents,pathId,nodeIndex,selector);
+    if(!before.hitTargetMatches){
+      const blocker=before.openDialog?`open dialog #${before.openDialog}`:`element ${String(before.topElement||'unknown')}`;
+      throw new Error(`Visual input spline handle is covered by ${blocker}.`);
+    }
     const startX=Math.round(before.rect.x+before.rect.width*.5),startY=Math.round(before.rect.y+before.rect.height*.5);
     const dx=Math.max(-240,Math.min(240,Number(action.dx??(action.vertical?0:54))));
     const dy=Math.max(-180,Math.min(180,Number(action.dy??(action.vertical?-48:12))));

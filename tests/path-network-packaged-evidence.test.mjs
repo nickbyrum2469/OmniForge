@@ -83,12 +83,17 @@ test('two-minute gate exercises real packaged renderer actions and restores its 
 });
 
 test('packaged gate drives real horizontal and Shift-vertical spline handles and proves Undo', () => {
+  assert.match(script, /type='dismiss-first-use-tutorial'/);
   assert.match(script, /nativeInputActions=@\(/);
   assert.match(script, /type='path-node-drag'.*vertical=\$false.*undo=\$true/);
   assert.match(script, /type='path-node-drag'.*vertical=\$true.*undo=\$true/);
   assert.match(script, /nativeInputTelemetry/);
   assert.match(script, /undoVerified/);
   assert.match(desktop, /#splineNodeOverlay \[data-spline-node=/);
+  assert.match(desktop, /dismissVisualFirstUseTutorial/);
+  assert.match(desktop, /#skipTutorialButton/);
+  assert.match(desktop, /hitTargetMatches/);
+  assert.match(desktop, /Visual input spline handle is covered by/);
   assert.match(desktop, /sendInputEvent\(\{type:'mouseDown'/);
   assert.match(desktop, /type:'mouseMove'/);
   assert.match(desktop, /modifiers=action\.vertical\?\['shift'\]:\[\]/);
