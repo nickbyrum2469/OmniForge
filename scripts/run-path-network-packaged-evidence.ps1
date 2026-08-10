@@ -444,7 +444,7 @@ try {
   })
 
   $nativeVerticalRecord = Request-Capture $captureDir '08b-native-vertical-moved' @{
-    camera=(Get-LookCamera ([double[]]@(0,24,34)) $target 62)
+    camera=(Get-LookCamera ([double[]]@(48,22,30)) ([double[]]@(48,0,0)) 68)
     hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeIndex=1;dx=0;dy=-48;vertical=$true;undo=$false})
   }
@@ -461,7 +461,7 @@ try {
   })
 
   $nativeRestoreRecord = Request-Capture $captureDir '08c-native-drag-restored' @{
-    camera=(Get-LookCamera ([double[]]@(0,40,28)) $target 58)
+    camera=(Get-LookCamera ([double[]]@(0,62,55)) $target 82)
     hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     nativeInputActions=@(
       @{type='path-undo';pathId=$path.id;nodeIndex=1;expectedPosition=@(55,0,0)},

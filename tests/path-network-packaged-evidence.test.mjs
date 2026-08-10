@@ -85,6 +85,9 @@ test('packaged evidence renders every bridge family at a compatible span and wid
   assert.match(app, /bridge structure was last drawn in frame/);
   assert.match(app, /const currentFixture=visualCaptureSceneFixture\(options\.expectedPathNetwork\)/);
   assert.match(app, /validateVisualCaptureRenderFixture\(options\.expectedPathNetwork,renderTelemetry,currentFixture\)/);
+  assert.match(app, /function applyVisualTestCamera/);
+  assert.match(app, /applyVisualTestCamera\(options\.camera\)/);
+  assert.match(app, /requestAnimationFrame\(\(\)=>requestAnimationFrame\(resolve\)\)/);
   assert.match(app, /uploadedStructureIndexCount/);
   assert.match(app, /drawnStructureIndexCount/);
   assert.match(app, /structureVertexCount/);

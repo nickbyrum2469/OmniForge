@@ -275,6 +275,15 @@ function visualCaptureSceneFixture(expected={}) {
   };
 }
 
+function applyVisualTestCamera(requestedCamera){
+  if(!requestedCamera||!camera)return false;
+  const next=cloneCamera(camera);
+  if(Array.isArray(requestedCamera.position)&&requestedCamera.position.length===3)next.position=requestedCamera.position.map(Number);
+  for(const key of ['yaw','pitch','fov'])if(Number.isFinite(Number(requestedCamera[key])))next[key]=Number(requestedCamera[key]);
+  camera=sanitizeCameraState(next,camera);
+  return true;
+}
+
 async function synchronizeVisualTestState(options={}) {
   const minimumRevision=Math.max(0,Number(options.minimumRevision||0));
   const requiresAuthoritativeState=minimumRevision>0||Boolean(options.expectedPathNetwork?.pathId);
@@ -295,6 +304,12 @@ async function synchronizeVisualTestState(options={}) {
     const expectedPathId=String(options.expectedPathNetwork?.pathId||'');
     applyState(authoritativeState,{forceSelection:Boolean(expectedPathId),preserveCamera:true});
     if(expectedPathId)await selectObject(expectedPathId,false);
+  }
+  // Native spline input runs before the PNG capture. Frame its requested
+  // camera now, then let two real animation frames reconcile HTML handles to
+  // the WebGL projection before Electron hit-tests and drags them.
+  if(applyVisualTestCamera(options.camera)){
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   }
   const fixture=visualCaptureSceneFixture(options.expectedPathNetwork);
   return {engineRevision:Number(state?.engine?.revision||0),fixture};
@@ -362,12 +377,7 @@ async function captureVisualTestFrame(options={}) {
   try{
     const synchronizationTelemetry=await synchronizeVisualTestState(options);
     const interactionTelemetry=await runVisualTestActions(options.actions);
-    if(options.camera){
-      const next=cloneCamera(camera);
-      if(Array.isArray(options.camera.position)&&options.camera.position.length===3)next.position=options.camera.position.map(Number);
-      for(const key of ['yaw','pitch','fov'])if(Number.isFinite(Number(options.camera[key])))next[key]=Number(options.camera[key]);
-      camera=sanitizeCameraState(next,originalCamera);
-    }
+    applyVisualTestCamera(options.camera);
     if(options.hideGuides!==false){scene.settings.gridVisible=false;scene.settings.splinesVisible=false;selectedId=null;}
     visualCaptureHideEditorReferences=options.hideEditorReferences!==false;
     const waitMs=Math.max(80,Math.min(3000,Number(options.waitMs||500)));
