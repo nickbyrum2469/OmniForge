@@ -399,12 +399,17 @@ function Wait-HealthOffline([int]$Port,[int]$TimeoutSeconds=20) {
   throw "Packaged OmniForge server did not remain offline with a bindable port after its editor window closed on port $Port."
 }
 
-function Close-PackagedGracefully($Process,[int]$Port,[string]$RuntimeRoot,[string]$Stage) {
+function Close-PackagedGracefully($Process,[int]$Port,[string]$RuntimeRoot,[string]$CaptureDir,[string]$Stage) {
   if ($null -eq $Process) { throw "No packaged process was available during $Stage." }
   if ($Process.HasExited) { throw "Packaged OmniForge had already exited before $Stage with code $($Process.ExitCode)." }
   $processId = $Process.Id
   $requestedAt = (Get-Date).ToUniversalTime()
-  if (-not $Process.CloseMainWindow()) { throw "Packaged OmniForge did not accept a graceful window close during $Stage." }
+  $closeRequestFile = Join-Path $CaptureDir 'close-request.json'
+  $closeRequestTemporaryFile = Join-Path $CaptureDir 'close-request.tmp.json'
+  Remove-Item -LiteralPath $closeRequestFile,$closeRequestTemporaryFile -Force -ErrorAction SilentlyContinue
+  $closeRequest = @{processId=$processId;stage=$Stage;requestedAt=$requestedAt.ToString('o')} | ConvertTo-Json -Compress
+  [IO.File]::WriteAllText($closeRequestTemporaryFile,$closeRequest,[Text.UTF8Encoding]::new($false))
+  Move-Item -LiteralPath $closeRequestTemporaryFile -Destination $closeRequestFile -Force
   if (-not $Process.WaitForExit(20000)) { throw "Packaged OmniForge did not exit within 20 seconds during $Stage." }
   $offline = Wait-HealthOffline $Port 20
   if ([int]$Process.ExitCode -ne 0) { throw "Packaged OmniForge exited non-cleanly during $Stage with code $($Process.ExitCode)." }
@@ -917,7 +922,7 @@ try {
 
   $savedNetworkRevision = [int]$finalPath.properties.pathNetwork.revision
   $resourceSamples.Add((Get-ProcessResourceSample $process $runtimeRoot 'before-saved-editor-close'))
-  $initialCloseRecord = Close-PackagedGracefully $process $port $runtimeRoot 'saved editor restart gate'
+  $initialCloseRecord = Close-PackagedGracefully $process $port $runtimeRoot $captureDir 'saved editor restart gate'
   $process = $null
   $process = Start-Process -FilePath $executable -WorkingDirectory $packageRoot -PassThru
   $restartHealth = Wait-PackagedHealth $process $port $runtimeRoot
@@ -933,7 +938,7 @@ try {
   Assert-ProcessResponsive $process $port $runtimeRoot 'restarted persisted fixture' | Out-Null
   $resourceSamples.Add((Get-ProcessResourceSample $process $runtimeRoot 'after-restart'))
   $resourceSamples.Add((Get-ProcessResourceSample $process $runtimeRoot 'before-restarted-editor-close'))
-  $restartCloseRecord = Close-PackagedGracefully $process $port $runtimeRoot 'completed restarted evidence'
+  $restartCloseRecord = Close-PackagedGracefully $process $port $runtimeRoot $captureDir 'completed restarted evidence'
   $process = $null
 
   $manifest = [ordered]@{

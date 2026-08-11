@@ -348,9 +348,25 @@ function installVisualCaptureWatcher() {
   if(!VISUAL_CAPTURE_DIR||!mainWindow||mainWindow.isDestroyed())return;
   fs.mkdirSync(VISUAL_CAPTURE_DIR,{recursive:true});
   const requestFile=path.join(VISUAL_CAPTURE_DIR,'capture-request.json');
+  const closeRequestFile=path.join(VISUAL_CAPTURE_DIR,'close-request.json');
   if(visualCaptureTimer)clearInterval(visualCaptureTimer);
   visualCaptureTimer=setInterval(async()=>{
-    if(visualCaptureInFlight||!mainWindow||mainWindow.isDestroyed()||!fs.existsSync(requestFile))return;
+    if(visualCaptureInFlight||!mainWindow||mainWindow.isDestroyed())return;
+    if(fs.existsSync(closeRequestFile)){
+      const closeRequest=readJson(closeRequestFile,{});
+      fs.rmSync(closeRequestFile,{force:true});
+      if(Number(closeRequest.processId)!==process.pid){
+        appendLog(`Rejected visual close request for PID ${closeRequest.processId||'unknown'}; desktop PID is ${process.pid}.`);
+        return;
+      }
+      // Close the actual editor BrowserWindow. Process.CloseMainWindow is not
+      // deterministic when diagnostic mode owns a detached Chromium DevTools
+      // window, because Windows may report that tool window as the process's
+      // main HWND after restart.
+      mainWindow.close();
+      return;
+    }
+    if(!fs.existsSync(requestFile))return;
     visualCaptureInFlight=true;
     const processingFile=path.join(VISUAL_CAPTURE_DIR,`capture-processing-${process.pid}.json`);
     let nativeCameraRestore=null;

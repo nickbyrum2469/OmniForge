@@ -294,6 +294,12 @@ test('packaged startup, responsiveness, shutdown, and restart are tied to one is
   assert.match(script, /sessions\\lifecycle\.json/);
   assert.match(script, /lifecycle\.cleanShutdown -ne \$true/);
   assert.match(script, /lifecycle\.pid -ne \$processId/);
+  assert.match(script, /close-request\.json/);
+  assert.match(script, /processId=\$processId;stage=\$Stage/);
+  assert.match(desktop, /const closeRequestFile=path\.join\(VISUAL_CAPTURE_DIR,'close-request\.json'\)/);
+  assert.match(desktop, /Number\(closeRequest\.processId\)!==process\.pid/);
+  assert.match(desktop, /mainWindow\.close\(\)/);
+  assert.doesNotMatch(script, /\.CloseMainWindow\(\)/);
 });
 
 test('failure cleanup kills the process tree and proves the exact port remains offline', () => {
