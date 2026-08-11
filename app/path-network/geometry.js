@@ -1984,45 +1984,192 @@ function appendMasonryCauseway(builder, segment, sections, baseHeightAt, profile
   if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-masonry-parapet');
 }
 
-function appendRopeFootbridge(builder, segment, sections, baseHeightAt, profile) {
-  for (const index of sectionIndicesAtSpacing(sections, 0.55, true)) {
+function candidateIndicesAtSpacing(sections, candidates, spacing) {
+  if (candidates.length <= 2) return [];
+  const selected = [];
+  let lastDistance = sections[candidates[0]].distance;
+  for (const index of candidates.slice(1, -1)) {
+    const distance = sections[index].distance;
+    if (distance - lastDistance + EPSILON < spacing) continue;
+    selected.push(index);
+    lastDistance = distance;
+  }
+  return selected;
+}
+
+/**
+ * Produces the single attachment authority used by every visible part of a
+ * rope footbridge. Keeping the load ropes, planks, hangers, hand ropes, and
+ * timber portals on these exact points prevents the former floating pieces
+ * caused by independently rounded spacing queries.
+ */
+export function ropeFootbridgeAttachmentPlan(sections, profile) {
+  if (!Array.isArray(sections) || sections.length < 2) {
+    return { span: 0, slatStations: [], hangerStations: [], portals: [] };
+  }
+  const slatIndices = sectionIndicesAtSpacing(sections, 0.5, true);
+  const firstDistance = sections[0].distance;
+  const span = Math.max(EPSILON, sections.at(-1).distance - firstDistance);
+  const maximumSag = clamp(span * 0.012, 0.16, 0.42);
+  const slatStations = slatIndices.map(index => {
     const section = sections[index];
     const frame = sectionFrame(sections, index);
+    const fraction = clamp((section.distance - firstDistance) / span, 0, 1);
+    const sag = Math.sin(Math.PI * fraction) * maximumSag;
+    const halfClearWidth = Math.max(
+      0.5,
+      finite(section.roadHalfWidth, finite(profile?.clearWidth, 1.4) * 0.5)
+    );
+    const sides = [-1, 1].map(sign => {
+      const deckEdge = sectionLateralPoint(section, sign * halfClearWidth, 0);
+      const loadRopePoint = add3(deckEdge, scale3(frame.up, -0.015));
+      return {
+        sign,
+        deckEdge,
+        loadRopePoint,
+        handRopePoint: add3(deckEdge, scale3(frame.up, 1.2 - sag))
+      };
+    });
+    return {
+      index,
+      distance: section.distance,
+      section,
+      frame,
+      fraction,
+      sag,
+      plankCenter: add3(section.center, scale3(frame.up, 0.045)),
+      plankLength: 0.46,
+      plankWidth: halfClearWidth * 2 + 0.2,
+      plankHeight: 0.15,
+      sides
+    };
+  });
+  const hangerIndexSet = new Set(candidateIndicesAtSpacing(sections, slatIndices, 1.35));
+  const hangerStations = slatStations.filter(station => hangerIndexSet.has(station.index));
+  const portals = [slatStations[0], slatStations.at(-1)].map((station, portalIndex) => {
+    const direction = portalIndex === 0 ? -1 : 1;
+    const outward = scale3(station.frame.tangent, direction);
+    const posts = station.sides.map(side => {
+      const foot = add3(side.loadRopePoint, scale3(station.frame.up, -0.14));
+      return {
+        sign: side.sign,
+        foot,
+        top: add3(side.loadRopePoint, scale3(station.frame.up, 1.52)),
+        loadTie: side.loadRopePoint,
+        handTie: side.handRopePoint
+      };
+    });
+    return {
+      index: station.index,
+      station,
+      outward,
+      posts,
+      sillLeft: posts[0].loadTie,
+      sillRight: posts[1].loadTie,
+      crossheadLeft: posts[0].top,
+      crossheadRight: posts[1].top
+    };
+  });
+  return { span, maximumSag, slatStations, hangerStations, portals };
+}
+
+function appendRopeFootbridge(builder, segment, sections, baseHeightAt, profile) {
+  const plan = ropeFootbridgeAttachmentPlan(sections, profile);
+  for (const station of plan.slatStations) {
     appendOrientedBox(
       builder,
-      add3(section.center, scale3(frame.up, 0.04)),
-      frame.tangent,
-      frame.side,
-      frame.up,
-      [0.46, profile.clearWidth, 0.14],
+      station.plankCenter,
+      station.frame.tangent,
+      station.frame.side,
+      station.frame.up,
+      [station.plankLength, station.plankWidth, station.plankHeight],
       'bridge-timber-deck-slat'
     );
   }
-  const railIndices = sectionIndicesAtSpacing(sections, 1.8, true);
-  const firstDistance = sections[0].distance;
-  const span = Math.max(EPSILON, sections.at(-1).distance - firstDistance);
-  for (const key of ['roadLeft', 'roadRight']) {
-    const handrail = [];
-    for (const index of railIndices) {
-      const section = sections[index];
-      const frame = sectionFrame(sections, index);
-      const fraction = clamp((section.distance - firstDistance) / span, 0, 1);
-      const sag = Math.sin(Math.PI * fraction) * 0.22;
-      const deckPoint = add3(section[key], scale3(frame.up, 0.08));
-      const railPoint = add3(deckPoint, scale3(frame.up, 1.15 - sag));
-      appendBeamBetween(builder, deckPoint, railPoint, 0.065, 0.065, 'bridge-rope-hanger');
-      handrail.push(railPoint);
+
+  for (const sideIndex of [0, 1]) {
+    for (let index = 1; index < plan.slatStations.length; index += 1) {
+      const previous = plan.slatStations[index - 1].sides[sideIndex];
+      const current = plan.slatStations[index].sides[sideIndex];
+      appendBeamBetween(
+        builder,
+        previous.loadRopePoint,
+        current.loadRopePoint,
+        0.11,
+        0.11,
+        'bridge-rope-deck-load-cable'
+      );
+      appendBeamBetween(
+        builder,
+        previous.handRopePoint,
+        current.handRopePoint,
+        0.095,
+        0.095,
+        'bridge-rope-handrail'
+      );
     }
-    for (let index = 1; index < handrail.length; index += 1) {
-      appendBeamBetween(builder, handrail[index - 1], handrail[index], 0.09, 0.09, 'bridge-rope-handrail');
+    for (const station of plan.hangerStations) {
+      const side = station.sides[sideIndex];
+      appendBeamBetween(
+        builder,
+        side.loadRopePoint,
+        side.handRopePoint,
+        0.06,
+        0.06,
+        'bridge-rope-hanger'
+      );
     }
   }
-  for (const section of [sections[0], sections.at(-1)]) {
-    const frame = sectionFrame(sections, sections.indexOf(section));
-    for (const sign of [-1, 1]) {
-      const foot = add3(section.center, scale3(frame.side, sign * profile.deckWidth * 0.6));
-      const top = add3(foot, scale3(frame.up, 1.5));
-      appendBeamBetween(builder, foot, top, 0.24, 0.24, 'bridge-timber-anchor-post');
+
+  for (const portal of plan.portals) {
+    appendBeamBetween(
+      builder,
+      portal.sillLeft,
+      portal.sillRight,
+      0.22,
+      0.2,
+      'bridge-timber-anchor-sill'
+    );
+    appendBeamBetween(
+      builder,
+      portal.crossheadLeft,
+      portal.crossheadRight,
+      0.24,
+      0.22,
+      'bridge-timber-anchor-crosshead'
+    );
+    for (const post of portal.posts) {
+      appendBeamBetween(builder, post.foot, post.top, 0.28, 0.28, 'bridge-timber-anchor-post');
+    }
+
+    const deadmanCenter = add3(portal.station.section.center, scale3(portal.outward, 1.45));
+    const deadmanPoints = portal.posts.map(post => {
+      const lateral = sectionLateralPoint(
+        portal.station.section,
+        post.sign * (portal.station.plankWidth * 0.5 + 0.18),
+        0
+      );
+      const point = add3(lateral, scale3(portal.outward, 1.45));
+      point[1] = finite(baseHeightAt(point[0], point[2]), deadmanCenter[1]) + 0.12;
+      return point;
+    });
+    appendBeamBetween(
+      builder,
+      deadmanPoints[0],
+      deadmanPoints[1],
+      0.3,
+      0.24,
+      'bridge-timber-anchor-deadman'
+    );
+    for (let sideIndex = 0; sideIndex < portal.posts.length; sideIndex += 1) {
+      appendBeamBetween(
+        builder,
+        portal.posts[sideIndex].top,
+        deadmanPoints[sideIndex],
+        0.085,
+        0.085,
+        'bridge-rope-anchor-backstay'
+      );
     }
   }
   appendBridgeAbutments(builder, sections, baseHeightAt, profile, 'bridge-timber');

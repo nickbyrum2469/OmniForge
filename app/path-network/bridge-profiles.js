@@ -506,11 +506,11 @@ export function bridgeMaterialForRole(role = '') {
   if (text.includes('rope')) {
     return {
       name: 'bridge-rope',
-      baseColor: [0.15, 0.065, 0.018, 1],
+      baseColor: [0.34, 0.19, 0.075, 1],
       roughness: 0.96,
       metallic: 0,
-      textureTintStrength: 0.55,
-      normalStrength: 0.45,
+      textureTintStrength: 0.42,
+      normalStrength: 0.62,
       aoStrength: 0.75,
       textureUrls: textureSet('timber')
     };
