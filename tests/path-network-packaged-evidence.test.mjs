@@ -242,6 +242,9 @@ test('packaged gate drives real horizontal and Shift-vertical spline handles and
 
 test('canvas capture hook drives bounded semantic actions and returns timing evidence', () => {
   assert.match(app, /const visualTestClickTargets=Object\.freeze/);
+  assert.match(app, /ai:'\[data-dock-tab="codex"\]'/);
+  assert.match(app, /worldSettings:'\[data-dock-tab="scene"\]'/);
+  assert.doesNotMatch(app, /data-bottom-tab/);
   assert.match(app, /world:'\[data-v010-world-tab\]'/);
   assert.match(app, /async function runVisualTestActions/);
   assert.match(app, /type==='viewport-navigate'/);

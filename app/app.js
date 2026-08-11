@@ -151,10 +151,10 @@ const visualTestClickTargets=Object.freeze({
   // World is installed by the connected v0.10 workspace after bootstrap, so
   // target its permanent ownership marker rather than a nonexistent core tab.
   world:'[data-v010-world-tab]',
-  ai:'[data-bottom-tab="ai"]',
-  console:'[data-bottom-tab="console"]',
-  jobs:'[data-bottom-tab="jobs"]',
-  worldSettings:'[data-bottom-tab="world"]',
+  ai:'[data-dock-tab="codex"]',
+  console:'[data-dock-tab="console"]',
+  jobs:'[data-dock-tab="jobs"]',
+  worldSettings:'[data-dock-tab="scene"]',
   pathEdit:'#v011SplineEdit',
   save:'#saveButton'
 });
