@@ -69,6 +69,11 @@ function defaultGameplayRules(source = {}) {
 }
 
 function defaultEngineering(source = {}) {
+  const minimumBridgeRunLength = source.minimumBridgeRunLength === null
+    || source.minimumBridgeRunLength === undefined
+    || source.minimumBridgeRunLength === ''
+    ? null
+    : clamp(source.minimumBridgeRunLength, 0, 1000);
   return {
     civilAssist: source.civilAssist !== false,
     maxGradePercent: clamp(source.maxGradePercent ?? 12, 0.1, 100),
@@ -77,6 +82,8 @@ function defaultEngineering(source = {}) {
     maxFillDepth: clamp(source.maxFillDepth ?? 2.5, 0, 1000),
     retainingWallThreshold: clamp(source.retainingWallThreshold ?? 3.5, 0, 1000),
     bridgeThreshold: clamp(source.bridgeThreshold ?? 5, 0, 1000),
+    minimumBridgeRunLength,
+    bridgeIntervalPadding: clamp(source.bridgeIntervalPadding ?? 0, 0, 1000),
     tunnelThreshold: clamp(source.tunnelThreshold ?? 8, 0, 1000),
     maximumBridgeSpan: clamp(source.maximumBridgeSpan ?? 45, 2, 1000),
     tunnelClearance: clamp(source.tunnelClearance ?? 4.5, 1, 50),

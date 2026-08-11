@@ -7,6 +7,7 @@ import {
 } from './terrain-modifier.js';
 import { createTerrainQueryService } from '../world/terrain-query-service.js';
 import { connectScenePathRuntimeConsumers } from './consumers.js';
+import { selectPreferredPathTerrainSample } from './terrain-sample-selection.js';
 
 let objectCache = new WeakMap();
 const stableRuntimeCache = new Map();
@@ -211,14 +212,7 @@ export function sampleScenePathTerrain(runtimes, baseHeight, x, z) {
   let selected = null;
   for (const runtime of runtimes || []) {
     const sample = samplePathTerrainModifier(runtime.terrainModifier, x, z);
-    if (
-      !selected
-      || sample.influence > selected.influence
-      || (
-        sample.influence === selected.influence
-        && sample.lateralDistance < selected.lateralDistance
-      )
-    ) selected = sample;
+    selected = selectPreferredPathTerrainSample(selected, sample, runtime);
   }
   if (!selected || !Number.isFinite(selected.lateralDistance)) {
     return {
@@ -229,7 +223,7 @@ export function sampleScenePathTerrain(runtimes, baseHeight, x, z) {
       materialWeights: { terrain: 1, road: 0, shoulder: 0, earthwork: 0 }
     };
   }
-  return selected;
+  return selected.sample;
 }
 
 export function clearPathRuntimeCache(pathObject = null) {

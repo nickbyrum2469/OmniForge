@@ -25,6 +25,17 @@ import { pathNetworkDegrees } from '../app/path-network/transactions.js';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 
+test('v0.11 runtime-facing server and marketplace identities match the packaged product version',()=>{
+  const packageVersion=JSON.parse(fs.readFileSync(path.join(ROOT,'package.json'),'utf8')).version;
+  const serverSource=fs.readFileSync(path.join(ROOT,'server','server.mjs'),'utf8');
+  const marketplaceSource=fs.readFileSync(path.join(ROOT,'server','marketplace.mjs'),'utf8');
+  assert.equal(packageVersion,'0.11.0');
+  assert.match(serverSource,new RegExp(`OmniForge ${packageVersion.replaceAll('.','\\.')} running at`));
+  assert.match(marketplaceSource,new RegExp(`OmniForge/${packageVersion.replaceAll('.','\\.')}`));
+  assert.doesNotMatch(serverSource,/OmniForge 0\.9\.0 running at/);
+  assert.doesNotMatch(marketplaceSource,/OmniForge\/0\.9\.0/);
+});
+
 function terrain(overrides={}){
   return {id:'terrain-test',type:'terrain',name:'Terrain',visible:true,locked:false,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},properties:normalizeTerrainProperties({preset:'mountainValley',sizeX:240,sizeZ:200,resolution:96,height:42,macroScale:190,detailScale:32,octaves:6,warpStrength:38,ridgeStrength:.75,valleyStrength:.65,valleyRadius:62,seed:17,...overrides},{position:[0,0,0],scale:[1,1,1]})};
 }
@@ -132,15 +143,15 @@ test('v0.11 editor, renderer, runtime, desktop, and MCP expose the connected wor
   assert.match(html,/v011\.js/);
   assert.match(editor,/Shift-drag raises or lowers it/);
   assert.match(editor,/Right-click inserts a node into the nearest compiled segment/);
-  assert.match(editor,/PathGenerationWorkerPool/);
-  assert.match(editor,/workerCount:\s*logicalProcessors\s*-\s*1/);
+  assert.match(editor,/sharedPathGenerationWorkerPool/);
   assert.doesNotMatch(editor,/Math\.min\(4,\s*logicalProcessors\s*-\s*1\)/);
   assert.match(editor,/\/api\/v012\/path\//);
   assert.match(editor,/Join nearest branch/);
   assert.match(editor,/expectedSourceRevision/);
   assert.match(editor,/terrainPointFromScreen/);
   assert.match(editor,/data-v011-expand/);
-  assert.match(renderer,/buildPathGuideSegmentsFromCorridor/);
+  assert.doesNotMatch(renderer,/buildPathGuideSegmentsFromCorridor/);
+  assert.match(renderer,/runtime\.geometry\.guides/);
   assert.match(renderer,/scene\.settings\.splinesVisible!==false/);
   assert.match(renderer,/Spline guides are editor overlays, not world geometry/);
   assert.match(renderer,/if\(scene\.settings\.splinesVisible!==false\)\{\s*\/\/[\s\S]*?gl\.disable\(gl\.DEPTH_TEST\)/);
@@ -173,11 +184,15 @@ test('v0.11 bootstrap persists terrain expansion and spline node editing through
     assert.equal(inserted.status,201);const index=inserted.body.index;
     const moved=await requestJson(port,`/api/v011/path/${pathId}/node/${index}`,{method:'PATCH',body:JSON.stringify({x:13,z:17})});
     assert.equal(moved.status,200);assert.deepEqual(moved.body.path.properties.points[index],[13,17]);
-    const grade=await requestJson(port,`/api/v011/path/${pathId}`,{method:'PATCH',body:JSON.stringify({properties:{carveTerrain:true,maxGradePercent:6,maxCutDepth:4,maxFillDepth:1.5}})});
-    assert.equal(grade.status,200);assert.equal(grade.body.path.properties.carveTerrain,true);
+    const grade=await requestJson(port,`/api/v011/path/${pathId}`,{method:'PATCH',body:JSON.stringify({properties:{maxGradePercent:6,maxCutDepth:4,maxFillDepth:1.5}})});
+    assert.equal(grade.status,200);assert.equal(grade.body.compatibility.authority,'path-network-v2');
     assert.equal(grade.body.diagnostics.validation,grade.body.diagnostics.gameplayReady?'passed':'failed');
     if(grade.body.diagnostics.gameplayReady)assert.ok(grade.body.diagnostics.compiledMaxGradePercent<=6.15);
-    else assert.equal(grade.body.diagnostics.constraintStatus,'blocked-infeasible-profile');
+    else assert.equal(grade.body.diagnostics.constraintStatus,'blocked-invalid-construction');
+    const rejectedLegacyField=await requestJson(port,`/api/v011/path/${pathId}`,{method:'PATCH',body:JSON.stringify({properties:{splineTension:.9}})});
+    assert.equal(rejectedLegacyField.status,400);assert.match(rejectedLegacyField.body.error,/not schema-v2 authorities: splineTension.*\/api\/v012\/path\/\{pathId\}\/transaction/);
+    const rejectedLegacySplit=await requestJson(port,`/api/v011/path/${pathId}/split`,{method:'POST',body:JSON.stringify({index:1})});
+    assert.equal(rejectedLegacySplit.status,400);assert.match(rejectedLegacySplit.body.error,/Legacy split creates a second points-based path object and is disabled/);
     const v2Initial=await requestJson(port,`/api/v012/path/${pathId}/network`);
     assert.equal(v2Initial.status,200);
     assert.equal(v2Initial.body.network.schemaVersion,2);

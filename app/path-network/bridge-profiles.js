@@ -129,6 +129,81 @@ export function normalizeBridgeProfile(input = {}) {
   };
 }
 
+/**
+ * Validate one automatic bridge portal against the terrain on its approach
+ * side. A threshold crossing is not, by itself, a buildable abutment: the
+ * landing station must have bounded cut/fill support and a compatible
+ * authored road grade. A steep terrain bank is reported separately because
+ * the adjoining earthwork, retaining wall, and abutment own that transition.
+ *
+ * `outsideSample` is the first sample away from the open span. End-of-segment
+ * portals may omit it; their authored endpoint is then the only available
+ * support authority.
+ */
+export function bridgePortalLandingStatus(sample, outsideSample, engineering = {}) {
+  const landing = sample || {};
+  const outside = outsideSample || null;
+  const supportSamples = outside ? [landing, outside] : [landing];
+  const maximumFillDepth = Math.max(0, finite(engineering.maxFillDepth, 2.5));
+  const maximumCutDepth = Math.max(0, finite(engineering.maxCutDepth, 6));
+  const maximumGradePercent = Math.max(0.1, finite(engineering.maxGradePercent, 12));
+  const maximumFill = Math.max(0, ...supportSamples.map(candidate => (
+    finite(candidate?.position?.[1]) - finite(candidate?.baseY, candidate?.position?.[1])
+  )));
+  const maximumCut = Math.max(0, ...supportSamples.map(candidate => (
+    finite(candidate?.baseY, candidate?.position?.[1]) - finite(candidate?.position?.[1])
+  )));
+  let roadGradePercent = 0;
+  let terrainGradePercent = 0;
+  let gradeDeltaPercent = 0;
+  if (outside) {
+    const horizontal = Math.max(1e-6, Math.hypot(
+      finite(landing?.position?.[0]) - finite(outside?.position?.[0]),
+      finite(landing?.position?.[2]) - finite(outside?.position?.[2])
+    ));
+    const roadDelta = finite(landing?.position?.[1]) - finite(outside?.position?.[1]);
+    const terrainDelta = finite(landing?.baseY, landing?.position?.[1])
+      - finite(outside?.baseY, outside?.position?.[1]);
+    roadGradePercent = Math.abs(roadDelta) / horizontal * 100;
+    terrainGradePercent = Math.abs(terrainDelta) / horizontal * 100;
+    gradeDeltaPercent = Math.abs(terrainDelta - roadDelta) / horizontal * 100;
+  }
+  const supportValid = maximumFill <= maximumFillDepth + 1e-6
+    && maximumCut <= maximumCutDepth + 1e-6;
+  // The deck/road grade is a hard portal constraint. A steep terrain bank is
+  // not automatically a rejected landing: the abutment and the adjoining
+  // cut/fill or retaining run own that bank. Report it separately so Civil
+  // Assist and diagnostics can expose the required approach work without
+  // moving the deck boundary all the way to flat ground (which creates an
+  // oversized dirt causeway around real ravines).
+  const gradeValid = roadGradePercent <= maximumGradePercent + 0.05;
+  const terrainApproachValid = terrainGradePercent <= maximumGradePercent + 0.05
+    && gradeDeltaPercent <= maximumGradePercent + 0.05;
+  const reasons = [];
+  if (maximumFill > maximumFillDepth + 1e-6) reasons.push('portal-fill-support-exceeds-limit');
+  if (maximumCut > maximumCutDepth + 1e-6) reasons.push('portal-cut-support-exceeds-limit');
+  if (roadGradePercent > maximumGradePercent + 0.05) reasons.push('portal-road-grade-exceeds-limit');
+  const warnings = [];
+  if (terrainGradePercent > maximumGradePercent + 0.05) warnings.push('portal-terrain-grade-exceeds-limit');
+  if (gradeDeltaPercent > maximumGradePercent + 0.05) warnings.push('portal-grade-mismatch-exceeds-limit');
+  return Object.freeze({
+    valid: supportValid && gradeValid,
+    supportValid,
+    gradeValid,
+    terrainApproachValid,
+    maximumFill,
+    maximumCut,
+    maximumFillDepth,
+    maximumCutDepth,
+    roadGradePercent,
+    terrainGradePercent,
+    gradeDeltaPercent,
+    maximumGradePercent,
+    reasons: Object.freeze(reasons),
+    warnings: Object.freeze(warnings)
+  });
+}
+
 function minimumClearWidthForVehicleClass(vehicleClass) {
   return VEHICLE_MINIMUM_CLEAR_WIDTH[vehicleClass]
     ?? VEHICLE_MINIMUM_CLEAR_WIDTH.mixed;

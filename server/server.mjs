@@ -857,7 +857,7 @@ initializeJobManager();
 await assertProjectUnlocked(readState().project.id);
 server.listen(port, host, () => {
   acquireActiveProjectLock(readState());
-  console.log(`OmniForge 0.9.0 running at http://${host}:${port}`);
+  console.log(`OmniForge 0.11.0 running at http://${host}:${port}`);
   console.log('Press Ctrl+C to stop.');
 });
 

@@ -13,7 +13,9 @@ function build(mode, {
   span = 40,
   width = 5,
   vehicleClass = 'mixed',
-  bridgeStyle = 'auto'
+  bridgeStyle = 'auto',
+  terrainHeightAt = baseHeight,
+  surfaceDetailProfile = undefined
 } = {}) {
   const network = normalizePathNetwork({
     id: `construction-${mode}`,
@@ -29,15 +31,16 @@ function build(mode, {
       constructionLocked: true,
       crossSectionProfile: { width, shoulderWidth: 0.8, blendDistance: 2 },
       gameplayRules: { vehicleClass },
-      structureProfile: { bridgeStyle }
+      structureProfile: { bridgeStyle },
+      ...(surfaceDetailProfile ? { surfaceDetailProfile } : {})
     }]
   });
   const compiled = compilePathNetwork(network, {
-    terrainHeightAt: baseHeight,
+    terrainHeightAt,
     terrainNormalAt: () => [0, 1, 0],
     spacing: 0.5
   });
-  const terrainModifier = compilePathTerrainModifier(compiled, { baseHeightAt: baseHeight, chunkSize: 16 });
+  const terrainModifier = compilePathTerrainModifier(compiled, { baseHeightAt: terrainHeightAt, chunkSize: 16 });
   return {
     compiled,
     terrainModifier,
@@ -156,6 +159,130 @@ test('bridge abutments stay bounded around their approach portals', () => {
     abutmentVertices.every(point => Math.abs(point[2]) <= 12),
     'abutments must not be projected sideways by a sloped road frame'
   );
+});
+
+test('both bridge portals contain exact threshold and apron topology', () => {
+  const span = 44;
+  const { geometry } = build('bridge', {
+    startY: 8,
+    endY: 8,
+    span,
+    width: 9,
+    bridgeStyle: 'steel-girder'
+  });
+  const mesh = geometry.meshes.structure;
+  const positionsForRole = predicate => {
+    const positions = [];
+    for (let index = 0; index < mesh.roles.length; index += 1) {
+      if (!predicate(mesh.roles[index])) continue;
+      positions.push(Array.from(mesh.positions.slice(index * 3, index * 3 + 3)));
+    }
+    return positions;
+  };
+  const thresholds = positionsForRole(role => role === 'bridge-steel-expansion-joint-deck-top');
+  const aprons = positionsForRole(role => role === 'bridge-concrete-deck-portal-apron-deck-top');
+  const deckSeams = positionsForRole(role => role === 'bridge-concrete-deck-top');
+  assert.ok(thresholds.length > 0, 'a deliberate steel threshold must replace an abrupt dirt/deck material cut');
+  assert.ok(aprons.length > 0, 'the structural deck must contain a bounded portal apron');
+  assert.ok(deckSeams.some(point => Math.abs(point[0]) <= 0.001), 'start portal must preserve the exact shared deck boundary');
+  assert.ok(deckSeams.some(point => Math.abs(point[0] - span) <= 0.001), 'end portal must preserve the exact shared deck boundary');
+  assert.ok(
+    thresholds.some(point => point[0] > 0.001 && point[0] < 1.1),
+    'start portal threshold band is missing immediately inside the shared boundary'
+  );
+  assert.ok(
+    thresholds.some(point => point[0] < span - 0.001 && point[0] > span - 1.1),
+    'end portal threshold band is missing immediately inside the shared boundary'
+  );
+  assert.ok(aprons.some(point => point[0] < 5), 'start portal apron is missing');
+  assert.ok(aprons.some(point => point[0] > span - 5), 'end portal apron is missing');
+  assert.equal(geometry.validation.valid, true, geometry.validation.errors.join(' '));
+});
+
+test('abutment foundations conform independently across an asymmetric slope', () => {
+  const crossSlope = (x, z) => (
+    (z < 0 ? -4.5 : 2.25)
+    + Math.sin(x * 0.05) * 0.18
+    + z * 0.025
+  );
+  const span = 44;
+  const { geometry } = build('bridge', {
+    startY: 9,
+    endY: 9,
+    span,
+    width: 9,
+    bridgeStyle: 'steel-girder',
+    terrainHeightAt: crossSlope
+  });
+  const mesh = geometry.meshes.structure;
+  const footing = [];
+  const backwall = [];
+  const wingwall = [];
+  for (let index = 0; index < mesh.roles.length; index += 1) {
+    const point = Array.from(mesh.positions.slice(index * 3, index * 3 + 3));
+    if (mesh.roles[index] === 'bridge-concrete-abutment-footing') footing.push(point);
+    if (mesh.roles[index] === 'bridge-concrete-abutment-backwall') backwall.push(point);
+    if (mesh.roles[index] === 'bridge-concrete-abutment-wingwall') wingwall.push(point);
+  }
+  assert.ok(footing.length > 0 && backwall.length > 0 && wingwall.length > 0);
+  const portalGroups = [
+    footing.filter(point => point[0] < 5),
+    footing.filter(point => point[0] > span - 5)
+  ];
+  for (const portal of portalGroups) {
+    const lowSide = portal.filter(point => point[2] < -0.5);
+    const highSide = portal.filter(point => point[2] > 0.5);
+    assert.ok(lowSide.length > 0 && highSide.length > 0, 'both cross-slope sides need independent footing cells');
+    const highest = points => Math.max(...points.map(point => point[1]));
+    assert.ok(
+      highest(highSide) - highest(lowSide) > 5,
+      'footing tops must follow each side of the terrain instead of one shared minimum elevation'
+    );
+  }
+  const contactVertices = [...footing, ...backwall, ...wingwall];
+  assert.ok(contactVertices.every(point => point.every(Number.isFinite)));
+  assert.ok(contactVertices.every(point => point[0] >= -5 && point[0] <= span + 5));
+  assert.ok(contactVertices.every(point => Math.abs(point[2]) <= 10));
+  assert.equal(geometry.validation.valid, true, geometry.validation.errors.join(' '));
+  assert.equal(geometry.validation.meshes.structure.degenerateTriangles, 0);
+});
+
+test('bridge core filters dirt displacement while portal aprons retain authored road detail', () => {
+  const { geometry } = build('bridge', {
+    startY: 8,
+    endY: 8,
+    span: 44,
+    width: 9,
+    bridgeStyle: 'steel-girder',
+    surfaceDetailProfile: {
+      profileId: 'custom',
+      puddleCoverage: 0.4,
+      puddleDepth: 0.08,
+      wheelRutStrength: 0.9,
+      hoofPrintDensity: 0.7,
+      bootPrintDensity: 0.65,
+      erosionStrength: 0.8,
+      detailNormalStrength: 1.2
+    }
+  });
+  const mesh = geometry.meshes.structure;
+  const detailAt = (index, component) => {
+    const stream = [mesh.surfaceDetail0, mesh.surfaceDetail1, mesh.surfaceDetail2, mesh.surfaceDetail3][Math.floor(component / 4)];
+    return stream[index * 4 + component % 4];
+  };
+  const apronIndex = mesh.roles.findIndex(role => role === 'bridge-concrete-deck-portal-apron-deck-top');
+  const coreIndex = mesh.roles.findIndex((role, index) => (
+    role === 'bridge-concrete-deck-top'
+    && mesh.positions[index * 3] > 18
+    && mesh.positions[index * 3] < 26
+  ));
+  assert.ok(apronIndex >= 0 && coreIndex >= 0);
+  assert.ok(detailAt(apronIndex, 5) > 0.8, 'portal apron should preserve the approaching road rut payload');
+  assert.equal(detailAt(coreIndex, 5), 0, 'structural deck must not deform into dirt wheel ruts');
+  assert.equal(detailAt(coreIndex, 8), 0, 'structural deck must not stamp hoof depressions');
+  assert.equal(detailAt(coreIndex, 10), 0, 'structural deck must not stamp boot depressions');
+  assert.ok(detailAt(coreIndex, 2) <= 0.012 + 1e-6, 'deck puddling must stay structurally bounded');
+  assert.ok(detailAt(coreIndex, 12) <= 0.012 + 1e-6, 'deck erosion must stay structurally bounded');
 });
 
 test('mixed bridge intervals give the deck exclusive ownership of the span surface', () => {

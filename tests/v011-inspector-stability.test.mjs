@@ -37,6 +37,9 @@ test('diagnostic mode includes input, event-loop, WebGL, and long-task evidence'
   const source = fs.readFileSync(path.join(ROOT, 'app', 'runtime-diagnostics.js'), 'utf8');
   for (const evidence of [
     'event-loop-stall',
+    'runtime-sample',
+    'rafP95Ms',
+    'usedJSHeapBytes',
     'webgl-context-lost',
     'long-task',
     'unhandled-rejection'

@@ -4,7 +4,6 @@ import {
   transformPoint, modelMatrix, normalMatrix3, hexToRgb, cameraForward
 } from './math.js';
 import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, terrainBaseHeightAt, normalizeTerrainProperties, terrainBounds } from './worldgen.js';
-import { buildPathGuideSegmentsFromCorridor, buildTerrainConformingPathSurface, terrainPathSamplingDiagnostics } from './path-visuals.js';
 import { compileScenePathRuntimes, sampleScenePathTerrain } from './path-network/runtime.js';
 import { connectScenePathRuntimeConsumers, sampleSceneGroundSurface } from './path-network/consumers.js';
 import { buildPathCostGuideData } from './path-network/debug-visualization.js';
@@ -17,6 +16,9 @@ import { FrameResources, detectRenderCapabilities } from './frame-resources.js';
 import { HDRPipeline } from './hdr-pipeline.js';
 import { directionFromAzimuthElevation } from './celestial-mechanics.js';
 import { SRGB_GLSL } from './color-management.js';
+import { sharedPathGenerationWorkerPool } from './path-network/generation-pool.js';
+import { InteractivePathRenderGeneration } from './path-network/interactive-render-generation.js';
+import { createTerrainQueryService } from './world/terrain-query-service.js';
 
 function compile(gl,type,source){
   const shader=gl.createShader(type); gl.shaderSource(shader,source); gl.compileShader(shader);
@@ -32,6 +34,7 @@ function smoothstep(a,b,x){const t=clamp((x-a)/(b-a||1),0,1);return t*t*(3-2*t);
 function lerp(a,b,t){return a+(b-a)*t;}
 function isEditorReference(object){return object?.properties?.renderClass==='editor-only'||object?.properties?.editorReference===true;}
 function affectsSurfaceRecipes(object){return object?.properties?.affectsSurfaceRecipes!==false&&!isEditorReference(object);}
+let rendererInstanceSequence=0;
 
 const meshVS=`#version 300 es
 precision highp float;
@@ -831,6 +834,11 @@ function pathTerrainSurfaceMasks(pathRuntimes,chunkSize){
   // Only horizontal travel surfaces own visibility against terrain. Earthwork
   // deliberately meets the authored terrain at its outer boundary, while
   // curb/edge meshes are vertical closures and must not cut extra holes.
+  // Structural bridge decks are also excluded: bridge portal support belongs
+  // to the terrain modifier, while the open span deliberately retains authored
+  // terrain. Using an elevated deck as a subtractive mask leaves an unstitched
+  // projected hole whenever terrain reaches the deck, because the deck is not
+  // terrain-boundary topology.
   const triangles=[],chunks=new Map(),renderMeshes=['road','shoulder','gutter','sidewalk'];
   const bounds={minX:Infinity,maxX:-Infinity,minZ:Infinity,maxZ:-Infinity};
   let consideredTriangleCount=0,constructionRejectedTriangleCount=0,constructionClassifierQueryCount=0,constructionClassifierPairTestCount=0;
@@ -847,13 +855,11 @@ function pathTerrainSurfaceMasks(pathRuntimes,chunkSize){
   for(const runtime of pathRuntimes||[]){
     const classifier=pathSurfaceConstructionClassifier(runtime,chunkSize);
     const meshes=runtime?.geometry?.meshes||{};
-    for(const meshName of [...renderMeshes,'structure']){
+    for(const meshName of renderMeshes){
       const mesh=meshes[meshName];if(!mesh?.indices?.length)continue;
       for(let offset=0;offset<mesh.indices.length;offset+=3){
         consideredTriangleCount+=1;
         const vertexIndices=[mesh.indices[offset],mesh.indices[offset+1],mesh.indices[offset+2]];
-        const role=mesh.roles?.[vertexIndices[0]]||'';
-        if(meshName==='structure'&&!/^bridge-.*deck/.test(role))continue;
         const vertices=vertexIndices.map(index=>Array.from(mesh.positions.slice(index*3,index*3+3)));
         const face=cross(sub(vertices[1],vertices[0]),sub(vertices[2],vertices[0]));
         if(face[1]<=TERRAIN_CLIP_EPSILON)continue;
@@ -863,7 +869,7 @@ function pathTerrainSurfaceMasks(pathRuntimes,chunkSize){
         // A tunnel's visible floor is intentionally below untouched terrain;
         // its projected footprint must never punch a skylight through the
         // terrain above it. Invalid work likewise has no production surface.
-        if(meshName!=='structure'&&!classifier.allows([centerX,centerZ])){constructionRejectedTriangleCount+=1;continue;}
+        if(!classifier.allows([centerX,centerZ])){constructionRejectedTriangleCount+=1;continue;}
         register({
           points:polygonAreaXZ(points)<0?[...points].reverse():points,
           heights:polygonAreaXZ(points)<0?vertices.map(point=>point[1]).reverse():vertices.map(point=>point[1]),
@@ -1033,6 +1039,10 @@ function weldedTerrainNormals(positions,indices,tolerance=1e-4){
 }
 export function terrainMesh(object,paths,pathRuntimes=[]){
   const props=normalizeTerrainProperties(object.properties||{},object.transform||{}),resX=clamp(Math.round(Number(props.resolutionX||props.resolution||128)),8,256),resZ=clamp(Math.round(Number(props.resolutionZ||props.resolution||128)),8,256),bounds=props.bounds,p=[],n=[],idx=[],uv=[],blends=[];
+  // Schema-v2 networks are terrain authorities only through their compiled
+  // runtime. The old worldgen sampler remains a migration-only reader for
+  // projects that have not yet acquired pathNetwork data.
+  const legacyPaths=(paths||[]).filter(path=>!path?.properties?.pathNetwork);
   const ox=Number(object.transform.position?.[0]||0),oy=Number(object.transform.position?.[1]||0),oz=Number(object.transform.position?.[2]||0);
   const chunkSize=clamp(Number(props.chunkSize||64),8,512);
   const activeTerrainKeys=pathRuntimes.length?activePathChunkKeys(pathRuntimes,chunkSize):new Set();
@@ -1045,8 +1055,8 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
       // A bridge, tunnel, or invalid path has no terrain authority. Preserve
       // the exact authored terrain grid rather than changing topology merely
       // because a non-terrain path runtime exists in the scene.
-      const wy=authoredBaseOnly?terrainBaseHeightAt(object,wx,wz):terrainHeight(object,wx,wz,paths);
-      p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push(x/resX,z/resZ);blends.push(authoredBaseOnly?0:pathBlendAt(paths,wx,wz));
+      const wy=authoredBaseOnly?terrainBaseHeightAt(object,wx,wz):terrainHeight(object,wx,wz,legacyPaths);
+      p.push(wx-ox,wy-oy,wz-oz);n.push(0,1,0);uv.push(x/resX,z/resZ);blends.push(authoredBaseOnly?0:pathBlendAt(legacyPaths,wx,wz));
     }
     for(let z=0;z<resZ;z++)for(let x=0;x<resX;x++){const a=z*(resX+1)+x,b=a+resX+1;idx.push(a,b,a+1,b,b+1,a+1);}
     if(authoredBaseOnly)terrainMesh.lastPathDetail={
@@ -1159,10 +1169,6 @@ export function terrainMesh(object,paths,pathRuntimes=[]){
   const normals=weldedTerrainNormals(p,idx);
   return {positions:new Float32Array(p),normals,indices:new Uint32Array(idx),uvs:new Float32Array(uv),blends:new Float32Array(blends)};
 }
-function pathLineData(object,terrain,paths){
-  const corridor=buildTerrainConformingPathSurface(object,terrain,paths);
-  return buildPathGuideSegmentsFromCorridor(corridor);
-}
 function createBufferMesh(gl,data){
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);const buffers=[];
   const bind=(location,size,array)=>{const b=gl.createBuffer();buffers.push(b);gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,array,gl.STATIC_DRAW);gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,size,gl.FLOAT,false,0,0);};
@@ -1185,6 +1191,16 @@ function createBufferMesh(gl,data){
 function createLineBuffer(gl,positions){
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(positions),gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);gl.bindVertexArray(null);return {vao,count:positions.length/3,buffer:b};
 }
+function disposeBufferMesh(gl,mesh){if(!mesh)return;for(const buffer of mesh.buffers||[])gl.deleteBuffer(buffer);if(mesh.vao)gl.deleteVertexArray(mesh.vao);}
+function disposePathLineEntry(gl,entry){if(!entry)return;for(const item of [entry.center,entry.edges,entry.construction,...(entry.costSegments||[]).map(value=>value.buffer),...(entry.blockedCorridors||[]).flatMap(value=>[value.boundaries,value.hatches,value.endCaps])]){if(!item)continue;if(item.vao)gl.deleteVertexArray(item.vao);if(item.buffer)gl.deleteBuffer(item.buffer);}}
+function disposePathSurfaceEntry(gl,entry){for(const mesh of Object.values(entry?.meshes||{}))disposeBufferMesh(gl,mesh);}
+export function pathRenderBundleMatchesScene(bundle,scene){const terrain=scene?.objects?.find(object=>object.type==='terrain'&&object.visible!==false);return Boolean(bundle&&bundle.sceneId===String(scene?.id||'')&&bundle.terrainId===String(terrain?.id||''));}
+export function coherentPathRenderScene(scene,bundle){
+  if(!pathRenderBundleMatchesScene(bundle,scene))return scene;
+  const objects=[];for(const object of scene.objects){if(object.type==='terrain'){if(object.id===bundle.terrain.id)objects.push(bundle.terrain);continue;}if(object.type!=='path')objects.push(object);}
+  objects.push(...bundle.paths);return {...scene,settings:{...scene.settings,worldChunkSize:bundle.worldChunkSize},objects};
+}
+export function disposePathRenderBundle(gl,bundle){if(!bundle)return;disposeBufferMesh(gl,bundle.terrainMesh);for(const entry of bundle.pathLines?.values?.()||[])disposePathLineEntry(gl,entry);for(const entry of bundle.pathSurfaces?.values?.()||[])disposePathSurfaceEntry(gl,entry);}
 export function pathSurfaceCullMode(kind){
   return kind==='structure'?'double-sided':'front-face';
 }
@@ -1209,8 +1225,59 @@ export function pathSurfaceRendererDiagnostics(entry={}){
   };
 }
 
+export function pathNetworkTerrainSamplingDiagnostics({
+  terrainAvailable=false,
+  expectedPathCount=0,
+  exactWorkerResult=false,
+  runtimes=[],
+  terrainPathDetail=null
+}={}){
+  const currentRuntimes=exactWorkerResult?(runtimes||[]):[];
+  const networks=currentRuntimes.map(runtime=>{
+    const widths=(runtime?.compiled?.segments||[])
+      .map(segment=>Number(segment?.crossSectionProfile?.width))
+      .filter(width=>Number.isFinite(width)&&width>0);
+    return {
+      pathObjectId:String(runtime?.pathObjectId||''),
+      sourceNetworkId:String(runtime?.sourceNetworkId||runtime?.compiled?.sourceNetworkId||''),
+      sourceRevision:Number(runtime?.sourceRevision??runtime?.compiled?.sourceRevision??0),
+      generationRevision:Number(runtime?.generationRevision??runtime?.compiled?.generationRevision??0),
+      segmentCount:runtime?.compiled?.segments?.length||0,
+      minimumPathWidth:widths.length?Math.min(...widths):null
+    };
+  });
+  const widths=networks.map(network=>network.minimumPathWidth).filter(Number.isFinite);
+  const meshDetail=exactWorkerResult&&terrainPathDetail?structuredClone(terrainPathDetail):null;
+  return {
+    available:Boolean(terrainAvailable),
+    ready:Boolean(terrainAvailable&&exactWorkerResult),
+    workerResultCurrent:Boolean(exactWorkerResult),
+    authority:'path-network-v2-worker-result',
+    compiler:'path-network-v2',
+    corridorCompiler:'path-network-v2',
+    dedicatedPathSurface:true,
+    expectedPathCount:Math.max(0,Number(expectedPathCount)||0),
+    pathCount:networks.length,
+    minimumPathWidth:widths.length?Math.min(...widths):null,
+    sourceRevisions:networks.map(network=>({
+      pathObjectId:network.pathObjectId,
+      sourceNetworkId:network.sourceNetworkId,
+      sourceRevision:network.sourceRevision
+    })),
+    generationRevisions:networks.map(network=>({
+      pathObjectId:network.pathObjectId,
+      sourceNetworkId:network.sourceNetworkId,
+      generationRevision:network.generationRevision
+    })),
+    networks,
+    meshStrategy:meshDetail?.strategy||null,
+    queryStats:meshDetail?.terrainSampling?structuredClone(meshDetail.terrainSampling):null,
+    terrainMesh:meshDetail
+  };
+}
+
 export class Renderer3D{
-  constructor(canvas){
+  constructor(canvas,{pathGenerationPool=null}={}){
     this.canvas=canvas;this.gl=canvas.getContext('webgl2',{antialias:true,alpha:false,preserveDrawingBuffer:true,premultipliedAlpha:false});
     if(!this.gl)throw new Error('WebGL 2 is required.');
     const gl=this.gl;
@@ -1226,7 +1293,17 @@ export class Renderer3D{
     canvas.addEventListener('webglcontextlost',this.boundContextLost,false);canvas.addEventListener('webglcontextrestored',this.boundContextRestored,false);
     this.meshProgram=program(gl,meshVS,meshFS);this.depthProgram=program(gl,depthVS,depthFS);this.lineProgram=program(gl,lineVS,lineFS);this.skyPass=null;try{this.skyPass=new SkyPass(gl);}catch(error){console.error('Renderer-owned sky initialization failed; using the opaque environment fallback.',error);window.__omniforgeDiagnostics?.warn?.('sky-pass-initialization-failed',{message:error.message});}
     this.staticMeshes={cube:createBufferMesh(gl,cubeMesh()),plane:createBufferMesh(gl,planeMesh()),sphere:createBufferMesh(gl,sphereMesh()),cylinder:createBufferMesh(gl,cylinderMesh())};
-    this.dynamic=new Map();this.pathLines=new Map();this.pathSurfaces=new Map();this.pathPreview=null;this.pathRuntimeFrameCache=null;this.lastTerrainSamplingDiagnostics=null;this.terrainSamplingWarningSignature='';this.textureCache=new Map();this.instanceBuffers=new Set();this.renderStart=performance.now();this.assets=[];this.modelMeshes=new Map();this.modelLoads=new Map();this.modelRevisions=new Map();this.modelLoadRevisions=new Map();this.grid=null;this.gridKey='';this.selectionBox=createLineBuffer(gl,this.boxLines());this.whiteTexture=this.createSolidTexture([255,255,255,255]);this.flatNormalTexture=this.createSolidTexture([128,128,255,255]);
+    this.dynamic=new Map();this.pathLines=new Map();this.pathSurfaces=new Map();this.previewPathLines=new Map();this.previewPathSurfaces=new Map();this.pathPreview=null;this.pathRuntimeFrameCache=null;this.previewPathRuntimeFrameCache=null;this.activePathRenderBundle=null;this.lastTerrainSamplingDiagnostics=null;this.lastTerrainMeshPathDetail=null;this.terrainSamplingWarningSignature='';this.textureCache=new Map();this.instanceBuffers=new Set();this.renderStart=performance.now();this.assets=[];this.modelMeshes=new Map();this.modelLoads=new Map();this.modelRevisions=new Map();this.modelLoadRevisions=new Map();this.grid=null;this.gridKey='';this.selectionBox=createLineBuffer(gl,this.boxLines());this.whiteTexture=this.createSolidTexture([255,255,255,255]);this.flatNormalTexture=this.createSolidTexture([128,128,255,255]);
+    this.pathGenerationPool=pathGenerationPool||sharedPathGenerationWorkerPool();this.pathRenderRequest=null;this.pathRenderContextGeneration=0;this.pathRenderDisposed=false;this.pathRenderSignatureMemo=null;
+    this.pathRenderGeneration=new InteractivePathRenderGeneration({
+      pool:this.pathGenerationPool,
+      key:`renderer-path-runtime-${++rendererInstanceSequence}`,
+      onReady:message=>this.installInteractivePathRender(message),
+      onError:(error,request)=>{
+        window.__omniforgeDiagnostics?.warn?.('path-render-runtime-worker-failed',{message:error.message,signature:request?.signature||null,retainingPreviousBundle:Boolean(this.activePathRenderBundle)});
+        const now=Date.now();if(now-Number(this.lastPathRenderFailureToastAt||0)>5000){this.lastPathRenderFailureToastAt=now;window.__omniforgeV011Bridge?.showToast?.(this.activePathRenderBundle?'Terrain and roads could not rebuild. The last valid view is retained while OmniForge retries.':'Terrain and roads are still generating after an error. OmniForge is retrying without blocking the editor.','error');}
+      }
+    });
     this.createShadowResources(2048);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.disable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     this.renderGraph=this.createRenderGraph();
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(canvas);this.resize();
@@ -1239,8 +1316,15 @@ export class Renderer3D{
     this.assets=next;
     for(const asset of models.values())this.ensureModelMesh(asset);
   }
-  setPathPreview(pathObject){this.pathPreview=pathObject?structuredClone(pathObject):null;this.pathRuntimeFrameCache=null;}
-  pathRenderScene(scene){return this.pathPreview?{...scene,objects:[...scene.objects.filter(object=>object.id!==this.pathPreview.id),this.pathPreview]}:scene;}
+  disposePathPreviewResources(){for(const entry of this.previewPathLines.values())disposePathLineEntry(this.gl,entry);for(const entry of this.previewPathSurfaces.values())disposePathSurfaceEntry(this.gl,entry);this.previewPathLines.clear();this.previewPathSurfaces.clear();}
+  setPathPreview(pathObject){this.disposePathPreviewResources();this.pathPreview=pathObject?structuredClone(pathObject):null;this.previewPathRuntimeFrameCache=null;}
+  activePathBundleForScene(scene){
+    return pathRenderBundleMatchesScene(this.activePathRenderBundle,scene)?this.activePathRenderBundle:null;
+  }
+  pathRenderScene(scene){
+    if(this.pathPreview)return {...scene,objects:[...scene.objects.filter(object=>object.id!==this.pathPreview.id),this.pathPreview]};
+    return coherentPathRenderScene(scene,this.activePathRenderBundle);
+  }
   ensureModelMesh(asset){
     if(!asset?.id||!asset.meshUrl)return;const revision=this.modelRevision(asset);
     if(this.modelMeshes.has(asset.id)&&this.modelRevisions.get(asset.id)===revision)return;
@@ -1285,13 +1369,79 @@ export class Renderer3D{
   boxLines(){const c=[[-.5,-.5,-.5],[.5,-.5,-.5],[.5,.5,-.5],[-.5,.5,-.5],[-.5,-.5,.5],[.5,-.5,.5],[.5,.5,.5],[-.5,.5,.5]],e=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]],p=[];e.forEach(([a,b])=>p.push(...c[a],...c[b]));return p;}
   gridLines(size,step){const p=[],half=size/2;for(let v=-half;v<=half+.001;v+=step){p.push(-half,.015,v,half,.015,v,v,.015,-half,v,.015,half);}return p;}
   ensureGrid(scene){const key=`${scene.settings.gridSize}:${scene.settings.gridStep}`;if(key===this.gridKey&&this.grid)return;if(this.grid){this.gl.deleteVertexArray(this.grid.vao);this.gl.deleteBuffer(this.grid.buffer);}this.grid=createLineBuffer(this.gl,this.gridLines(Number(scene.settings.gridSize||100),Number(scene.settings.gridStep||5)));this.gridKey=key;}
+  pathRenderSignature(scene,{fresh=false}={}){
+    if(!fresh&&this.pathRenderSignatureMemo?.scene===scene&&this.pathRenderSignatureMemo?.frame===this.frameCounter)return this.pathRenderSignatureMemo.signature;
+    const terrain=scene?.objects?.find(object=>object.type==='terrain'&&object.visible!==false)||null,paths=(scene?.objects||[]).filter(object=>object.type==='path');
+    const signature=JSON.stringify([
+      scene?.id||'',
+      scene?.settings?.worldChunkSize||null,
+      terrain?[terrain.id,terrain.visible,terrain.transform,terrain.properties]:null,
+      paths.map(pathObject=>[pathObject.id,pathObject.visible,pathObject.transform,pathObject.properties])
+    ]);
+    if(!fresh)this.pathRenderSignatureMemo={scene,frame:this.frameCounter,signature};
+    return signature;
+  }
+  isPreviewPathScene(scene){return Boolean(this.pathPreview&&scene?.objects?.some(object=>object===this.pathPreview));}
+  scheduleInteractivePathRender(scene){
+    if(!scene?.objects||this.isPreviewPathScene(scene))return null;
+    const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return null;
+    const paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false),signature=this.pathRenderSignature(scene);
+    this.pathRenderRequest={signature,sceneId:String(scene.id||''),terrainId:String(terrain.id||''),contextGeneration:this.pathRenderContextGeneration};
+    if(this.pathRuntimeFrameCache?.renderSignature===signature){this.pathRuntimeFrameCache.terrain=terrain;this.pathRuntimeFrameCache.paths=[...paths];return signature;}
+    const workerScene={id:scene.id,settings:{worldChunkSize:scene.settings?.worldChunkSize},objects:[terrain,...paths]};
+    this.pathRenderGeneration.request({
+      signature,
+      payload:{signature,scene:workerScene},
+      context:{signature,scene,terrain,paths:[...paths],sceneId:String(scene.id||''),terrainId:String(terrain.id||''),contextGeneration:this.pathRenderContextGeneration}
+    });
+    return signature;
+  }
+  rehydrateWorkerPathRuntimes(runtimes,terrain){
+    const terrainService=createTerrainQueryService({terrain}),baseHeightAt=(x,z)=>terrainService.elevationAt(x,z,{view:'authored-natural'});
+    return (runtimes||[]).map(runtime=>({
+      ...runtime,
+      terrainService,
+      terrainModifier:runtime?.terrainModifier?{...runtime.terrainModifier,baseHeightAt}:runtime?.terrainModifier
+    }));
+  }
+  buildPathLineEntry(pathObject,runtime){
+    const blockedGuideCount=(runtime.geometry.guides.blockedCorridors||[]).length;
+    const signature=`${runtime.sourceRevision}:${runtime.generationRevision}:${pathObject.properties?.previewRevision||0}:${runtime.geometry.guides.center.length}:${runtime.geometry.guides.edges.length}:${blockedGuideCount}`;
+    const data=runtime.geometry.guides,costSegments=buildPathCostGuideData(runtime).map(entry=>({...entry,buffer:createLineBuffer(this.gl,entry.positions)})),blockedCorridors=(data.blockedCorridors||[]).map(entry=>({...entry,boundaries:createLineBuffer(this.gl,entry.boundaries),hatches:createLineBuffer(this.gl,entry.hatches),endCaps:createLineBuffer(this.gl,entry.endCaps)}));
+    return {signature,center:createLineBuffer(this.gl,data.center),edges:createLineBuffer(this.gl,data.edges),construction:createLineBuffer(this.gl,data.construction),costSegments,blockedCorridors};
+  }
+  buildPathSurfaceEntry(pathObject,runtime){
+    const signature=`${runtime.sourceRevision}:${runtime.generationRevision}:${pathObject.properties?.previewRevision||0}`,diagnostics=runtime.diagnostics;
+    if(!diagnostics.valid)window.__omniforgeDiagnostics?.warn?.('path-network-v2-partially-blocked',{pathId:pathObject.id,diagnostics});
+    const meshes={};for(const [name,data] of Object.entries(runtime.geometry.meshes))if(data.indices.length)meshes[name]=createBufferMesh(this.gl,data);
+    const renderIdentity={sourceNetworkId:String(diagnostics.sourceNetworkId||''),sourceRevision:Number(diagnostics.sourceRevision||0),generationRevision:Number(diagnostics.generationRevision||0),nodeIds:[...(diagnostics.nodeIds||[])],segmentIds:[...(diagnostics.segmentIds||[])],segments:(diagnostics.segments||[]).map(segment=>({...segment})),bridgeSelections:(diagnostics.bridgeSelections||[]).map(selection=>({...selection}))};
+    return {signature,meshes,diagnostics,renderIdentity,uploadedMeshes:uploadedPathMeshDiagnostics(meshes),drawnMeshes:{}};
+  }
+  installInteractivePathRender({signature,revision,context,result,workerDurationMs,queueDurationMs,poolLatencyMs,payloadCloneMs,dispatchCloneMs}){
+    const request=this.pathRenderRequest;
+    if(this.pathRenderDisposed||this.contextLost||!context?.scene||request?.signature!==signature||request?.sceneId!==context.sceneId||request?.terrainId!==context.terrainId||request?.contextGeneration!==context.contextGeneration||this.pathRenderSignature(context.scene,{fresh:true})!==signature||result?.sceneId!==context.sceneId||result?.terrainId!==context.terrainId)return false;
+    const uploadStartedAt=performance.now(),runtimes=this.rehydrateWorkerPathRuntimes(result.runtimes,context.terrain),nextLines=new Map(),nextSurfaces=new Map();let nextTerrain=null;
+    try{
+      nextTerrain=result.terrainMesh?createBufferMesh(this.gl,result.terrainMesh):null;
+      if(!nextTerrain)throw new Error('Path render worker returned no terrain mesh for an active terrain.');
+      for(const runtime of runtimes){const pathObject=context.paths.find(object=>object.id===runtime.pathObjectId&&object.visible!==false);if(!pathObject)continue;nextLines.set(pathObject.id,this.buildPathLineEntry(pathObject,runtime));nextSurfaces.set(pathObject.id,this.buildPathSurfaceEntry(pathObject,runtime));}
+    }catch(error){
+      disposeBufferMesh(this.gl,nextTerrain);for(const entry of nextLines.values())disposePathLineEntry(this.gl,entry);for(const entry of nextSurfaces.values())disposePathSurfaceEntry(this.gl,entry);throw error;
+    }
+    const terrain=structuredClone(context.terrain),paths=structuredClone(context.paths),previousBundle=this.activePathRenderBundle,uploadDurationMs=performance.now()-uploadStartedAt;
+    this.activePathRenderBundle={signature,sceneId:context.sceneId,terrainId:context.terrainId,worldChunkSize:context.scene.settings?.worldChunkSize,terrain,paths,runtimes,terrainMesh:nextTerrain,pathLines:nextLines,pathSurfaces:nextSurfaces,terrainPathDetail:result.terrainPathDetail||null,workerDurationMs:Number(workerDurationMs||0),uploadDurationMs,installedAt:performance.now()};
+    this.dynamic.clear();this.dynamic.set(context.terrain.id,{signature,sceneId:context.sceneId,mesh:nextTerrain,pathRenderOwned:true});
+    this.pathLines=nextLines;this.pathSurfaces=nextSurfaces;this.pathRuntimeFrameCache={sceneId:context.sceneId,terrainId:context.terrainId,terrain,paths,runtimes,revisionKey:signature,renderSignature:signature};this.lastTerrainMeshPathDetail=result.terrainPathDetail||null;
+    disposePathRenderBundle(this.gl,previousBundle);
+    window.__omniforgeDiagnostics?.event?.('path-render-runtime-swapped',{revision,sourceSignature:signature,workerDurationMs:Number(workerDurationMs||0),queueDurationMs:Number(queueDurationMs||0),poolLatencyMs:Number(poolLatencyMs||0),payloadCloneMs:Number(payloadCloneMs||0),dispatchCloneMs:Number(dispatchCloneMs||0),uploadDurationMs,totalReadyLatencyMs:Number(poolLatencyMs||workerDurationMs||0)+uploadDurationMs,pathCount:runtimes.length,terrainVertexCount:Math.floor((result.terrainMesh?.positions?.length||0)/3)});
+    return true;
+  }
   meshFor(object,scene){
     if(object.properties?.celestialRole)return null;
     if(object.type==='box')return this.staticMeshes.cube;if(object.type==='decal')return this.staticMeshes.plane;if(this.staticMeshes[object.type])return this.staticMeshes[object.type];if(object.type==='directionalLight'||object.type==='pointLight')return this.staticMeshes.sphere;if(object.type==='empty'||object.type==='path')return null;
     if(object.type==='model'){const asset=this.assets.find(item=>item.type==='model'&&item.id===object.properties?.assetId);if(asset)this.ensureModelMesh(asset);return asset?this.modelMeshes.get(asset.id)||null:null;}
-    const paths=scene.objects.filter(o=>o.type==='path'),pathRuntimes=object.type==='terrain'?this.scenePathRuntimes(scene):[],signature=JSON.stringify([object.type,object.properties,object.transform.scale,paths.map(p=>[p.visible,p.transform,p.properties])]),cached=this.dynamic.get(object.id);
-    if(cached?.signature===signature)return cached.mesh;if(cached){for(const b of cached.mesh.buffers)this.gl.deleteBuffer(b);this.gl.deleteVertexArray(cached.mesh.vao);}
-    const data=object.type==='terrain'?terrainMesh(object,paths,pathRuntimes):null;if(!data)return null;const mesh=createBufferMesh(this.gl,data);this.dynamic.set(object.id,{signature,mesh});return mesh;
+    if(object.type==='terrain'){const bundle=this.activePathBundleForScene(scene);return bundle?.terrainId===String(object.id)?bundle.terrainMesh:null;}
+    return null;
   }
   prepareInstances(mesh,objects){
     const gl=this.gl,matrices=new Float32Array(objects.length*16);
@@ -1313,11 +1463,10 @@ export class Renderer3D{
     return groups;
   }
   pathBuffers(pathObject,scene){
-    const runtime=this.scenePathRuntimes(scene).find(item=>item.pathObjectId===pathObject.id);if(!runtime)return {center:null,edges:null};
+    const preview=this.isPreviewPathScene(scene),cache=preview?this.previewPathLines:this.pathLines,runtime=this.scenePathRuntimes(scene).find(item=>item.pathObjectId===pathObject.id),cached=cache.get(pathObject.id);if(!runtime)return cached||{center:null,edges:null};
     const blockedGuideCount=(runtime.geometry.guides.blockedCorridors||[]).length;
-    const signature=`${runtime.sourceRevision}:${runtime.generationRevision}:${pathObject.properties?.previewRevision||0}:${runtime.geometry.guides.center.length}:${runtime.geometry.guides.edges.length}:${blockedGuideCount}`,cached=this.pathLines.get(pathObject.id);if(cached?.signature===signature)return cached;
-    if(cached){for(const item of [cached.center,cached.edges,cached.construction,...(cached.costSegments||[]).map(entry=>entry.buffer),...(cached.blockedCorridors||[]).flatMap(entry=>[entry.boundaries,entry.hatches,entry.endCaps])])if(item){this.gl.deleteVertexArray(item.vao);this.gl.deleteBuffer(item.buffer);}}
-    const data=runtime.geometry.guides,costSegments=buildPathCostGuideData(runtime).map(entry=>({...entry,buffer:createLineBuffer(this.gl,entry.positions)})),blockedCorridors=(data.blockedCorridors||[]).map(entry=>({...entry,boundaries:createLineBuffer(this.gl,entry.boundaries),hatches:createLineBuffer(this.gl,entry.hatches),endCaps:createLineBuffer(this.gl,entry.endCaps)})),next={signature,center:createLineBuffer(this.gl,data.center),edges:createLineBuffer(this.gl,data.edges),construction:createLineBuffer(this.gl,data.construction),costSegments,blockedCorridors};this.pathLines.set(pathObject.id,next);return next;
+    const signature=`${runtime.sourceRevision}:${runtime.generationRevision}:${pathObject.properties?.previewRevision||0}:${runtime.geometry.guides.center.length}:${runtime.geometry.guides.edges.length}:${blockedGuideCount}`;if(cached?.signature===signature)return cached;
+    const next=this.buildPathLineEntry(pathObject,runtime);cache.set(pathObject.id,next);disposePathLineEntry(this.gl,cached);return next;
   }
   drawBlockedPathGuides(buffers,viewProj){
     for(const blocked of buffers.blockedCorridors||[]){
@@ -1327,68 +1476,27 @@ export class Renderer3D{
     }
   }
   pathSurfaceFor(pathObject,scene){
-    const runtime=this.scenePathRuntimes(scene).find(item=>item.pathObjectId===pathObject.id);if(!runtime)return null;
-    const signature=`${runtime.sourceRevision}:${runtime.generationRevision}:${pathObject.properties?.previewRevision||0}`,cached=this.pathSurfaces.get(pathObject.id);
+    const preview=this.isPreviewPathScene(scene),cache=preview?this.previewPathSurfaces:this.pathSurfaces,runtime=this.scenePathRuntimes(scene).find(item=>item.pathObjectId===pathObject.id),cached=cache.get(pathObject.id);if(!runtime)return cached?.meshes||null;
+    const signature=`${runtime.sourceRevision}:${runtime.generationRevision}:${pathObject.properties?.previewRevision||0}`;
     if(cached?.signature===signature)return cached.meshes;
-    if(cached?.meshes)for(const mesh of Object.values(cached.meshes)){if(!mesh)continue;for(const buffer of mesh.buffers||[])this.gl.deleteBuffer(buffer);this.gl.deleteVertexArray(mesh.vao);}
-    const diagnostics=runtime.diagnostics;
-    if(!diagnostics.valid)window.__omniforgeDiagnostics?.warn?.('path-network-v2-partially-blocked',{pathId:pathObject.id,diagnostics});
-    const meshes={};
-    for(const [name,data] of Object.entries(runtime.geometry.meshes)){
-      if(data.indices.length)meshes[name]=createBufferMesh(this.gl,data);
-    }
-    const renderIdentity={
-      sourceNetworkId:String(diagnostics.sourceNetworkId||''),
-      sourceRevision:Number(diagnostics.sourceRevision||0),
-      generationRevision:Number(diagnostics.generationRevision||0),
-      nodeIds:[...(diagnostics.nodeIds||[])],
-      segmentIds:[...(diagnostics.segmentIds||[])],
-      segments:(diagnostics.segments||[]).map(segment=>({...segment})),
-      bridgeSelections:(diagnostics.bridgeSelections||[]).map(selection=>({...selection}))
-    };
-    this.pathSurfaces.set(pathObject.id,{
-      signature,
-      meshes,
-      diagnostics,
-      renderIdentity,
-      uploadedMeshes:uploadedPathMeshDiagnostics(meshes),
-      drawnMeshes:{}
-    });return meshes;
+    const next=this.buildPathSurfaceEntry(pathObject,runtime);cache.set(pathObject.id,next);disposePathSurfaceEntry(this.gl,cached);return next.meshes;
   }
   scenePathRuntimes(scene){
-    const terrain=scene?.objects?.find(object=>object.type==='terrain'&&object.visible!==false),paths=(scene?.objects||[]).filter(object=>object.type==='path'&&object.visible!==false);
-    const revisionKey=JSON.stringify([
-      terrain?.id||null,
-      terrain?.properties?.generatedRevision||0,
-      paths.map(pathObject=>[
-        pathObject.id,
-        pathObject.properties?.pathNetwork?.revision||0,
-        pathObject.properties?.previewRevision||0
-      ])
-    ]);
-    const cached=this.pathRuntimeFrameCache;
-    if(
-      cached
-      && cached.terrain===terrain
-      && cached.revisionKey===revisionKey
-      && cached.paths.length===paths.length
-      && cached.paths.every((pathObject,index)=>pathObject===paths[index])
-    )return cached.runtimes;
-    try{
-      const runtimes=compileScenePathRuntimes(scene);
-      this.pathRuntimeFrameCache={terrain,paths:[...paths],revisionKey,runtimes};
-      return runtimes;
-    }catch(error){
-      this.pathRuntimeFrameCache=null;
-      window.__omniforgeDiagnostics?.warn?.('path-network-v2-compile-failed',{message:error.message});
-      return [];
+    if(this.isPreviewPathScene(scene)){
+      const terrain=scene?.objects?.find(object=>object.type==='terrain'&&object.visible!==false),paths=(scene?.objects||[]).filter(object=>object.type==='path'&&object.visible!==false),revisionKey=this.pathRenderSignature(scene),cached=this.previewPathRuntimeFrameCache;
+      if(cached?.terrain===terrain&&cached.revisionKey===revisionKey)return cached.runtimes;
+      try{const runtimes=compileScenePathRuntimes(scene);this.previewPathRuntimeFrameCache={terrain,paths:[...paths],revisionKey,runtimes};return runtimes;}catch(error){this.previewPathRuntimeFrameCache=null;window.__omniforgeDiagnostics?.warn?.('path-network-v2-preview-compile-failed',{message:error.message});return [];}
     }
+    const terrain=scene?.objects?.find(object=>object.type==='terrain'&&object.visible!==false),paths=(scene?.objects||[]).filter(object=>object.type==='path'&&object.visible!==false),revisionKey=this.pathRenderSignature(scene),bundle=this.activePathBundleForScene(scene);
+    if(bundle?.signature===revisionKey)return bundle.runtimes;
+    this.scheduleInteractivePathRender(scene);const cached=this.pathRuntimeFrameCache;
+    if(cached?.sceneId===String(scene?.id||'')&&cached?.terrainId===String(terrain?.id||'')&&cached?.renderSignature===revisionKey)return cached.runtimes;
+    return [];
   }
   updateTerrainSamplingDiagnostics(scene){
-    const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false),paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false);
-    const diagnostics=terrainPathSamplingDiagnostics(terrain,paths);this.lastTerrainSamplingDiagnostics=diagnostics;
-    const signature=JSON.stringify(diagnostics);
-    if(diagnostics.undersampled&&signature!==this.terrainSamplingWarningSignature){this.terrainSamplingWarningSignature=signature;window.__omniforgeDiagnostics?.warn?.('terrain-path-grid-undersampled',diagnostics);}
+    const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false),paths=scene.objects.filter(object=>object.type==='path'&&object.visible!==false),renderSignature=terrain?this.pathRenderSignature(scene):null,cached=this.pathRuntimeFrameCache;
+    const exactWorkerResult=Boolean(terrain&&cached?.renderSignature===renderSignature&&cached?.terrain?.id===terrain.id);
+    const diagnostics=pathNetworkTerrainSamplingDiagnostics({terrainAvailable:Boolean(terrain),expectedPathCount:paths.length,exactWorkerResult,runtimes:cached?.runtimes||[],terrainPathDetail:this.lastTerrainMeshPathDetail});this.lastTerrainSamplingDiagnostics=diagnostics;
     return diagnostics;
   }
   cameraMatrices(camera){const forward=cameraForward(camera),target=add(camera.position,forward),view=mat4LookAt(camera.position,target),proj=mat4Perspective((camera.fov||62)*DEG,this.canvas.width/this.canvas.height,.08,12000),viewProj=mat4Multiply(proj,view);return {view,proj,viewProj,inverse:mat4Invert(viewProj)};}
@@ -1563,7 +1671,7 @@ export class Renderer3D{
     gl.disable(gl.BLEND);gl.depthMask(true);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);
     for(const pathObject of paths){
       const meshes=this.pathSurfaceFor(pathObject,pathScene);if(!meshes)continue;
-      const surfaceEntry=this.pathSurfaces.get(pathObject.id);
+      const surfaceEntry=(this.isPreviewPathScene(pathScene)?this.previewPathSurfaces:this.pathSurfaces).get(pathObject.id);
       const segmentProfile=pathObject.properties?.pathNetwork?.segments?.[0]?.materialProfile||{};
       for(const [kind,mesh] of Object.entries(meshes)){
         if(!mesh)continue;
@@ -1640,17 +1748,19 @@ export class Renderer3D{
     window.__omniforgeDiagnostics?.event?.('webgl-context-restored',{recoveryMode:this.capabilities.contextRecoveryMode,contextGeneration:this.frameResources.contextGeneration});
     setTimeout(()=>globalThis.location?.reload?.(),0);
   }
-  getRenderDiagnostics(){return {capabilities:this.capabilities,frameResources:this.frameResources.snapshot(),hdrPipeline:this.hdrPipeline.snapshot(),renderGraph:this.renderGraph.diagnosticsSnapshot(),lastFrameReport:this.lastFrameReport,terrainSampling:this.lastTerrainSamplingDiagnostics,pathSurfaceCount:this.pathSurfaces.size,pathwayCorridors:[...this.pathSurfaces.entries()].map(([id,entry])=>({id,...(entry.diagnostics||{}),renderer:pathSurfaceRendererDiagnostics(entry)}))};}
+  getRenderDiagnostics(){const bundle=this.activePathRenderBundle;return {capabilities:this.capabilities,frameResources:this.frameResources.snapshot(),hdrPipeline:this.hdrPipeline.snapshot(),renderGraph:this.renderGraph.diagnosticsSnapshot(),lastFrameReport:this.lastFrameReport,terrainSampling:this.lastTerrainSamplingDiagnostics,pathRenderGeneration:this.pathRenderGeneration?.diagnostics?.(),pathGenerationPool:this.pathGenerationPool?.diagnostics?.(),activePathRenderBundle:bundle?{signature:bundle.signature,sceneId:bundle.sceneId,terrainId:bundle.terrainId,pathIds:bundle.paths.map(object=>object.id),workerDurationMs:bundle.workerDurationMs,uploadDurationMs:bundle.uploadDurationMs,installedAt:bundle.installedAt}:null,pathSurfaceCount:this.pathSurfaces.size,pathwayCorridors:[...this.pathSurfaces.entries()].map(([id,entry])=>({id,...(entry.diagnostics||{}),renderer:pathSurfaceRendererDiagnostics(entry)}))};}
   dispose(){
+    this.pathRenderDisposed=true;this.pathRenderContextGeneration+=1;this.pathRenderGeneration?.close?.();this.disposePathPreviewResources();
+    disposePathRenderBundle(this.gl,this.activePathRenderBundle);this.activePathRenderBundle=null;this.dynamic.clear();this.pathLines.clear();this.pathSurfaces.clear();
     this.resizeObserver?.disconnect?.();this.canvas.removeEventListener('webglcontextlost',this.boundContextLost,false);this.canvas.removeEventListener('webglcontextrestored',this.boundContextRestored,false);this.renderGraph?.dispose?.();this.hdrPipeline?.dispose?.();
   }
   render(scene,camera,selectedId,options={}){
     const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('Renderer3D.render',{objects:scene.objects.length},12)||(()=>{});
     if(this.contextLost||this.frameResources.contextLost){finishDiagnostic({suspended:true,reason:'webgl-context-lost'});return;}
-    this.resize();this.frameCounter+=1;
+    this.resize();this.frameCounter+=1;const sourceScene=scene;this.scheduleInteractivePathRender(sourceScene);scene=this.pathRenderScene(sourceScene);
     const gl=this.gl,{viewProj}=this.cameraMatrices(camera),lights=this.lightState(scene,options.editorMode||'edit',options.hideEditorReferences?'game-accurate':options.viewportLightingMode),lightViewProj=this.lightMatrix(scene,lights);
     const environment=normalizeEnvironmentState(scene,lights,(performance.now()-this.renderStart)/1000);
-    this.updateTerrainSamplingDiagnostics(scene);
+    this.updateTerrainSamplingDiagnostics(sourceScene);
     lights.environment=environment;lights.moonDir=environment.moonDirection;lights.moonColor=environment.moonColor;lights.moonIntensity=environment.moonLightIntensity;
     const foliageGroups=this.foliageGroups(scene,camera),foliageIds=new Set([...foliageGroups.values()].flat().map(item=>item.id));
     const frameResources=this.frameResources.beginFrame(this.frameCounter);

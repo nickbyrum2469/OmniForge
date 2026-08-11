@@ -3,8 +3,7 @@ import {
   mutateState,
   addActivity,
   activeScene,
-  findObject,
-  createSceneObject
+  findObject
 } from './state-store.mjs';
 import {
   ensureWorldFoundationState,
@@ -12,14 +11,11 @@ import {
   terrainDiagnostics,
   pathDiagnostics,
   updateTerrainProperties,
-  updatePathProperties,
   expandTerrain,
-  insertPathPoint,
-  splitPath,
   addTerrainSculptLayer,
   undoTerrainSculpt,
   clearTerrainSculpt,
-  normalizePathProperties,
+  applyLegacyPathCompatibilityMutation,
   migrateSceneWorldFoundation,
   terrainHeightAt,
   terrainNormalAt
@@ -504,11 +500,19 @@ export async function handleV011Request(req, res) {
       const result = mutateState(state => {
         ensureWorldFoundationState(state);
         const path = requirePath(state, ids[0]);
-        const properties = updatePathProperties(path, input.properties || input);
         const terrain = activeScene(state).objects.find(object => object.type === 'terrain');
+        const { expectedRevision, ...legacyPatch } = input;
+        const compatibility = applyLegacyPathCompatibilityMutation(path, terrain, 'update-engineering', {
+          properties: input.properties || legacyPatch,
+          expectedRevision
+        });
         const diagnostics = terrain ? pathDiagnostics(path, terrain) : null;
-        addActivity(state, 'path', `Updated spline and terrain-grade settings for ${path.name}.`, { pathId: path.id, diagnostics });
-        return { path, properties, diagnostics };
+        addActivity(state, 'path-network', `Delegated legacy engineering update to ${path.name} Path Network revision ${compatibility.network.revision}.`, {
+          pathId: path.id,
+          revision: compatibility.network.revision,
+          diagnostics
+        });
+        return { ...compatibility, properties: path.properties, diagnostics };
       });
       json(res, 200, { ...result.result, state: result.state });
       return true;
@@ -520,18 +524,15 @@ export async function handleV011Request(req, res) {
       const result = mutateState(state => {
         ensureWorldFoundationState(state);
         const path = requirePath(state, ids[0]);
-        let inserted;
-        if (Number.isInteger(Number(input.index))) {
-          const properties = normalizePathProperties(path.properties || {}, path.transform || {});
-          const points = properties.points.map(point => [...point]);
-          const index = Math.max(0, Math.min(points.length, Number(input.index)));
-          points.splice(index, 0, [Number(input.x), Number(input.z)]);
-          inserted = { points, index };
-        } else inserted = insertPathPoint(path, Number(input.x), Number(input.z));
-        updatePathProperties(path, { points: inserted.points });
+        const terrain = activeScene(state).objects.find(object => object.type === 'terrain');
+        const compatibility = applyLegacyPathCompatibilityMutation(path, terrain, 'insert-node', input);
         state.selection.objectId = path.id;
-        addActivity(state, 'path', `Inserted spline node ${inserted.index + 1} on ${path.name}.`, { pathId: path.id, index: inserted.index, point: inserted.points[inserted.index] });
-        return { path, index: inserted.index };
+        addActivity(state, 'path-network', `Delegated legacy insertion to node ${compatibility.nodeId} on ${path.name}.`, {
+          pathId: path.id,
+          nodeId: compatibility.nodeId,
+          revision: compatibility.network.revision
+        });
+        return compatibility;
       });
       json(res, 201, { ...result.result, state: result.state });
       return true;
@@ -543,13 +544,16 @@ export async function handleV011Request(req, res) {
       const result = mutateState(state => {
         ensureWorldFoundationState(state);
         const path = requirePath(state, ids[0]);
-        const properties = normalizePathProperties(path.properties || {}, path.transform || {});
         const index = Number(ids[1]);
-        if (!properties.points[index]) throw new Error('Spline node not found.');
-        const points = properties.points.map(point => [...point]);
-        points[index] = [Number(input.x), Number(input.z)];
-        updatePathProperties(path, { points });
-        return { path, index };
+        const terrain = activeScene(state).objects.find(object => object.type === 'terrain');
+        const compatibility = applyLegacyPathCompatibilityMutation(path, terrain, 'move-node', { ...input, index });
+        state.selection.objectId = path.id;
+        addActivity(state, 'path-network', `Delegated legacy node move to ${compatibility.nodeId} on ${path.name}.`, {
+          pathId: path.id,
+          nodeId: compatibility.nodeId,
+          revision: compatibility.network.revision
+        });
+        return compatibility;
       });
       json(res, 200, { ...result.result, state: result.state });
       return true;
@@ -559,14 +563,16 @@ export async function handleV011Request(req, res) {
       const result = mutateState(state => {
         ensureWorldFoundationState(state);
         const path = requirePath(state, ids[0]);
-        const properties = normalizePathProperties(path.properties || {}, path.transform || {});
         const index = Number(ids[1]);
-        if (properties.points.length <= 2) throw new Error('A path requires at least two spline nodes.');
-        if (!properties.points[index]) throw new Error('Spline node not found.');
-        const points = properties.points.map(point => [...point]);
-        points.splice(index, 1);
-        updatePathProperties(path, { points });
-        return { path, removedIndex: index };
+        const terrain = activeScene(state).objects.find(object => object.type === 'terrain');
+        const compatibility = applyLegacyPathCompatibilityMutation(path, terrain, 'delete-node', { index });
+        state.selection.objectId = path.id;
+        addActivity(state, 'path-network', `Delegated legacy deletion of ${compatibility.nodeId} on ${path.name}.`, {
+          pathId: path.id,
+          nodeId: compatibility.nodeId,
+          revision: compatibility.network.revision
+        });
+        return { ...compatibility, removedIndex: index };
       });
       json(res, 200, { ...result.result, state: result.state });
       return true;
@@ -575,25 +581,11 @@ export async function handleV011Request(req, res) {
     ids = match(url.pathname, /^\/api\/v011\/path\/([^/]+)\/split$/);
     if (ids && req.method === 'POST') {
       const input = await readJsonBody(req);
-      const result = mutateState(state => {
-        ensureWorldFoundationState(state);
-        const scene = activeScene(state);
-        const path = requirePath(state, ids[0]);
-        const properties = normalizePathProperties(path.properties || {}, path.transform || {});
-        if (properties.points.length < 3) throw new Error('A path requires at least three nodes before it can be split.');
-        const [first, second] = splitPath(path, Number(input.index ?? Math.floor(properties.points.length / 2)));
-        updatePathProperties(path, { points: first });
-        const created = createSceneObject('path', {
-          name: String(input.name || `${path.name} Branch`).slice(0, 120),
-          position: [0, 0, 0],
-          properties: { ...properties, points: second, worldSpacePoints: true, profileRevision: 1 }
-        });
-        scene.objects.push(created);
-        state.selection.objectId = created.id;
-        addActivity(state, 'path', `Split ${path.name} into two connected spline paths.`, { sourcePathId: path.id, createdPathId: created.id });
-        return { source: path, created };
-      });
-      json(res, 201, { ...result.result, state: result.state });
+      const state = readState();
+      ensureWorldFoundationState(state);
+      const path = requirePath(state, ids[0]);
+      const terrain = activeScene(state).objects.find(object => object.type === 'terrain');
+      applyLegacyPathCompatibilityMutation(path, terrain, 'split', input);
       return true;
     }
 
@@ -602,9 +594,14 @@ export async function handleV011Request(req, res) {
       const result = mutateState(state => {
         ensureWorldFoundationState(state);
         const path = requirePath(state, ids[0]);
-        const properties = normalizePathProperties(path.properties || {}, path.transform || {});
-        updatePathProperties(path, { points: [...properties.points].reverse() });
-        return { path };
+        const terrain = activeScene(state).objects.find(object => object.type === 'terrain');
+        const compatibility = applyLegacyPathCompatibilityMutation(path, terrain, 'reverse');
+        state.selection.objectId = path.id;
+        addActivity(state, 'path-network', `Delegated legacy reverse to ${path.name} Path Network revision ${compatibility.network.revision}.`, {
+          pathId: path.id,
+          revision: compatibility.network.revision
+        });
+        return compatibility;
       });
       json(res, 200, { ...result.result, state: result.state });
       return true;

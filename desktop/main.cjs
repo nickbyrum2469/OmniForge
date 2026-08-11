@@ -354,6 +354,7 @@ function installVisualCaptureWatcher() {
     visualCaptureInFlight=true;
     const processingFile=path.join(VISUAL_CAPTURE_DIR,`capture-processing-${process.pid}.json`);
     let nativeCameraRestore=null;
+    let captureHoldToken=null;
     try{
       fs.renameSync(requestFile,processingFile);
       const request=readJson(processingFile,{});
@@ -369,16 +370,38 @@ function installVisualCaptureWatcher() {
       const nativeInputTelemetry=await performVisualInputActions(mainWindow.webContents,requestOptions.nativeInputActions);
       const options=JSON.stringify(requestOptions);
       const captureResult=await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestCapture(${options})`,true);
+      captureHoldToken=String(captureResult?.captureHoldToken||'');
+      if(requestOptions.fullWindowCapture===true&&!captureHoldToken)throw new Error('Renderer did not hold the paired full-window capture state.');
       const dataUrl=typeof captureResult==='string'?captureResult:captureResult?.dataUrl;
       const match=/^data:image\/png;base64,(.+)$/s.exec(String(dataUrl||''));
       if(!match)throw new Error('Renderer did not return a PNG data URL.');
       fs.writeFileSync(path.join(VISUAL_CAPTURE_DIR,`${id}.png`),Buffer.from(match[1],'base64'));
-      writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:true,id,at:new Date().toISOString(),renderTelemetry:captureResult?.renderTelemetry||null,synchronizationTelemetry:captureResult?.synchronizationTelemetry||null,fixtureTelemetry:captureResult?.fixtureTelemetry||null,nativeSynchronizationTelemetry,interactionTelemetry:captureResult?.interactionTelemetry||[],nativeInputTelemetry});
+      let fullWindowFile=null;
+      if(requestOptions.fullWindowCapture===true){
+        // The canvas PNG proves rendered geometry. A separate Chromium page
+        // capture proves the surrounding packaged editor UI, including tabs,
+        // Inspector controls, Save state, and any modal/overlay that could
+        // intercept real input. Keep both artifacts tied to one request ID.
+        const windowImage=await mainWindow.webContents.capturePage();
+        fullWindowFile=`${id}-window.png`;
+        fs.writeFileSync(path.join(VISUAL_CAPTURE_DIR,fullWindowFile),windowImage.toPNG());
+      }
+      if(captureHoldToken){
+        const releaseToken=JSON.stringify(captureHoldToken);
+        await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestFinishCapture(${releaseToken})`,true);
+        captureHoldToken=null;
+      }
+      writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:true,id,at:new Date().toISOString(),fullWindowFile,renderTelemetry:captureResult?.renderTelemetry||null,synchronizationTelemetry:captureResult?.synchronizationTelemetry||null,fixtureTelemetry:captureResult?.fixtureTelemetry||null,nativeSynchronizationTelemetry,interactionTelemetry:captureResult?.interactionTelemetry||[],nativeInputTelemetry});
     }catch(error){
       const request=readJson(processingFile,{});const id=String(request.id||'capture-error').replace(/[^a-z0-9_-]/gi,'-');
       writeJson(path.join(VISUAL_CAPTURE_DIR,`${id}.json`),{ok:false,id,error:error.message,stack:error.stack||''});
       writeIncident('visual-capture-failed',{id,message:error.message,stack:error.stack||''});
     }finally{
+      if(captureHoldToken&&mainWindow&&!mainWindow.isDestroyed()){
+        const releaseToken=JSON.stringify(captureHoldToken);
+        await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestFinishCapture(${releaseToken})`,true).catch(error=>appendLog(`Visual capture state restore failed: ${error.message}`));
+        captureHoldToken=null;
+      }
       if(nativeCameraRestore&&mainWindow&&!mainWindow.isDestroyed()){
         const restoreCamera=JSON.stringify(nativeCameraRestore);
         await mainWindow.webContents.executeJavaScript(`window.__omniforgeVisualTestRestoreCamera(${restoreCamera})`,true).catch(()=>{});

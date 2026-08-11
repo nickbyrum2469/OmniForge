@@ -296,6 +296,36 @@ function visualTestNeedsInputCamera(options={}){
   return Array.isArray(options.nativeInputActions)&&options.nativeInputActions.some(action=>['path-node-drag','path-undo'].includes(String(action?.type||'')));
 }
 
+let visualCaptureHoldSequence=0;
+let pendingVisualCaptureRestore=null;
+
+async function restoreVisualCaptureState(snapshot){
+  if(!snapshot)return;
+  camera=snapshot.camera;
+  scene.settings.gridVisible=snapshot.gridVisible;
+  scene.settings.splinesVisible=snapshot.splinesVisible;
+  visualCaptureHideEditorReferences=snapshot.hideEditorReferences;
+  const restoredSelection=snapshot.selectedId&&scene.objects.some(object=>object.id===snapshot.selectedId)?snapshot.selectedId:null;
+  // Restore the local render authority before the optional server selection
+  // write so even a transient API failure cannot leave the viewport captured
+  // in evidence-only state.
+  selectedId=restoredSelection;
+  await selectObject(restoredSelection,false);
+}
+
+async function finishVisualCaptureHold(token){
+  const pending=pendingVisualCaptureRestore;
+  if(!pending||pending.token!==String(token||''))throw new Error('Visual capture restore token is missing or stale.');
+  if(!pending.restoring){
+    clearTimeout(pending.timeout);
+    pending.restoring=restoreVisualCaptureState(pending.snapshot).finally(()=>{
+      if(pendingVisualCaptureRestore===pending)pendingVisualCaptureRestore=null;
+    });
+  }
+  await pending.restoring;
+  return true;
+}
+
 async function synchronizeVisualTestState(options={}) {
   const minimumRevision=Math.max(0,Number(options.minimumRevision||0));
   const requiresAuthoritativeState=minimumRevision>0||Boolean(options.expectedPathNetwork?.pathId);
@@ -320,7 +350,7 @@ async function synchronizeVisualTestState(options={}) {
   // Native spline input runs before the PNG capture. Frame its requested
   // camera now, then let two real animation frames reconcile HTML handles to
   // the WebGL projection before Electron hit-tests and drags them.
-  if(visualTestNeedsInputCamera(options)&&applyVisualTestCamera(options.camera)){
+  if(visualTestNeedsInputCamera(options)&&applyVisualTestCamera(options.inputCamera||options.camera)){
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   }
   const fixture=visualCaptureSceneFixture(options.expectedPathNetwork);
@@ -382,13 +412,18 @@ function validateVisualCaptureRenderFixture(expected,renderTelemetry,sceneFixtur
 
 async function captureVisualTestFrame(options={}) {
   if(!ui.viewport||!camera||!scene)throw new Error('Viewport is not ready for visual capture.');
+  if(pendingVisualCaptureRestore)throw new Error('A previous full-window visual capture is still awaiting restoration.');
   // Native input is preceded by a camera-framing synchronization. Desktop
   // passes the camera from before that synchronization so the evidence camera
   // cannot leak into later editing or the persisted editor camera.
-  const originalCamera=normalizedVisualTestCamera(options.restoreCamera,camera)||cloneCamera(camera);
-  const originalGrid=scene.settings.gridVisible;
-  const originalSplines=scene.settings.splinesVisible;
-  const originalSelectedId=selectedId;
+  const restoreSnapshot={
+    camera:normalizedVisualTestCamera(options.restoreCamera,camera)||cloneCamera(camera),
+    gridVisible:scene.settings.gridVisible,
+    splinesVisible:scene.settings.splinesVisible,
+    selectedId,
+    hideEditorReferences:visualCaptureHideEditorReferences
+  };
+  let captureHoldToken=null;
   try{
     const synchronizationTelemetry=await synchronizeVisualTestState(options);
     const interactionTelemetry=await runVisualTestActions(options.actions);
@@ -403,19 +438,31 @@ async function captureVisualTestFrame(options={}) {
     // against the post-action authority rather than the earlier sync snapshot.
     const currentFixture=visualCaptureSceneFixture(options.expectedPathNetwork);
     const fixtureTelemetry=validateVisualCaptureRenderFixture(options.expectedPathNetwork,renderTelemetry,currentFixture);
-    return {
+    const result={
       dataUrl:ui.viewport.toDataURL('image/png'),
       renderTelemetry,
       synchronizationTelemetry,
       fixtureTelemetry,
       interactionTelemetry
     };
+    if(options.fullWindowCapture===true){
+      captureHoldToken=`visual-capture-${Date.now().toString(36)}-${(++visualCaptureHoldSequence).toString(36)}`;
+      const timeout=setTimeout(()=>{
+        if(pendingVisualCaptureRestore?.token===captureHoldToken){
+          finishVisualCaptureHold(captureHoldToken).catch(error=>console.error('Visual capture state restore timed out.',error));
+        }
+      },30000);
+      pendingVisualCaptureRestore={token:captureHoldToken,snapshot:restoreSnapshot,timeout};
+      result.captureHoldToken=captureHoldToken;
+    }
+    return result;
   }finally{
-    camera=originalCamera;
-    scene.settings.gridVisible=originalGrid;
-    scene.settings.splinesVisible=originalSplines;
-    await selectObject(originalSelectedId&&scene.objects.some(object=>object.id===originalSelectedId)?originalSelectedId:null,false);
-    visualCaptureHideEditorReferences=false;
+    // A full-window proof must be captured while the exact same camera,
+    // selection, guide visibility, and reference visibility used for the
+    // paired canvas PNG are still active. Desktop releases this hold after
+    // capturePage(), and the timeout is a final safety net if that handshake
+    // is interrupted. Ordinary canvas-only captures restore immediately.
+    if(!captureHoldToken)await restoreVisualCaptureState(restoreSnapshot);
   }
 }
 window.__omniforgeVisualTestCapture=captureVisualTestFrame;
@@ -425,6 +472,7 @@ window.__omniforgeVisualTestRestoreCamera=requestedCamera=>{
   applyVisualTestCamera(requestedCamera);
   return cloneCamera(camera);
 };
+window.__omniforgeVisualTestFinishCapture=finishVisualCaptureHold;
 
 function objectIcon(type) {
   return ({box:'▣',sphere:'●',cylinder:'⬭',plane:'▱',terrain:'⌁',path:'⌇',model:'◆',decal:'◫',directionalLight:'☀',pointLight:'✦',empty:'＋'})[type] || '◇';

@@ -58,9 +58,10 @@ function pointSegment2(x, z, start, end) {
   const dx = end[0] - start[0];
   const dz = end[2] - start[2];
   const denominator = dx * dx + dz * dz;
-  const t = denominator > EPSILON
-    ? clamp(((x - start[0]) * dx + (z - start[2]) * dz) / denominator, 0, 1)
+  const rawT = denominator > EPSILON
+    ? ((x - start[0]) * dx + (z - start[2]) * dz) / denominator
     : 0;
+  const t = clamp(rawT, 0, 1);
   const nearestX = lerp(start[0], end[0], t);
   const nearestZ = lerp(start[2], end[2], t);
   const signedLateral = denominator > EPSILON
@@ -68,6 +69,7 @@ function pointSegment2(x, z, start, end) {
     : 0;
   return {
     t,
+    rawT,
     x: nearestX,
     z: nearestZ,
     lateral: signedLateral,
@@ -161,8 +163,12 @@ function constructionEntry(segment, sample, next, pairIndex, bridgeProfiles) {
   const startBridgeState = bridgeCrossSectionState(profile, sample.distance, bridgeAuthorities);
   const endBridgeState = bridgeCrossSectionState(profile, next.distance, bridgeAuthorities);
   const extents = profileExtents(profile);
+  const startTerrainExtents = profileExtents(profileAtBridgeState(profile, startBridgeState));
+  const endTerrainExtents = profileExtents(profileAtBridgeState(profile, endBridgeState));
   const maximumOuterEdge = Math.max(
     extents.outerEdge,
+    startTerrainExtents.outerEdge,
+    endTerrainExtents.outerEdge,
     startBridgeState.maximumOuterEdge,
     endBridgeState.maximumOuterEdge,
     startBridgeState.exclusionHalfWidth,
@@ -170,8 +176,20 @@ function constructionEntry(segment, sample, next, pairIndex, bridgeProfiles) {
   );
   const effectiveExtents = {
     ...extents,
-    leftOuterEdge: Math.max(extents.leftOuterEdge, startBridgeState.leftOuterEdge, endBridgeState.leftOuterEdge),
-    rightOuterEdge: Math.max(extents.rightOuterEdge, startBridgeState.rightOuterEdge, endBridgeState.rightOuterEdge),
+    leftOuterEdge: Math.max(
+      extents.leftOuterEdge,
+      startTerrainExtents.leftOuterEdge,
+      endTerrainExtents.leftOuterEdge,
+      startBridgeState.leftOuterEdge,
+      endBridgeState.leftOuterEdge
+    ),
+    rightOuterEdge: Math.max(
+      extents.rightOuterEdge,
+      startTerrainExtents.rightOuterEdge,
+      endTerrainExtents.rightOuterEdge,
+      startBridgeState.rightOuterEdge,
+      endBridgeState.rightOuterEdge
+    ),
     outerEdge: maximumOuterEdge
   };
   const padding = maximumOuterEdge + 0.05;
@@ -187,6 +205,30 @@ function constructionEntry(segment, sample, next, pairIndex, bridgeProfiles) {
     ? finite(bridgeProfile.deckWidth, profile.width) * 0.5
       + Math.max(0.25, finite(bridgeProfile.deckEdgeOverhang, 0.25))
     : 0;
+  const intervalStartDistance = finite(construction.startDistance, sample.distance);
+  const intervalEndDistance = finite(construction.endDistance, next.distance);
+  const bridgeSeats = bridgeProfile && bridgeSeatLength > EPSILON
+    ? [
+        {
+          id: `${segment.id}:${intervalStartDistance.toFixed(5)}:${intervalEndDistance.toFixed(5)}:start`,
+          segmentId: segment.id,
+          bridgeStyle: bridgeProfile.bridgeStyle,
+          side: 'start',
+          portalDistance: intervalStartDistance,
+          startDistance: intervalStartDistance,
+          endDistance: Math.min(intervalEndDistance, intervalStartDistance + bridgeSeatLength)
+        },
+        {
+          id: `${segment.id}:${intervalStartDistance.toFixed(5)}:${intervalEndDistance.toFixed(5)}:end`,
+          segmentId: segment.id,
+          bridgeStyle: bridgeProfile.bridgeStyle,
+          side: 'end',
+          portalDistance: intervalEndDistance,
+          startDistance: Math.max(intervalStartDistance, intervalEndDistance - bridgeSeatLength),
+          endDistance: intervalEndDistance
+        }
+      ].filter(seat => seat.endDistance > seat.startDistance + EPSILON)
+    : [];
   return {
     id: `${segment.id}:${pairIndex}`,
     segmentId: segment.id,
@@ -197,14 +239,15 @@ function constructionEntry(segment, sample, next, pairIndex, bridgeProfiles) {
     extents,
     effectiveExtents,
     construction,
-    intervalStartDistance: finite(construction.startDistance, sample.distance),
-    intervalEndDistance: finite(construction.endDistance, next.distance),
+    intervalStartDistance,
+    intervalEndDistance,
     bridgeProfile,
     bridgeAuthority,
     bridgeAuthorities,
     startBridgeState,
     endBridgeState,
     bridgeSeatLength,
+    bridgeSeats,
     bridgeExclusionHalfWidth,
     bounds: {
       minX: Math.min(sample.position[0], next.position[0]) - padding,
@@ -321,11 +364,9 @@ function terrainRangesForEntry(entry) {
   }
   if (mode !== 'bridge' || entry.bridgeSeatLength <= EPSILON) return [];
   const ranges = [];
-  const candidates = [
-    [entry.intervalStartDistance, entry.intervalStartDistance + entry.bridgeSeatLength],
-    [entry.intervalEndDistance - entry.bridgeSeatLength, entry.intervalEndDistance]
-  ];
-  for (const [candidateStart, candidateEnd] of candidates) {
+  for (const seat of entry.bridgeSeats || []) {
+    const candidateStart = seat.startDistance;
+    const candidateEnd = seat.endDistance;
     const start = Math.max(entry.start.distance, candidateStart);
     const end = Math.min(entry.end.distance, candidateEnd);
     if (end > start + EPSILON) ranges.push([start, end]);
@@ -386,7 +427,12 @@ function profileAtBridgeState(profile, state) {
     sidewalkRightWidth: finite(profile.sidewalkRightWidth) * scale,
     sidewalkHeight: finite(profile.sidewalkHeight) * scale,
     ditchDepth: finite(profile.ditchDepth) * scale,
-    blendDistance: Math.max(0.05, finite(profile.blendDistance, 2.5) * Math.max(0.02, scale))
+    // The accessory scale retires shoulders, gutters, curbs, sidewalks, and
+    // ditches at a bridge portal. It must not retire the terrain feather: a
+    // vanishing blend width turns the abutment contact into a hard green lip.
+    // The authored feather remains the stable terrain-contact authority while
+    // the physical road/deck cross-section is free to narrow independently.
+    blendDistance: Math.max(0.05, finite(profile.blendDistance, 2.5))
   };
 }
 
@@ -399,13 +445,15 @@ function sampleBridgeAwareCrossSection(profile, bridgeState, signedLateral) {
     bridgeState?.roadHalfWidth,
     effectiveLayout.halfRoad
   ));
-  const canonicalOuterEdge = Math.max(
+  const bridgeOuterEdge = Math.max(
     canonicalRoadEdge,
     finite(
       sideSign < 0 ? bridgeState?.leftOuterEdge : bridgeState?.rightOuterEdge,
       sideSign < 0 ? effectiveLayout.left.outerEdge : effectiveLayout.right.outerEdge
     )
   );
+  const effectiveSide = sideSign < 0 ? effectiveLayout.left : effectiveLayout.right;
+  const canonicalOuterEdge = Math.max(bridgeOuterEdge, effectiveSide.outerEdge);
   if (lateral > canonicalOuterEdge + EPSILON) return null;
 
   // The cross-section sampler owns the authored shoulder/gutter/ditch shape,
@@ -415,7 +463,6 @@ function sampleBridgeAwareCrossSection(profile, bridgeState, signedLateral) {
   // the same tapered outer boundary used by rendering and foliage exclusion.
   let effectiveLateral = lateral;
   if (lateral > canonicalRoadEdge + EPSILON) {
-    const effectiveSide = sideSign < 0 ? effectiveLayout.left : effectiveLayout.right;
     const canonicalAccessory = canonicalOuterEdge - canonicalRoadEdge;
     const effectiveAccessory = effectiveSide.outerEdge - effectiveLayout.halfRoad;
     const amount = canonicalAccessory > EPSILON
@@ -424,6 +471,28 @@ function sampleBridgeAwareCrossSection(profile, bridgeState, signedLateral) {
     effectiveLateral = effectiveLayout.halfRoad + effectiveAccessory * amount;
   }
   return samplePathCrossSection(effectiveProfile, effectiveLateral * sideSign);
+}
+
+function bridgeSeatAtStation(entry, stationDistance, rawT) {
+  if (
+    entry.construction.mode !== 'bridge'
+    || rawT < -EPSILON
+    || rawT > 1 + EPSILON
+  ) return null;
+  for (const seat of entry.bridgeSeats || []) {
+    if (
+      stationDistance < seat.startDistance - EPSILON
+      || stationDistance > seat.endDistance + EPSILON
+    ) continue;
+    const weight = seat.side === 'start'
+      ? 1 - smoothstep(seat.startDistance, seat.endDistance, stationDistance)
+      : smoothstep(seat.startDistance, seat.endDistance, stationDistance);
+    return {
+      ...seat,
+      weight: clamp(weight, 0, 1)
+    };
+  }
+  return null;
 }
 
 function sampleEntry(entry, x, z, baseHeight, engineering) {
@@ -436,6 +505,7 @@ function sampleEntry(entry, x, z, baseHeight, engineering) {
   const lateral = nearest.distance;
   const signedLateral = (nearest.lateral < 0 ? -1 : 1) * lateral;
   const stationDistance = lerp(entry.start.distance, entry.end.distance, nearest.t);
+  const rawStationDistance = lerp(entry.start.distance, entry.end.distance, nearest.rawT);
   const bridgeState = bridgeCrossSectionState(
     entry.profile,
     stationDistance,
@@ -452,14 +522,8 @@ function sampleEntry(entry, x, z, baseHeight, engineering) {
   const influence = crossSection.influence;
 
   const mode = entry.construction.mode;
-  const distanceFromIntervalStart = Math.max(0, stationDistance - entry.intervalStartDistance);
-  const distanceFromIntervalEnd = Math.max(0, entry.intervalEndDistance - stationDistance);
-  const bridgeSeatWeight = mode === 'bridge' && entry.bridgeSeatLength > EPSILON
-    ? Math.max(
-      1 - smoothstep(0, entry.bridgeSeatLength, distanceFromIntervalStart),
-      1 - smoothstep(0, entry.bridgeSeatLength, distanceFromIntervalEnd)
-    )
-    : 0;
+  const bridgeSeat = bridgeSeatAtStation(entry, rawStationDistance, nearest.rawT);
+  const bridgeSeatWeight = bridgeSeat?.weight || 0;
   const longitudinalSupportWeight = mode === 'bridge' ? bridgeSeatWeight : 1;
   const applies = terrainModeApplies(mode, profile) || bridgeSeatWeight > EPSILON;
   const maxCut = Math.max(0, finite(engineering.maxCutDepth, 6));
@@ -475,11 +539,18 @@ function sampleEntry(entry, x, z, baseHeight, engineering) {
   // Reserve the underlay separation inside the configured cut budget. The
   // support terrain therefore never exceeds maxCutDepth merely to make room
   // for the visible road surface.
-  const boundedTarget = clamp(
-    targetHeight,
-    baseHeight - maxCut + terrainUnderlayClearance * underlayWeight,
-    baseHeight + maxFill
-  );
+  const boundedTarget = mode === 'bridge' && bridgeSeat
+    // A bridge seat is a compact structural excavation/foundation footprint,
+    // not ordinary embankment fill. Capping it at maxFillDepth guarantees a
+    // hollow gap whenever the portal sits above a ravine bank. The explicit
+    // longitudinal seat and persistent lateral feather bound this exception;
+    // its weight reaches zero before the open span, which remains untouched.
+    ? targetHeight
+    : clamp(
+      targetHeight,
+      baseHeight - maxCut + terrainUnderlayClearance * underlayWeight,
+      baseHeight + maxFill
+    );
   const supportHeight = boundedTarget - terrainUnderlayClearance * underlayWeight;
   const height = applies ? lerp(baseHeight, supportHeight, effectiveInfluence) : baseHeight;
   return {
@@ -506,6 +577,8 @@ function sampleEntry(entry, x, z, baseHeight, engineering) {
     accessoryScale: bridgeState.accessoryScale,
     exclusionHalfWidth: bridgeState.exclusionHalfWidth,
     bridgeTaperAmount: bridgeState.amount,
+    bridgeSeatSide: bridgeSeat?.side || null,
+    bridgeSeatWeight,
     height,
     longitudinalSupportWeight,
     influence: applies ? effectiveInfluence : 0,
@@ -569,6 +642,8 @@ function sampleJunctionEntry(entry, x, z, baseHeight, engineering) {
     accessoryScale: 1,
     exclusionHalfWidth: 0,
     bridgeTaperAmount: 0,
+    bridgeSeatSide: null,
+    bridgeSeatWeight: 0,
     materialWeights: materialWeights('road', 1)
   };
 }
@@ -657,8 +732,11 @@ function crossSectionForSample(segment, sample, baseHeightAt, bridgeAuthorities 
     finite(baseHeightAt(shoulderRight[0], shoulderRight[2]), shoulderRight[1]),
     shoulderRight[2]
   ];
-  const outerLeft = point(-bridgeState.leftOuterEdge);
-  const outerRight = point(bridgeState.rightOuterEdge);
+  // Terrain owns a persistent feather beyond the tapered physical accessory
+  // bands. Using bridgeState.left/rightOuterEdge here would collapse the dirty
+  // boundary to the deck edge exactly where the abutment needs a soft landing.
+  const outerLeft = point(-layout.left.outerEdge);
+  const outerRight = point(layout.right.outerEdge);
   outerLeft[1] = finite(baseHeightAt(outerLeft[0], outerLeft[2]), outerLeft[1]);
   outerRight[1] = finite(baseHeightAt(outerRight[0], outerRight[2]), outerRight[1]);
   return {
@@ -843,6 +921,8 @@ export function samplePathTerrainModifier(modifier, x, z) {
     height: baseHeight,
     longitudinalSupportWeight: 0,
     influence: 0,
+    bridgeSeatSide: null,
+    bridgeSeatWeight: 0,
     zone: 'terrain',
     materialWeights: {
       terrain: 1,

@@ -53,6 +53,21 @@ function bytes(view) {
   return Buffer.from(view.buffer, view.byteOffset, view.byteLength);
 }
 
+test('schema-v2 terrain never falls back to stale legacy point fields while compiled authority is unavailable', () => {
+  const terrain = terrainFixture();
+  const path = pathFixture('cut-fill', 10);
+  Object.assign(path.properties, {
+    points: [[-40, 0], [40, 0]],
+    nodeElevations: [40, 40],
+    width: 24,
+    carveTerrain: true
+  });
+  const baseline = terrainMesh(structuredClone(terrain), [], []);
+  const pending = terrainMesh(structuredClone(terrain), [path], []);
+  assert.deepEqual(bytes(pending.positions), bytes(baseline.positions));
+  assert.deepEqual(bytes(pending.blends), bytes(baseline.blends));
+});
+
 const EPSILON = 1e-7;
 function areaXZ(polygon) {
   let area = 0;
@@ -108,12 +123,11 @@ function interpolateXZ(point, triangle, values) {
 
 function upwardPathSurfaces(runtime) {
   const result = [];
-  for (const meshName of ['road', 'shoulder', 'gutter', 'sidewalk', 'structure']) {
+  for (const meshName of ['road', 'shoulder', 'gutter', 'sidewalk']) {
     const mesh = runtime.geometry.meshes[meshName];
     for (let offset = 0; offset < mesh.indices.length; offset += 3) {
       const indices = [mesh.indices[offset], mesh.indices[offset + 1], mesh.indices[offset + 2]];
       const role = mesh.roles[indices[0]] || '';
-      if (meshName === 'structure' && !/^bridge-.*deck/.test(role)) continue;
       const vertices = indices.map(index => Array.from(mesh.positions.slice(index * 3, index * 3 + 3)));
       const ab = vertices[1].map((value, index) => value - vertices[0][index]);
       const ac = vertices[2].map((value, index) => value - vertices[0][index]);
@@ -168,6 +182,34 @@ function terrainSurfacePenetrations(mesh, surfaces, clearance = 0.001) {
     }
   }
   return failures;
+}
+
+function terrainCoversPointXZ(mesh, x, z) {
+  const point = [x, z];
+  for (let offset = 0; offset < mesh.indices.length; offset += 3) {
+    const triangle = [0, 1, 2].map(vertex => {
+      const index = mesh.indices[offset + vertex];
+      return [mesh.positions[index * 3], mesh.positions[index * 3 + 2]];
+    });
+    const signedArea = areaXZ(triangle);
+    if (Math.abs(signedArea) <= EPSILON) continue;
+    const oriented = signedArea < 0 ? [...triangle].reverse() : triangle;
+    let inside = true;
+    for (let edge = 0; edge < 3; edge += 1) {
+      const start = oriented[edge];
+      const end = oriented[(edge + 1) % 3];
+      const side = (
+        (end[0] - start[0]) * (point[1] - start[1])
+        - (end[1] - start[1]) * (point[0] - start[0])
+      );
+      if (side < -EPSILON) {
+        inside = false;
+        break;
+      }
+    }
+    if (inside) return true;
+  }
+  return false;
 }
 
 function curvedRoadBridgeFixture() {
@@ -313,6 +355,33 @@ test('renderer consumes bridge portal-seat chunks while leaving the open span at
   assert.ok(openSpanVertices > 20, 'fixture must sample terrain below the open bridge span');
 });
 
+test('a structural bridge deck cannot subtract an unstitched hole from authored terrain', () => {
+  const terrain = terrainFixture();
+  terrain.properties.height = 0;
+  const path = pathFixture('bridge', -2);
+  const scene = { settings: { worldChunkSize: 16 }, objects: [terrain, path] };
+  const runtimes = compileScenePathRuntimes(scene);
+  const runtime = runtimes[0];
+  assert.equal(runtime.compiled.segments[0].construction.mode, 'bridge');
+  assert.ok(runtime.geometry.meshes.structure.indices.length > 0, 'fixture must contain a structural bridge deck');
+  assert.equal(runtime.geometry.meshes.road.indices.length, 0, 'fixture must isolate bridge structure from ordinary road clipping');
+
+  const mesh = terrainMesh(structuredClone(terrain), [path], runtimes);
+  const clipping = terrainMesh.lastPathDetail.surfaceClipping;
+  assert.equal(clipping.maskTriangleCount, 0, 'bridge deck entered the subtractive terrain-mask authority');
+  assert.equal(clipping.clippedTriangleCount, 0, 'bridge deck clipped authored terrain below the open span');
+  assert.equal(clipping.removedTriangleCount, 0, 'bridge deck removed terrain without boundary closure topology');
+  assert.equal(clipping.addedVertexCount, 0, 'bridge deck caused terrain-fragment topology to be generated');
+
+  for (let x = -18; x <= 18; x += 3) {
+    assert.equal(
+      terrainCoversPointXZ(mesh, x, 0),
+      true,
+      `authored terrain coverage opened below the bridge at x=${x}`
+    );
+  }
+});
+
 test('compiled road surface exclusively owns path material above its terrain underlay', () => {
   const terrain = terrainFixture();
   terrain.properties.height = 0;
@@ -380,7 +449,7 @@ test('duplicate terrain chunk-boundary vertices share height and welded normals'
   assert.equal([...mesh.normals].every(Number.isFinite), true);
 });
 
-test('steep noisy curves, junction, and bridge portal contain no terrain triangles through final travel surfaces', () => {
+test('steep noisy road surfaces clip penetration without degenerate terrain while bridge terrain remains intact', () => {
   const { terrain, path } = curvedRoadBridgeFixture();
   const scene = { settings: { worldChunkSize: 16 }, objects: [terrain, path] };
   const runtimes = compileScenePathRuntimes(scene);
@@ -403,7 +472,7 @@ test('steep noisy curves, junction, and bridge portal contain no terrain triangl
   );
 
   const penetrations = terrainSurfacePenetrations(mesh, upwardPathSurfaces(runtime));
-  assert.deepEqual(penetrations, [], `terrain penetrated a road/deck surface: ${JSON.stringify(penetrations)}`);
+  assert.deepEqual(penetrations, [], `terrain penetrated an ordinary road surface: ${JSON.stringify(penetrations)}`);
   assert.equal([...mesh.positions, ...mesh.normals].every(Number.isFinite), true);
   for (let offset = 0; offset < mesh.indices.length; offset += 3) {
     const points = [0, 1, 2].map(vertex => {

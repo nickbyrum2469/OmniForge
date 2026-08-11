@@ -109,6 +109,45 @@ function automaticBridgeModifier() {
   };
 }
 
+function structuralBridgeSeatModifier() {
+  const baseHeightAt = () => -12;
+  const network = normalizePathNetwork({
+    id: 'structural-bridge-seats',
+    engineering: {
+      maxCutDepth: 1,
+      maxFillDepth: 0.2
+    },
+    nodes: [
+      { id: 'west', position: [0, 4, 0], heightMode: 'absolute' },
+      { id: 'east', position: [20, 4, 0], heightMode: 'absolute' }
+    ],
+    segments: [{
+      id: 'bridge',
+      fromNode: 'west',
+      toNode: 'east',
+      constructionMode: 'bridge',
+      constructionLocked: true,
+      crossSectionProfile: {
+        width: 4,
+        shoulderWidth: 1,
+        ditchDepth: 0.3,
+        blendDistance: 3
+      },
+      structureProfile: { bridgeStyle: 'steel-girder' }
+    }]
+  });
+  const compiled = compilePathNetwork(network, {
+    terrainHeightAt: baseHeightAt,
+    terrainNormalAt: normal,
+    spacing: 0.5
+  });
+  return {
+    compiled,
+    modifier: compilePathTerrainModifier(compiled, { baseHeightAt, chunkSize: 4 }),
+    baseHeightAt
+  };
+}
+
 test('explicit local modifier preserves base terrain exactly outside dirty corridor chunks', () => {
   const modifier = modifierFor();
   const outside = samplePathTerrainModifier(modifier, 20, 30);
@@ -308,6 +347,81 @@ test('bridge portal seats are clamped so even a short authored span retains open
   const center = samplePathTerrainModifier(modifier, 2, 0);
   assert.equal(center.longitudinalSupportWeight, 0);
   assert.equal(center.height, 0);
+});
+
+test('bridge portal terrain feather remains authored when physical accessories retire', () => {
+  const { modifier } = structuralBridgeSeatModifier();
+  const portalSection = modifier.crossSections.find(section => section.distance <= 1e-8);
+  assert.ok(portalSection);
+  assert.equal(portalSection.accessoryScale, 0);
+  assert.equal(portalSection.layout.left.blendWidth, 3);
+  assert.equal(portalSection.layout.right.blendWidth, 3);
+  assert.ok(Math.abs(
+    portalSection.layout.left.outerEdge - portalSection.layout.left.ditchEdge - 3
+  ) <= 1e-8);
+  assert.ok(Math.abs(
+    portalSection.layout.right.outerEdge - portalSection.layout.right.ditchEdge - 3
+  ) <= 1e-8);
+
+  const insidePortal = 0.01;
+  const featherMidpoint = (
+    portalSection.layout.right.ditchEdge + portalSection.layout.right.outerEdge
+  ) * 0.5;
+  const feather = samplePathTerrainModifier(modifier, insidePortal, featherMidpoint);
+  const outside = samplePathTerrainModifier(
+    modifier,
+    insidePortal,
+    portalSection.layout.right.outerEdge + 0.05
+  );
+  assert.equal(feather.zone, 'blend');
+  assert.equal(feather.bridgeSeatSide, 'start');
+  assert.ok(feather.influence > 0.45 && feather.influence < 0.55);
+  assert.equal(outside.terrainApplied, false);
+  assert.equal(outside.height, outside.baseHeight);
+});
+
+test('both bridge portal seats support the deck beyond maxFill without closing the open span', () => {
+  const { modifier, baseHeightAt } = structuralBridgeSeatModifier();
+  const bridgeEntry = modifier.entries.find(entry => entry.construction.mode === 'bridge');
+  assert.ok(bridgeEntry);
+  assert.deepEqual(bridgeEntry.bridgeSeats.map(seat => seat.side), ['start', 'end']);
+
+  const roadHalfWidth = modifier.crossSections[0].roadWidth * 0.5;
+  const portalSamples = [
+    [0, roadHalfWidth * 0.9, 'start'],
+    [0, -roadHalfWidth * 0.9, 'start'],
+    [20, roadHalfWidth * 0.9, 'end'],
+    [20, -roadHalfWidth * 0.9, 'end']
+  ];
+  for (const [x, z, side] of portalSamples) {
+    const sample = samplePathTerrainModifier(modifier, x, z);
+    assert.equal(sample.bridgeSeatSide, side);
+    assert.ok(sample.bridgeSeatWeight > 0.99);
+    assert.ok(sample.height > sample.baseHeight + modifier.engineering.maxFillDepth + 10);
+    assert.ok(Math.abs(sample.surfaceHeight - sample.height - sample.terrainUnderlayClearance) < 1e-6);
+  }
+
+  const openSpan = samplePathTerrainModifier(modifier, 10, 0);
+  assert.equal(openSpan.constructionMode, 'bridge');
+  assert.equal(openSpan.bridgeSeatSide, null);
+  assert.equal(openSpan.longitudinalSupportWeight, 0);
+  assert.equal(openSpan.height, baseHeightAt(10, 0));
+});
+
+test('bridge portal seats use bounded longitudinal footprints instead of radial end patches', () => {
+  const { modifier } = structuralBridgeSeatModifier();
+  for (const [x, z] of [
+    [-0.2, 0],
+    [20.2, 0],
+    [-0.2, 2],
+    [20.2, -2]
+  ]) {
+    const sample = samplePathTerrainModifier(modifier, x, z);
+    assert.equal(sample.bridgeSeatSide, null);
+    assert.equal(sample.terrainApplied, false);
+    assert.equal(sample.influence, 0);
+    assert.equal(sample.height, sample.baseHeight);
+  }
 });
 
 test('padded exclusion uses a neighboring-chunk capsule without widening terrain modification', () => {

@@ -1080,6 +1080,88 @@ function appendQuad(
   pushTriangle(builder, base + 1, base + 3, base + 2);
 }
 
+function appendQuadFacing(builder, a, b, c, d, role, desiredNormal) {
+  const firstNormal = cross3(sub3(b, a), sub3(c, a));
+  const secondNormal = cross3(sub3(d, b), sub3(c, b));
+  // Contact geometry is assembled from independently sampled terrain points.
+  // A collapsed face is omitted rather than leaving a zero-area triangle that
+  // later poisons normals, collision, or the shadow pass.
+  if (length3(firstNormal) < 1e-8 || length3(secondNormal) < 1e-8) return false;
+  if (dot3(add3(firstNormal, secondNormal), desiredNormal) < 0) {
+    appendQuad(builder, b, a, d, c, role);
+  } else {
+    appendQuad(builder, a, b, c, d, role);
+  }
+  return true;
+}
+
+function appendContactCell(builder, cell, role, forward, side) {
+  const {
+    nearLeftTop,
+    nearRightTop,
+    farLeftTop,
+    farRightTop,
+    nearLeftBottom,
+    nearRightBottom,
+    farLeftBottom,
+    farRightBottom
+  } = cell;
+  appendQuadFacing(
+    builder,
+    nearLeftTop,
+    nearRightTop,
+    farLeftTop,
+    farRightTop,
+    role,
+    [0, 1, 0]
+  );
+  appendQuadFacing(
+    builder,
+    nearLeftBottom,
+    farLeftBottom,
+    nearRightBottom,
+    farRightBottom,
+    role,
+    [0, -1, 0]
+  );
+  appendQuadFacing(
+    builder,
+    nearRightTop,
+    nearLeftTop,
+    nearRightBottom,
+    nearLeftBottom,
+    role,
+    scale3(forward, -1)
+  );
+  appendQuadFacing(
+    builder,
+    farLeftTop,
+    farRightTop,
+    farLeftBottom,
+    farRightBottom,
+    role,
+    forward
+  );
+  appendQuadFacing(
+    builder,
+    nearLeftTop,
+    farLeftTop,
+    nearLeftBottom,
+    farLeftBottom,
+    role,
+    scale3(side, -1)
+  );
+  appendQuadFacing(
+    builder,
+    farRightTop,
+    nearRightTop,
+    farRightBottom,
+    nearRightBottom,
+    role,
+    side
+  );
+}
+
 function appendOrientedBox(builder, center, tangentInput, sideInput, upInput, size, role) {
   const tangent = normalize3(tangentInput);
   let side = normalize3(sideInput);
@@ -1301,10 +1383,124 @@ function bridgeSidewalkNavigationRows(segment, sections, sideSign) {
   });
 }
 
-function appendBridgeDeck(builder, sections, thickness, role, surfaceDetail = null) {
+function appendStripWithCellRoles(
+  builder,
+  rows,
+  roleForCell,
+  blendValues = [1, 1],
+  skipDegenerate = false,
+  surfaceDetail = null,
+  boundaryVertexRole = null
+) {
+  if (rows.length < 2) return;
+  const appendGroup = (start, end, role) => {
+    const groupRows = rows.slice(start, end + 1);
+    const vertexStart = builder.positions.length / 3;
+    appendStrip(
+      builder,
+      groupRows,
+      role,
+      blendValues,
+      skipDegenerate,
+      surfaceDetail
+    );
+    if (!boundaryVertexRole) return;
+    const columnCount = groupRows[0]?.positions?.length || 0;
+    if (start === 0) {
+      for (let column = 0; column < columnCount; column += 1) {
+        builder.roles[vertexStart + column] = boundaryVertexRole;
+      }
+    }
+    if (end === rows.length - 1) {
+      const lastRowStart = vertexStart + (groupRows.length - 1) * columnCount;
+      for (let column = 0; column < columnCount; column += 1) {
+        builder.roles[lastRowStart + column] = boundaryVertexRole;
+      }
+    }
+  };
+  let groupStart = 0;
+  let groupRole = roleForCell(rows[0], rows[1], 0);
+  for (let cell = 1; cell < rows.length - 1; cell += 1) {
+    const role = roleForCell(rows[cell], rows[cell + 1], cell);
+    if (role === groupRole) continue;
+    appendGroup(groupStart, cell, groupRole);
+    // Adjacent material regions intentionally duplicate the exact boundary
+    // row. They occupy identical positions but never overlap in area, which
+    // gives the renderer a clean material threshold without a crack.
+    groupStart = cell;
+    groupRole = role;
+  }
+  appendGroup(groupStart, rows.length - 1, groupRole);
+}
+
+function bridgeThresholdRole(profile, deckRole) {
+  if (profile?.bridgeStyle === 'steel-girder') return 'bridge-steel-expansion-joint-deck-top';
+  if (profile?.bridgeStyle === 'timber-trestle') return 'bridge-timber-threshold-sill-deck-top';
+  if (profile?.bridgeStyle === 'stone-arch') return 'bridge-stone-coping-deck-top';
+  if (profile?.bridgeStyle === 'masonry-causeway') return 'bridge-masonry-coping-deck-top';
+  if (profile?.bridgeStyle === 'rope-footbridge') return 'bridge-timber-anchor-landing-deck-top';
+  return `${deckRole}-portal-threshold-deck-top`;
+}
+
+function bridgePortalBandLengths(profile, span) {
+  const thresholdLength = Math.min(
+    span * 0.25,
+    clamp(finite(profile?.abutmentSeatLength, 1.2) * 0.22, 0.18, 0.48)
+  );
+  const apronLength = Math.min(
+    span * 0.5,
+    Math.max(
+      thresholdLength,
+      finite(profile?.abutmentSeatLength, 1.2)
+        + Math.min(2.5, finite(profile?.approachTaperLength, 5) * 0.35)
+    )
+  );
+  return { thresholdLength, apronLength };
+}
+
+function bridgeTopRoleForCell(start, end, profile, deckRole, firstDistance, lastDistance) {
+  const midpoint = (start.distance + end.distance) * 0.5;
+  const portalDistance = Math.min(midpoint - firstDistance, lastDistance - midpoint);
+  const span = Math.max(0, lastDistance - firstDistance);
+  const { thresholdLength, apronLength } = bridgePortalBandLengths(profile, span);
+  if (portalDistance <= thresholdLength + EPSILON) return bridgeThresholdRole(profile, deckRole);
+  if (portalDistance <= apronLength + EPSILON) return `${deckRole}-portal-apron-deck-top`;
+  return `${deckRole}-top`;
+}
+
+function structuralBridgeSurfaceDetail(surfaceDetail, profile) {
+  if (!surfaceDetail) return null;
+  const detail = new Float32Array(surfaceDetail);
+  const family = String(profile?.bridgeStyle || '');
+  // Structural decks may carry restrained wetness and transferred grime, but
+  // they do not inherit dirt excavation, wheel-rut displacement, or hoof/boot
+  // stamping from the adjoining trail. Portal aprons retain the authored road
+  // payload; the inner deck uses this family-safe payload.
+  detail[2] = Math.min(detail[2], family === 'stone-arch' || family === 'masonry-causeway' ? 0.025 : 0.012);
+  detail[4] = Math.min(detail[4], family === 'stone-arch' || family === 'masonry-causeway' ? 0.006 : 0.003);
+  detail[5] = 0;
+  detail[8] = 0;
+  detail[10] = 0;
+  detail[12] = Math.min(detail[12], family === 'stone-arch' || family === 'masonry-causeway' ? 0.045 : 0.012);
+  detail[13] = Math.min(detail[13], family === 'timber-trestle' ? 0.28 : 0.42);
+  return detail;
+}
+
+function appendBridgeDeck(builder, sections, thickness, role, surfaceDetail = null, profile = null) {
+  const firstDistance = sections[0].distance;
+  const lastDistance = sections.at(-1).distance;
+  const span = Math.max(0, lastDistance - firstDistance);
+  const { apronLength } = bridgePortalBandLengths(profile, span);
+  const deckSurfaceDetail = structuralBridgeSurfaceDetail(surfaceDetail, profile);
   const top = sections.map(section => ({
     distance: section.distance,
     textureRepeatLength: 4,
+    surfaceDetail: Math.min(
+      section.distance - firstDistance,
+      lastDistance - section.distance
+    ) <= apronLength + EPSILON
+      ? surfaceDetail
+      : deckSurfaceDetail,
     lateralDistances: (section.deckTopPositions || [
       section.roadLeft,
       section.roadCenter || section.center,
@@ -1321,7 +1517,22 @@ function appendBridgeDeck(builder, sections, thickness, role, surfaceDetail = nu
     textureRepeatLength: 4,
     positions: top[index].positions.map(point => [point[0], point[1] - thickness, point[2]])
   }));
-  appendStrip(builder, top, `${role}-top`, [1, 1], true, surfaceDetail);
+  appendStripWithCellRoles(
+    builder,
+    top,
+    (start, end) => bridgeTopRoleForCell(
+      start,
+      end,
+      profile,
+      role,
+      firstDistance,
+      lastDistance
+    ),
+    [1, 1],
+    true,
+    surfaceDetail,
+    `${role}-top`
+  );
   appendStrip(builder, bottom.map(row => ({
     ...row,
     // Reverse the complete authored cross-section so every deck family keeps
@@ -1386,78 +1597,180 @@ function appendBridgeRailings(builder, sections, role) {
   }
 }
 
-function appendBridgeAbutments(builder, sections, baseHeightAt, profile, materialRole = 'bridge-concrete') {
+function abutmentColumns(section, side, deckThickness, lateralMargin) {
+  const source = [...(section.deckTopPositions || [
+    section.deckLeft,
+    section.roadLeft,
+    section.roadCenter || section.center,
+    section.roadRight,
+    section.deckRight
+  ])]
+    .filter(point => Array.isArray(point) && point.every(Number.isFinite))
+    .sort((a, b) => dot3(sub3(a, section.center), side) - dot3(sub3(b, section.center), side));
+  if (source.length < 2) return [];
+  const left = add3(source[0], scale3(side, -lateralMargin));
+  const right = add3(source.at(-1), scale3(side, lateralMargin));
+  left[1] = source[0][1];
+  right[1] = source.at(-1)[1];
+  return [left, ...source, right].map(point => ({
+    position: point,
+    bearingY: point[1] - deckThickness
+  }));
+}
+
+function sampledContact(baseHeightAt, point, topY, embed = 0.2) {
+  const terrainY = finite(baseHeightAt(point[0], point[2]), topY - 1);
+  return {
+    terrainY,
+    bottomY: Math.min(terrainY - embed, topY - Math.max(0.18, embed))
+  };
+}
+
+function appendAbutmentWingwall(
+  builder,
+  section,
+  columns,
+  baseHeightAt,
+  profile,
+  materialRole,
+  outward,
+  side,
+  sideSign,
+  deckThickness
+) {
+  const edge = sideSign < 0 ? columns[0] : columns.at(-1);
   const structuralWidth = Math.max(profile.deckWidth, profile.clearWidth, profile.width);
+  const seatLength = Math.max(0.4, finite(profile.abutmentSeatLength, 1.2));
+  const length = clamp(seatLength + structuralWidth * 0.08, 1.6, 3.2);
+  const flare = clamp(structuralWidth * 0.09, 0.35, 1.05);
+  const thickness = clamp(structuralWidth * 0.045, 0.28, 0.52);
+  const stationCount = 5;
+  const startTopY = edge.bearingY - 0.06;
+  const stations = [];
+  for (let index = 0; index < stationCount; index += 1) {
+    const amount = index / (stationCount - 1);
+    const center = add3(
+      add3(
+        edge.position,
+        scale3(outward, seatLength * 0.35 + length * amount)
+      ),
+      scale3(side, sideSign * (0.12 + flare * smoothstep01(amount)))
+    );
+    const left = add3(center, scale3(side, -thickness * 0.5));
+    const right = add3(center, scale3(side, thickness * 0.5));
+    const leftTerrain = finite(baseHeightAt(left[0], left[2]), startTopY - 1);
+    const rightTerrain = finite(baseHeightAt(right[0], right[2]), startTopY - 1);
+    const terrainCrest = Math.max(leftTerrain, rightTerrain);
+    const desiredTop = lerp(startTopY, terrainCrest + 0.62, smoothstep01(amount));
+    const topY = Math.min(startTopY, Math.max(terrainCrest + 0.42, desiredTop));
+    stations.push({
+      leftTop: [left[0], topY, left[2]],
+      rightTop: [right[0], topY, right[2]],
+      leftBottom: [left[0], Math.min(leftTerrain - 0.2, topY - 0.24), left[2]],
+      rightBottom: [right[0], Math.min(rightTerrain - 0.2, topY - 0.24), right[2]]
+    });
+  }
+  for (let index = 1; index < stations.length; index += 1) {
+    const near = stations[index - 1];
+    const far = stations[index];
+    const cellForward = normalize3(
+      sub3(
+        scale3(add3(far.leftTop, far.rightTop), 0.5),
+        scale3(add3(near.leftTop, near.rightTop), 0.5)
+      ),
+      outward
+    );
+    appendContactCell(builder, {
+      nearLeftTop: near.leftTop,
+      nearRightTop: near.rightTop,
+      farLeftTop: far.leftTop,
+      farRightTop: far.rightTop,
+      nearLeftBottom: near.leftBottom,
+      nearRightBottom: near.rightBottom,
+      farLeftBottom: far.leftBottom,
+      farRightBottom: far.rightBottom
+    }, `${materialRole}-abutment-wingwall`, cellForward, side);
+  }
+}
+
+function appendBridgeAbutments(
+  builder,
+  sections,
+  baseHeightAt,
+  profile,
+  materialRole = 'bridge-concrete',
+  deckThickness = profile.deckThickness
+) {
+  const structuralWidth = Math.max(profile.deckWidth, profile.clearWidth, profile.width);
+  const lateralMargin = clamp(structuralWidth * 0.075, 0.4, 0.85);
+  const seatLength = Math.max(0.4, finite(profile.abutmentSeatLength, 1.2));
   for (const index of [0, sections.length - 1]) {
     const section = sections[index];
     const frame = sectionFrame(sections, index);
     const direction = index === 0 ? -1 : 1;
     const horizontalTangent = normalize3([frame.tangent[0], 0, frame.tangent[2]], [0, 0, 1]);
-    const horizontalSide = normalize3([-horizontalTangent[2], 0, horizontalTangent[0]], [1, 0, 0]);
-    const up = [0, 1, 0];
-    const terrainSamples = [
-      section.center,
-      add3(section.center, scale3(horizontalSide, structuralWidth * 0.5 + 0.65)),
-      add3(section.center, scale3(horizontalSide, -(structuralWidth * 0.5 + 0.65)))
-    ].map(point => finite(
-      baseHeightAt(point[0], point[2]),
-      section.center[1] - profile.deckThickness - 0.5
-    ));
-    const terrainY = Math.min(...terrainSamples);
-    const seatY = section.center[1] - profile.deckThickness;
-    const wallHeight = clamp(seatY - terrainY, 1.1, 14);
-    const wallBottomY = seatY - wallHeight;
-    const seatLength = Math.max(0.4, finite(profile.abutmentSeatLength, 1.2));
-    const backCenter = add3(section.center, scale3(horizontalTangent, direction * seatLength * 0.5));
-    const footingCenter = [
-      backCenter[0],
-      Math.min(terrainY - 0.22, wallBottomY - 0.22),
-      backCenter[2]
-    ];
-    appendOrientedBox(
-      builder,
-      footingCenter,
-      horizontalTangent,
-      horizontalSide,
-      up,
-      [seatLength + 1.6, structuralWidth + 3.2, 0.52],
-      `${materialRole}-abutment-footing`
-    );
-    appendOrientedBox(
-      builder,
-      [
-        backCenter[0],
-        seatY - wallHeight * 0.5,
-        backCenter[2]
-      ],
-      horizontalTangent,
-      horizontalSide,
-      up,
-      [Math.max(1.05, seatLength * 0.7), structuralWidth + 2.2, wallHeight],
-      `${materialRole}-abutment-backwall`
-    );
-    for (const sign of [-1, 1]) {
-      const wingHeight = Math.max(0.9, Math.min(4, wallHeight * 0.72));
-      const wingCenter = add3(
-        add3(backCenter, scale3(horizontalTangent, direction * 1.45)),
-        scale3(horizontalSide, sign * (structuralWidth * 0.5 + 0.82))
-      );
-      wingCenter[1] = seatY - wingHeight * 0.5 - 0.08;
-      appendOrientedBox(
+    const outward = scale3(horizontalTangent, direction);
+    const side = sectionHorizontalSide(section);
+    const columns = abutmentColumns(section, side, deckThickness, lateralMargin);
+    if (columns.length < 2) continue;
+    for (let column = 1; column < columns.length; column += 1) {
+      const left = columns[column - 1];
+      const right = columns[column];
+      const nearLeftTop = [left.position[0], left.bearingY, left.position[2]];
+      const nearRightTop = [right.position[0], right.bearingY, right.position[2]];
+      const farLeftTop = add3(nearLeftTop, scale3(outward, seatLength));
+      const farRightTop = add3(nearRightTop, scale3(outward, seatLength));
+      farLeftTop[1] -= Math.min(0.14, seatLength * 0.05);
+      farRightTop[1] -= Math.min(0.14, seatLength * 0.05);
+      const nearLeftContact = sampledContact(baseHeightAt, nearLeftTop, nearLeftTop[1]);
+      const nearRightContact = sampledContact(baseHeightAt, nearRightTop, nearRightTop[1]);
+      const farLeftContact = sampledContact(baseHeightAt, farLeftTop, farLeftTop[1]);
+      const farRightContact = sampledContact(baseHeightAt, farRightTop, farRightTop[1]);
+      appendContactCell(builder, {
+        nearLeftTop,
+        nearRightTop,
+        farLeftTop,
+        farRightTop,
+        nearLeftBottom: [nearLeftTop[0], nearLeftContact.bottomY, nearLeftTop[2]],
+        nearRightBottom: [nearRightTop[0], nearRightContact.bottomY, nearRightTop[2]],
+        farLeftBottom: [farLeftTop[0], farLeftContact.bottomY, farLeftTop[2]],
+        farRightBottom: [farRightTop[0], farRightContact.bottomY, farRightTop[2]]
+      }, `${materialRole}-abutment-backwall`, outward, side);
+
+      const footingNearLeftTopY = Math.min(nearLeftContact.terrainY + 0.04, nearLeftTop[1] - 0.12);
+      const footingNearRightTopY = Math.min(nearRightContact.terrainY + 0.04, nearRightTop[1] - 0.12);
+      const footingFarLeftTopY = Math.min(farLeftContact.terrainY + 0.04, farLeftTop[1] - 0.12);
+      const footingFarRightTopY = Math.min(farRightContact.terrainY + 0.04, farRightTop[1] - 0.12);
+      appendContactCell(builder, {
+        nearLeftTop: [nearLeftTop[0], footingNearLeftTopY, nearLeftTop[2]],
+        nearRightTop: [nearRightTop[0], footingNearRightTopY, nearRightTop[2]],
+        farLeftTop: [farLeftTop[0], footingFarLeftTopY, farLeftTop[2]],
+        farRightTop: [farRightTop[0], footingFarRightTopY, farRightTop[2]],
+        nearLeftBottom: [nearLeftTop[0], footingNearLeftTopY - 0.48, nearLeftTop[2]],
+        nearRightBottom: [nearRightTop[0], footingNearRightTopY - 0.48, nearRightTop[2]],
+        farLeftBottom: [farLeftTop[0], footingFarLeftTopY - 0.48, farLeftTop[2]],
+        farRightBottom: [farRightTop[0], footingFarRightTopY - 0.48, farRightTop[2]]
+      }, `${materialRole}-abutment-footing`, outward, side);
+    }
+    for (const sideSign of [-1, 1]) {
+      appendAbutmentWingwall(
         builder,
-        wingCenter,
-        horizontalTangent,
-        horizontalSide,
-        up,
-        [3.1, 0.5, wingHeight],
-        `${materialRole}-abutment-wingwall`
+        section,
+        columns,
+        baseHeightAt,
+        profile,
+        materialRole,
+        outward,
+        side,
+        sideSign,
+        deckThickness
       );
     }
   }
 }
 
 function appendTimberTrestle(builder, segment, sections, baseHeightAt, profile, surfaceDetail = null) {
-  appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-timber-deck', surfaceDetail);
+  appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-timber-deck', surfaceDetail, profile);
   for (let index = 1; index < sections.length; index += 1) {
     for (const key of ['deckLeft', 'deckRight']) {
       const start = [...sections[index - 1][key]];
@@ -1497,7 +1810,14 @@ function appendTimberTrestle(builder, segment, sections, baseHeightAt, profile, 
 }
 
 function appendStoneArch(builder, segment, sections, baseHeightAt, profile, surfaceDetail = null) {
-  appendBridgeDeck(builder, sections, profile.deckThickness + 0.18, 'bridge-stone-deck', surfaceDetail);
+  appendBridgeDeck(
+    builder,
+    sections,
+    profile.deckThickness + 0.18,
+    'bridge-stone-deck',
+    surfaceDetail,
+    profile
+  );
   const firstDistance = sections[0].distance;
   const span = Math.max(EPSILON, sections.at(-1).distance - firstDistance);
   for (const key of ['deckLeft', 'deckRight']) {
@@ -1524,12 +1844,19 @@ function appendStoneArch(builder, segment, sections, baseHeightAt, profile, surf
       appendBeamBetween(builder, arch[index - 1], arch[index], 0.34, 0.42, 'bridge-stone-arch-ring');
     }
   }
-  appendBridgeAbutments(builder, sections, baseHeightAt, profile, 'bridge-stone');
+  appendBridgeAbutments(
+    builder,
+    sections,
+    baseHeightAt,
+    profile,
+    'bridge-stone',
+    profile.deckThickness + 0.18
+  );
   if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-stone-parapet');
 }
 
 function appendSteelGirder(builder, segment, sections, baseHeightAt, profile, surfaceDetail = null) {
-  appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-concrete-deck', surfaceDetail);
+  appendBridgeDeck(builder, sections, profile.deckThickness, 'bridge-concrete-deck', surfaceDetail, profile);
   const girderCount = clamp(Math.round(profile.deckWidth / 2) + 2, 3, 8);
   for (let index = 1; index < sections.length; index += 1) {
     for (let girder = 0; girder < girderCount; girder += 1) {
@@ -1628,7 +1955,14 @@ function appendSteelGirder(builder, segment, sections, baseHeightAt, profile, su
 }
 
 function appendMasonryCauseway(builder, segment, sections, baseHeightAt, profile, surfaceDetail = null) {
-  appendBridgeDeck(builder, sections, profile.deckThickness + 0.2, 'bridge-masonry-deck', surfaceDetail);
+  appendBridgeDeck(
+    builder,
+    sections,
+    profile.deckThickness + 0.2,
+    'bridge-masonry-deck',
+    surfaceDetail,
+    profile
+  );
   for (const key of ['deckLeft', 'deckRight']) {
     appendStrip(builder, sections.map(section => {
       const top = section[key];
@@ -1639,7 +1973,14 @@ function appendMasonryCauseway(builder, segment, sections, baseHeightAt, profile
       };
     }), 'bridge-masonry-sidewall', [1, 1]);
   }
-  appendBridgeAbutments(builder, sections, baseHeightAt, profile, 'bridge-masonry');
+  appendBridgeAbutments(
+    builder,
+    sections,
+    baseHeightAt,
+    profile,
+    'bridge-masonry',
+    profile.deckThickness + 0.2
+  );
   if (profile.railings) appendBridgeRailings(builder, sections, 'bridge-masonry-parapet');
 }
 

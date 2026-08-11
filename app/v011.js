@@ -1,4 +1,4 @@
-import { PathGenerationWorkerPool } from './path-network/generation-pool.js';
+import { sharedPathGenerationWorkerPool } from './path-network/generation-pool.js';
 import { trailArchetypes } from './path-network/archetypes.js';
 import { trailCandidateToPathNetwork } from './path-network/trail-solver.js';
 import { nearestCompiledStation } from './path-network/compiler.js';
@@ -15,6 +15,7 @@ import {
 } from './path-network/editor-drag-preview.js';
 import { suggestPathNodeHandles } from './path-network/transactions.js';
 import { routeRestrictionsFromScene } from './path-network/world-constraints.js';
+import { assessCompiledPathEditAuthority } from './path-network/editor-runtime-authority.js';
 
 const $ = selector => document.querySelector(selector);
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -131,6 +132,25 @@ function activePathRuntime(object) {
   if (!snapshot?.scene || !renderer?.scenePathRuntimes) return null;
   return renderer.scenePathRuntimes(snapshot.scene)
     .find(runtime => runtime.pathObjectId === object?.id) || null;
+}
+
+function compiledPathEditAuthority(object) {
+  const snapshot = currentSnapshot();
+  const renderer = bridge()?.renderer?.();
+  if (!snapshot?.scene || !renderer) return assessCompiledPathEditAuthority({ scene: snapshot?.scene, pathObject: object });
+  const expectedSignature = renderer.pathRenderSignature?.(snapshot.scene, { fresh: true });
+  const generationDiagnostics = renderer.pathRenderGeneration?.diagnostics?.()
+    || renderer.getRenderDiagnostics?.()?.pathRenderGeneration
+    || null;
+  const runtime = renderer.scenePathRuntimes?.(snapshot.scene)
+    ?.find(item => item.pathObjectId === object?.id) || null;
+  return assessCompiledPathEditAuthority({
+    scene: snapshot.scene,
+    pathObject: object,
+    runtime,
+    expectedSignature,
+    generationDiagnostics
+  });
 }
 
 function pathNodeSelection(object) {
@@ -861,12 +881,7 @@ function captureRouteDraft(object) {
 }
 
 function pathGenerationPool() {
-  if (!routeGenerationPool) {
-    const logicalProcessors = Math.max(2, Number(navigator.hardwareConcurrency || 4));
-    routeGenerationPool = new PathGenerationWorkerPool({
-      workerCount: logicalProcessors - 1
-    });
-  }
+  if (!routeGenerationPool) routeGenerationPool = sharedPathGenerationWorkerPool();
   return routeGenerationPool;
 }
 
@@ -1362,6 +1377,9 @@ function installViewportEditing() {
     event.preventDefault();
     event.stopImmediatePropagation();
     const snapshot = currentSnapshot();
+    const path = snapshot?.scene?.objects?.find(object => object.id === splineEditPathId);
+    const authority = compiledPathEditAuthority(path);
+    if (!authority.ready) return bridge()?.showToast?.(authority.message, 'error');
     const point = bridge()?.renderer?.()?.terrainPointFromScreen?.(
       snapshot.scene,
       snapshot.camera,
@@ -1370,8 +1388,7 @@ function installViewportEditing() {
       { surface: 'base' }
     );
     if (!point) return bridge()?.showToast?.('The cursor did not hit terrain.', 'error');
-    const path = snapshot.scene.objects.find(object => object.id === splineEditPathId);
-    const nearest = nearestCompiledStation(activePathRuntime(path)?.compiled, point);
+    const nearest = nearestCompiledStation(authority.runtime.compiled, point);
     if (!nearest) return bridge()?.showToast?.('No compiled path segment was found.', 'error');
     const nodeId = `${path.id}:node:${Date.now().toString(36)}`;
     selectedPathNodeId = nodeId;

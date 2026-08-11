@@ -147,6 +147,26 @@ function New-ExpectedPathFixture(
   }
 }
 
+function Set-EvidenceRavine(
+  [int]$Port,
+  [string]$TerrainId,
+  [double]$CanyonWidth,
+  [double]$CanyonDepth,
+  [double]$CanyonFloorWidth
+) {
+  Invoke-Api $Port "/api/v011/terrain/$TerrainId/sculpt" 'DELETE' @{} | Out-Null
+  return Invoke-Api $Port "/api/v011/terrain/$TerrainId" 'PATCH' @{
+    properties = @{
+      preset='plains';height=1;baseElevation=0;macroScale=5000;detailScale=1000
+      octaves=1;lacunarity=2;gain=.15;warpStrength=0;ridgeStrength=0
+      plateauStrength=0;valleyStrength=0;islandStrength=0
+      canyonDepth=$CanyonDepth;canyonWidth=$CanyonWidth;canyonFloorWidth=$CanyonFloorWidth
+      canyonMeander=0;canyonDirection=90
+      resolution=144;chunkSize=32;seed=8128
+    }
+  }
+}
+
 function Request-Capture([string]$CaptureDir,[string]$Id,[hashtable]$Options,[int]$TimeoutSeconds=60) {
   $requestFile = Join-Path $CaptureDir 'capture-request.json'
   $temporaryFile = Join-Path $CaptureDir 'capture-request.tmp.json'
@@ -164,8 +184,22 @@ function Request-Capture([string]$CaptureDir,[string]$Id,[hashtable]$Options,[in
     $response = Get-Content -LiteralPath $responseFile -Raw | ConvertFrom-Json
     if (-not $response.ok) { throw "Packaged capture $Id failed: $($response.error)" }
     if (-not (Test-Path -LiteralPath $pngFile -PathType Leaf)) { throw "Packaged capture $Id returned no PNG." }
+    $fullWindowFile = $null
+    if ($Options.fullWindowCapture) {
+      $expectedFullWindowFile = "$Id-window.png"
+      $fullWindowFile = [string]$response.fullWindowFile
+      if ($fullWindowFile -ne $expectedFullWindowFile) {
+        throw "Packaged capture $Id did not report deterministic full-window proof $expectedFullWindowFile."
+      }
+      if (-not (Test-Path -LiteralPath (Join-Path $CaptureDir $fullWindowFile) -PathType Leaf)) {
+        throw "Packaged capture $Id reported missing full-window proof $fullWindowFile."
+      }
+    }
     $watch.Stop()
-    return [ordered]@{ id=$Id; elapsedMs=$watch.Elapsed.TotalMilliseconds; file=(Split-Path $pngFile -Leaf); response=$response }
+    return [ordered]@{
+      id=$Id;elapsedMs=$watch.Elapsed.TotalMilliseconds;file=(Split-Path $pngFile -Leaf)
+      fullWindowFile=$fullWindowFile;response=$response
+    }
   }
   throw "Packaged capture $Id timed out after $TimeoutSeconds seconds."
 }
@@ -191,6 +225,156 @@ function Assert-ProcessResponsive($Process,[int]$Port,[string]$RuntimeRoot,[stri
   $watch.Stop()
   if ($watch.Elapsed.TotalMilliseconds -gt 4000) { throw "Health request exceeded four seconds during $Stage." }
   return $watch.Elapsed.TotalMilliseconds
+}
+
+function Get-ElectronProcessRole($ProcessRecord,[int]$DesktopProcessId,[int]$RuntimeProcessId) {
+  $processId = [int]$ProcessRecord.ProcessId
+  if ($processId -eq $DesktopProcessId) { return 'desktop-main' }
+  if ($processId -eq $RuntimeProcessId) { return 'runtime-server' }
+  $commandLine = [string]$ProcessRecord.CommandLine
+  $match = [regex]::Match($commandLine,'(?:^|\s)--type=(?:"?)([A-Za-z0-9_-]+)')
+  if ($match.Success) {
+    switch ($match.Groups[1].Value) {
+      'renderer' { return 'renderer' }
+      'gpu-process' { return 'gpu' }
+      'utility' { return 'utility' }
+      'crashpad-handler' { return 'crashpad' }
+      default { return "chromium-$($match.Groups[1].Value)" }
+    }
+  }
+  return 'electron-child'
+}
+
+function Get-BoundedProcessTree([int]$RootProcessId,[int]$RuntimeProcessId,[int]$MaximumDepth=8,[int]$MaximumProcesses=64) {
+  try {
+    $snapshot = @(Get-CimInstance -ClassName Win32_Process -Property ProcessId,ParentProcessId,Name,CommandLine -ErrorAction Stop)
+  } catch {
+    throw "Could not enumerate the Windows process tree for desktop PID $RootProcessId`: $($_.Exception.Message)"
+  }
+  $recordsById = @{}
+  foreach ($record in $snapshot) { $recordsById[[int]$record.ProcessId] = $record }
+  if (-not $recordsById.ContainsKey($RootProcessId)) {
+    throw "The launched Electron desktop PID $RootProcessId was absent from the Windows process snapshot."
+  }
+  $frontier = @([ordered]@{processId=$RootProcessId;depth=0})
+  $visited = @{}
+  $tree = New-Object System.Collections.Generic.List[object]
+  while ($frontier.Count -gt 0) {
+    $next = New-Object System.Collections.Generic.List[object]
+    foreach ($cursor in $frontier) {
+      $processId = [int]$cursor.processId
+      if ($visited.ContainsKey($processId)) { continue }
+      $visited[$processId] = $true
+      if ($tree.Count -ge $MaximumProcesses) {
+        throw "Electron process-tree sampling exceeded the bounded limit of $MaximumProcesses processes for desktop PID $RootProcessId."
+      }
+      $record = $recordsById[$processId]
+      if ($null -eq $record) { continue }
+      $tree.Add([ordered]@{
+        processId=$processId
+        parentProcessId=[int]$record.ParentProcessId
+        depth=[int]$cursor.depth
+        role=(Get-ElectronProcessRole $record $RootProcessId $RuntimeProcessId)
+        snapshotName=[string]$record.Name
+      })
+      if ([int]$cursor.depth -ge $MaximumDepth) { continue }
+      foreach ($child in @($snapshot | Where-Object { [int]$_.ParentProcessId -eq $processId } | Sort-Object ProcessId)) {
+        $next.Add([ordered]@{processId=[int]$child.ProcessId;depth=([int]$cursor.depth+1)})
+      }
+    }
+    $frontier = @($next)
+  }
+  return @($tree)
+}
+
+function Get-ProcessResourceSample($DesktopProcess,[string]$RuntimeRoot,[string]$Stage) {
+  if ($null -eq $DesktopProcess -or $DesktopProcess.HasExited) {
+    throw "The desktop process was unavailable while sampling resources during $Stage."
+  }
+  $marker = Read-JsonFile (Join-Path $RuntimeRoot 'sessions\runtime.json')
+  $runtimeProcessId = [int]$marker.pid
+  $processTree = @(Get-BoundedProcessTree ([int]$DesktopProcess.Id) $runtimeProcessId)
+  $roles = [ordered]@{
+    desktop = [int]$DesktopProcess.Id
+    runtime = $runtimeProcessId
+  }
+  $processes = [ordered]@{}
+  foreach ($entry in $roles.GetEnumerator()) {
+    $process = Get-Process -Id ([int]$entry.Value) -ErrorAction SilentlyContinue
+    if ($null -eq $process) { throw "The $($entry.Key) process $($entry.Value) was unavailable during $Stage resource sampling." }
+    $process.Refresh()
+    $processes[$entry.Key] = [ordered]@{
+      pid=[int]$process.Id
+      processName=[string]$process.ProcessName
+      cpuSeconds=[double]$process.TotalProcessorTime.TotalSeconds
+      workingSetBytes=[int64]$process.WorkingSet64
+      privateMemoryBytes=[int64]$process.PrivateMemorySize64
+      threadCount=[int]$process.Threads.Count
+    }
+  }
+  $treeSamples = New-Object System.Collections.Generic.List[object]
+  foreach ($entry in $processTree) {
+    $process = Get-Process -Id ([int]$entry.processId) -ErrorAction SilentlyContinue
+    if ($null -eq $process) {
+      $treeSamples.Add([ordered]@{
+        pid=[int]$entry.processId
+        parentPid=[int]$entry.parentProcessId
+        role=[string]$entry.role
+        processName=[string]$entry.snapshotName
+        exited=$true
+        cpuSeconds=$null
+        workingSetBytes=$null
+        privateMemoryBytes=$null
+        threadCount=$null
+      })
+      continue
+    }
+    try {
+      $process.Refresh()
+    } catch {
+      $treeSamples.Add([ordered]@{
+        pid=[int]$entry.processId
+        parentPid=[int]$entry.parentProcessId
+        role=[string]$entry.role
+        processName=[string]$entry.snapshotName
+        exited=$true
+        cpuSeconds=$null
+        workingSetBytes=$null
+        privateMemoryBytes=$null
+        threadCount=$null
+      })
+      continue
+    }
+    $treeSamples.Add([ordered]@{
+      pid=[int]$process.Id
+      parentPid=[int]$entry.parentProcessId
+      role=[string]$entry.role
+      processName=[string]$process.ProcessName
+      exited=$false
+      cpuSeconds=[double]$process.TotalProcessorTime.TotalSeconds
+      workingSetBytes=[int64]$process.WorkingSet64
+      privateMemoryBytes=[int64]$process.PrivateMemorySize64
+      threadCount=[int]$process.Threads.Count
+    })
+  }
+  $liveRendererProcesses = @($treeSamples | Where-Object { $_.role -eq 'renderer' -and $_.exited -ne $true })
+  $liveGpuProcesses = @($treeSamples | Where-Object { $_.role -eq 'gpu' -and $_.exited -ne $true })
+  $discoveredRoles = (@($treeSamples | ForEach-Object {
+    $state = if ($_.exited -eq $true) { 'exited' } else { 'live' }
+    "$($_.pid):$($_.role):$state"
+  }) -join ', ')
+  if ($liveRendererProcesses.Count -lt 1) {
+    throw "No live Electron renderer process was found beneath desktop PID $($DesktopProcess.Id) during $Stage. Discovered process roles: $discoveredRoles"
+  }
+  if ($liveGpuProcesses.Count -lt 1) {
+    throw "No live Electron GPU process was found beneath desktop PID $($DesktopProcess.Id) during $Stage. Discovered process roles: $discoveredRoles"
+  }
+  return [ordered]@{
+    stage=$Stage
+    timestamp=(Get-Date).ToUniversalTime().ToString('o')
+    processes=$processes
+    electronProcessTree=$treeSamples
+  }
 }
 
 function Wait-HealthOffline([int]$Port,[int]$TimeoutSeconds=20) {
@@ -314,6 +498,7 @@ $records = New-Object System.Collections.Generic.List[object]
 $interactionRecords = New-Object System.Collections.Generic.List[object]
 $bridgeFamilyRecords = New-Object System.Collections.Generic.List[object]
 $surfaceProfileRecords = New-Object System.Collections.Generic.List[object]
+$resourceSamples = New-Object System.Collections.Generic.List[object]
 $restartRecord = $null
 $cleanupFailure = $null
 $startedAt = (Get-Date).ToUniversalTime()
@@ -330,6 +515,7 @@ try {
   $process = Start-Process -FilePath $executable -WorkingDirectory $packageRoot -PassThru
   $health = Wait-PackagedHealth $process $port $runtimeRoot
   Start-Sleep -Seconds 3
+  $resourceSamples.Add((Get-ProcessResourceSample $process $runtimeRoot 'after-startup'))
 
   $state = Invoke-Api $port '/api/state'
   $scene = @($state.scenes | Where-Object { $_.id -eq $state.activeSceneId })[0]
@@ -337,18 +523,8 @@ try {
   $path = @($scene.objects | Where-Object { $_.type -eq 'path' })[0]
   if ($null -eq $terrain -or $null -eq $path) { throw 'Starter terrain or Path Network is missing from the isolated packaged project.' }
 
-  Invoke-Api $port "/api/v011/terrain/$($terrain.id)/sculpt" 'DELETE' @{} | Out-Null
-  $terrainResult = Invoke-Api $port "/api/v011/terrain/$($terrain.id)" 'PATCH' @{
-    properties = @{
-      preset='plains';height=0;baseElevation=0;macroScale=240;detailScale=48;warpStrength=0
-      ridgeStrength=0;plateauStrength=0;valleyStrength=0;canyonDepth=0;islandStrength=0
-      resolution=144;chunkSize=32;seed=8128
-    }
-  }
-  $gapResult = Invoke-Api $port "/api/v011/terrain/$($terrain.id)/sculpt" 'POST' @{
-    mode='lower';x=0;z=0;radius=18;strength=12;falloff=0.78
-  }
-  $revision = [int64]$gapResult.state.engine.revision
+  $terrainResult = Set-EvidenceRavine $port $terrain.id 16 12 4
+  $revision = [int64]$terrainResult.state.engine.revision
 
   $networkResult = Invoke-Api $port "/api/v012/path/$($path.id)/network" 'PUT' @{
     expectedRevision = [int]$path.properties.pathNetwork.revision
@@ -387,29 +563,30 @@ try {
 
   $target = [double[]]@(0,0,0)
   $views = @(
-    @{id='01-approach';camera=(Get-LookCamera ([double[]]@(-62,3.2,5)) $target 66);guides=$false},
-    @{id='02-side';camera=(Get-LookCamera ([double[]]@(0,9,34)) $target 62);guides=$false},
-    @{id='03-rear';camera=(Get-LookCamera ([double[]]@(62,4,-5)) $target 66);guides=$false},
-    @{id='04-elevated';camera=(Get-LookCamera ([double[]]@(0,48,28)) $target 58);guides=$false},
-    @{id='05-underside';camera=(Get-LookCamera ([double[]]@(0,-5,20)) ([double[]]@(0,-1,0)) 70);guides=$false},
-    @{id='06-player-level';camera=(Get-LookCamera ([double[]]@(-46,2.1,4)) ([double[]]@(4,0,0)) 72);guides=$false}
+    @{id='01-west-landing-close';camera=(Get-LookCamera ([double[]]@(-29,4.5,10)) ([double[]]@(-17,0,0)) 55);guides=$false},
+    @{id='02-side-profile';camera=(Get-LookCamera ([double[]]@(0,7.5,24)) ([double[]]@(0,-2,0)) 60);guides=$false},
+    @{id='03-east-landing-close';camera=(Get-LookCamera ([double[]]@(29,4.5,-10)) ([double[]]@(17,0,0)) 55);guides=$false},
+    @{id='04-wide-elevated';camera=(Get-LookCamera ([double[]]@(0,36,38)) ([double[]]@(0,-2,0)) 58);guides=$false},
+    @{id='05-underside';camera=(Get-LookCamera ([double[]]@(0,-7,17)) ([double[]]@(0,-4,0)) 64);guides=$false},
+    @{id='06-player-level';camera=(Get-LookCamera ([double[]]@(-38,1.75,1.2)) ([double[]]@(1,0,0)) 70);guides=$false}
   )
   foreach ($view in $views) {
     $captureOptions = @{
       camera=$view.camera;hideGuides=(-not $view.guides);hideEditorReferences=$true;waitMs=1400
       minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     }
-    if ($view.id -eq '01-approach') {
+    if ($view.id -eq '01-west-landing-close') {
       # The isolated data root represents a genuine first launch. Dismiss the
       # tutorial through its real native Skip button before any native spline
       # input so the proof run exercises the editor rather than its backdrop.
       $captureOptions.nativeInputActions = @(@{type='dismiss-first-use-tutorial'})
+      $captureOptions.fullWindowCapture = $true
     }
     $record = Request-Capture $captureDir $view.id $captureOptions
     $records.Add($record)
-    if ($view.id -in @('01-approach','02-side','05-underside')) {
+    if ($view.id -in @('01-west-landing-close','02-side-profile','05-underside')) {
       $bridgeFamilyRecords.Add([ordered]@{
-        style='steel-girder';spanRadius=18;width=6;vehicleClass='mixed'
+        style='steel-girder';ravine=@{width=16;depth=12;floorWidth=4};width=6;vehicleClass='mixed'
         view=$view.id;capture=$record.file
       })
     }
@@ -427,8 +604,9 @@ try {
   $records.Add($guideRecord)
 
   $nativeHorizontalRecord = Request-Capture $captureDir '08a-native-horizontal-moved' @{
-    camera=(Get-LookCamera ([double[]]@(-55,22,30)) ([double[]]@(-55,0,0)) 68)
-    hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
+    inputCamera=(Get-LookCamera ([double[]]@(-55,22,30)) ([double[]]@(-55,0,0)) 68)
+    camera=(Get-LookCamera ([double[]]@(-62,11,20)) ([double[]]@(-32,0,0)) 60)
+    hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeIndex=0;dx=54;dy=10;vertical=$false;undo=$false})
   }
   $records.Add($nativeHorizontalRecord)
@@ -446,8 +624,9 @@ try {
   })
 
   $nativeVerticalRecord = Request-Capture $captureDir '08b-native-vertical-moved' @{
-    camera=(Get-LookCamera ([double[]]@($horizontalPosition[0],$horizontalPosition[1]+22,$horizontalPosition[2]+30)) ([double[]]$horizontalPosition) 68)
-    hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
+    inputCamera=(Get-LookCamera ([double[]]@($horizontalPosition[0],$horizontalPosition[1]+22,$horizontalPosition[2]+30)) ([double[]]$horizontalPosition) 68)
+    camera=(Get-LookCamera ([double[]]@($horizontalPosition[0]-10,$horizontalPosition[1]+8,$horizontalPosition[2]+18)) ([double[]]@($horizontalPosition[0]+14,1.2,0)) 58)
+    hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     # Sixteen native pixels maps to +2.4 m in the viewport's vertical gizmo.
     # The exact evidence fixture remains Civil-Assist-valid at this height while
     # still producing an unmistakable authored elevation change in the capture.
@@ -466,7 +645,7 @@ try {
   })
 
   $nativeRestoreRecord = Request-Capture $captureDir '08c-native-drag-restored' @{
-    camera=(Get-LookCamera ([double[]]@(0,62,55)) $target 82)
+    camera=(Get-LookCamera ([double[]]@(-40,22,30)) ([double[]]@(-20,0,0)) 64)
     hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     nativeInputActions=@(
       @{type='path-undo';pathId=$path.id;nodeIndex=0;expectedPosition=$horizontalPosition},
@@ -486,21 +665,27 @@ try {
     telemetry=$nativeRestoreRecord.response.nativeInputTelemetry
   })
 
+  $worldTabRecord = Request-Capture $captureDir '08d-world-tab-ui' @{
+    camera=(Get-LookCamera ([double[]]@(0,24,34)) ([double[]]@(0,-1,0)) 62)
+    hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900
+    minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
+    actions=@(@{type='click';target='world';waitMs=450})
+  }
+  $records.Add($worldTabRecord)
+  Assert-ProcessResponsive $process $port $runtimeRoot 'World tab full-window proof' | Out-Null
+
   # Each production bridge family gets its own span/width-appropriate scene in
   # the same exact packaged executable. This is visual evidence, not a mock
   # mesh: every fixture passes through Civil Assist, the authoritative terrain
   # modifier, the shared road/deck taper, shadows, and the runtime renderer.
   $familyFixtures = @(
-    @{slug='timber-trestle';style='timber-trestle';radius=7.0;depth=7.0;width=4.5;vehicleClass='mixed';profileId='dirt-road'},
-    @{slug='stone-arch';style='stone-arch';radius=10.0;depth=8.0;width=7.0;vehicleClass='mixed';profileId='dirt-road'},
-    @{slug='masonry-causeway';style='masonry-causeway';radius=8.0;depth=6.0;width=6.0;vehicleClass='mixed';profileId='dirt-road'},
-    @{slug='rope-footbridge';style='rope-footbridge';radius=11.0;depth=9.0;width=2.1;vehicleClass='pedestrian';profileId='natural-trail'}
+    @{slug='timber-trestle';style='timber-trestle';canyonWidth=7.0;canyonDepth=7.0;canyonFloorWidth=2.0;width=4.5;vehicleClass='mixed';profileId='dirt-road'},
+    @{slug='stone-arch';style='stone-arch';canyonWidth=10.0;canyonDepth=8.0;canyonFloorWidth=3.0;width=7.0;vehicleClass='mixed';profileId='dirt-road'},
+    @{slug='masonry-causeway';style='masonry-causeway';canyonWidth=5.5;canyonDepth=6.0;canyonFloorWidth=1.5;width=6.0;vehicleClass='mixed';profileId='dirt-road'},
+    @{slug='rope-footbridge';style='rope-footbridge';canyonWidth=11.0;canyonDepth=9.0;canyonFloorWidth=3.0;width=2.1;vehicleClass='pedestrian';profileId='natural-trail'}
   )
   foreach ($fixture in $familyFixtures) {
-    Invoke-Api $port "/api/v011/terrain/$($terrain.id)/sculpt" 'DELETE' @{} | Out-Null
-    $familyGap = Invoke-Api $port "/api/v011/terrain/$($terrain.id)/sculpt" 'POST' @{
-      mode='lower';x=0;z=0;radius=$fixture.radius;strength=$fixture.depth;falloff=0.78
-    }
+    $familyRavine = Set-EvidenceRavine $port $terrain.id $fixture.canyonWidth $fixture.canyonDepth $fixture.canyonFloorWidth
     $currentNetwork = Invoke-Api $port "/api/v012/path/$($path.id)/network"
     $familyNetwork = Invoke-Api $port "/api/v012/path/$($path.id)/network" 'PUT' @{
       expectedRevision=[int]$currentNetwork.network.revision
@@ -528,10 +713,16 @@ try {
     }
     $revision = [int64]$familyNetwork.state.engine.revision
     $fixtureExpectation = New-ExpectedPathFixture $path.id ([string]$familyNetwork.network.id) $fixture.style ([int]$familyNetwork.network.revision) 'weathered-dirt-road' ([double]$fixture.width)
+    $landingX = -([double]$fixture.canyonWidth + 1.5)
+    $sideHeight = [Math]::Max(6,[double]$fixture.canyonDepth * .45)
+    $wideHeight = [Math]::Max(22,[double]$fixture.canyonDepth * 2.2)
+    $wideDistance = [Math]::Max(26,[double]$fixture.canyonWidth * 1.8)
     foreach ($familyView in @(
-      @{suffix='approach';camera=(Get-LookCamera ([double[]]@(-36,3.4,10)) $target 65)},
-      @{suffix='side';camera=(Get-LookCamera ([double[]]@(0,10,29)) $target 62)},
-      @{suffix='underside';camera=(Get-LookCamera ([double[]]@(0,-3,18)) ([double[]]@(0,-1,0)) 68)}
+      @{suffix='landing-close';camera=(Get-LookCamera ([double[]]@($landingX-9,3.6,8)) ([double[]]@($landingX,0,0)) 54)},
+      @{suffix='side';camera=(Get-LookCamera ([double[]]@(0,$sideHeight,$fixture.canyonWidth+11)) ([double[]]@(0,-2,0)) 60)},
+      @{suffix='underside';camera=(Get-LookCamera ([double[]]@(0,-([double]$fixture.canyonDepth*.52),$fixture.canyonWidth+6)) ([double[]]@(0,-([double]$fixture.canyonDepth*.36),0)) 64)},
+      @{suffix='player-level';camera=(Get-LookCamera ([double[]]@(-([double]$fixture.canyonWidth+18),1.75,1)) ([double[]]@(0,0,0)) 69)},
+      @{suffix='wide-elevated';camera=(Get-LookCamera ([double[]]@(0,$wideHeight,$wideDistance)) ([double[]]@(0,-1.5,0)) 58)}
     )) {
       $familyId = "family-$($fixture.slug)-$($familyView.suffix)"
       $familyCapture = Request-Capture $captureDir $familyId @{
@@ -540,7 +731,9 @@ try {
       }
       $records.Add($familyCapture)
       $bridgeFamilyRecords.Add([ordered]@{
-        style=$fixture.style;spanRadius=$fixture.radius;width=$fixture.width;vehicleClass=$fixture.vehicleClass
+        style=$fixture.style
+        ravine=@{width=$fixture.canyonWidth;depth=$fixture.canyonDepth;floorWidth=$fixture.canyonFloorWidth;direction=90;meander=0}
+        width=$fixture.width;vehicleClass=$fixture.vehicleClass
         view=$familyView.suffix;capture=$familyCapture.file
       })
       Assert-ProcessResponsive $process $port $runtimeRoot $familyId | Out-Null
@@ -549,10 +742,7 @@ try {
 
   # Restore the primary steel fixture before the sustained interaction and
   # persistence gate so the final saved state is deterministic.
-  Invoke-Api $port "/api/v011/terrain/$($terrain.id)/sculpt" 'DELETE' @{} | Out-Null
-  $restoredGap = Invoke-Api $port "/api/v011/terrain/$($terrain.id)/sculpt" 'POST' @{
-    mode='lower';x=0;z=0;radius=18;strength=12;falloff=0.78
-  }
+  $restoredRavine = Set-EvidenceRavine $port $terrain.id 16 12 4
   $currentNetwork = Invoke-Api $port "/api/v012/path/$($path.id)/network"
   $restoredSteel = Invoke-Api $port "/api/v012/path/$($path.id)/network" 'PUT' @{
     expectedRevision=[int]$currentNetwork.network.revision
@@ -636,6 +826,7 @@ try {
   $revision = [int64]$restoredSurface.state.engine.revision
   $fixtureExpectation = New-ExpectedPathFixture $path.id ([string]$restoredSurface.network.id) 'steel-girder' ([int]$restoredSurface.network.revision)
 
+  $resourceSamples.Add((Get-ProcessResourceSample $process $runtimeRoot 'before-sustained-interaction'))
   $interactionWatch = [Diagnostics.Stopwatch]::StartNew()
   $cycle = 0
   $pathIsMoved = $false
@@ -679,6 +870,7 @@ try {
       id=$id;elapsedMs=$record.elapsedMs;healthMs=(Assert-ProcessResponsive $process $port $runtimeRoot $id)
       telemetry=$record.response.interactionTelemetry;renderProof=$record.file;exactNetworkRevision=$postActionRevision
     })
+    $resourceSamples.Add((Get-ProcessResourceSample $process $runtimeRoot $id))
     if ($record.elapsedMs -gt 20000) { throw "Interaction cycle $cycle exceeded the 20-second responsiveness ceiling." }
     if ($interactionWatch.Elapsed.TotalSeconds -lt $DurationSeconds) { Start-Sleep -Seconds 4 }
   }
@@ -696,7 +888,7 @@ try {
     $pathIsMoved = $false
   }
   $finalRecord = Request-Capture $captureDir '09-restored-and-saved' @{
-    camera=(Get-LookCamera ([double[]]@(0,18,36)) $target 62);hideGuides=$true;hideEditorReferences=$true;waitMs=1000
+    camera=(Get-LookCamera ([double[]]@(0,18,36)) $target 62);hideGuides=$true;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=1000
     minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     nativeInputActions=@(@{type='click-control';selector='#saveButton';label='Save';waitMs=1400})
   }
@@ -718,6 +910,7 @@ try {
   if ([Math]::Abs([double]$east.position[2]) -gt 0.001) { throw 'The interaction loop did not restore the authored bridge endpoint before Save.' }
 
   $savedNetworkRevision = [int]$finalPath.properties.pathNetwork.revision
+  $resourceSamples.Add((Get-ProcessResourceSample $process $runtimeRoot 'before-saved-editor-close'))
   $initialCloseRecord = Close-PackagedGracefully $process $port $runtimeRoot 'saved editor restart gate'
   $process = $null
   $process = Start-Process -FilePath $executable -WorkingDirectory $packageRoot -PassThru
@@ -727,11 +920,13 @@ try {
   $restartPath = Assert-PersistedPathFixture $restartState $path.id $savedNetworkRevision
   $fixtureExpectation.minimumNetworkRevision = [int]$restartPath.properties.pathNetwork.revision
   $restartRecord = Request-Capture $captureDir '11-restarted-persisted' @{
-    camera=(Get-LookCamera ([double[]]@(0,18,36)) $target 62);hideGuides=$true;hideEditorReferences=$true;waitMs=1400
+    camera=(Get-LookCamera ([double[]]@(0,18,36)) $target 62);hideGuides=$true;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=1400
     minimumRevision=[int64]$restartState.engine.revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
   }
   $records.Add($restartRecord)
   Assert-ProcessResponsive $process $port $runtimeRoot 'restarted persisted fixture' | Out-Null
+  $resourceSamples.Add((Get-ProcessResourceSample $process $runtimeRoot 'after-restart'))
+  $resourceSamples.Add((Get-ProcessResourceSample $process $runtimeRoot 'before-restarted-editor-close'))
   $restartCloseRecord = Close-PackagedGracefully $process $port $runtimeRoot 'completed restarted evidence'
   $process = $null
 
@@ -740,8 +935,12 @@ try {
     packagedSourceCommit=$packagedCommit;packagedSourceTree=$packagedSourceTree;packagedSourceAudit=$packagedSourceAudit
     executable=$executable;port=$port;startedAt=$startedAt.ToString('o');finishedAt=(Get-Date).ToUniversalTime().ToString('o')
     diagnosticMode=[bool]$Diagnostics;durationSeconds=$interactionWatch.Elapsed.TotalSeconds
-    fixture=@{terrainId=$terrain.id;pathId=$path.id;gap=@{center=@(0,0);radius=18;depth=12};bridgeStyle='steel-girder'}
+    fixture=@{
+      terrainId=$terrain.id;pathId=$path.id;bridgeStyle='steel-girder'
+      ravine=@{canyonWidth=16;canyonDepth=12;canyonFloorWidth=4;canyonDirection=90;canyonMeander=0}
+    }
     captures=$records;interactions=$interactionRecords;bridgeFamilies=$bridgeFamilyRecords;surfaceProfiles=$surfaceProfileRecords
+    resourceSamples=$resourceSamples
     finalNetworkRevision=[int]$finalPath.properties.pathNetwork.revision;finalEndpoint=@($east.position);saveEvidence=$saveTelemetry[0]
     health=$health;restartHealth=$restartHealth;restartCapture=$restartRecord
     gracefulShutdowns=@($initialCloseRecord,$restartCloseRecord)

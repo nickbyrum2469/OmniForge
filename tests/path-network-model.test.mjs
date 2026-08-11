@@ -191,6 +191,34 @@ test('bridge profiles normalize and reject unknown structure families', () => {
   }), /Unknown bridge style/);
 });
 
+test('bridge landing settings survive normalization without being replaced by width defaults', () => {
+  const network = normalizePathNetwork({
+    id: 'bridge-landing-settings',
+    nodes: [
+      { id: 'a', position: [0, 0, 0] },
+      { id: 'b', position: [40, 0, 0] }
+    ],
+    segments: [{ id: 'route', fromNode: 'a', toNode: 'b' }],
+    engineering: {
+      minimumBridgeRunLength: 7.25,
+      bridgeIntervalPadding: 2.75
+    }
+  });
+  assert.equal(network.engineering.minimumBridgeRunLength, 7.25);
+  assert.equal(network.engineering.bridgeIntervalPadding, 2.75);
+
+  const automatic = normalizePathNetwork({
+    id: 'automatic-bridge-landing-settings',
+    nodes: [
+      { id: 'a', position: [0, 0, 0] },
+      { id: 'b', position: [40, 0, 0] }
+    ],
+    segments: [{ id: 'route', fromNode: 'a', toNode: 'b' }]
+  });
+  assert.equal(automatic.engineering.minimumBridgeRunLength, null);
+  assert.equal(automatic.engineering.bridgeIntervalPadding, 0);
+});
+
 test('path transactions author free, aligned, and automatic spline handles', () => {
   const original = migrateLegacyPathObject(legacyPath({ worldSpacePoints: true }), { terrainHeightAt: () => 0 }).network;
   const node = original.nodes[1];

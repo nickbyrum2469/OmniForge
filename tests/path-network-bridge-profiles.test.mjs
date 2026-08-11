@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  bridgePortalLandingStatus,
   PATH_BRIDGE_PROFILES,
   resolveBridgeProfile
 } from '../app/path-network/bridge-profiles.js';
@@ -148,4 +149,36 @@ test('explicit incompatible selections remain visible and return actionable diag
     && diagnostic.actual > diagnostic.limit
     && diagnostic.authoredStyle === 'timber-trestle'
   )));
+});
+
+test('bridge portal landing validation reports support and grade failures independently', () => {
+  const sample = (distance, roadY, terrainY) => ({
+    distance,
+    position: [distance, roadY, 0],
+    baseY: terrainY
+  });
+  const engineering = { maxFillDepth: 2, maxCutDepth: 4, maxGradePercent: 15 };
+  const stable = bridgePortalLandingStatus(
+    sample(10, 1, 0.5),
+    sample(9, 0.9, 0.4),
+    engineering
+  );
+  assert.equal(stable.valid, true);
+
+  const unsupported = bridgePortalLandingStatus(
+    sample(10, 4, 0),
+    sample(9, 4, 0),
+    engineering
+  );
+  assert.equal(unsupported.supportValid, false);
+  assert.ok(unsupported.reasons.includes('portal-fill-support-exceeds-limit'));
+
+  const cliffLip = bridgePortalLandingStatus(
+    sample(10, 1, 0.5),
+    sample(9, 0.9, -0.5),
+    engineering
+  );
+  assert.equal(cliffLip.valid, true, 'a supported abutment may retain an adjoining terrain bank');
+  assert.equal(cliffLip.terrainApproachValid, false);
+  assert.ok(cliffLip.warnings.includes('portal-terrain-grade-exceeds-limit'));
 });

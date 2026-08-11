@@ -5,7 +5,10 @@ import { compilePathNetwork } from '../app/path-network/compiler.js';
 import { buildPathNetworkGeometry } from '../app/path-network/geometry.js';
 import { compilePathTerrainModifier } from '../app/path-network/terrain-modifier.js';
 import { connectPathRuntimeConsumers } from '../app/path-network/consumers.js';
-import { pathCrossSectionProfile } from '../app/path-network/cross-section-profiles.js';
+import {
+  pathCrossSectionLayout,
+  pathCrossSectionProfile
+} from '../app/path-network/cross-section-profiles.js';
 import { bridgeCrossSectionState } from '../app/path-network/bridge-profiles.js';
 import { PATH_SURFACE_DETAIL_RENDER_LAYOUT } from '../app/path-network/surface-detail-profiles.js';
 
@@ -197,7 +200,7 @@ test('dirt-road approaches narrow monotonically to a safe deck and retire should
   }
 });
 
-test('bridge approach stations share one taper width across terrain, render, collision, navigation, earthwork, and detail', () => {
+test('bridge approach stations share road width while terrain retains its authored feather', () => {
   const { compiled, terrainModifier, geometry } = buildAutomaticGap({
     id: 'shared-bridge-taper-authority'
   });
@@ -227,6 +230,7 @@ test('bridge approach stations share one taper width across terrain, render, col
     return state.amount > EPSILON && state.amount < 1 - EPSILON;
   });
   assert.ok(approachSections.length >= 4);
+  const authoredLayout = pathCrossSectionLayout(segment.crossSectionProfile);
 
   const roadWidths = new Map(widthsByX(geometry.meshes.road, 'road-core')
     .map(row => [row.x.toFixed(5), row.width]));
@@ -246,14 +250,20 @@ test('bridge approach stations share one taper width across terrain, render, col
     assert.ok(Math.abs(section.surfaceDetailRoadWidth - state.surfaceDetailRoadWidth) <= EPSILON);
     assert.ok(Math.abs(roadWidths.get(xKey) - state.roadWidth) <= EPSILON);
     assert.ok(Math.abs(navigationWidths.get(xKey) - state.roadWidth) <= EPSILON);
-    assert.ok(Math.abs(
-      Math.hypot(section.outerLeft[0] - section.center[0], section.outerLeft[2] - section.center[2])
-      - state.leftOuterEdge
-    ) <= EPSILON);
-    assert.ok(Math.abs(
-      Math.hypot(section.outerRight[0] - section.center[0], section.outerRight[2] - section.center[2])
-      - state.rightOuterEdge
-    ) <= EPSILON);
+    const leftTerrainOuter = Math.hypot(
+      section.outerLeft[0] - section.center[0],
+      section.outerLeft[2] - section.center[2]
+    );
+    const rightTerrainOuter = Math.hypot(
+      section.outerRight[0] - section.center[0],
+      section.outerRight[2] - section.center[2]
+    );
+    assert.ok(Math.abs(leftTerrainOuter - section.layout.left.outerEdge) <= EPSILON);
+    assert.ok(Math.abs(rightTerrainOuter - section.layout.right.outerEdge) <= EPSILON);
+    assert.ok(Math.abs(section.layout.left.blendWidth - authoredLayout.left.blendWidth) <= EPSILON);
+    assert.ok(Math.abs(section.layout.right.blendWidth - authoredLayout.right.blendWidth) <= EPSILON);
+    assert.ok(leftTerrainOuter >= state.leftOuterEdge - EPSILON);
+    assert.ok(rightTerrainOuter >= state.rightOuterEdge - EPSILON);
     const detailWidths = detailRoadWidthsAtX(geometry.meshes.road, 'road-core', section.center[0]);
     assert.ok(detailWidths.length >= 3);
     assert.ok(detailWidths.every(width => Math.abs(width - state.surfaceDetailRoadWidth) <= EPSILON));

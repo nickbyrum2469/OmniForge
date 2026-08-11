@@ -226,6 +226,130 @@ test('Civil Assist limits an automatic bridge to the actual local gap', () => {
   assert.ok(bridges[0].endDistance - bridges[0].startDistance < compiled.segments[0].metrics.length * 0.25);
 });
 
+test('Civil Assist applies authored portal padding before choosing stable bridge landings', () => {
+  const compile = bridgeIntervalPadding => {
+    const network = normalizePathNetwork({
+      id: `padded-bridge-${bridgeIntervalPadding}`,
+      nodes: [
+        { id: 'a', position: [0, 0, 0], heightMode: 'absolute' },
+        { id: 'b', position: [60, 0, 0], heightMode: 'absolute' }
+      ],
+      segments: [{
+        id: 'route',
+        fromNode: 'a',
+        toNode: 'b',
+        crossSectionProfile: { width: 3 }
+      }],
+      engineering: {
+        bridgeThreshold: 3,
+        maxFillDepth: 2,
+        minimumBridgeRunLength: 5,
+        bridgeIntervalPadding,
+        maximumBridgeSpan: 30,
+        maxGradePercent: 20
+      }
+    });
+    return compilePathNetwork(network, {
+      terrainHeightAt: x => x >= 25 && x <= 35 ? -7 : 0,
+      terrainNormalAt: flatNormal,
+      spacing: 0.5
+    }).segments[0].constructionIntervals.find(interval => interval.mode === 'bridge');
+  };
+  const unpadded = compile(0);
+  const padded = compile(2);
+  assert.ok(unpadded?.portalValidation?.valid);
+  assert.ok(padded?.portalValidation?.valid);
+  assert.ok(padded.startDistance <= unpadded.startDistance - 1.5);
+  assert.ok(padded.endDistance >= unpadded.endDistance + 1.5);
+  assert.equal(padded.portalValidation.padding, 2);
+});
+
+test('Civil Assist honors an authored minimum bridge run instead of replacing it with a width default', () => {
+  const compile = minimumBridgeRunLength => {
+    const engineering = {
+      bridgeThreshold: 3,
+      maxFillDepth: 2,
+      bridgeIntervalPadding: 0,
+      maximumBridgeSpan: 30,
+      maxGradePercent: 20
+    };
+    if (minimumBridgeRunLength !== undefined) engineering.minimumBridgeRunLength = minimumBridgeRunLength;
+    const network = normalizePathNetwork({
+      id: `minimum-bridge-run-${minimumBridgeRunLength ?? 'automatic'}`,
+      nodes: [
+        { id: 'a', position: [0, 0, 0], heightMode: 'absolute' },
+        { id: 'b', position: [60, 0, 0], heightMode: 'absolute' }
+      ],
+      segments: [{
+        id: 'route',
+        fromNode: 'a',
+        toNode: 'b',
+        crossSectionProfile: { width: 4 }
+      }],
+      engineering
+    });
+    return compilePathNetwork(network, {
+      terrainHeightAt: x => x >= 27 && x <= 33 ? -7 : 0,
+      terrainNormalAt: flatNormal,
+      spacing: 0.5
+    }).segments[0].constructionIntervals;
+  };
+  assert.equal(
+    compile(undefined).some(interval => interval.mode === 'bridge'),
+    false,
+    'automatic width-derived safety minimum should reject the short gap'
+  );
+  assert.equal(
+    compile(6).some(interval => interval.mode === 'bridge'),
+    true,
+    'the explicitly authored six-metre bridge minimum must remain authoritative'
+  );
+});
+
+test('Civil Assist absorbs an unstable threshold lip into stable bridge portals without a cut-fill sliver', () => {
+  const terrainHeightAt = x => {
+    if (x < 20 || x > 40) return 0;
+    if (x < 24) return -(x - 20) * 1.5;
+    if (x > 36) return -(40 - x) * 1.5;
+    return -6;
+  };
+  const network = normalizePathNetwork({
+    id: 'stable-portal-landings',
+    nodes: [
+      { id: 'a', position: [0, 0, 0], heightMode: 'absolute' },
+      { id: 'b', position: [60, 0, 0], heightMode: 'absolute' }
+    ],
+    segments: [{
+      id: 'route',
+      fromNode: 'a',
+      toNode: 'b',
+      crossSectionProfile: { width: 4, shoulderWidth: 0.5 }
+    }],
+    engineering: {
+      bridgeThreshold: 3,
+      maxFillDepth: 1.5,
+      minimumBridgeRunLength: 6,
+      bridgeIntervalPadding: 0,
+      maximumBridgeSpan: 40,
+      maxGradePercent: 20
+    }
+  });
+  const compiled = compilePathNetwork(network, {
+    terrainHeightAt,
+    terrainNormalAt: flatNormal,
+    spacing: 0.5
+  });
+  const intervals = compiled.segments[0].constructionIntervals;
+  const bridgeIndex = intervals.findIndex(interval => interval.mode === 'bridge');
+  const bridge = intervals[bridgeIndex];
+  assert.ok(bridge, 'the sustained ravine must remain a bridge');
+  assert.equal(bridge.portalValidation.valid, true);
+  assert.ok(bridge.portalValidation.start.maximumFill <= 1.5 + 1e-6);
+  assert.ok(bridge.portalValidation.end.maximumFill <= 1.5 + 1e-6);
+  assert.notEqual(intervals[bridgeIndex - 1]?.mode, 'cut-fill');
+  assert.notEqual(intervals[bridgeIndex + 1]?.mode, 'cut-fill');
+});
+
 test('Civil Assist rejects an automatic unsupported run longer than the configured bridge span', () => {
   const input = normalizePathNetwork({
     id: 'unsupported-long-crossing',

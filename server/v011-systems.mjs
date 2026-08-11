@@ -7,7 +7,6 @@ import {
   terrainBaseHeightAt,
   terrainHeightAt,
   terrainNormalAt,
-  compilePathProfile,
   samplePathSpline,
   expandTerrain,
   insertPathPoint,
@@ -18,6 +17,18 @@ import {
 } from '../app/worldgen.js';
 import { createScenePathRuntimeContext } from '../app/path-network/runtime.js';
 import { sampleSceneGroundSurface } from '../app/path-network/consumers.js';
+import {
+  attachPathNetwork,
+  clonePathNetwork
+} from '../app/path-network/model.js';
+import {
+  applyPathNetworkTransaction,
+  replacePathNetwork
+} from '../app/path-network/transactions.js';
+import {
+  compilePathNetwork,
+  nearestCompiledStation
+} from '../app/path-network/compiler.js';
 
 const now = () => new Date().toISOString();
 
@@ -133,7 +144,7 @@ export function terrainDiagnostics(terrain, paths = [], grid = 18) {
     for (let x = 0; x < grid; x += 1) {
       const wx = properties.bounds.minX + (x / Math.max(1, grid - 1)) * (properties.bounds.maxX - properties.bounds.minX);
       const wz = properties.bounds.minZ + (z / Math.max(1, grid - 1)) * (properties.bounds.maxZ - properties.bounds.minZ);
-      values.push(terrainHeightAt(terrain, wx, wz, paths));
+      values.push(terrainBaseHeightAt(terrain, wx, wz));
     }
   }
   const min = Math.min(...values), max = Math.max(...values), mean = values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -146,7 +157,15 @@ export function terrainDiagnostics(terrain, paths = [], grid = 18) {
   }
   const averageBandDifference = rowCorrelations.reduce((sum, value) => sum + value, 0) / Math.max(1, rowCorrelations.length);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    sampleView: 'authored-natural',
+    pathModificationAuthority: 'compiled-path-network-v2',
+    pathNetworks: (paths || []).map(path => {
+      const network = attachPathNetwork(path, {
+        terrainHeightAt: (x, z) => terrainBaseHeightAt(terrain, x, z)
+      }).network;
+      return { pathId: path.id, networkId: network.id, revision: network.revision };
+    }),
     minHeight: min,
     maxHeight: max,
     relief: max - min,
@@ -163,36 +182,273 @@ export function terrainDiagnostics(terrain, paths = [], grid = 18) {
 }
 
 export function pathDiagnostics(pathObject, terrain) {
-  const properties = normalizePathProperties(pathObject.properties || {}, pathObject.transform || {});
-  const samples = samplePathSpline(pathObject, { spacing: Math.max(0.5, properties.width * 0.3) });
-  const profile = compilePathProfile(pathObject, terrain);
-  let rawMaxGrade = 0, compiledMaxGrade = 0, estimatedCut = 0, estimatedFill = 0;
-  for (let index = 1; index < profile.length; index += 1) {
-    const a = profile[index - 1], b = profile[index];
-    const distance = Math.max(0.001, Math.hypot(b.x - a.x, b.z - a.z));
-    const rawA = terrainBaseHeightAt(terrain, a.x, a.z), rawB = terrainBaseHeightAt(terrain, b.x, b.z);
-    rawMaxGrade = Math.max(rawMaxGrade, Math.abs(rawB - rawA) / distance * 100);
-    compiledMaxGrade = Math.max(compiledMaxGrade, Math.abs(b.y - a.y) / distance * 100);
-    if (b.y < rawB) estimatedCut = Math.max(estimatedCut, rawB - b.y);
-    else estimatedFill = Math.max(estimatedFill, b.y - rawB);
+  const baseHeightAt = (x, z) => terrainBaseHeightAt(terrain, x, z);
+  const network = attachPathNetwork(pathObject, { terrainHeightAt: baseHeightAt }).network;
+  const compiled = compilePathNetwork(network, {
+    terrainHeightAt: baseHeightAt,
+    terrainNormalAt: (x, z) => terrainNormalAt(terrain, x, z, []),
+    spacing: Math.max(0.25, Number(network.defaults?.crossSectionProfile?.width || 3) * 0.2),
+    generationRevision: network.revision
+  });
+  const constructionModes = {};
+  for (const segment of compiled.segments) {
+    const mode = String(segment.construction?.mode || 'invalid');
+    constructionModes[mode] = (constructionModes[mode] || 0) + 1;
   }
-  const constraints = profile.diagnostics || {};
-  const gameplayReady = constraints.gameplayReady === true
-    && compiledMaxGrade <= properties.maxGradePercent + 0.15
-    && estimatedCut <= properties.maxCutDepth + 0.001
-    && estimatedFill <= properties.maxFillDepth + 0.001;
+  const gameplayReady = compiled.diagnostics.valid === true;
   return {
-    schemaVersion: 1, nodeCount: properties.points.length, sampleCount: samples.length, profileSampleCount: profile.length, spline: properties.spline,
-    rawMaxGradePercent: rawMaxGrade, compiledMaxGradePercent: compiledMaxGrade, configuredMaxGradePercent: properties.maxGradePercent,
-    estimatedCut, estimatedFill, configuredMaxCut: properties.maxCutDepth, configuredMaxFill: properties.maxFillDepth,
-    carveTerrain: properties.carveTerrain,
-    surfaceAuthority: properties.surfaceAuthority,
-    terrainModificationAuthority: properties.terrainModificationAuthority,
-    constraintStatus: constraints.feasible === false ? 'blocked-infeasible-profile' : 'passed',
-    infeasibleStationCount: constraints.infeasibleStationCount || 0,
+    schemaVersion: 2,
+    authority: 'compiled-path-network-v2',
+    sourceNetworkId: compiled.sourceNetworkId,
+    sourceRevision: compiled.sourceRevision,
+    generationRevision: compiled.generationRevision,
+    nodeCount: compiled.nodes.length,
+    segmentCount: compiled.segments.length,
+    junctionCount: compiled.junctions.length,
+    sampleCount: compiled.stations.length,
+    totalLength: compiled.diagnostics.totalLength,
+    compiledMaxGradePercent: compiled.diagnostics.maximumGradePercent,
+    configuredMaxGradePercent: network.engineering.maxGradePercent,
+    estimatedCut: compiled.diagnostics.maximumCut,
+    estimatedFill: compiled.diagnostics.maximumFill,
+    configuredMaxCut: network.engineering.maxCutDepth,
+    configuredMaxFill: network.engineering.maxFillDepth,
+    constructionModes,
+    constraintStatus: gameplayReady ? 'passed' : 'blocked-invalid-construction',
+    invalidSegmentIds: [...compiled.diagnostics.invalidSegmentIds],
     gameplayReady,
     validation: gameplayReady ? 'passed' : 'failed',
     checkedAt: now()
+  };
+}
+
+const LEGACY_ENGINEERING_KEYS = new Set([
+  'civilAssist',
+  'maxGradePercent',
+  'minimumCurveRadius',
+  'maxCutDepth',
+  'maxFillDepth',
+  'retainingWallThreshold',
+  'bridgeThreshold',
+  'minimumBridgeRunLength',
+  'bridgeIntervalPadding',
+  'tunnelThreshold',
+  'maximumBridgeSpan',
+  'tunnelClearance',
+  'stairMaximumRise',
+  'stairMinimumRun'
+]);
+
+const LEGACY_PATH_COMPATIBILITY_HELP = 'Use the schema-v2 Path Network endpoint /api/v012/path/{pathId}/transaction with stable node and segment IDs.';
+
+function legacyCompatibilityError(message) {
+  return new Error(`${message} ${LEGACY_PATH_COMPATIBILITY_HELP}`);
+}
+
+function simplePathOrder(network) {
+  if (network.segments.length !== network.nodes.length - 1) return null;
+  const adjacency = new Map(network.nodes.map(node => [node.id, []]));
+  for (const segment of network.segments) {
+    adjacency.get(segment.fromNode)?.push({ segment, nodeId: segment.toNode });
+    adjacency.get(segment.toNode)?.push({ segment, nodeId: segment.fromNode });
+  }
+  if ([...adjacency.values()].some(items => items.length > 2)) return null;
+  const endpoints = network.nodes.filter(node => adjacency.get(node.id)?.length === 1);
+  if (endpoints.length !== 2) return null;
+  const directedStart = endpoints.find(node => {
+    const outgoing = network.segments.some(segment => segment.fromNode === node.id);
+    const incoming = network.segments.some(segment => segment.toNode === node.id);
+    return outgoing && !incoming;
+  });
+  const start = directedStart || endpoints[0];
+  const nodes = [];
+  const segments = [];
+  const visited = new Set();
+  let previousId = null;
+  let current = start;
+  while (current) {
+    nodes.push(current);
+    const next = (adjacency.get(current.id) || []).find(item => item.nodeId !== previousId && !visited.has(item.segment.id));
+    if (!next) break;
+    visited.add(next.segment.id);
+    segments.push(next.segment);
+    previousId = current.id;
+    current = network.nodes.find(node => node.id === next.nodeId) || null;
+  }
+  return nodes.length === network.nodes.length && segments.length === network.segments.length
+    ? { nodes, segments }
+    : null;
+}
+
+function pushCompatibilityHistory(pathObject, network, label) {
+  const history = Array.isArray(pathObject.properties?.pathNetworkUndo)
+    ? pathObject.properties.pathNetworkUndo.slice(-15)
+    : [];
+  history.push({
+    label: String(label || 'Legacy Path Network compatibility edit').slice(0, 120),
+    network: clonePathNetwork(network),
+    restoreObjects: [],
+    removeObjectIds: [],
+    recordedAt: now()
+  });
+  pathObject.properties.pathNetworkUndo = history;
+  pathObject.properties.pathNetworkRedo = [];
+}
+
+function syncLegacyPathProjection(pathObject, network) {
+  const order = simplePathOrder(network);
+  if (!order) return;
+  pathObject.properties.points = order.nodes.map(node => [node.position[0], node.position[2]]);
+  pathObject.properties.nodeElevations = order.nodes.map(node => (
+    node.heightMode === 'absolute' ? node.position[1] : null
+  ));
+  pathObject.properties.legacyPathProjectionRevision = network.revision;
+}
+
+function replaceLegacyEngineering(network, patch) {
+  const requested = Object.keys(patch || {});
+  const supported = requested.filter(key => LEGACY_ENGINEERING_KEYS.has(key));
+  const passthrough = new Set(['showSpline', 'width', 'spline', 'collider', 'navigation']);
+  const unsupported = requested.filter(key => !LEGACY_ENGINEERING_KEYS.has(key) && !passthrough.has(key));
+  if (unsupported.length) {
+    throw legacyCompatibilityError(`Legacy path engineering fields are not schema-v2 authorities: ${unsupported.join(', ')}.`);
+  }
+  if (!requested.length) throw legacyCompatibilityError('The legacy path engineering patch is empty.');
+  const replacement = clonePathNetwork(network);
+  for (const key of supported) replacement.engineering[key] = patch[key];
+  if (Object.prototype.hasOwnProperty.call(patch, 'showSpline')) replacement.editor.showSpline = patch.showSpline !== false;
+  if (Object.prototype.hasOwnProperty.call(patch, 'width')) {
+    const width = Number(patch.width);
+    if (!Number.isFinite(width) || width <= 0) throw legacyCompatibilityError('Legacy path width must be a positive finite number.');
+    replacement.defaults.crossSectionProfile.width = width;
+    for (const segment of replacement.segments) segment.crossSectionProfile.width = width;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'spline')) {
+    for (const segment of replacement.segments) segment.curveType = patch.spline === false ? 'linear' : 'hermite';
+  }
+  for (const key of ['collider', 'navigation']) {
+    if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+    replacement.defaults.gameplayRules[key] = patch[key] !== false;
+    for (const segment of replacement.segments) segment.gameplayRules[key] = patch[key] !== false;
+  }
+  replacement.revision = network.revision + 1;
+  return replacePathNetwork(network, replacement);
+}
+
+/**
+ * Compatibility adapter for v0.11 route and MCP names. It never treats
+ * properties.points or nodeElevations as writable runtime authority.
+ */
+export function applyLegacyPathCompatibilityMutation(pathObject, terrain, command, input = {}) {
+  if (!terrain) throw new Error('A terrain is required to edit a schema-v2 Path Network.');
+  const baseHeightAt = (x, z) => terrainBaseHeightAt(terrain, x, z);
+  const current = attachPathNetwork(pathObject, { terrainHeightAt: baseHeightAt }).network;
+  const expectedRevision = input.expectedRevision;
+  if (expectedRevision !== undefined && Number(expectedRevision) !== current.revision) {
+    throw new Error(`Path Network revision conflict: expected ${expectedRevision}, current ${current.revision}.`);
+  }
+  let result;
+  let metadata = {};
+  if (command === 'update-engineering') {
+    result = replaceLegacyEngineering(current, input.properties || input);
+  } else if (command === 'insert-node') {
+    const x = Number(input.x), z = Number(input.z);
+    if (!Number.isFinite(x) || !Number.isFinite(z)) throw legacyCompatibilityError('Legacy node insertion requires finite x and z coordinates.');
+    const compiled = compilePathNetwork(current, {
+      terrainHeightAt: baseHeightAt,
+      terrainNormalAt: (sampleX, sampleZ) => terrainNormalAt(terrain, sampleX, sampleZ, []),
+      spacing: 0.35
+    });
+    let segmentId;
+    if (Number.isInteger(Number(input.index))) {
+      const order = simplePathOrder(current);
+      const index = Number(input.index);
+      if (!order || index <= 0 || index >= order.nodes.length) {
+        throw legacyCompatibilityError('Index-based node insertion is only safe between nodes of a simple, unbranched Path Network.');
+      }
+      segmentId = order.segments[index - 1].id;
+      metadata.index = index;
+    } else {
+      const nearest = nearestCompiledStation(compiled, [x, baseHeightAt(x, z), z]);
+      if (!nearest) throw legacyCompatibilityError('No compiled Path Network segment is available for insertion.');
+      segmentId = nearest.segmentId;
+    }
+    const authoredY = Number(input.y);
+    const hasAuthoredY = input.y !== undefined && Number.isFinite(authoredY);
+    result = applyPathNetworkTransaction(current, {
+      id: 'legacy-v011-insert-node',
+      label: 'Insert Path Network node',
+      operations: [{
+        type: 'insert-node',
+        segmentId,
+        node: {
+          position: [x, hasAuthoredY ? authoredY : baseHeightAt(x, z), z],
+          heightMode: hasAuthoredY ? 'absolute' : 'terrain',
+          heightOffset: Number(input.heightOffset || 0)
+        }
+      }]
+    });
+    metadata.nodeId = result.network.nodes.at(-1)?.id || null;
+  } else if (command === 'move-node' || command === 'delete-node') {
+    const order = simplePathOrder(current);
+    const index = Number(input.index);
+    if (!order || !Number.isInteger(index) || !order.nodes[index]) {
+      throw legacyCompatibilityError('Index-based node editing is only safe on a simple, unbranched Path Network.');
+    }
+    const node = order.nodes[index];
+    if (command === 'move-node') {
+      const x = Number(input.x), z = Number(input.z), authoredY = Number(input.y);
+      if (!Number.isFinite(x) || !Number.isFinite(z)) throw legacyCompatibilityError('Legacy node movement requires finite x and z coordinates.');
+      const hasAuthoredY = input.y !== undefined && Number.isFinite(authoredY);
+      result = applyPathNetworkTransaction(current, {
+        id: 'legacy-v011-move-node',
+        label: 'Move Path Network node',
+        operations: [{
+          type: 'move-node',
+          nodeId: node.id,
+          position: [x, hasAuthoredY ? authoredY : node.position[1], z],
+          heightMode: hasAuthoredY ? 'absolute' : node.heightMode,
+          heightOffset: node.heightOffset
+        }]
+      });
+    } else {
+      result = applyPathNetworkTransaction(current, {
+        id: 'legacy-v011-delete-node',
+        label: 'Delete Path Network node',
+        operations: [{ type: 'delete-node', nodeId: node.id }]
+      });
+    }
+    metadata = { index, nodeId: node.id };
+  } else if (command === 'reverse') {
+    result = applyPathNetworkTransaction(current, {
+      id: 'legacy-v011-reverse-path',
+      label: 'Reverse Path Network segment directions',
+      operations: current.segments.map(segment => ({ type: 'reverse-segment', segmentId: segment.id }))
+    });
+  } else if (command === 'split') {
+    throw legacyCompatibilityError('Legacy split creates a second points-based path object and is disabled. Insert/connect stable nodes or use the v2 merge route instead.');
+  } else {
+    throw legacyCompatibilityError(`Unknown legacy path mutation ${command}.`);
+  }
+  pushCompatibilityHistory(pathObject, current, `Legacy compatibility: ${command}`);
+  pathObject.properties.pathNetwork = result.network;
+  pathObject.properties.pathNetworkSchemaVersion = result.network.schemaVersion;
+  syncLegacyPathProjection(pathObject, result.network);
+  if (metadata.nodeId && metadata.index === undefined) {
+    const order = simplePathOrder(result.network);
+    metadata.index = order ? order.nodes.findIndex(node => node.id === metadata.nodeId) : -1;
+  }
+  return {
+    path: pathObject,
+    network: result.network,
+    validation: result.validation,
+    compatibility: {
+      delegatedFrom: `v011:${command}`,
+      authority: 'path-network-v2',
+      previousRevision: current.revision,
+      revision: result.network.revision
+    },
+    ...metadata
   };
 }
 

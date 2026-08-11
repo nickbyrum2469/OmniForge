@@ -248,7 +248,7 @@ function installWorldPanel() {
   bindControls();
   refresh();
   const version = field('engineVersion');
-  if (version) version.textContent = 'v0.10.0';
+  if (version) version.textContent = 'v0.11.0';
   const renderBadge = field('renderBadge');
   if (renderBadge) renderBadge.textContent = 'HYBRID PBR + ATMOSPHERE';
 }

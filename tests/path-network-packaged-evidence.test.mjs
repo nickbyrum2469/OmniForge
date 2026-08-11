@@ -24,25 +24,58 @@ test('packaged path evidence is isolated from user project data and ignored as o
 
 test('packaged path evidence captures every required bridge inspection angle', () => {
   for (const id of [
-    '01-approach',
-    '02-side',
-    '03-rear',
-    '04-elevated',
+    '01-west-landing-close',
+    '02-side-profile',
+    '03-east-landing-close',
+    '04-wide-elevated',
     '05-underside',
     '06-player-level',
     '07-editor-guides-elevated',
     '08a-native-horizontal-moved',
     '08b-native-vertical-moved',
     '08c-native-drag-restored',
+    '08d-world-tab-ui',
     '09-restored-and-saved',
     '10-surface-details-close',
     '11-restarted-persisted'
   ]) assert.match(script, new RegExp(`'${id}'`), id);
   assert.match(script, /Get-LookCamera/);
   assert.match(script, /bridgeStyle='steel-girder'/);
-  assert.match(script, /mode='lower';x=0;z=0;radius=18;strength=12/);
+  assert.match(script, /function Set-EvidenceRavine/);
+  assert.match(script, /canyonMeander=0;canyonDirection=90/);
+  assert.match(script, /Set-EvidenceRavine \$port \$terrain\.id 16 12 4/);
+  assert.doesNotMatch(script, /mode='lower';x=0;z=0;radius=/);
   assert.match(script, /profileId='muddy-wagon-road';seed=8128/);
   assert.match(script, /hoofPrintDensity=0\.18;bootPrintDensity=0\.12/);
+});
+
+test('key packaged stages require native full-window UI proof alongside viewport PNGs', () => {
+  assert.match(script, /\$expectedFullWindowFile = "\$Id-window\.png"/);
+  assert.match(script, /\[string\]\$response\.fullWindowFile/);
+  assert.match(script, /reported missing full-window proof/);
+  assert.match(script, /fullWindowFile=\$fullWindowFile/);
+  assert.match(script, /\$captureOptions\.fullWindowCapture = \$true/);
+  assert.match(script, /'08a-native-horizontal-moved'[\s\S]*?fullWindowCapture=\$true/);
+  assert.match(script, /'08b-native-vertical-moved'[\s\S]*?fullWindowCapture=\$true/);
+  assert.match(script, /'08d-world-tab-ui'[\s\S]*?fullWindowCapture=\$true[\s\S]*?target='world'/);
+  assert.match(script, /'09-restored-and-saved'[\s\S]*?fullWindowCapture=\$true/);
+  assert.match(script, /'11-restarted-persisted'[\s\S]*?fullWindowCapture=\$true/);
+  assert.match(desktop, /requestOptions\.fullWindowCapture/);
+  assert.match(desktop, /mainWindow\.webContents\.capturePage\(\)/);
+  assert.match(desktop, /`\$\{id\}-window\.png`/);
+  assert.match(desktop, /fullWindowFile/);
+});
+
+test('paired canvas and full-window evidence retain one camera and editor state until page capture completes', () => {
+  assert.match(app, /pendingVisualCaptureRestore/);
+  assert.match(app, /result\.captureHoldToken=captureHoldToken/);
+  assert.match(app, /__omniforgeVisualTestFinishCapture=finishVisualCaptureHold/);
+  assert.match(desktop, /captureHoldToken=String\(captureResult\?\.captureHoldToken\|\|''\)/);
+  const pageCapture = desktop.indexOf('mainWindow.webContents.capturePage()');
+  const releaseCapture = desktop.indexOf('window.__omniforgeVisualTestFinishCapture', pageCapture);
+  assert.ok(pageCapture >= 0, 'full-window page capture must exist');
+  assert.ok(releaseCapture > pageCapture, 'renderer state must be released only after full-window page capture');
+  assert.match(desktop, /if\(captureHoldToken&&mainWindow&&!mainWindow\.isDestroyed\(\)\)/);
 });
 
 test('packaged evidence renders every bridge family at a compatible span and width', () => {
@@ -55,13 +88,16 @@ test('packaged evidence renders every bridge family at a compatible span and wid
   ]) assert.match(script, new RegExp(`bridgeStyle='${style}'|style='${style}'`), style);
   assert.match(
     script,
-    /slug='masonry-causeway';style='masonry-causeway';radius=8\.0;depth=6\.0;width=6\.0;vehicleClass='mixed';profileId='dirt-road'/,
+    /slug='masonry-causeway';style='masonry-causeway';canyonWidth=5\.5;canyonDepth=6\.0;canyonFloorWidth=1\.5;width=6\.0;vehicleClass='mixed';profileId='dirt-road'/,
     'masonry causeway evidence must retain the deterministic span that compiles a real bridge interval'
   );
   assert.match(script, /family-\$\(\$fixture\.slug\)-\$\(\$familyView\.suffix\)/);
-  assert.match(script, /suffix='approach'/);
+  assert.match(script, /suffix='landing-close'/);
   assert.match(script, /suffix='side'/);
   assert.match(script, /suffix='underside'/);
+  assert.match(script, /suffix='player-level'/);
+  assert.match(script, /suffix='wide-elevated'/);
+  assert.match(script, /ravine=@\{width=\$fixture\.canyonWidth;depth=\$fixture\.canyonDepth;floorWidth=\$fixture\.canyonFloorWidth;direction=90;meander=0\}/);
   assert.match(script, /bridgeFamilies=\$bridgeFamilyRecords/);
   assert.match(script, /Restore primary packaged steel bridge fixture/);
   assert.match(script, /New-ExpectedPathFixture/);
@@ -88,7 +124,7 @@ test('packaged evidence renders every bridge family at a compatible span and wid
   assert.match(app, /function applyVisualTestCamera/);
   assert.match(app, /function visualTestNeedsInputCamera/);
   assert.match(app, /\['path-node-drag','path-undo'\]\.includes\(String\(action\?\.type\|\|''\)\)/);
-  assert.match(app, /visualTestNeedsInputCamera\(options\)&&applyVisualTestCamera\(options\.camera\)/);
+  assert.match(app, /visualTestNeedsInputCamera\(options\)&&applyVisualTestCamera\(options\.inputCamera\|\|options\.camera\)/);
   assert.match(app, /applyVisualTestCamera\(options\.camera\)/);
   assert.match(app, /normalizedVisualTestCamera\(options\.restoreCamera,camera\)/);
   assert.match(app, /__omniforgeVisualTestCameraSnapshot/);
@@ -130,11 +166,43 @@ test('two-minute gate exercises real packaged renderer actions and restores its 
   assert.doesNotMatch(script, /type='save';message='Packaged path evidence saved'/);
 });
 
+test('packaged evidence records a bounded Electron process tree with renderer and GPU resources', () => {
+  assert.match(script, /function Get-ProcessResourceSample/);
+  assert.match(script, /function Get-BoundedProcessTree/);
+  assert.match(script, /Get-CimInstance -ClassName Win32_Process/);
+  assert.match(script, /MaximumDepth=8/);
+  assert.match(script, /MaximumProcesses=64/);
+  assert.match(script, /desktop = \[int\]\$DesktopProcess\.Id/);
+  assert.match(script, /runtime = \$runtimeProcessId/);
+  assert.match(script, /role -eq 'renderer'/);
+  assert.match(script, /role -eq 'gpu'/);
+  assert.match(script, /No live Electron renderer process was found beneath desktop PID/);
+  assert.match(script, /No live Electron GPU process was found beneath desktop PID/);
+  assert.match(script, /parentPid=\[int\]\$entry\.parentProcessId/);
+  assert.match(script, /exited=\$true/);
+  assert.match(script, /exited=\$false/);
+  assert.match(script, /role -eq 'renderer' -and \$_\.exited -ne \$true/);
+  assert.match(script, /role -eq 'gpu' -and \$_\.exited -ne \$true/);
+  assert.match(script, /electronProcessTree=\$treeSamples/);
+  assert.match(script, /cpuSeconds=\[double\]\$process\.TotalProcessorTime\.TotalSeconds/);
+  assert.match(script, /workingSetBytes=\[int64\]\$process\.WorkingSet64/);
+  assert.match(script, /privateMemoryBytes=\[int64\]\$process\.PrivateMemorySize64/);
+  assert.match(script, /threadCount=\[int\]\$process\.Threads\.Count/);
+  assert.match(script, /'after-startup'/);
+  assert.match(script, /'before-sustained-interaction'/);
+  assert.match(script, /Get-ProcessResourceSample \$process \$runtimeRoot \$id/);
+  assert.match(script, /'before-saved-editor-close'/);
+  assert.match(script, /'after-restart'/);
+  assert.match(script, /'before-restarted-editor-close'/);
+  assert.match(script, /resourceSamples=\$resourceSamples/);
+});
+
 test('packaged gate drives real horizontal and Shift-vertical spline handles and proves Undo', () => {
   assert.match(script, /type='dismiss-first-use-tutorial'/);
   assert.match(script, /nativeInputActions=@\(/);
   assert.match(script, /type='path-node-drag'.*vertical=\$false.*undo=\$false/);
   assert.match(script, /type='path-node-drag'.*dy=-16.*vertical=\$true.*undo=\$false/);
+  assert.match(script, /inputCamera=\(Get-LookCamera/);
   assert.match(script, /type='path-undo'.*expectedPosition=\$horizontalPosition/);
   assert.match(script, /type='path-undo'.*expectedPosition=@\(-55,0,0\)/);
   assert.match(script, /nativeInputTelemetry/);

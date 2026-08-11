@@ -4,6 +4,7 @@ import {
   terrainBounds
 } from '../worldgen.js';
 import { samplePathTerrainModifier } from '../path-network/terrain-modifier.js';
+import { selectPreferredPathTerrainSample } from '../path-network/terrain-sample-selection.js';
 
 export const TERRAIN_VIEWS = Object.freeze([
   'natural',
@@ -77,14 +78,7 @@ function combineConstructionSample(pathRuntimes, baseHeight, x, z) {
   let selected = null;
   for (const runtime of pathRuntimes || []) {
     const sample = samplePathTerrainModifier(runtime?.terrainModifier, x, z);
-    if (
-      !selected
-      || sample.influence > selected.influence
-      || (
-        sample.influence === selected.influence
-        && sample.lateralDistance < selected.lateralDistance
-      )
-    ) selected = sample;
+    selected = selectPreferredPathTerrainSample(selected, sample, runtime);
   }
   if (!selected || !Number.isFinite(selected.lateralDistance)) {
     return {
@@ -94,11 +88,12 @@ function combineConstructionSample(pathRuntimes, baseHeight, x, z) {
       sourceId: null
     };
   }
+  const sample = selected.sample;
   return {
-    height: selected.height,
-    influence: selected.influence,
-    zone: selected.zone,
-    sourceId: selected.segmentId
+    height: sample.height,
+    influence: sample.influence,
+    zone: sample.zone,
+    sourceId: sample.segmentId
   };
 }
 

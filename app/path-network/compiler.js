@@ -4,6 +4,7 @@ import {
   pathNetworkNodeMap,
   validatePathNetwork
 } from './model.js';
+import { bridgePortalLandingStatus } from './bridge-profiles.js';
 
 const EPSILON = 1e-7;
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -413,9 +414,118 @@ function replaceConstructionInterval(interval, mode, reason) {
   interval.automatic = true;
 }
 
-function stabilizeConstructionIntervals(intervals, segment, engineering) {
+function constructionEdgeStates(intervals, samples) {
+  const states = Array.from({ length: Math.max(0, samples.length - 1) }, () => null);
+  for (const interval of intervals) {
+    const start = clamp(interval.startSampleIndex, 0, states.length);
+    const end = clamp(interval.endSampleIndex, start, states.length);
+    for (let index = start; index < end; index += 1) states[index] = { ...interval };
+  }
+  return states;
+}
+
+function intervalsFromEdgeStates(states, samples) {
+  const intervals = states.map((state, index) => ({
+    ...(state || { mode: 'conform', reason: 'terrain-and-grade-within-limits', automatic: true }),
+    startDistance: samples[index].distance,
+    endDistance: samples[index + 1].distance,
+    startSampleIndex: index,
+    endSampleIndex: index + 1
+  }));
+  return mergeConstructionIntervals(intervals);
+}
+
+function paddedPortalSampleIndex(samples, sampleIndex, direction, padding) {
+  let index = clamp(sampleIndex, 0, Math.max(0, samples.length - 1));
+  if (padding <= EPSILON) return index;
+  const targetDistance = samples[index].distance + direction * padding;
+  while (
+    index + direction >= 0
+    && index + direction < samples.length
+    && (
+      direction < 0
+        ? samples[index].distance > targetDistance + EPSILON
+        : samples[index].distance < targetDistance - EPSILON
+    )
+  ) index += direction;
+  return index;
+}
+
+function stablePortalSampleIndex(samples, sampleIndex, direction, engineering) {
+  let index = clamp(sampleIndex, 0, Math.max(0, samples.length - 1));
+  while (true) {
+    const outsideIndex = index + direction;
+    const outside = outsideIndex >= 0 && outsideIndex < samples.length
+      ? samples[outsideIndex]
+      : null;
+    const status = bridgePortalLandingStatus(samples[index], outside, engineering);
+    if (status.valid || !outside) return { index, status };
+    index = outsideIndex;
+  }
+}
+
+function stabilizeBridgePortalLandings(intervals, samples, segment, engineering) {
+  const bridgeRuns = intervals.filter(interval => interval.mode === 'bridge');
+  if (!bridgeRuns.length || samples.length < 2) return intervals;
+  const padding = Math.max(0, finite(engineering.bridgeIntervalPadding));
+  const edgeStates = constructionEdgeStates(intervals, samples);
+  for (const bridge of bridgeRuns) {
+    // A deliberately elevated segment whose complete authored extent is a
+    // bridge has no road-side station to search. Its endpoint/support design
+    // remains the structural profile's responsibility; the landing gate is
+    // for automatic bridge-to-terrain transitions inside a longer route.
+    if (
+      bridge.startSampleIndex === 0
+      && bridge.endSampleIndex === samples.length - 1
+    ) continue;
+    const paddedStart = paddedPortalSampleIndex(samples, bridge.startSampleIndex, -1, padding);
+    const paddedEnd = paddedPortalSampleIndex(samples, bridge.endSampleIndex, 1, padding);
+    const start = stablePortalSampleIndex(samples, paddedStart, -1, engineering);
+    const end = stablePortalSampleIndex(samples, paddedEnd, 1, engineering);
+    const startEdge = Math.min(start.index, Math.max(0, edgeStates.length - 1));
+    const endEdge = Math.max(startEdge + 1, Math.min(edgeStates.length, end.index));
+    for (let index = startEdge; index < endEdge; index += 1) {
+      edgeStates[index] = {
+        ...bridge,
+        mode: 'bridge',
+        reason: bridge.reason,
+        automatic: true
+      };
+    }
+  }
+  const landed = intervalsFromEdgeStates(edgeStates, samples);
+  for (const interval of landed) {
+    if (interval.mode !== 'bridge') continue;
+    if (
+      interval.startSampleIndex === 0
+      && interval.endSampleIndex === samples.length - 1
+    ) continue;
+    const startOutsideIndex = interval.startSampleIndex - 1;
+    const endOutsideIndex = interval.endSampleIndex + 1;
+    const start = bridgePortalLandingStatus(
+      samples[interval.startSampleIndex],
+      startOutsideIndex >= 0 ? samples[startOutsideIndex] : null,
+      engineering
+    );
+    const end = bridgePortalLandingStatus(
+      samples[interval.endSampleIndex],
+      endOutsideIndex < samples.length ? samples[endOutsideIndex] : null,
+      engineering
+    );
+    interval.portalValidation = { valid: start.valid && end.valid, start, end, padding };
+    if (!interval.portalValidation.valid) {
+      replaceConstructionInterval(interval, 'invalid', 'bridge-portal-has-no-stable-landing');
+    }
+  }
+  return mergeConstructionIntervals(landed);
+}
+
+function stabilizeConstructionIntervals(intervals, samples, segment, engineering) {
   const width = Math.max(0.5, finite(segment.crossSectionProfile?.width, 3));
-  const minimumBridgeLength = Math.max(6, width * 2);
+  const automaticMinimumBridgeLength = Math.max(6, width * 2);
+  const minimumBridgeLength = Number.isFinite(engineering.minimumBridgeRunLength)
+    ? engineering.minimumBridgeRunLength
+    : automaticMinimumBridgeLength;
   const bridgeHysteresisLength = Math.max(1.5, width * 0.75);
   const minimumRetainingLength = Math.max(4, width * 1.5);
   const minimumEarthworkRun = Math.max(2.5, width * 1.25);
@@ -437,6 +547,7 @@ function stabilizeConstructionIntervals(intervals, segment, engineering) {
     }
   }
   stable = mergeConstructionIntervals(stable);
+  stable = stabilizeBridgePortalLandings(stable, samples, segment, engineering);
 
   for (const interval of stable) {
     const length = intervalLength(interval);
@@ -475,6 +586,10 @@ function stabilizeConstructionIntervals(intervals, segment, engineering) {
       } else if (previousIsTerrain && !next) {
         replacement = previous.mode;
       } else if (nextIsTerrain && !previous) {
+        replacement = next.mode;
+      } else if (previousIsTerrain && next?.mode === 'bridge') {
+        replacement = previous.mode;
+      } else if (previous?.mode === 'bridge' && nextIsTerrain) {
         replacement = next.mode;
       }
       if (!replacement || replacement === interval.mode) continue;
@@ -537,7 +652,7 @@ function constructionIntervalsFor(segment, samples, engineering, overallMetrics)
     });
   }
 
-  return stabilizeConstructionIntervals(intervals, segment, engineering);
+  return stabilizeConstructionIntervals(intervals, samples, segment, engineering);
 }
 
 function representativeConstruction(intervals) {

@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { addTerrainSculptLayer, normalizeTerrainProperties } from '../app/worldgen.js';
+import { normalizeTerrainProperties, terrainBaseHeightAt } from '../app/worldgen.js';
+import { PATH_BRIDGE_PROFILES } from '../app/path-network/bridge-profiles.js';
 import { compilePathObjectRuntime } from '../app/path-network/runtime.js';
 
 const BRIDGE_FIXTURES = Object.freeze([
-  Object.freeze({ style: 'steel-girder', radius: 18, depth: 12, width: 6, vehicleClass: 'mixed', minimumBridgeRunLength: 7, expectedSpan: 30.680272108843532 }),
-  Object.freeze({ style: 'timber-trestle', radius: 7, depth: 7, width: 4.5, vehicleClass: 'mixed', minimumBridgeRunLength: 5, expectedSpan: 11.224489795918373 }),
-  Object.freeze({ style: 'stone-arch', radius: 10, depth: 8, width: 7, vehicleClass: 'mixed', minimumBridgeRunLength: 5, expectedSpan: 15.714285714285708 }),
-  Object.freeze({ style: 'masonry-causeway', radius: 8, depth: 6, width: 6, vehicleClass: 'mixed', minimumBridgeRunLength: 5, expectedSpan: 12.721088435374156 }),
-  Object.freeze({ style: 'rope-footbridge', radius: 11, depth: 9, width: 2.1, vehicleClass: 'pedestrian', minimumBridgeRunLength: 5, expectedSpan: 17.328767123287676 })
+  Object.freeze({ style: 'steel-girder', canyonWidth: 16, canyonDepth: 12, canyonFloorWidth: 4, width: 6, vehicleClass: 'mixed', minimumBridgeRunLength: 7 }),
+  Object.freeze({ style: 'timber-trestle', canyonWidth: 7, canyonDepth: 7, canyonFloorWidth: 2, width: 4.5, vehicleClass: 'mixed', minimumBridgeRunLength: 5 }),
+  Object.freeze({ style: 'stone-arch', canyonWidth: 10, canyonDepth: 8, canyonFloorWidth: 3, width: 7, vehicleClass: 'mixed', minimumBridgeRunLength: 5 }),
+  Object.freeze({ style: 'masonry-causeway', canyonWidth: 5.5, canyonDepth: 6, canyonFloorWidth: 1.5, width: 6, vehicleClass: 'mixed', minimumBridgeRunLength: 5 }),
+  Object.freeze({ style: 'rope-footbridge', canyonWidth: 11, canyonDepth: 9, canyonFloorWidth: 3, width: 2.1, vehicleClass: 'pedestrian', minimumBridgeRunLength: 5 })
 ]);
 
 const SURFACE_FIXTURES = Object.freeze([
@@ -19,7 +20,7 @@ const SURFACE_FIXTURES = Object.freeze([
   Object.freeze({ profileId: 'walked-footpath', code: 5, values: Object.freeze({ seed: 8128, puddleCoverage: 0.03, puddleScale: 2.2, puddleDepth: 0.01, wheelRutStrength: 0, wheelTrackGauge: 1.1, wheelRutWidth: 0.08, hoofPrintDensity: 0.03, hoofPrintScale: 0.18, bootPrintDensity: 0.82, bootPrintScale: 0.27, erosionStrength: 0.22, detailNormalStrength: 0.58, weatherResponse: 0.72 }) })
 ]);
 
-function evidenceTerrain({ radius, depth, suffix }) {
+function evidenceTerrain({ canyonWidth, canyonDepth, canyonFloorWidth, suffix }) {
   const transform = { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] };
   const terrain = {
     id: `evidence-terrain-${suffix}`,
@@ -28,29 +29,28 @@ function evidenceTerrain({ radius, depth, suffix }) {
     transform,
     properties: normalizeTerrainProperties({
       preset: 'plains',
-      height: 0,
+      height: 1,
       baseElevation: 0,
-      macroScale: 240,
-      detailScale: 48,
+      macroScale: 5000,
+      detailScale: 1000,
+      octaves: 1,
+      lacunarity: 2,
+      gain: 0.15,
       warpStrength: 0,
       ridgeStrength: 0,
       plateauStrength: 0,
       valleyStrength: 0,
-      canyonDepth: 0,
+      canyonDepth,
+      canyonWidth,
+      canyonFloorWidth,
+      canyonMeander: 0,
+      canyonDirection: 90,
       islandStrength: 0,
       resolution: 144,
       chunkSize: 32,
       seed: 8128
     }, transform)
   };
-  addTerrainSculptLayer(terrain, {
-    mode: 'lower',
-    x: 0,
-    z: 0,
-    radius,
-    strength: depth,
-    falloff: 0.78
-  });
   return terrain;
 }
 
@@ -112,8 +112,9 @@ function evidencePath({
 
 function compileEvidenceFixture({
   style = 'steel-girder',
-  radius = 18,
-  depth = 12,
+  canyonWidth = 16,
+  canyonDepth = 12,
+  canyonFloorWidth = 4,
   width = 6,
   vehicleClass = 'mixed',
   minimumBridgeRunLength = 7,
@@ -122,7 +123,7 @@ function compileEvidenceFixture({
 } = {}) {
   return compilePathObjectRuntime(
     evidencePath({ suffix, bridgeStyle: style, width, vehicleClass, minimumBridgeRunLength, surfaceDetailProfile }),
-    evidenceTerrain({ radius, depth, suffix }),
+    evidenceTerrain({ canyonWidth, canyonDepth, canyonFloorWidth, suffix }),
     { useStableCache: false }
   );
 }
@@ -131,21 +132,51 @@ test('every packaged-evidence bridge family fixture compiles a real compatible s
   for (const fixture of BRIDGE_FIXTURES) {
     const runtime = compileEvidenceFixture({ ...fixture, suffix: `bridge-${fixture.style}` });
     const selection = runtime.diagnostics.bridgeSelections[0];
+    const bridgeInterval = runtime.diagnostics.construction.find(interval => interval.mode === 'bridge');
     const structure = runtime.diagnostics.meshStats.structure;
+    const structureRoles = runtime.geometry.meshes.structure.roles || [];
 
     assert.equal(runtime.diagnostics.valid, true, `${fixture.style}: ${runtime.diagnostics.geometry.errors.join(' ')}`);
+    assert.equal(runtime.geometry.validation.valid, true, `${fixture.style} portal/landing geometry did not validate`);
+    assert.deepEqual(runtime.geometry.validation.errors, [], `${fixture.style} portal/landing geometry reported errors`);
     assert.equal(runtime.diagnostics.terrain.bridgeIntervalCount, 1, `${fixture.style} did not compile a bridge interval`);
     assert.equal(runtime.diagnostics.bridgeSelections.length, 1, `${fixture.style} did not resolve one bridge selection`);
     assert.equal(selection.bridgeStyle, fixture.style);
     assert.equal(selection.valid, true);
-    assert.ok(Math.abs(selection.span - fixture.expectedSpan) <= 0.001, `${fixture.style} span changed from the evidence target`);
+    assert.ok(selection.span >= fixture.minimumBridgeRunLength, `${fixture.style} span ${selection.span} did not meet the evidence minimum run`);
+    assert.ok(selection.span >= fixture.canyonFloorWidth * 2, `${fixture.style} span ${selection.span} did not cross the ravine floor`);
+    assert.ok(selection.span <= PATH_BRIDGE_PROFILES[fixture.style].maximumSpan, `${fixture.style} span ${selection.span} exceeded its production family limit`);
+    assert.ok(bridgeInterval.startDistance < 55 && bridgeInterval.endDistance > 55, `${fixture.style} did not cross the ravine centre`);
+    assert.ok(structureRoles.some(role => (
+      role.includes('portal-apron')
+      || role.includes('anchor-landing')
+      || role.includes('anchor-post')
+    )), `${fixture.style} produced no compiled portal/landing structure`);
     assert.ok(structure.vertexCount > 0, `${fixture.style} produced no structural vertices`);
     assert.ok(structure.indexCount > 0, `${fixture.style} produced no indexed structural geometry`);
   }
 });
 
+test('packaged evidence terrain is an elongated cross-route ravine, not a radial bowl', () => {
+  const terrain = evidenceTerrain({
+    canyonWidth: 16,
+    canyonDepth: 12,
+    canyonFloorWidth: 4,
+    suffix: 'ravine-shape'
+  });
+  const centre = terrainBaseHeightAt(terrain, 0, 0);
+  const alongNorth = terrainBaseHeightAt(terrain, 0, 38);
+  const alongSouth = terrainBaseHeightAt(terrain, 0, -38);
+  const westBank = terrainBaseHeightAt(terrain, -38, 0);
+  const eastBank = terrainBaseHeightAt(terrain, 38, 0);
+
+  assert.ok(centre < -10, 'ravine centre is not deeply excavated');
+  assert.ok(alongNorth < -10 && alongSouth < -10, 'ravine does not remain elongated along Z');
+  assert.ok(westBank > -2 && eastBank > -2, 'ravine banks do not recover across the X-aligned route');
+});
+
 test('the exact packaged native horizontal plus 2.4 metre vertical edit remains Civil-Assist-valid', () => {
-  const terrain = evidenceTerrain({ radius: 18, depth: 12, suffix: 'native-edit' });
+  const terrain = evidenceTerrain({ canyonWidth: 16, canyonDepth: 12, canyonFloorWidth: 4, suffix: 'native-edit' });
   const path = evidencePath({
     suffix: 'native-edit',
     bridgeStyle: 'steel-girder',

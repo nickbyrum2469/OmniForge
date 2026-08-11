@@ -41,13 +41,18 @@ test('terrain-conforming corridor remains dense and renderable independent of te
   assert.ok(Math.abs(firstWidth - 3) < 0.05);
 });
 
-test('renderer owns an engineering corridor pass instead of relying only on terrain vertex blend', () => {
+test('renderer excludes the legacy corridor authority and reports Path Network v2 worker telemetry', () => {
   const renderer = fs.readFileSync(path.join(ROOT, 'app', 'renderer.js'), 'utf8');
   assert.match(renderer, /pathSurfaceFor\(pathObject,scene\)/);
   assert.match(renderer, /renderPathSurfacePass\(frame\)/);
-  assert.match(renderer, /buildTerrainConformingPathSurface/);
+  assert.doesNotMatch(renderer, /buildTerrainConformingPathSurface/);
+  assert.match(renderer, /runtime\.geometry\.guides/);
+  assert.match(renderer, /runtime\.geometry\.meshes/);
   assert.match(renderer, /gl\.polygonOffset\(-2,-2\)/);
-  assert.match(renderer, /terrain-path-grid-undersampled/);
+  assert.match(renderer, /pathNetworkTerrainSamplingDiagnostics/);
+  assert.match(renderer, /path-network-v2-worker-result/);
+  assert.doesNotMatch(renderer, /terrainPathSamplingDiagnostics\(terrain,paths\)/);
+  assert.doesNotMatch(renderer, /terrain-path-grid-undersampled/);
   assert.match(renderer, /pathSurfaceCount:this\.pathSurfaces\.size/);
   assert.match(renderer, /pathwayCorridors:/);
 });
