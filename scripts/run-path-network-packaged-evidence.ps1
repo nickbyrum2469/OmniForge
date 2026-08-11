@@ -618,6 +618,9 @@ try {
   if ([double]$horizontalTelemetry.horizontalDelta -lt 0.01) { throw 'The packaged horizontal spline-node drag did not move its authored node.' }
   $horizontalPosition = @($horizontalTelemetry.after.position | ForEach-Object { [double]$_ })
   if ($horizontalPosition.Count -ne 3) { throw 'The packaged horizontal spline-node drag did not report one finite 3D node position.' }
+  $horizontalX = [double]$horizontalPosition[0]
+  $horizontalY = [double]$horizontalPosition[1]
+  $horizontalZ = [double]$horizontalPosition[2]
   $fixtureExpectation.minimumNetworkRevision = [int]$nativeHorizontalRecord.response.fixtureTelemetry.networkRevision
   Assert-ExactPathRenderRevision $nativeHorizontalRecord $path.id ([int]$fixtureExpectation.minimumNetworkRevision) | Out-Null
   $interactionRecords.Add([ordered]@{
@@ -627,8 +630,8 @@ try {
   })
 
   $nativeVerticalRecord = Request-Capture $captureDir '08b-native-vertical-moved' @{
-    inputCamera=(Get-LookCamera ([double[]]@($horizontalPosition[0],$horizontalPosition[1]+22,$horizontalPosition[2]+30)) ([double[]]$horizontalPosition) 68)
-    camera=(Get-LookCamera ([double[]]@($horizontalPosition[0]-10,$horizontalPosition[1]+8,$horizontalPosition[2]+18)) ([double[]]@($horizontalPosition[0]+14,1.2,0)) 58)
+    inputCamera=(Get-LookCamera ([double[]]@($horizontalX,($horizontalY+22),($horizontalZ+30))) ([double[]]$horizontalPosition) 68)
+    camera=(Get-LookCamera ([double[]]@(($horizontalX-10),($horizontalY+8),($horizontalZ+18))) ([double[]]@(($horizontalX+14),1.2,0)) 58)
     hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     # Sixteen native pixels maps to +2.4 m in the viewport's vertical gizmo.
     # The exact evidence fixture remains Civil-Assist-valid at this height while
@@ -721,9 +724,9 @@ try {
     $wideHeight = [Math]::Max(22,[double]$fixture.canyonDepth * 2.2)
     $wideDistance = [Math]::Max(26,[double]$fixture.canyonWidth * 1.8)
     foreach ($familyView in @(
-      @{suffix='landing-close';camera=(Get-LookCamera ([double[]]@($landingX-9,3.6,8)) ([double[]]@($landingX,0,0)) 54)},
-      @{suffix='side';camera=(Get-LookCamera ([double[]]@(0,$sideHeight,$fixture.canyonWidth+11)) ([double[]]@(0,-2,0)) 60)},
-      @{suffix='underside';camera=(Get-LookCamera ([double[]]@(0,-([double]$fixture.canyonDepth*.52),$fixture.canyonWidth+6)) ([double[]]@(0,-([double]$fixture.canyonDepth*.36),0)) 64)},
+      @{suffix='landing-close';camera=(Get-LookCamera ([double[]]@(($landingX-9),3.6,8)) ([double[]]@($landingX,0,0)) 54)},
+      @{suffix='side';camera=(Get-LookCamera ([double[]]@(0,$sideHeight,([double]$fixture.canyonWidth+11))) ([double[]]@(0,-2,0)) 60)},
+      @{suffix='underside';camera=(Get-LookCamera ([double[]]@(0,-([double]$fixture.canyonDepth*.52),([double]$fixture.canyonWidth+6))) ([double[]]@(0,-([double]$fixture.canyonDepth*.36),0)) 64)},
       @{suffix='player-level';camera=(Get-LookCamera ([double[]]@(-([double]$fixture.canyonWidth+18),1.75,1)) ([double[]]@(0,0,0)) 69)},
       @{suffix='wide-elevated';camera=(Get-LookCamera ([double[]]@(0,$wideHeight,$wideDistance)) ([double[]]@(0,-1.5,0)) 58)}
     )) {

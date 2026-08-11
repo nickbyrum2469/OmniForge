@@ -81,6 +81,9 @@ test('paired canvas and full-window evidence retain one camera and editor state 
 });
 
 test('packaged evidence renders every bridge family at a compatible span and width', () => {
+  assert.match(script, /\$horizontalX = \[double\]\$horizontalPosition\[0\]/);
+  assert.match(script, /\(\$horizontalX-10\)/);
+  assert.doesNotMatch(script, /\$horizontalPosition\[0\]-10/);
   for (const style of [
     'timber-trestle',
     'stone-arch',
