@@ -282,9 +282,12 @@ function Get-BoundedProcessTree([int]$RootProcessId,[int]$RuntimeProcessId,[int]
         $next.Add([ordered]@{processId=[int]$child.ProcessId;depth=([int]$cursor.depth+1)})
       }
     }
-    $frontier = @($next)
+    # Windows PowerShell 5.1 can throw "Argument types do not match" when its
+    # array subexpression binder wraps a generic List[object]. Materialize the
+    # next breadth-first frontier explicitly for consistent packaged evidence.
+    $frontier = $next.ToArray()
   }
-  return @($tree)
+  return $tree.ToArray()
 }
 
 function Get-ProcessResourceSample($DesktopProcess,[string]$RuntimeRoot,[string]$Stage) {

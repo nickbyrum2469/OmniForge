@@ -169,6 +169,9 @@ test('two-minute gate exercises real packaged renderer actions and restores its 
 test('packaged evidence records a bounded Electron process tree with renderer and GPU resources', () => {
   assert.match(script, /function Get-ProcessResourceSample/);
   assert.match(script, /function Get-BoundedProcessTree/);
+  assert.match(script, /\$frontier = \$next\.ToArray\(\)/);
+  assert.match(script, /return \$tree\.ToArray\(\)/);
+  assert.doesNotMatch(script, /\$frontier = @\(\$next\)/);
   assert.match(script, /Get-CimInstance -ClassName Win32_Process/);
   assert.match(script, /MaximumDepth=8/);
   assert.match(script, /MaximumProcesses=64/);
