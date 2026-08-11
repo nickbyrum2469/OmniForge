@@ -50,6 +50,8 @@ test('packaged path evidence captures every required bridge inspection angle', (
 });
 
 test('key packaged stages require native full-window UI proof alongside viewport PNGs', () => {
+  assert.match(script, /\$Options\.ContainsKey\('fullWindowCapture'\)/);
+  assert.doesNotMatch(script, /if \(\$Options\.fullWindowCapture\)/);
   assert.match(script, /\$expectedFullWindowFile = "\$Id-window\.png"/);
   assert.match(script, /\[string\]\$response\.fullWindowFile/);
   assert.match(script, /reported missing full-window proof/);

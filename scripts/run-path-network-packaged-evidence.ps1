@@ -185,7 +185,7 @@ function Request-Capture([string]$CaptureDir,[string]$Id,[hashtable]$Options,[in
     if (-not $response.ok) { throw "Packaged capture $Id failed: $($response.error)" }
     if (-not (Test-Path -LiteralPath $pngFile -PathType Leaf)) { throw "Packaged capture $Id returned no PNG." }
     $fullWindowFile = $null
-    if ($Options.fullWindowCapture) {
+    if ($Options.ContainsKey('fullWindowCapture') -and [bool]$Options['fullWindowCapture']) {
       $expectedFullWindowFile = "$Id-window.png"
       $fullWindowFile = [string]$response.fullWindowFile
       if ($fullWindowFile -ne $expectedFullWindowFile) {
