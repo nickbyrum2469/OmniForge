@@ -44,6 +44,39 @@ function uniqueId(requested, used, fallback) {
   return result;
 }
 
+function assertRawV2IdentityIntegrity(input) {
+  if (Number(input?.schemaVersion) !== PATH_NETWORK_SCHEMA_VERSION) return;
+  for (const [label, collection] of [
+    ['node', input.nodes],
+    ['segment', input.segments]
+  ]) {
+    if (!Array.isArray(collection)) continue;
+    const used = new Set();
+    for (const item of collection) {
+      const rawId = item?.id === undefined || item?.id === null ? '' : String(item.id).trim();
+      if (!rawId) {
+        throw new Error(`Stored Path Network v2 contains a ${label} without an id; stable identity cannot be assigned implicitly.`);
+      }
+      const id = cleanId(rawId);
+      if (id !== rawId) {
+        throw new Error(`Stored Path Network v2 ${label} id ${rawId} is not canonical; use ${id} before it becomes authoritative.`);
+      }
+      if (used.has(id)) {
+        throw new Error(`Stored Path Network v2 contains duplicate ${label} id ${id}; identity cannot be repaired implicitly.`);
+      }
+      used.add(id);
+      if (label === 'segment' && item?.curveControl !== undefined && item.curveControl !== null) {
+        for (const handleName of ['fromHandle', 'toHandle']) {
+          const handle = item.curveControl?.[handleName];
+          if (!Array.isArray(handle) || handle.length < 3 || handle.slice(0, 3).some(value => !Number.isFinite(Number(value)))) {
+            throw new Error(`Stored Path Network v2 segment ${id} contains an invalid ${handleName} curve control.`);
+          }
+        }
+      }
+    }
+  }
+}
+
 function defaultCrossSection(source = {}, fallback = {}) {
   return normalizePathCrossSection(source, fallback);
 }
@@ -93,6 +126,10 @@ function defaultEngineering(source = {}) {
 }
 
 export function normalizePathNetwork(input = {}, options = {}) {
+  // Legacy migration deliberately assigns missing/colliding identifiers once.
+  // A persisted schema-v2 graph is already authoritative: silently renaming a
+  // duplicate here would detach segment references and hide data corruption.
+  assertRawV2IdentityIntegrity(input);
   const pathId = cleanId(options.pathId || input.id || 'path');
   const sourceNodes = Array.isArray(input.nodes) ? input.nodes : [];
   const usedNodeIds = new Set();
@@ -119,6 +156,14 @@ export function normalizePathNetwork(input = {}, options = {}) {
     fromNode: cleanId(source?.fromNode),
     toNode: cleanId(source?.toNode),
     curveType: source?.curveType === 'linear' ? 'linear' : 'hermite',
+    curveControl: source?.curveControl
+      && Array.isArray(source.curveControl.fromHandle)
+      && Array.isArray(source.curveControl.toHandle)
+      ? {
+          fromHandle: vec3(source.curveControl.fromHandle),
+          toHandle: vec3(source.curveControl.toHandle)
+        }
+      : null,
     constructionMode: PATH_CONSTRUCTION_MODES.includes(source?.constructionMode) ? source.constructionMode : 'auto',
     constructionLocked: source?.constructionLocked === true,
     crossSectionProfile: defaultCrossSection(
@@ -170,7 +215,19 @@ export function normalizePathNetwork(input = {}, options = {}) {
 }
 
 export function validatePathNetwork(input = {}) {
-  const network = normalizePathNetwork(input, { pathId: input.id });
+  let network;
+  try {
+    network = normalizePathNetwork(input, { pathId: input.id });
+  } catch (error) {
+    return {
+      valid: false,
+      errors: [error.message],
+      warnings: [],
+      nodeCount: Array.isArray(input?.nodes) ? input.nodes.length : 0,
+      segmentCount: Array.isArray(input?.segments) ? input.segments.length : 0,
+      junctionCount: 0
+    };
+  }
   const errors = [];
   const warnings = [];
   if (network.nodes.length < 2) errors.push('A path network requires at least two nodes.');
@@ -178,6 +235,7 @@ export function validatePathNetwork(input = {}) {
 
   const nodeIds = new Set(network.nodes.map(node => node.id));
   const segmentIds = new Set();
+  const connectedPairs = new Set();
   const degree = new Map(network.nodes.map(node => [node.id, 0]));
   for (const node of network.nodes) {
     if (!node.position.every(Number.isFinite)) errors.push(`Node ${node.id} contains a non-finite position.`);
@@ -188,11 +246,36 @@ export function validatePathNetwork(input = {}) {
     if (!nodeIds.has(segment.fromNode)) errors.push(`Segment ${segment.id} references missing start node ${segment.fromNode}.`);
     if (!nodeIds.has(segment.toNode)) errors.push(`Segment ${segment.id} references missing end node ${segment.toNode}.`);
     if (segment.fromNode === segment.toNode) errors.push(`Segment ${segment.id} cannot connect a node to itself.`);
+    const pair = [segment.fromNode, segment.toNode].sort().join('\u0000');
+    if (connectedPairs.has(pair)) {
+      errors.push(`Segment ${segment.id} duplicates an existing connection between ${segment.fromNode} and ${segment.toNode}.`);
+    }
+    connectedPairs.add(pair);
     if (nodeIds.has(segment.fromNode)) degree.set(segment.fromNode, degree.get(segment.fromNode) + 1);
     if (nodeIds.has(segment.toNode)) degree.set(segment.toNode, degree.get(segment.toNode) + 1);
   }
   for (const [nodeId, count] of degree) {
     if (count === 0) warnings.push(`Node ${nodeId} is not connected to a segment.`);
+  }
+  if (network.nodes.length) {
+    const adjacency = new Map(network.nodes.map(node => [node.id, []]));
+    for (const segment of network.segments) {
+      adjacency.get(segment.fromNode)?.push(segment.toNode);
+      adjacency.get(segment.toNode)?.push(segment.fromNode);
+    }
+    const visited = new Set();
+    const pending = [network.nodes[0].id];
+    while (pending.length) {
+      const nodeId = pending.pop();
+      if (visited.has(nodeId)) continue;
+      visited.add(nodeId);
+      for (const neighbor of adjacency.get(nodeId) || []) {
+        if (!visited.has(neighbor)) pending.push(neighbor);
+      }
+    }
+    if (visited.size !== network.nodes.length) {
+      warnings.push(`A Path Network contains ${network.nodes.length - visited.size} node(s) outside the primary graph.`);
+    }
   }
   return {
     valid: errors.length === 0,

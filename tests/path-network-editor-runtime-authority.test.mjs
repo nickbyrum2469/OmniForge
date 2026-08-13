@@ -86,17 +86,16 @@ test('a failed exact rebuild reports the compiler failure without accepting stal
   assert.match(result.message, /correct the path error and retry/i);
 });
 
-test('right-click insertion checks exact compiled authority before terrain picking or mutation', () => {
+test('right-click insertion checks exact compiled authority before screen-space spline picking or mutation', () => {
   const source = fs.readFileSync(path.join(ROOT, 'app', 'v011.js'), 'utf8');
-  const start = source.indexOf("canvas.addEventListener('contextmenu'");
+  const start = source.indexOf('const insertPathNodeFromViewport');
   const end = source.indexOf("document.addEventListener('pointerlockchange'", start);
-  assert.ok(start >= 0 && end > start, 'context-menu edit handler was not found');
+  assert.ok(start >= 0 && end > start, 'right-click edit handler was not found');
   const handler = source.slice(start, end);
   const guard = handler.indexOf('const authority = compiledPathEditAuthority(path)');
-  const hitTest = handler.indexOf('terrainPointFromScreen');
-  const nearest = handler.indexOf('nearestCompiledStation(authority.runtime.compiled, point)');
+  const nearest = handler.indexOf('nearestCompiledScreenStation(authority.runtime.compiled');
   const transaction = handler.indexOf('await transactPathNetwork');
-  assert.ok(guard >= 0 && guard < hitTest && hitTest < nearest && nearest < transaction);
+  assert.ok(guard >= 0 && guard < nearest && nearest < transaction);
   assert.match(handler, /if \(!authority\.ready\) return bridge\(\)\?\.showToast\?\.\(authority\.message, 'error'\)/);
-  assert.doesNotMatch(handler, /nearestCompiledStation\(activePathRuntime/);
+  assert.doesNotMatch(handler, /terrainPointFromScreen/);
 });

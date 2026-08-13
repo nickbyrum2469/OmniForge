@@ -132,12 +132,14 @@ test('renderer and editor expose Pathway Studio authority and telemetry',()=>{
   assert.match(v011,/selectedPathNodeId/);
   assert.match(v011,/type: 'move-node'/);
   assert.match(v011,/type: 'insert-node'/);
-  assert.match(v011,/nearestCompiledStation/);
+  assert.match(v011,/nearestCompiledScreenStation/);
+  assert.doesNotMatch(v011.slice(v011.indexOf('const insertPathNodeFromViewport'),v011.indexOf("document.addEventListener('pointerlockchange'")),/terrainPointFromScreen/);
   assert.doesNotMatch(v011,/function nearestNetworkSegment/);
-  assert.match(v011,/createPathNodeDragPreview/);
+  assert.match(v011,/createPathNodeGroupPreview/);
   assert.match(v011,/scheduleNodeDragPreview/);
-  assert.match(v011,/overlay\.addEventListener\('pointerdown', beginNodeDrag, true\)/);
-  assert.match(v011,/event\.target\?\.closest\?\.\('\[data-spline-node\]'\)/);
+  assert.match(v011,/overlay\.addEventListener\('pointerdown', event =>/);
+  assert.match(v011,/event\.target\?\.closest\?\.\('\[data-spline-node-id\]:not\(\[data-spline-handle\]\)'\)/);
+  assert.match(v011,/data-spline-node-id/);
   assert.doesNotMatch(v011,/handle\.addEventListener\('pointerdown', beginNodeDrag\)/);
   assert.doesNotMatch(v011,/setPathPreview\(draggingNode\.previewPath\)/);
   assert.match(v011,/path-node-drag-preview/);
@@ -151,7 +153,8 @@ test('renderer and editor expose Pathway Studio authority and telemetry',()=>{
   assert.match(v011,/routeRestrictionsFromScene/);
   assert.match(v011,/Protected scene footprints/);
   assert.match(v011,/Grade cost/);
-  assert.match(v011,/v012ShowRouteCosts/);
+  assert.match(v011,/v012DiagnosticOverlay/);
+  assert.match(v011,/setPathDiagnosticMode/);
   assert.match(v011,/data-v012-runtime-status/);
   assert.match(v011,/Blocked — route is not gameplay-safe/);
   assert.match(renderer,/buildPathCostGuideData/);

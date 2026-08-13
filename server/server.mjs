@@ -449,7 +449,11 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const { state, result } = mutateState(state => {
       const object = createSceneObject(body.type, body);
-      activeScene(state).objects.push(object);
+      const scene = activeScene(state);
+      if (scene.objects.some(item => item.id === object.id)) {
+        throw new Error(`Scene object id ${object.id} already exists.`);
+      }
+      scene.objects.push(object);
       state.selection.objectId = object.id;
       state.editor.lastFocusObjectId = object.id;
       addActivity(state, 'object', `Created ${object.type}: ${object.name}`);
@@ -499,6 +503,12 @@ async function handleApi(req, res, url) {
       const object = findObject(state, body.objectId);
       if (!object) throw new Error('Object not found.');
       if (isCelestialProxy(object)) throw new Error('Celestial proxies cannot be duplicated. Configure additional celestial bodies through Celestial Studio.');
+      if (object.type === 'path' && object.properties?.pathNetwork?.schemaVersion === 2) {
+        throw new Error(
+          `Path Network v2 object ${object.id} cannot use generic scene cloning because that would duplicate internal node and segment authority. `
+          + `Use POST /api/v012/path/${encodeURIComponent(object.id)}/duplicate.`
+        );
+      }
       const clone = structuredClone(object);
       clone.id = `${object.type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
       clone.name = `${object.name} Copy`;

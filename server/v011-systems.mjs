@@ -422,8 +422,12 @@ export function applyLegacyPathCompatibilityMutation(pathObject, terrain, comman
   } else if (command === 'reverse') {
     result = applyPathNetworkTransaction(current, {
       id: 'legacy-v011-reverse-path',
-      label: 'Reverse Path Network segment directions',
-      operations: current.segments.map(segment => ({ type: 'reverse-segment', segmentId: segment.id }))
+      label: 'Reverse Path Network direction',
+      // A whole-network reversal must also swap each authored node's incoming
+      // and outgoing tangent authority. Reversing endpoints independently
+      // reshaped manual Hermite curves even though the user only requested a
+      // direction change.
+      operations: [{ type: 'reverse-network' }]
     });
   } else if (command === 'split') {
     throw legacyCompatibilityError('Legacy split creates a second points-based path object and is disabled. Insert/connect stable nodes or use the v2 merge route instead.');

@@ -293,7 +293,16 @@ function applyVisualTestCamera(requestedCamera){
 }
 
 function visualTestNeedsInputCamera(options={}){
-  return Array.isArray(options.nativeInputActions)&&options.nativeInputActions.some(action=>['path-node-drag','path-undo'].includes(String(action?.type||'')));
+  const cameraBoundActions=new Set([
+    'path-node-drag',
+    'path-node-group-drag',
+    'path-node-toggle-selection',
+    'path-node-insert',
+    'path-handle-drag',
+    'path-network-split',
+    'path-undo'
+  ]);
+  return Array.isArray(options.nativeInputActions)&&options.nativeInputActions.some(action=>cameraBoundActions.has(String(action?.type||'')));
 }
 
 let visualCaptureHoldSequence=0;

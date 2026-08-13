@@ -27,8 +27,10 @@ import {
 } from '../app/path-network/model.js';
 import {
   applyPathNetworkTransaction,
+  duplicatePathNetwork,
   mergePathNetworksAtSegment,
-  replacePathNetwork
+  replacePathNetwork,
+  splitPathNetworkAtNode
 } from '../app/path-network/transactions.js';
 import {
   compilePathNetwork,
@@ -91,6 +93,39 @@ function requirePath(state, pathId) {
   return path;
 }
 
+function uniquePathObjectId(scene, requested, fallback) {
+  const base = String(requested || fallback || 'path')
+    .replace(/[^a-zA-Z0-9:_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120) || 'path';
+  const used = new Set((scene.objects || []).map(object => object.id));
+  if (requested && used.has(base)) throw new Error(`Scene object ${base} already exists.`);
+  let result = base;
+  let suffix = 2;
+  while (used.has(result)) result = `${base}-${suffix++}`;
+  return result;
+}
+
+function clonedPathObject(source, objectId, name, network) {
+  const clone = structuredClone(source);
+  clone.id = objectId;
+  clone.name = String(name || `${source.name} Copy`).slice(0, 120);
+  clone.parentId = null;
+  clone.transform = {
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1]
+  };
+  clone.properties = {
+    ...(clone.properties || {}),
+    pathNetwork: clonePathNetwork(network),
+    pathNetworkSchemaVersion: network.schemaVersion,
+    pathNetworkUndo: [],
+    pathNetworkRedo: []
+  };
+  return clone;
+}
+
 function authoritativePathNetwork(path) {
   return attachPathNetwork(path).network;
 }
@@ -122,13 +157,40 @@ function recordPathEdit(path, network, label) {
   path.properties.pathNetworkRedo = [];
 }
 
+function preflightPathHistoryObjects(scene, entry) {
+  const removeObjectIds = Array.isArray(entry?.removeObjectIds) ? entry.removeObjectIds : [];
+  const removeIds = new Set();
+  for (const value of removeObjectIds) {
+    const id = String(value || '');
+    if (!id) throw new Error('Path history contains a removal target without a stable scene id.');
+    if (removeIds.has(id)) throw new Error(`Path history contains duplicate removal target id ${id}.`);
+    removeIds.add(id);
+    const matches = scene.objects.filter(item => item.id === id);
+    if (matches.length !== 1) {
+      const reason = matches.length === 0 ? 'is missing' : `is ambiguous (${matches.length} scene objects use that id)`;
+      throw new Error(`Cannot remove Path Network history object ${id} because it ${reason}. The history entry was not consumed.`);
+    }
+  }
+  const restoreObjects = Array.isArray(entry?.restoreObjects) ? entry.restoreObjects : [];
+  const restoreIds = new Set();
+  for (const object of restoreObjects) {
+    const id = String(object?.id || '');
+    if (!id) throw new Error('Path history contains a restore object without a stable scene id.');
+    if (restoreIds.has(id)) throw new Error(`Path history contains duplicate restore object id ${id}.`);
+    restoreIds.add(id);
+    if (scene.objects.some(item => item.id === id)) {
+      throw new Error(`Cannot restore Path Network history object ${id} because that scene id is already occupied.`);
+    }
+  }
+}
+
 function applyPathHistoryObjects(scene, entry) {
+  preflightPathHistoryObjects(scene, entry);
   const removeIds = new Set(entry?.removeObjectIds || []);
   const removedObjects = scene.objects.filter(object => removeIds.has(object.id)).map(object => structuredClone(object));
   if (removeIds.size) scene.objects = scene.objects.filter(object => !removeIds.has(object.id));
   const restoredObjects = [];
   for (const object of entry?.restoreObjects || []) {
-    if (scene.objects.some(item => item.id === object.id)) continue;
     const restored = structuredClone(object);
     scene.objects.push(restored);
     restoredObjects.push(restored);
@@ -243,6 +305,96 @@ export async function handleV011Request(req, res) {
       return true;
     }
 
+    ids = match(url.pathname, /^\/api\/v012\/path\/([^/]+)\/duplicate$/);
+    if (ids && req.method === 'POST') {
+      const input = await readJsonBody(req);
+      const result = mutateState(state => {
+        ensureWorldFoundationState(state);
+        const scene = activeScene(state);
+        const source = requirePath(state, ids[0]);
+        const current = authoritativePathNetwork(source);
+        requireExpectedRevision(current, input.expectedRevision);
+        const objectId = uniquePathObjectId(scene, input.newPathId, `${source.id}-copy`);
+        const duplicate = duplicatePathNetwork(current, {
+          newNetworkId: objectId,
+          offset: input.offset
+        });
+        const clone = clonedPathObject(source, objectId, input.name || `${source.name} Copy`, duplicate.network);
+        pushPathHistory(source, 'pathNetworkUndo', current, input.label || 'Duplicate path network', {
+          removeObjectIds: [clone.id]
+        });
+        source.properties.pathNetworkRedo = [];
+        scene.objects.push(clone);
+        // The source owns the creation-history entry. Keeping it selected
+        // makes the next Undo remove the duplicate in one obvious action.
+        state.selection.objectId = source.id;
+        addActivity(state, 'path-network', `Duplicated ${source.name} as an independent Path Network.`, {
+          sourcePathId: source.id,
+          pathId: clone.id,
+          revision: clone.properties.pathNetwork.revision
+        });
+        return {
+          path: clone,
+          network: duplicate.network,
+          validation: duplicate.validation,
+          sourcePathId: source.id,
+          undoPathId: source.id,
+          undoDepth: source.properties.pathNetworkUndo.length,
+          redoDepth: 0
+        };
+      });
+      json(res, 201, { ...result.result, state: result.state });
+      return true;
+    }
+
+    ids = match(url.pathname, /^\/api\/v012\/path\/([^/]+)\/split$/);
+    if (ids && req.method === 'POST') {
+      const input = await readJsonBody(req);
+      const result = mutateState(state => {
+        ensureWorldFoundationState(state);
+        const scene = activeScene(state);
+        const path = requirePath(state, ids[0]);
+        const current = authoritativePathNetwork(path);
+        requireExpectedRevision(current, input.expectedRevision);
+        const objectId = uniquePathObjectId(scene, input.newPathId, `${path.id}-split`);
+        const split = splitPathNetworkAtNode(current, input.nodeId, {
+          newNetworkId: objectId,
+          extractedSegmentId: input.extractedSegmentId
+        });
+        const extracted = clonedPathObject(path, objectId, input.name || `${path.name} Split`, split.extractedNetwork);
+        pushPathHistory(path, 'pathNetworkUndo', current, input.label || 'Split path network', {
+          removeObjectIds: [extracted.id]
+        });
+        path.properties.pathNetworkRedo = [];
+        path.properties.pathNetwork = split.retainedNetwork;
+        path.properties.pathNetworkSchemaVersion = split.retainedNetwork.schemaVersion;
+        scene.objects.push(extracted);
+        // Split history is stored on the retained path, so keep that object
+        // selected for immediate Undo/Redo rather than selecting a fresh path
+        // with an intentionally empty history stack.
+        state.selection.objectId = path.id;
+        addActivity(state, 'path-network', `Split ${path.name} into two independent Path Networks.`, {
+          pathId: path.id,
+          extractedPathId: extracted.id,
+          splitNodeId: split.splitNodeId,
+          revision: split.retainedNetwork.revision
+        });
+        return {
+          path,
+          network: split.retainedNetwork,
+          extractedPath: extracted,
+          extractedNetwork: split.extractedNetwork,
+          splitNodeId: split.splitNodeId,
+          validation: split.retainedValidation,
+          extractedValidation: split.extractedValidation,
+          undoDepth: path.properties.pathNetworkUndo.length,
+          redoDepth: 0
+        };
+      });
+      json(res, 201, { ...result.result, state: result.state });
+      return true;
+    }
+
     ids = match(url.pathname, /^\/api\/v012\/path\/([^/]+)\/merge\/([^/]+)$/);
     if (ids && req.method === 'POST') {
       const input = await readJsonBody(req);
@@ -276,11 +428,25 @@ export async function handleV011Request(req, res) {
           .filter(item => item.nearest)
           .sort((a, b) => a.nearest.distance - b.nearest.distance)[0];
         if (!nearest) throw new Error('No open branch endpoint can be joined to the target path.');
+        const selectedSegment = current.segments.find(segment => segment.id === nearest.nearest.segmentId);
+        const authoredWidth = Number(selectedSegment?.crossSectionProfile?.width || current.defaults?.crossSectionProfile?.width || 3);
+        const requestedMaximum = Number(input.maxJoinDistance);
+        const maxJoinDistance = Number.isFinite(requestedMaximum)
+          ? Math.max(0.1, Math.min(requestedMaximum, 10000))
+          : Math.max(25, authoredWidth * 8);
+        if (nearest.nearest.distance > maxJoinDistance) {
+          throw new Error(
+            `Nearest branch join is ${nearest.nearest.distance.toFixed(2)} m away from target segment ${nearest.nearest.segmentId}, `
+            + `exceeding the ${maxJoinDistance.toFixed(2)} m safety limit. Move the branch closer or provide an intentional maxJoinDistance.`
+          );
+        }
         const naturalHeight = baseHeightAt(nearest.nearest.position[0], nearest.nearest.position[2]);
         const heightOffset = nearest.nearest.position[1] - naturalHeight;
         const merged = mergePathNetworksAtSegment(current, sourceNetwork, {
           targetSegmentId: nearest.nearest.segmentId,
           junctionPosition: nearest.nearest.position,
+          curveT: nearest.nearest.curveT,
+          curveAuthority: compiledTarget.segments.find(segment => segment.id === nearest.nearest.segmentId)?.curveAuthority,
           sourceNodeId: nearest.node.id,
           heightMode: Math.abs(heightOffset) <= 0.02 ? 'terrain' : 'offset',
           heightOffset
@@ -305,6 +471,11 @@ export async function handleV011Request(req, res) {
           validation: merged.validation,
           removedPathId: source.id,
           junctionNodeId: merged.junctionNodeId,
+          sourceEndpointId: nearest.node.id,
+          targetSegmentId: nearest.nearest.segmentId,
+          curveT: nearest.nearest.curveT,
+          distance: nearest.nearest.distance,
+          maxJoinDistance,
           importedNodeCount: merged.importedNodeCount,
           importedSegmentCount: merged.importedSegmentCount,
           undoDepth: target.properties.pathNetworkUndo.length,
@@ -324,9 +495,11 @@ export async function handleV011Request(req, res) {
         const current = authoritativePathNetwork(path);
         requireExpectedRevision(current, input.expectedRevision);
         const history = Array.isArray(path.properties.pathNetworkUndo) ? path.properties.pathNetworkUndo : [];
-        const entry = history.pop();
+        const entry = history.at(-1);
         if (!entry?.network) throw new Error('No Path Network edit is available to undo.');
         const scene = activeScene(state);
+        preflightPathHistoryObjects(scene, entry);
+        history.pop();
         const inverseObjects = applyPathHistoryObjects(scene, entry);
         pushPathHistory(path, 'pathNetworkRedo', current, entry.label, inverseObjects);
         const restored = replacePathNetwork(current, {
@@ -363,9 +536,11 @@ export async function handleV011Request(req, res) {
         const current = authoritativePathNetwork(path);
         requireExpectedRevision(current, input.expectedRevision);
         const history = Array.isArray(path.properties.pathNetworkRedo) ? path.properties.pathNetworkRedo : [];
-        const entry = history.pop();
+        const entry = history.at(-1);
         if (!entry?.network) throw new Error('No Path Network edit is available to redo.');
         const scene = activeScene(state);
+        preflightPathHistoryObjects(scene, entry);
+        history.pop();
         const inverseObjects = applyPathHistoryObjects(scene, entry);
         pushPathHistory(path, 'pathNetworkUndo', current, entry.label, inverseObjects);
         const restored = replacePathNetwork(current, {

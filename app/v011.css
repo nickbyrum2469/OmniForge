@@ -28,6 +28,11 @@
 .v011-note { color:#8e9db5; font-size:10px; line-height:1.5; margin:9px 0 0; }
 .v011-spline-editing #viewport { cursor:crosshair; }
 .spline-node-overlay { position:absolute; inset:0; z-index:5; pointer-events:none; overflow:hidden; }
+.spline-drag-preview { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+.spline-drag-preview-ribbon { fill:rgba(70,204,255,.24); stroke:rgba(192,244,255,.92); stroke-width:1.35; vector-effect:non-scaling-stroke; filter:drop-shadow(0 1px 3px rgba(0,0,0,.85)); }
+.spline-drag-preview-center { fill:none; stroke:#ffffff; stroke-width:1.25; stroke-dasharray:6 4; vector-effect:non-scaling-stroke; }
+.spline-handle-connectors { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+.spline-handle-connectors line { stroke:rgba(221,190,255,.88); stroke-width:1.5; stroke-dasharray:5 4; vector-effect:non-scaling-stroke; filter:drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
 .spline-node-handle { position:absolute; left:0; top:0; width:24px; height:24px; margin:-12px 0 0 -12px; border-radius:50%; border:2px solid #f4ddff; background:#7f4bd3; color:white; font:700 9px ui-monospace, monospace; box-shadow:0 0 0 3px rgba(82,46,136,.36), 0 4px 14px rgba(0,0,0,.5); pointer-events:auto; cursor:grab; transform-origin:center; }
 .spline-node-handle:hover { background:#a864ff; filter:brightness(1.16); box-shadow:0 0 0 5px rgba(168,100,255,.42),0 6px 18px rgba(0,0,0,.58); }
 .spline-node-handle:active { cursor:grabbing; background:#d070ff; }
@@ -39,6 +44,21 @@
 .v012-handle-editor { margin-top:12px; padding:10px; border:1px solid rgba(139,107,214,.24); border-radius:9px; background:linear-gradient(135deg,rgba(100,65,158,.08),rgba(18,25,40,.14)); }
 .spline-node-handle { width:30px; height:30px; margin:-15px 0 0 -15px; font-size:10px; }
 .spline-node-handle.selected { background:#f0a8ff; border-color:#ffffff; box-shadow:0 0 0 5px rgba(156,82,230,.42),0 5px 18px rgba(0,0,0,.58); }
+.spline-node-handle.selected-member { background:#42b9e9; border-color:#dff9ff; box-shadow:0 0 0 4px rgba(49,171,224,.35),0 5px 18px rgba(0,0,0,.58); }
+.spline-node-handle.selected-primary { background:#f0a8ff; border-color:#fff; box-shadow:0 0 0 5px rgba(156,82,230,.5),0 5px 18px rgba(0,0,0,.62); }
+.spline-tangent-handle { position:absolute; left:0; top:0; width:16px; height:16px; margin:-8px 0 0 -8px; padding:0; border:2px solid #fff; background:#d65cff; pointer-events:auto; cursor:crosshair; transform-origin:center; box-shadow:0 0 0 3px rgba(117,47,171,.35),0 3px 12px rgba(0,0,0,.7); }
+.spline-tangent-handle.incoming { border-radius:50%; background:#43c6ef; }
+.spline-tangent-handle.outgoing { border-radius:3px; transform:rotate(45deg); background:#f06cff; }
+.spline-tangent-handle:hover { filter:brightness(1.2); box-shadow:0 0 0 5px rgba(207,128,255,.4),0 4px 16px rgba(0,0,0,.72); }
+.v012-group-editor { margin-top:12px; padding:10px; border:1px solid rgba(67,198,239,.3); border-radius:8px; background:rgba(14,42,58,.4); }
+.v012-group-editor[hidden] { display:none; }
+.v012-overlay-legend { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; margin:7px 0 10px; font-size:8px; text-align:center; }
+.v012-overlay-legend span { padding:5px 2px; border-radius:4px; color:#071018; font-weight:750; }
+.v012-overlay-legend .grade { background:#ffcf4a; }
+.v012-overlay-legend .curvature { background:#c889ff; }
+.v012-overlay-legend .cut { background:#ff755f; }
+.v012-overlay-legend .fill { background:#48c9eb; }
+.v012-overlay-legend .construction { background:#eef4ff; }
 .v011-readout code { max-width:65%; overflow-wrap:anywhere; }
 .v012-action-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .v012-route-generator { margin-top:14px; padding:12px; border:1px solid rgba(44,203,225,.28); border-radius:8px; background:linear-gradient(160deg,rgba(10,33,43,.88),rgba(10,17,29,.92)); box-shadow:inset 0 1px rgba(154,244,255,.04); }

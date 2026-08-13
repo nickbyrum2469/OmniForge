@@ -147,6 +147,75 @@ function New-ExpectedPathFixture(
   }
 }
 
+function New-ExpectedGraphFixture(
+  [string]$PathId,
+  [string]$NetworkId,
+  [string[]]$NodeIds,
+  [string[]]$SegmentIds,
+  [int]$MinimumNetworkRevision=0
+) {
+  @{
+    pathId=$PathId
+    networkId=$NetworkId
+    nodeIds=$NodeIds
+    segmentIds=$SegmentIds
+    minimumNetworkRevision=$MinimumNetworkRevision
+    valid=$true
+    minimumBridgeIntervalCount=0
+  }
+}
+
+function Assert-ExactGraphTopology($Network,[string[]]$NodeIds,[hashtable[]]$Segments,[string]$Stage) {
+  $actualNodes = @($Network.nodes | ForEach-Object { [string]$_.id })
+  if (($actualNodes -join ',') -ne ($NodeIds -join ',')) {
+    throw "$Stage changed stable node identities: $($actualNodes -join ', ')."
+  }
+  $actualSegments = @($Network.segments | ForEach-Object { [ordered]@{id=[string]$_.id;fromNode=[string]$_.fromNode;toNode=[string]$_.toNode} })
+  if ($actualSegments.Count -ne $Segments.Count) { throw "$Stage changed the authored segment count." }
+  for ($index=0; $index -lt $Segments.Count; $index++) {
+    foreach ($property in @('id','fromNode','toNode')) {
+      if ([string]$actualSegments[$index].$property -ne [string]$Segments[$index].$property) {
+        throw "$Stage changed segment $index $property from $($Segments[$index].$property) to $($actualSegments[$index].$property)."
+      }
+    }
+  }
+  return $true
+}
+
+function Get-ExactPathNetworkSignature($Network) {
+  if ($null -eq $Network) { throw 'Cannot sign a missing Path Network.' }
+  # The isolated evidence fixture contains no secrets or user content. Keeping
+  # the complete normalized network in the signature makes Save/restart prove
+  # node coordinates, height/handle modes, spline handles, segment authority,
+  # engineering settings, and editor flags rather than counts alone.
+  $json = $Network | ConvertTo-Json -Depth 64 -Compress
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try {
+    return -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($json)) | ForEach-Object { $_.ToString('x2') })
+  } finally {
+    $sha.Dispose()
+  }
+}
+
+function Assert-NativeGraphCapture(
+  $Record,
+  [string]$ActionType,
+  [string]$PathId,
+  [int]$Port,
+  [hashtable]$Expectation,
+  [string[]]$NodeIds,
+  [hashtable[]]$Segments
+) {
+  $native = @($Record.response.nativeInputTelemetry | Where-Object { [string]$_.type -eq $ActionType })
+  if ($native.Count -ne 1) { throw "Capture $($Record.id) did not report exactly one $ActionType native action." }
+  $authority = Invoke-Api $Port "/api/v012/path/$PathId/network"
+  $state = Invoke-Api $Port '/api/state'
+  Assert-ExactGraphTopology $authority.network $NodeIds $Segments "Capture $($Record.id)" | Out-Null
+  $Expectation.minimumNetworkRevision = [int]$authority.network.revision
+  Assert-ExactPathRenderRevision $Record $PathId ([int]$authority.network.revision) | Out-Null
+  return [ordered]@{telemetry=$native[0];authority=$authority;state=$state}
+}
+
 function Set-EvidenceRavine(
   [int]$Port,
   [string]$TerrainId,
@@ -172,7 +241,9 @@ function Request-Capture([string]$CaptureDir,[string]$Id,[hashtable]$Options,[in
   $temporaryFile = Join-Path $CaptureDir 'capture-request.tmp.json'
   $responseFile = Join-Path $CaptureDir "$Id.json"
   $pngFile = Join-Path $CaptureDir "$Id.png"
-  Remove-Item $requestFile,$temporaryFile,$responseFile,$pngFile -Force -ErrorAction SilentlyContinue
+  $mutatedPngFile = Join-Path $CaptureDir "$Id-mutated.png"
+  $mutatedWindowFile = Join-Path $CaptureDir "$Id-mutated-window.png"
+  Remove-Item $requestFile,$temporaryFile,$responseFile,$pngFile,$mutatedPngFile,$mutatedWindowFile -Force -ErrorAction SilentlyContinue
   $payload = @{ id = $Id; options = $Options } | ConvertTo-Json -Depth 32
   [IO.File]::WriteAllText($temporaryFile,$payload,[Text.UTF8Encoding]::new($false))
   Move-Item $temporaryFile $requestFile -Force
@@ -195,10 +266,27 @@ function Request-Capture([string]$CaptureDir,[string]$Id,[hashtable]$Options,[in
         throw "Packaged capture $Id reported missing full-window proof $fullWindowFile."
       }
     }
+    $mutationCapture = $null
+    if ($Options.ContainsKey('captureMutatedState') -and [bool]$Options['captureMutatedState']) {
+      $mutationCaptures = @($response.mutationCaptures)
+      if ($mutationCaptures.Count -ne 1) { throw "Packaged capture $Id did not report exactly one pre-Undo mutated-state capture." }
+      $mutationCapture = $mutationCaptures[0]
+      if ([string]$mutationCapture.canvasFile -ne "$Id-mutated.png" -or [string]$mutationCapture.fullWindowFile -ne "$Id-mutated-window.png") {
+        throw "Packaged capture $Id did not report deterministic mutated-state artifact names."
+      }
+      if (-not (Test-Path -LiteralPath $mutatedPngFile -PathType Leaf) -or -not (Test-Path -LiteralPath $mutatedWindowFile -PathType Leaf)) {
+        throw "Packaged capture $Id is missing its paired pre-Undo mutated canvas/full-window proof."
+      }
+      if ([int]$mutationCapture.renderState.sourceRevision -ne [int]$mutationCapture.renderState.networkRevision -or
+          ((@($mutationCapture.renderState.nodeIds) -join ',') -ne (@($mutationCapture.renderState.compiledNodeIds) -join ',')) -or
+          ((@($mutationCapture.renderState.segmentIds) -join ',') -ne (@($mutationCapture.renderState.compiledSegmentIds) -join ','))) {
+        throw "Packaged capture $Id mutated-state proof was not compiled from its exact authoritative graph revision."
+      }
+    }
     $watch.Stop()
     return [ordered]@{
       id=$Id;elapsedMs=$watch.Elapsed.TotalMilliseconds;file=(Split-Path $pngFile -Leaf)
-      fullWindowFile=$fullWindowFile;response=$response
+      fullWindowFile=$fullWindowFile;mutationCapture=$mutationCapture;response=$response
     }
   }
   throw "Packaged capture $Id timed out after $TimeoutSeconds seconds."
@@ -506,6 +594,7 @@ $records = New-Object System.Collections.Generic.List[object]
 $interactionRecords = New-Object System.Collections.Generic.List[object]
 $bridgeFamilyRecords = New-Object System.Collections.Generic.List[object]
 $surfaceProfileRecords = New-Object System.Collections.Generic.List[object]
+$graphEditRecords = New-Object System.Collections.Generic.List[object]
 $resourceSamples = New-Object System.Collections.Generic.List[object]
 $restartRecord = $null
 $cleanupFailure = $null
@@ -615,7 +704,7 @@ try {
     inputCamera=(Get-LookCamera ([double[]]@(-55,22,30)) ([double[]]@(-55,0,0)) 68)
     camera=(Get-LookCamera ([double[]]@(-62,11,20)) ([double[]]@(-32,0,0)) 60)
     hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
-    nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeIndex=0;dx=54;dy=10;vertical=$false;undo=$false})
+    nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeId='approach-west';dx=54;dy=10;vertical=$false;undo=$false})
   }
   $records.Add($nativeHorizontalRecord)
   if (@($nativeHorizontalRecord.response.nativeInputTelemetry).Count -ne 1) { throw 'The packaged native-input gate did not report the horizontal spline-node drag.' }
@@ -641,7 +730,7 @@ try {
     # Sixteen native pixels maps to +2.4 m in the viewport's vertical gizmo.
     # The exact evidence fixture remains Civil-Assist-valid at this height while
     # still producing an unmistakable authored elevation change in the capture.
-    nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeIndex=0;dx=0;dy=-16;vertical=$true;undo=$false})
+    nativeInputActions=@(@{type='path-node-drag';pathId=$path.id;nodeId='approach-west';dx=0;dy=-16;vertical=$true;undo=$false})
   }
   $records.Add($nativeVerticalRecord)
   if (@($nativeVerticalRecord.response.nativeInputTelemetry).Count -ne 1) { throw 'The packaged native-input gate did not report the vertical spline-node drag.' }
@@ -659,8 +748,8 @@ try {
     camera=(Get-LookCamera ([double[]]@(-40,22,30)) ([double[]]@(-20,0,0)) 64)
     hideGuides=$false;hideEditorReferences=$false;waitMs=900;minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
     nativeInputActions=@(
-      @{type='path-undo';pathId=$path.id;nodeIndex=0;expectedPosition=$horizontalPosition},
-      @{type='path-undo';pathId=$path.id;nodeIndex=0;expectedPosition=@(-55,0,0)}
+      @{type='path-undo';pathId=$path.id;nodeId='approach-west';expectedPosition=$horizontalPosition},
+      @{type='path-undo';pathId=$path.id;nodeId='approach-west';expectedPosition=@(-55,0,0)}
     )
   }
   $records.Add($nativeRestoreRecord)
@@ -684,6 +773,183 @@ try {
   }
   $records.Add($worldTabRecord)
   Assert-ProcessResponsive $process $port $runtimeRoot 'World tab full-window proof' | Out-Null
+
+  # Gate 1 graph editing runs on one small deterministic path, isolated from
+  # the bridge-family showcase. Every mutation below is generated by native
+  # mouse/keyboard input in the packaged editor and ends on the exact fixture
+  # topology after a real Undo/Redo/Undo sequence where applicable.
+  $graphPathResult = Invoke-Api $port '/api/object' 'POST' @{
+    type='path';id='path-graph-evidence';name='Packaged Graph Evidence';position=@(0,0,0)
+  }
+  $graphPath = $graphPathResult.object
+  # Newly created path objects begin with the legacy-compatible authored
+  # properties returned by /api/object. Resolve their authoritative schema-v2
+  # network through the v0.12 API before attempting an optimistic replacement;
+  # do not assume the create response already contains migration authority.
+  $graphAuthority = Invoke-Api $port "/api/v012/path/$($graphPath.id)/network"
+  $graphRevision = [int]$graphAuthority.network.revision
+  $graphInstall = Invoke-Api $port "/api/v012/path/$($graphPath.id)/network" 'PUT' @{
+    expectedRevision=$graphRevision
+    label='Install isolated packaged graph editing fixture'
+    network=@{
+      schemaVersion=2;id="$($graphPath.id):network";revision=$graphRevision
+      nodes=@(
+        @{id='graph-west';position=@(-24,2,-240);heightMode='absolute';heightOffset=0;handleMode='free';incomingHandle=@(-5,0,0);outgoingHandle=@(10,0,0)},
+        @{id='graph-middle';position=@(0,2,-240);heightMode='absolute';heightOffset=0;handleMode='free';incomingHandle=@(-8,0,0);outgoingHandle=@(8,0,0)},
+        @{id='graph-east';position=@(24,2,-240);heightMode='absolute';heightOffset=0;handleMode='free';incomingHandle=@(-10,0,0);outgoingHandle=@(5,0,0)}
+      )
+      segments=@(
+        @{id='graph-west-middle';fromNode='graph-west';toNode='graph-middle';curveType='hermite';constructionMode='conform';constructionLocked=$true},
+        @{id='graph-middle-east';fromNode='graph-middle';toNode='graph-east';curveType='hermite';constructionMode='conform';constructionLocked=$true}
+      )
+      engineering=@{civilAssist=$false;maxGradePercent=40;minimumCurveRadius=1;maxCutDepth=2;maxFillDepth=2;bridgeThreshold=20;maximumBridgeSpan=40}
+      editor=@{showSpline=$true;showGrade=$true;showConstruction=$true}
+    }
+  }
+  $graphNodeIds = [string[]]@('graph-west','graph-middle','graph-east')
+  $graphSegments = [hashtable[]]@(
+    @{id='graph-west-middle';fromNode='graph-west';toNode='graph-middle'},
+    @{id='graph-middle-east';fromNode='graph-middle';toNode='graph-east'}
+  )
+  $graphExpectation = New-ExpectedGraphFixture $graphPath.id ([string]$graphInstall.network.id) $graphNodeIds ([string[]]@('graph-west-middle','graph-middle-east')) ([int]$graphInstall.network.revision)
+  Invoke-Api $port '/api/selection' 'POST' @{objectId=$graphPath.id} | Out-Null
+  $revision = [int64]$graphInstall.state.engine.revision
+  # Keep Gate 1's saved graph far outside the bridge showcase so it can remain
+  # in the same real scene through Save/restart without polluting later bridge
+  # captures.
+  $graphInputCamera = Get-LookCamera ([double[]]@(0,36,-198)) ([double[]]@(0,2,-240)) 62
+  $graphCaptureCamera = Get-LookCamera ([double[]]@(0,20,-204)) ([double[]]@(0,2,-240)) 58
+  $graphReady = Request-Capture $captureDir '08e-graph-fixture-ready' @{
+    camera=$graphCaptureCamera;hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900
+    minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$graphExpectation
+    actions=@(@{type='select';objectId=$graphPath.id;waitMs=180},@{type='click';target='pathEdit';waitMs=350})
+  }
+  $records.Add($graphReady)
+  Assert-ExactPathRenderRevision $graphReady $graphPath.id ([int]$graphReady.response.fixtureTelemetry.networkRevision) | Out-Null
+
+  $insertRecord = Request-Capture $captureDir '08f-native-right-click-insert-undo' @{
+    inputCamera=$graphInputCamera;camera=$graphCaptureCamera;hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900
+    captureMutatedState=$true
+    minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$graphExpectation
+    nativeInputActions=@(@{type='path-node-insert';pathId=$graphPath.id;segmentId='graph-west-middle';stationFraction=.5;undo=$true})
+  }
+  $records.Add($insertRecord)
+  $insertEvidence = Assert-NativeGraphCapture $insertRecord 'path-node-insert' $graphPath.id $port $graphExpectation $graphNodeIds $graphSegments
+  $insertionDeviation = [double]$insertEvidence.telemetry.centerlineDeviation
+  if ($insertEvidence.telemetry.resolvedBy -ne 'compiledSegmentId' -or -not $insertEvidence.telemetry.undoVerified -or
+      @($insertEvidence.telemetry.after.nodeIds).Count -ne 4 -or @($insertEvidence.telemetry.after.segments).Count -ne 3 -or
+      [double]::IsNaN($insertionDeviation) -or [double]::IsInfinity($insertionDeviation) -or $insertionDeviation -gt 0.01) {
+    throw 'Native right-click insertion did not prove one exact compiled-segment split followed by Undo.'
+  }
+  $graphEditRecords.Add([ordered]@{id=$insertRecord.id;kind='right-click-insert';capture=$insertRecord.file;fullWindow=$insertRecord.fullWindowFile;mutatedCapture=$insertRecord.mutationCapture;telemetry=$insertEvidence.telemetry})
+
+  $groupRecord = Request-Capture $captureDir '08g-native-ctrl-group-drag-undo' @{
+    inputCamera=$graphInputCamera;camera=$graphCaptureCamera;hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900
+    captureMutatedState=$true
+    minimumRevision=[int64]$insertEvidence.state.engine.revision;revisionTimeoutMs=20000;expectedPathNetwork=$graphExpectation
+    nativeInputActions=@(
+      @{type='path-node-toggle-selection';pathId=$graphPath.id;nodeId='graph-west';expectedSelected=$true},
+      @{type='path-node-group-drag';pathId=$graphPath.id;nodeId='graph-middle';nodeIds=@('graph-west','graph-middle');dx=24;dy=8;vertical=$false;undo=$true}
+    )
+  }
+  $records.Add($groupRecord)
+  $groupEvidence = Assert-NativeGraphCapture $groupRecord 'path-node-group-drag' $graphPath.id $port $graphExpectation $graphNodeIds $graphSegments
+  $toggles = @($groupRecord.response.nativeInputTelemetry | Where-Object { $_.type -eq 'path-node-toggle-selection' })
+  if ($toggles.Count -ne 1 -or @($toggles | Where-Object { $_.resolvedBy -ne 'nodeId' -or -not $_.selected }).Count -ne 0 -or
+      $groupEvidence.telemetry.resolvedBy -ne 'nodeId' -or -not $groupEvidence.telemetry.undoVerified -or @($groupEvidence.telemetry.groupAfter).Count -ne 2) {
+    throw 'Native Ctrl multi-selection and coherent group drag did not prove stable-ID input plus Undo.'
+  }
+  $graphEditRecords.Add([ordered]@{id=$groupRecord.id;kind='ctrl-group-drag';capture=$groupRecord.file;fullWindow=$groupRecord.fullWindowFile;mutatedCapture=$groupRecord.mutationCapture;telemetry=$groupRecord.response.nativeInputTelemetry})
+
+  $handleRecord = Request-Capture $captureDir '08h-native-manual-handle-drag-undo' @{
+    inputCamera=$graphInputCamera;camera=$graphCaptureCamera;hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900
+    captureMutatedState=$true
+    minimumRevision=[int64]$groupEvidence.state.engine.revision;revisionTimeoutMs=20000;expectedPathNetwork=$graphExpectation
+    nativeInputActions=@(@{type='path-handle-drag';pathId=$graphPath.id;nodeId='graph-middle';side='outgoing';dx=34;dy=-18;undo=$true})
+  }
+  $records.Add($handleRecord)
+  $handleEvidence = Assert-NativeGraphCapture $handleRecord 'path-handle-drag' $graphPath.id $port $graphExpectation $graphNodeIds $graphSegments
+  if ($handleEvidence.telemetry.resolvedBy -ne 'nodeId' -or -not $handleEvidence.telemetry.undoVerified -or [double]$handleEvidence.telemetry.vectorDelta -le .001) {
+    throw 'Native manual tangent-handle drag did not prove a stable-ID vector edit followed by Undo.'
+  }
+  $graphEditRecords.Add([ordered]@{id=$handleRecord.id;kind='manual-handle-drag';capture=$handleRecord.file;fullWindow=$handleRecord.fullWindowFile;mutatedCapture=$handleRecord.mutationCapture;telemetry=$handleEvidence.telemetry})
+
+  foreach ($nativeGraphAction in @(
+    @{id='08i-native-duplicate-undo-redo';kind='duplicate';action=@{type='path-network-duplicate';pathId=$graphPath.id}},
+    @{id='08j-native-split-undo-redo';kind='split';action=@{type='path-network-split';pathId=$graphPath.id;nodeId='graph-middle'}}
+  )) {
+    $authority = Invoke-Api $port "/api/v012/path/$($graphPath.id)/network"
+    $graphState = Invoke-Api $port '/api/state'
+    $graphExpectation.minimumNetworkRevision = [int]$authority.network.revision
+    $record = Request-Capture $captureDir $nativeGraphAction.id @{
+      inputCamera=$graphInputCamera;camera=$graphCaptureCamera;hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900
+      captureMutatedState=$true
+      minimumRevision=[int64]$graphState.engine.revision;revisionTimeoutMs=20000;expectedPathNetwork=$graphExpectation
+      nativeInputActions=@($nativeGraphAction.action)
+    }
+    $records.Add($record)
+    $evidence = Assert-NativeGraphCapture $record ([string]$nativeGraphAction.action.type) $graphPath.id $port $graphExpectation $graphNodeIds $graphSegments
+    if (-not $evidence.telemetry.undoVerified -or -not $evidence.telemetry.redoVerified) {
+      throw "Native $($nativeGraphAction.kind) did not prove real Undo and Redo."
+    }
+    $graphEditRecords.Add([ordered]@{id=$record.id;kind=$nativeGraphAction.kind;capture=$record.file;fullWindow=$record.fullWindowFile;mutatedCapture=$record.mutationCapture;telemetry=$evidence.telemetry})
+  }
+
+  $branchResult = Invoke-Api $port '/api/object' 'POST' @{
+    type='path';id='path-graph-branch';name='Packaged Graph Branch';position=@(0,0,0)
+  }
+  $branch = $branchResult.object
+  $branchAuthority = Invoke-Api $port "/api/v012/path/$($branch.id)/network"
+  $branchRevision = [int]$branchAuthority.network.revision
+  $branchInstall = Invoke-Api $port "/api/v012/path/$($branch.id)/network" 'PUT' @{
+    expectedRevision=$branchRevision
+    label='Install isolated packaged Join source fixture'
+    network=@{
+      schemaVersion=2;id="$($branch.id):network";revision=$branchRevision
+      nodes=@(
+        @{id='branch-near';position=@(0,2,-228);heightMode='absolute';heightOffset=0;handleMode='automatic'},
+        @{id='branch-far';position=@(0,2,-250);heightMode='absolute';heightOffset=0;handleMode='automatic'}
+      )
+      segments=@(@{id='branch-route';fromNode='branch-near';toNode='branch-far';curveType='hermite';constructionMode='conform';constructionLocked=$true})
+      engineering=@{civilAssist=$false;maxGradePercent=40;minimumCurveRadius=1;maxCutDepth=2;maxFillDepth=2;bridgeThreshold=20;maximumBridgeSpan=40}
+      editor=@{showSpline=$true;showGrade=$true;showConstruction=$true}
+    }
+  }
+  Invoke-Api $port '/api/selection' 'POST' @{objectId=$graphPath.id} | Out-Null
+  $joinRecord = Request-Capture $captureDir '08k-native-join-undo-redo' @{
+    camera=$graphCaptureCamera;hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900
+    captureMutatedState=$true
+    minimumRevision=[int64]$branchInstall.state.engine.revision;revisionTimeoutMs=20000;expectedPathNetwork=$graphExpectation
+    actions=@(@{type='select';objectId=$graphPath.id;waitMs=250})
+    nativeInputActions=@(@{type='path-network-join';pathId=$graphPath.id;sourcePathId=$branch.id})
+  }
+  $records.Add($joinRecord)
+  $joinEvidence = Assert-NativeGraphCapture $joinRecord 'path-network-join' $graphPath.id $port $graphExpectation $graphNodeIds $graphSegments
+  if (-not $joinEvidence.telemetry.undoVerified -or -not $joinEvidence.telemetry.redoVerified -or
+      [string]$joinEvidence.telemetry.selectedSource.selected -ne [string]$branch.id) {
+    throw 'Native Join did not prove the stable branch choice with real Undo and Redo.'
+  }
+  $joinRestoredState = Invoke-Api $port '/api/state'
+  $joinRestoredScene = @($joinRestoredState.scenes | Where-Object { $_.id -eq $joinRestoredState.activeSceneId })[0]
+  if (@($joinRestoredScene.objects | Where-Object { $_.id -eq $branch.id -and $_.type -eq 'path' }).Count -ne 1) {
+    throw 'Native Join final Undo did not restore the exact source Path Network object.'
+  }
+  $graphEditRecords.Add([ordered]@{id=$joinRecord.id;kind='join';capture=$joinRecord.file;fullWindow=$joinRecord.fullWindowFile;mutatedCapture=$joinRecord.mutationCapture;telemetry=$joinEvidence.telemetry})
+
+  # Preserve the exact Gate 1 graph and its restored Join source through the
+  # real Save/restart gate. They live outside every bridge-showcase camera and
+  # therefore prove persistence without contaminating the visual review scene.
+  $graphBeforeSave = (Invoke-Api $port "/api/v012/path/$($graphPath.id)/network").network
+  $branchBeforeSave = (Invoke-Api $port "/api/v012/path/$($branch.id)/network").network
+  Assert-ExactGraphTopology $graphBeforeSave $graphNodeIds $graphSegments 'Graph fixture before Save' | Out-Null
+  Assert-ExactGraphTopology $branchBeforeSave ([string[]]@('branch-near','branch-far')) ([hashtable[]]@(@{id='branch-route';fromNode='branch-near';toNode='branch-far'})) 'Join source before Save' | Out-Null
+  $graphPersistenceSignature = Get-ExactPathNetworkSignature $graphBeforeSave
+  $branchPersistenceSignature = Get-ExactPathNetworkSignature $branchBeforeSave
+  Invoke-Api $port '/api/selection' 'POST' @{objectId=$path.id} | Out-Null
+  $primaryNetwork = Invoke-Api $port "/api/v012/path/$($path.id)/network"
+  $primaryState = Invoke-Api $port '/api/state'
+  $fixtureExpectation.minimumNetworkRevision = [int]$primaryNetwork.network.revision
+  $revision = [int64]$primaryState.engine.revision
 
   # Each production bridge family gets its own span/width-appropriate scene in
   # the same exact packaged executable. This is visual evidence, not a mock
@@ -930,12 +1196,30 @@ try {
   $restartState = Invoke-Api $port '/api/state'
   $restartPath = Assert-PersistedPathFixture $restartState $path.id $savedNetworkRevision
   $fixtureExpectation.minimumNetworkRevision = [int]$restartPath.properties.pathNetwork.revision
+  $restartGraphAuthority = Invoke-Api $port "/api/v012/path/$($graphPath.id)/network"
+  $restartBranchAuthority = Invoke-Api $port "/api/v012/path/$($branch.id)/network"
+  Assert-ExactGraphTopology $restartGraphAuthority.network $graphNodeIds $graphSegments 'Graph fixture after restart' | Out-Null
+  Assert-ExactGraphTopology $restartBranchAuthority.network ([string[]]@('branch-near','branch-far')) ([hashtable[]]@(@{id='branch-route';fromNode='branch-near';toNode='branch-far'})) 'Join source after restart' | Out-Null
+  $restartGraphSignature = Get-ExactPathNetworkSignature $restartGraphAuthority.network
+  $restartBranchSignature = Get-ExactPathNetworkSignature $restartBranchAuthority.network
+  if ($restartGraphSignature -ne $graphPersistenceSignature -or $restartBranchSignature -ne $branchPersistenceSignature) {
+    throw 'Packaged Save/restart changed the exact Gate 1 graph, node modes, handles, or restored Join source.'
+  }
   $restartRecord = Request-Capture $captureDir '11-restarted-persisted' @{
     camera=(Get-LookCamera ([double[]]@(0,18,36)) $target 62);hideGuides=$true;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=1400
     minimumRevision=[int64]$restartState.engine.revision;revisionTimeoutMs=20000;expectedPathNetwork=$fixtureExpectation
   }
   $records.Add($restartRecord)
   Assert-ProcessResponsive $process $port $runtimeRoot 'restarted persisted fixture' | Out-Null
+  $graphExpectation.minimumNetworkRevision = [int]$restartGraphAuthority.network.revision
+  $restartGraphRecord = Request-Capture $captureDir '11b-restarted-graph-persisted' @{
+    camera=$graphCaptureCamera;hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=1100
+    minimumRevision=[int64]$restartState.engine.revision;revisionTimeoutMs=20000;expectedPathNetwork=$graphExpectation
+    actions=@(@{type='select';objectId=$graphPath.id;waitMs=180},@{type='click';target='pathEdit';waitMs=350})
+  }
+  $records.Add($restartGraphRecord)
+  Assert-ExactPathRenderRevision $restartGraphRecord $graphPath.id ([int]$restartGraphAuthority.network.revision) | Out-Null
+  Assert-ProcessResponsive $process $port $runtimeRoot 'restarted persisted Gate 1 graph' | Out-Null
   $resourceSamples.Add((Get-ProcessResourceSample $process $runtimeRoot 'after-restart'))
   $resourceSamples.Add((Get-ProcessResourceSample $process $runtimeRoot 'before-restarted-editor-close'))
   $restartCloseRecord = Close-PackagedGracefully $process $port $runtimeRoot $captureDir 'completed restarted evidence'
@@ -950,10 +1234,15 @@ try {
       terrainId=$terrain.id;pathId=$path.id;bridgeStyle='steel-girder'
       ravine=@{canyonWidth=16;canyonDepth=12;canyonFloorWidth=4;canyonDirection=90;canyonMeander=0}
     }
-    captures=$records;interactions=$interactionRecords;bridgeFamilies=$bridgeFamilyRecords;surfaceProfiles=$surfaceProfileRecords
+    captures=$records;interactions=$interactionRecords;graphEdits=$graphEditRecords;bridgeFamilies=$bridgeFamilyRecords;surfaceProfiles=$surfaceProfileRecords
     resourceSamples=$resourceSamples
     finalNetworkRevision=[int]$finalPath.properties.pathNetwork.revision;finalEndpoint=@($east.position);saveEvidence=$saveTelemetry[0]
-    health=$health;restartHealth=$restartHealth;restartCapture=$restartRecord
+    health=$health;restartHealth=$restartHealth;restartCapture=$restartRecord;restartGraphCapture=$restartGraphRecord
+    graphPersistence=@{
+      pathId=$graphPath.id;sourcePathId=$branch.id
+      graphSignature=$restartGraphSignature;sourceSignature=$restartBranchSignature
+      graphRevision=[int]$restartGraphAuthority.network.revision;sourceRevision=[int]$restartBranchAuthority.network.revision
+    }
     gracefulShutdowns=@($initialCloseRecord,$restartCloseRecord)
   }
   $manifest | ConvertTo-Json -Depth 64 | Set-Content -LiteralPath (Join-Path $evidenceRoot 'manifest.json') -Encoding UTF8

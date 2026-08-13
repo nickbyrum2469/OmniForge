@@ -69,10 +69,14 @@ function segmentTangents(segment, fromNode, toNode, positions, adjacency, tensio
   const start = positions.get(fromNode.id);
   const end = positions.get(toNode.id);
   const distance = Math.max(EPSILON, distance3(start, end));
-  const startTangent = fromNode.handleMode !== 'automatic' && fromNode.outgoingHandle
+  const startTangent = segment.curveControl?.fromHandle
+    ? scale3(segment.curveControl.fromHandle, 3)
+    : fromNode.handleMode !== 'automatic' && fromNode.outgoingHandle
     ? scale3(fromNode.outgoingHandle, 3)
     : automaticTangent(fromNode.id, toNode.id, true, positions, adjacency, distance, tension);
-  const endTangent = toNode.handleMode !== 'automatic' && toNode.incomingHandle
+  const endTangent = segment.curveControl?.toHandle
+    ? scale3(segment.curveControl.toHandle, -3)
+    : toNode.handleMode !== 'automatic' && toNode.incomingHandle
     ? scale3(toNode.incomingHandle, -3)
     : automaticTangent(toNode.id, fromNode.id, false, positions, adjacency, distance, tension);
   return { startTangent, endTangent };
@@ -779,7 +783,16 @@ function compileSegment(segment, network, positions, adjacency, nodeMap, options
     materialProfile: segment.materialProfile,
     surfaceDetailProfile: segment.surfaceDetailProfile,
     structureProfile: segment.structureProfile,
-    gameplayRules: segment.gameplayRules
+    gameplayRules: segment.gameplayRules,
+    curveAuthority: {
+      segmentId: segment.id,
+      sourceRevision: network.revision,
+      start: [...start],
+      end: [...end],
+      fromHandle: scale3(startTangent, 1 / 3),
+      toHandle: scale3(endTangent, -1 / 3),
+      source: segment.curveControl ? 'segment-local' : 'node-derived'
+    }
   };
 }
 

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildPathCostGuideData,
+  buildPathDiagnosticGuideData,
   compiledSegmentLinePositions,
   pathCostColor,
   pathSegmentCostSeverity
@@ -75,3 +76,26 @@ test('runtime debug data keeps segment diagnostics beside compiled geometry', ()
   assert.equal(guides[0].positions.length, 12);
 });
 
+test('compiled diagnostic overlays expose grade, curvature, cut-fill, and construction per station', () => {
+  const segment = compiledSegment({ grade: 8, constructionMode: 'bridge' });
+  segment.samples = [
+    { position: [0, 1, 0], baseY: 2, distance: 0, curvature: 0 },
+    { position: [3, 2, 4], baseY: 1, distance: 5, curvature: 0.08 },
+    { position: [6, 2.5, 8], baseY: 2.4, distance: 10, curvature: 0.02 }
+  ];
+  segment.constructionIntervals = [{ mode: 'bridge', startDistance: 0, endDistance: 10 }];
+  const runtime = {
+    compiled: {
+      engineering: { maxGradePercent: 12, maxCutDepth: 6, maxFillDepth: 2.5 },
+      segments: [segment]
+    }
+  };
+  for (const mode of ['grade', 'curvature', 'cut-fill', 'construction']) {
+    const entries = buildPathDiagnosticGuideData(runtime, mode);
+    assert.equal(entries.length, 2);
+    assert.ok(entries.every(entry => entry.mode === mode && entry.positions.length === 6));
+    assert.ok(entries.every(entry => entry.color.every(Number.isFinite)));
+  }
+  assert.equal(buildPathDiagnosticGuideData(runtime, 'construction')[0].constructionMode, 'bridge');
+  assert.equal(buildPathDiagnosticGuideData(runtime, 'cut-fill')[0].terrainDelta, -1);
+});

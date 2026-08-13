@@ -35,9 +35,17 @@ test('packaged path evidence captures every required bridge inspection angle', (
     '08b-native-vertical-moved',
     '08c-native-drag-restored',
     '08d-world-tab-ui',
+    '08e-graph-fixture-ready',
+    '08f-native-right-click-insert-undo',
+    '08g-native-ctrl-group-drag-undo',
+    '08h-native-manual-handle-drag-undo',
+    '08i-native-duplicate-undo-redo',
+    '08j-native-split-undo-redo',
+    '08k-native-join-undo-redo',
     '09-restored-and-saved',
     '10-surface-details-close',
-    '11-restarted-persisted'
+    '11-restarted-persisted',
+    '11b-restarted-graph-persisted'
   ]) assert.match(script, new RegExp(`'${id}'`), id);
   assert.match(script, /Get-LookCamera/);
   assert.match(script, /bridgeStyle='steel-girder'/);
@@ -60,8 +68,18 @@ test('key packaged stages require native full-window UI proof alongside viewport
   assert.match(script, /'08a-native-horizontal-moved'[\s\S]*?fullWindowCapture=\$true/);
   assert.match(script, /'08b-native-vertical-moved'[\s\S]*?fullWindowCapture=\$true/);
   assert.match(script, /'08d-world-tab-ui'[\s\S]*?fullWindowCapture=\$true[\s\S]*?target='world'/);
+  for (const id of [
+    '08e-graph-fixture-ready',
+    '08f-native-right-click-insert-undo',
+    '08g-native-ctrl-group-drag-undo',
+    '08h-native-manual-handle-drag-undo',
+    '08i-native-duplicate-undo-redo',
+    '08j-native-split-undo-redo',
+    '08k-native-join-undo-redo'
+  ]) assert.match(script, new RegExp(`'${id}'[\\s\\S]*?fullWindowCapture=\\$true`));
   assert.match(script, /'09-restored-and-saved'[\s\S]*?fullWindowCapture=\$true/);
   assert.match(script, /'11-restarted-persisted'[\s\S]*?fullWindowCapture=\$true/);
+  assert.match(script, /'11b-restarted-graph-persisted'[\s\S]*?fullWindowCapture=\$true/);
   assert.match(desktop, /requestOptions\.fullWindowCapture/);
   assert.match(desktop, /mainWindow\.webContents\.capturePage\(\)/);
   assert.match(desktop, /`\$\{id\}-window\.png`/);
@@ -128,7 +146,16 @@ test('packaged evidence renders every bridge family at a compatible span and wid
   assert.match(app, /validateVisualCaptureRenderFixture\(options\.expectedPathNetwork,renderTelemetry,currentFixture\)/);
   assert.match(app, /function applyVisualTestCamera/);
   assert.match(app, /function visualTestNeedsInputCamera/);
-  assert.match(app, /\['path-node-drag','path-undo'\]\.includes\(String\(action\?\.type\|\|''\)\)/);
+  for (const action of [
+    'path-node-drag',
+    'path-node-group-drag',
+    'path-node-toggle-selection',
+    'path-node-insert',
+    'path-handle-drag',
+    'path-network-split',
+    'path-undo'
+  ]) assert.match(app, new RegExp(`'${action}'`));
+  assert.match(app, /cameraBoundActions\.has\(String\(action\?\.type\|\|''\)\)/);
   assert.match(app, /visualTestNeedsInputCamera\(options\)&&applyVisualTestCamera\(options\.inputCamera\|\|options\.camera\)/);
   assert.match(app, /applyVisualTestCamera\(options\.camera\)/);
   assert.match(app, /normalizedVisualTestCamera\(options\.restoreCamera,camera\)/);
@@ -208,14 +235,15 @@ test('packaged evidence records a bounded Electron process tree with renderer an
 test('packaged gate drives real horizontal and Shift-vertical spline handles and proves Undo', () => {
   assert.match(script, /type='dismiss-first-use-tutorial'/);
   assert.match(script, /nativeInputActions=@\(/);
-  assert.match(script, /type='path-node-drag'.*vertical=\$false.*undo=\$false/);
-  assert.match(script, /type='path-node-drag'.*dy=-16.*vertical=\$true.*undo=\$false/);
+  assert.match(script, /type='path-node-drag'.*nodeId='approach-west'.*vertical=\$false.*undo=\$false/);
+  assert.match(script, /type='path-node-drag'.*nodeId='approach-west'.*dy=-16.*vertical=\$true.*undo=\$false/);
+  assert.match(script, /type='path-undo'.*nodeId='approach-west'.*expectedPosition=\$horizontalPosition/);
   assert.match(script, /inputCamera=\(Get-LookCamera/);
   assert.match(script, /type='path-undo'.*expectedPosition=\$horizontalPosition/);
   assert.match(script, /type='path-undo'.*expectedPosition=@\(-55,0,0\)/);
   assert.match(script, /nativeInputTelemetry/);
   assert.match(script, /undoVerified/);
-  assert.match(desktop, /#splineNodeOverlay \[data-spline-node=/);
+  assert.match(desktop, /#splineNodeOverlay \[data-spline-node-id\]/);
   assert.match(desktop, /dismissVisualFirstUseTutorial/);
   assert.match(desktop, /#skipTutorialButton/);
   assert.match(desktop, /#dismissIntegrationSetupButton/);
@@ -233,11 +261,54 @@ test('packaged gate drives real horizontal and Shift-vertical spline handles and
   assert.match(desktop, /type:'mouseMove'/);
   assert.match(desktop, /leftButtonDown/);
   assert.match(desktop, /modifiers:heldModifiers/);
-  assert.match(desktop, /modifiers:releasedModifiers/);
-  assert.match(desktop, /heldModifiers=action\.vertical\?\['shift','leftButtonDown'\]:\['leftButtonDown'\]/);
-  assert.match(desktop, /releasedModifiers=action\.vertical\?\['shift'\]:\[\]/);
+  assert.match(desktop, /const heldModifiers=\[\.\.\.modifiers,'leftButtonDown'\]/);
+  assert.match(desktop, /const heldModifiers=action\.vertical\?\['shift'\]:\[\]/);
   assert.match(desktop, /#v012UndoPath/);
   assert.match(desktop, /did not restore the dragged node position/);
+});
+
+test('packaged graph gate drives stable-ID native insertion, grouping, handles, split, duplicate, and join', () => {
+  assert.match(script, /function New-ExpectedGraphFixture/);
+  assert.match(script, /function Assert-ExactGraphTopology/);
+  assert.match(script, /function Assert-NativeGraphCapture/);
+  assert.match(script, /id='path-graph-evidence'/);
+  assert.match(script, /\$graphAuthority = Invoke-Api \$port "\/api\/v012\/path\/\$\(\$graphPath\.id\)\/network"/);
+  assert.match(script, /expectedRevision=\$graphRevision/);
+  assert.doesNotMatch(script, /\$graphPath\.properties\.pathNetwork\.revision/);
+  assert.match(script, /id='graph-west'/);
+  assert.match(script, /id='graph-middle'/);
+  assert.match(script, /id='graph-east'/);
+  assert.match(script, /type='path-node-insert';pathId=\$graphPath\.id;segmentId='graph-west-middle'/);
+  assert.match(script, /type='path-node-toggle-selection';pathId=\$graphPath\.id;nodeId='graph-west'/);
+  assert.match(script, /type='path-node-group-drag';pathId=\$graphPath\.id;nodeId='graph-middle';nodeIds=@\('graph-west','graph-middle'\)/);
+  assert.match(script, /type='path-handle-drag';pathId=\$graphPath\.id;nodeId='graph-middle';side='outgoing'/);
+  assert.match(script, /type='path-network-duplicate';pathId=\$graphPath\.id/);
+  assert.match(script, /type='path-network-split';pathId=\$graphPath\.id;nodeId='graph-middle'/);
+  assert.match(script, /id='path-graph-branch'/);
+  assert.match(script, /\$branchAuthority = Invoke-Api \$port "\/api\/v012\/path\/\$\(\$branch\.id\)\/network"/);
+  assert.match(script, /\$branchRevision = \[int\]\$branchAuthority\.network\.revision/);
+  assert.match(script, /expectedRevision=\$branchRevision/);
+  assert.doesNotMatch(script, /\$branch\.properties\.pathNetwork\.revision/);
+  assert.match(script, /type='path-network-join';pathId=\$graphPath\.id;sourcePathId=\$branch\.id/);
+  assert.match(script, /graphEdits=\$graphEditRecords/);
+  assert.match(script, /resolvedBy -ne 'compiledSegmentId'/);
+  assert.match(script, /\$insertionDeviation -gt 0\.01/);
+  assert.match(desktop, /centerlineDeviation>0\.01/);
+  assert.match(script, /resolvedBy -ne 'nodeId'/);
+  assert.match(script, /undoVerified/);
+  assert.match(script, /redoVerified/);
+  assert.match(script, /Assert-ExactPathRenderRevision/);
+});
+
+test('packaged graph gate preserves the exact graph and restored Join source through Save and restart', () => {
+  assert.match(script, /function Get-ExactPathNetworkSignature/);
+  assert.match(script, /\$graphBeforeSave = \(Invoke-Api \$port "\/api\/v012\/path\/\$\(\$graphPath\.id\)\/network"\)\.network/);
+  assert.match(script, /\$branchBeforeSave = \(Invoke-Api \$port "\/api\/v012\/path\/\$\(\$branch\.id\)\/network"\)\.network/);
+  assert.match(script, /\$restartGraphSignature -ne \$graphPersistenceSignature/);
+  assert.match(script, /\$restartBranchSignature -ne \$branchPersistenceSignature/);
+  assert.match(script, /Packaged Save\/restart changed the exact Gate 1 graph/);
+  assert.match(script, /restartGraphCapture=\$restartGraphRecord/);
+  assert.match(script, /graphPersistence=@\{/);
 });
 
 test('canvas capture hook drives bounded semantic actions and returns timing evidence', () => {

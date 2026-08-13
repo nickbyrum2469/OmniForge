@@ -1,18 +1,29 @@
 import { sharedPathGenerationWorkerPool } from './path-network/generation-pool.js';
 import { trailArchetypes } from './path-network/archetypes.js';
 import { trailCandidateToPathNetwork } from './path-network/trail-solver.js';
-import { nearestCompiledStation } from './path-network/compiler.js';
+import { nearestCompiledScreenStation } from './path-network/editor-screen-picking.js';
 import { PATH_BRIDGE_STYLES } from './path-network/model.js';
 import { pathCrossSectionProfiles } from './path-network/cross-section-profiles.js';
 import { pathSurfaceDetailProfiles } from './path-network/surface-detail-profiles.js';
 import {
   advancePathNodeDragGesture,
   createPathNodeDragGesture,
-  createPathNodeDragPreview,
-  pathNodeFromDragPreview,
-  shouldCommitPathNodeDragGesture,
-  updatePathNodeDragPreview
+  shouldCommitPathNodeDragGesture
 } from './path-network/editor-drag-preview.js';
+import {
+  createPathNodeGroupPreview,
+  pathNodeGroupMoveOperations,
+  prunePathNodeSelection,
+  togglePathNodeSelection,
+  updatePathNodeGroupPreview
+} from './path-network/editor-selection.js';
+import { samplePathEditorCurvePreview } from './path-network/editor-curve-preview.js';
+import {
+  intersectPathHandleRayCameraPlane,
+  pathHandleEndpoints,
+  previewPathHandleDrag,
+  resolvePathNodePosition
+} from './path-network/editor-handle-preview.js';
 import { suggestPathNodeHandles } from './path-network/transactions.js';
 import { routeRestrictionsFromScene } from './path-network/world-constraints.js';
 import { assessCompiledPathEditAuthority } from './path-network/editor-runtime-authority.js';
@@ -25,16 +36,21 @@ let splineEditPathId = null;
 let selectedSplineNodeIndex = null;
 let terrainSculptMode = null;
 let draggingNode = null;
+let draggingHandle = null;
 let inspectorObserver = null;
 let inspectorEnhanceQueued = false;
 let overlayFrame = 0;
 let foundationRefreshPromise = null;
 let foundationSignature = '';
 let selectedPathNodeId = null;
+let selectedPathNodeIds = new Set();
 let selectedPathSegmentId = null;
+let pathSelectionOwnerId = null;
 let routeGenerationRevision = 0;
 let routeGenerationPool = null;
 let pathDragPreviewFrame = 0;
+let pendingPathInsertGesture = null;
+let lastPathInsertGesture = null;
 let routeGenerationState = {
   status: 'idle',
   pathId: null,
@@ -44,6 +60,18 @@ let routeGenerationState = {
   error: ''
 };
 const routeDrafts = new Map();
+const pathDiagnosticModes = new Map();
+
+function pathDiagnosticMode(object) {
+  if (pathDiagnosticModes.has(object.id)) return pathDiagnosticModes.get(object.id);
+  const editor = object.properties?.pathNetwork?.editor || {};
+  const mode = editor.showConstructionBounds ? 'construction'
+    : editor.showCutFill ? 'cut-fill'
+      : editor.showCurvature ? 'curvature'
+        : editor.showGrade ? 'grade' : 'none';
+  pathDiagnosticModes.set(object.id, mode);
+  return mode;
+}
 
 
 function bridge() {
@@ -154,16 +182,61 @@ function compiledPathEditAuthority(object) {
 }
 
 function pathNodeSelection(object) {
+  ensurePathSelectionScope(object);
   const nodes = object?.properties?.pathNetwork?.nodes || [];
   const middle = Math.max(0, Math.floor((nodes.length || 1) / 2));
-  let index = selectedPathNodeId ? nodes.findIndex(node => node.id === selectedPathNodeId) : -1;
+  let selection = prunePathNodeSelection(object?.properties?.pathNetwork, {
+    nodeIds: selectedPathNodeIds,
+    primaryNodeId: selectedPathNodeId
+  });
+  let index = selection.primaryNodeId ? nodes.findIndex(node => node.id === selection.primaryNodeId) : -1;
   if (index < 0) index = Math.max(0, Math.min(Math.max(0, nodes.length - 1), Number(selectedSplineNodeIndex ?? middle)));
   const node = nodes[index] || { id: null, position: [0, 0, 0], heightMode: 'terrain', heightOffset: 0 };
   selectedPathNodeId = node.id;
-  return { index, node, point: node.position };
+  if (node.id && !selection.nodeIds.length) selection = { nodeIds: [node.id], primaryNodeId: node.id };
+  selectedPathNodeIds = new Set(selection.nodeIds);
+  return { index, node, point: node.position, nodeIds: selection.nodeIds };
+}
+
+function ensurePathSelectionScope(object) {
+  const nextOwnerId = object?.type === 'path' ? String(object.id || '') : '';
+  if (pathSelectionOwnerId === nextOwnerId) return;
+  pathSelectionOwnerId = nextOwnerId;
+  selectedPathNodeId = null;
+  selectedPathNodeIds = new Set();
+  selectedPathSegmentId = null;
+  selectedSplineNodeIndex = null;
+}
+
+function setPathNodeSelection(object, nodeId, { additive = false, preserveGroup = false } = {}) {
+  ensurePathSelectionScope(object);
+  const network = object?.properties?.pathNetwork;
+  if (!network) return { nodeIds: [], primaryNodeId: null };
+  const current = prunePathNodeSelection(network, {
+    nodeIds: selectedPathNodeIds,
+    primaryNodeId: selectedPathNodeId
+  });
+  const id = String(nodeId || '');
+  let next;
+  if (preserveGroup && current.nodeIds.includes(id)) {
+    next = { nodeIds: [...current.nodeIds], primaryNodeId: id };
+  } else {
+    next = togglePathNodeSelection(network, current, id, { additive });
+  }
+  selectedPathNodeIds = new Set(next.nodeIds);
+  selectedPathNodeId = next.primaryNodeId;
+  selectedSplineNodeIndex = network.nodes.findIndex(node => node.id === next.primaryNodeId);
+  return next;
+}
+
+function resolveEditorNodePosition(scene, renderer, node) {
+  return resolvePathNodePosition(node, {
+    terrainHeightAt: (x, z) => renderer?.terrainHeightForScene?.(scene, x, z)
+  });
 }
 
 function pathSegmentSelection(object, node = null) {
+  ensurePathSelectionScope(object);
   const network = object?.properties?.pathNetwork;
   const segments = network?.segments || [];
   let segment = selectedPathSegmentId
@@ -295,7 +368,8 @@ function pathPanel(object) {
   if (network?.schemaVersion !== 2) {
     return `<section class="v011-authoring-panel" data-v011-panel="path"><div class="v011-panel-title"><div><small>PATH NETWORK</small><strong>Migration required</strong></div></div><p class="v011-note">This path has not been migrated to the authoritative 3D Path Network. Save and reopen the project before editing it.</p></section>`;
   }
-  const { index: selectedIndex, node: selectedNode } = pathNodeSelection(object);
+  const { index: selectedIndex, node: selectedNode, nodeIds: selectedNodeIdsForPanel } = pathNodeSelection(object);
+  const diagnosticOverlay = pathDiagnosticMode(object);
   const runtime = activePathRuntime(object);
   const compilerDiagnostics = runtime?.compiled?.diagnostics;
   const invalidSegments = runtime?.compiled?.segments?.filter(segment => segment.construction.mode === 'invalid') || [];
@@ -309,6 +383,8 @@ function pathPanel(object) {
     .filter((reason, index, reasons) => reasons.indexOf(reason) === index)
     .join(' · ');
   const { segment: selectedSegment } = pathSegmentSelection(object, selectedNode);
+  const selectedNodeDegree = network.segments.filter(segment => segment.fromNode === selectedNode.id || segment.toNode === selectedNode.id).length;
+  const selectedNodeCanSplit = selectedNodeDegree === 2 && selectedNode.locked !== true;
   const nodeIndexById = new Map(network.nodes.map((node, index) => [node.id, index + 1]));
   const segmentOptions = network.segments.map((segment, index) => {
     const from = nodeIndexById.get(segment.fromNode) || '?';
@@ -406,21 +482,22 @@ function pathPanel(object) {
       <p class="v011-note">Surface details are deterministic and weather-aware: puddles, wheel ruts, hoof impressions, boot traffic, and erosion remain tied to the compiled road instead of floating decals.</p>
     </div>
     <button id="v011SplineEdit" class="button ${splineEditPathId === object.id ? 'primary' : 'subtle'}" type="button">${splineEditPathId === object.id ? 'Finish spline editing' : 'Edit nodes in viewport'}</button>
-    <p class="v011-note"><strong>Viewport:</strong> left-drag moves a node over terrain. Shift-drag raises or lowers it. Right-click inserts a node into the nearest compiled segment.</p>
+    <p class="v011-note"><strong>Viewport:</strong> click selects one node; Ctrl/Cmd-click toggles a group. Drag moves the selection over terrain. Shift-drag raises or lowers it. Right-click inserts a node into the nearest compiled segment.</p>
     <div class="v011-grid">
       <label class="v011-field"><span>Show this spline</span><input id="v012ShowSpline" type="checkbox" ${network.editor?.showSpline !== false ? 'checked' : ''}></label>
-      <label class="v011-field"><span>Route cost overlay</span><input id="v012ShowRouteCosts" type="checkbox" ${network.editor?.showGrade === true ? 'checked' : ''}></label>
+      <label class="v011-field"><span>Diagnostic overlay</span><select id="v012DiagnosticOverlay"><option value="none" ${diagnosticOverlay === 'none' ? 'selected' : ''}>None</option><option value="grade" ${diagnosticOverlay === 'grade' ? 'selected' : ''}>Grade</option><option value="curvature" ${diagnosticOverlay === 'curvature' ? 'selected' : ''}>Curvature</option><option value="cut-fill" ${diagnosticOverlay === 'cut-fill' ? 'selected' : ''}>Cut / fill</option><option value="construction" ${diagnosticOverlay === 'construction' ? 'selected' : ''}>Construction bounds</option></select></label>
       <label class="v011-field"><span>Construction mode</span><select id="v012ConstructionMode">${constructionOptions}</select></label>
       <label class="v011-field"><span>Lock construction</span><input id="v012ConstructionLocked" type="checkbox" ${selectedSegment?.constructionLocked ? 'checked' : ''}></label>
       <label class="v011-field"><span>Bridge family</span><select id="v012BridgeStyle">${bridgeOptions}</select></label>
       <label class="v011-field"><span>Bridge railings</span><input id="v012BridgeRailings" type="checkbox" ${selectedSegment?.structureProfile?.railings !== false ? 'checked' : ''}></label>
       <label class="v011-field"><span>Civil Assist</span><input id="v012CivilAssist" type="checkbox" ${network.engineering?.civilAssist !== false ? 'checked' : ''}></label>
     </div>
+    <div class="v012-overlay-legend" aria-label="Path overlay legend"><span class="grade">Grade</span><span class="curvature">Curvature</span><span class="cut">Cut</span><span class="fill">Fill</span><span class="construction">Construction</span></div>
     <p class="v011-note">${activeBridgeSelections.length
       ? `Resolved bridge: ${escapeHtml(activeBridgeSelections.map(item => `${item.label} · ${Number(item.span).toFixed(1)} m span`).join(' · '))}`
       : 'Bridge families are only generated for validated bridge intervals. Terrain-following dirt paths remain terrain construction and never receive bridge supports.'}</p>
     <div class="v011-node-editor">
-      <div class="v011-panel-title"><div><small>SELECTED 3D NODE</small><strong>Node ${selectedIndex + 1}</strong></div><span>${escapeHtml(selectedNode.heightMode)}</span></div>
+      <div class="v011-panel-title"><div><small>SELECTED 3D NODE${selectedNodeIdsForPanel.length > 1 ? ' GROUP' : ''}</small><strong>${selectedNodeIdsForPanel.length > 1 ? `${selectedNodeIdsForPanel.length} nodes · primary ${selectedIndex + 1}` : `Node ${selectedIndex + 1}`}</strong></div><span>${escapeHtml(selectedNode.heightMode)}</span></div>
       <div class="v011-grid">
         <label class="v011-field"><span>X</span><input id="v012NodeX" type="number" step="0.1" value="${Number(selectedNode.position[0] || 0)}"></label>
         <label class="v011-field"><span>Y</span><input id="v012NodeY" type="number" step="0.1" value="${Number(selectedNode.position[1] || 0)}"></label>
@@ -429,6 +506,12 @@ function pathPanel(object) {
         <label class="v011-field"><span>Terrain offset</span><input id="v012HeightOffset" type="number" step="0.1" value="${Number(selectedNode.heightOffset || 0)}"></label>
       </div>
       <div class="v011-actions v012-action-row"><button id="v012ApplyNode" class="primary" type="button">Apply 3D node</button><button id="v012SnapTerrain" type="button">Snap to terrain</button><button id="v012DeleteNode" type="button">Delete node</button><button id="v012UndoPath" type="button">Undo path edit</button><button id="v012RedoPath" type="button">Redo path edit</button></div>
+      <div class="v012-group-editor" ${selectedNodeIdsForPanel.length > 1 ? '' : 'hidden'}>
+        <div class="v011-panel-title"><div><small>GROUP DELTA</small><strong>Move selected nodes together</strong></div><span>${selectedNodeIdsForPanel.length} selected</span></div>
+        <div class="v011-grid"><label class="v011-field"><span>Delta X</span><input id="v012GroupDeltaX" type="number" step="0.1" value="0"></label><label class="v011-field"><span>Delta Y</span><input id="v012GroupDeltaY" type="number" step="0.1" value="0"></label><label class="v011-field"><span>Delta Z</span><input id="v012GroupDeltaZ" type="number" step="0.1" value="0"></label></div>
+        <div class="v011-actions"><button id="v012ApplyGroupDelta" class="primary" type="button">Apply group delta</button></div>
+        <p class="v011-note">X/Z preserves each node's terrain, offset, or absolute height authority. A non-zero Y delta converts the selected nodes into explicit absolute-height anchors.</p>
+      </div>
       <div class="v012-handle-editor">
         <div class="v011-panel-title"><div><small>SPLINE HANDLES</small><strong>Curve direction and reach</strong></div><span>${escapeHtml(selectedNode.handleMode)}</span></div>
         <div class="v011-grid">
@@ -447,7 +530,8 @@ function pathPanel(object) {
           : 'This is a junction node. Its shared approach geometry remains automatic; edit the connected approach nodes for predictable intersections.'}</p>
       </div>
     </div>
-    <div class="v011-actions"><button id="v012ReverseNetwork" type="button">Reverse segment directions</button></div>
+    <div class="v011-actions v012-action-row"><button id="v012ReverseNetwork" type="button">Reverse segment directions</button><button id="v012DuplicateNetwork" type="button">Duplicate path</button><button id="v012SplitNetwork" type="button" ${selectedNodeCanSplit ? '' : 'disabled'}>Split at primary node</button></div>
+    <p class="v011-note">Duplicate creates an independent offset copy. Split is available only on a degree-2 articulation node; endpoints and junctions stay protected from ambiguous graph cuts.</p>
     <div class="v012-network-tools">
       <div class="v011-panel-title"><div><small>PATH BRANCHES</small><strong>Join paths into one network</strong></div><span>${joinablePaths.length} available</span></div>
       ${joinablePaths.length
@@ -492,7 +576,7 @@ function enhanceInspector() {
   const container = $('#inspectorContent');
   const object = selectedObject();
   if (!container || !object) return;
-  const signature = `${object.id}:${currentSnapshot()?.state?.engine?.revision || 0}:${foundation?.terrainDiagnostics?.checkedAt || ''}:${splineEditPathId || ''}:${selectedPathNodeId || ''}:${selectedPathSegmentId || ''}:${terrainSculptMode?.terrainId || ''}:${routeGenerationRevision}:${routeGenerationState.status}:${routeGenerationState.selectedCandidate}`;
+  const signature = `${object.id}:${currentSnapshot()?.state?.engine?.revision || 0}:${foundation?.terrainDiagnostics?.checkedAt || ''}:${splineEditPathId || ''}:${pathSelectionOwnerId || ''}:${selectedPathNodeId || ''}:${[...selectedPathNodeIds].join(',')}:${selectedPathSegmentId || ''}:${terrainSculptMode?.terrainId || ''}:${routeGenerationRevision}:${routeGenerationState.status}:${routeGenerationState.selectedCandidate}`;
   if (container.dataset.v011Signature === signature && container.querySelector('[data-v011-panel]')) return;
   const selectedNode = pathNodeSelection(object);
   container.dataset.v011Signature = signature;
@@ -536,10 +620,11 @@ function enhanceInspector() {
     ...object.properties.pathNetwork,
     editor: { ...object.properties.pathNetwork.editor, showSpline: event.target.checked }
   }, 'Toggle spline visibility'));
-  $('#v012ShowRouteCosts')?.addEventListener('change', event => replacePathNetwork(object, {
-    ...object.properties.pathNetwork,
-    editor: { ...object.properties.pathNetwork.editor, showGrade: event.target.checked }
-  }, 'Toggle route cost overlay'));
+  $('#v012DiagnosticOverlay')?.addEventListener('change', event => {
+    const mode = event.target.value || 'none';
+    pathDiagnosticModes.set(object.id, mode);
+    bridge()?.renderer?.()?.setPathDiagnosticMode?.(object.id, mode);
+  });
   $('#v012SelectedSegment')?.addEventListener('change', event => {
     selectedPathSegmentId = event.target.value || null;
     enhanceInspector();
@@ -586,6 +671,7 @@ function enhanceInspector() {
     engineering: { ...object.properties.pathNetwork.engineering, civilAssist: event.target.checked }
   }, 'Update Civil Assist'));
   $('#v012ApplyNode')?.addEventListener('click', () => applySelectedNode(object, selectedNode.node));
+  $('#v012ApplyGroupDelta')?.addEventListener('click', () => applySelectedNodeGroupDelta(object));
   $('#v012HandleMode')?.addEventListener('change', updateHandleInputState);
   $('#v012ApplyHandles')?.addEventListener('click', () => applySelectedNodeHandles(object, selectedNode.node));
   updateHandleInputState();
@@ -601,8 +687,10 @@ function enhanceInspector() {
   $('#v012RedoPath')?.addEventListener('click', () => redoPathNetwork(object));
   $('#v012ReverseNetwork')?.addEventListener('click', () => transactPathNetwork(object, {
     label: 'Reverse path directions',
-    operations: object.properties.pathNetwork.segments.map(segment => ({ type: 'reverse-segment', segmentId: segment.id }))
+    operations: [{ type: 'reverse-network' }]
   }));
+  $('#v012DuplicateNetwork')?.addEventListener('click', () => duplicatePathNetworkObject(object));
+  $('#v012SplitNetwork')?.addEventListener('click', () => splitPathNetworkObject(object, selectedNode.node));
   $('#v012JoinPath')?.addEventListener('click', () => joinPathNetwork(object, $('#v012JoinSourcePath')?.value));
   for (const id of ['v012RouteArchetype','v012RouteSeed','v012RouteStartX','v012RouteStartZ','v012RouteEndX','v012RouteEndZ','v012UseRestriction','v012RestrictionMinX','v012RestrictionMaxX','v012RestrictionMinZ','v012RestrictionMaxZ']) {
     $(`#${id}`)?.addEventListener('change', () => captureRouteDraft(object));
@@ -656,6 +744,79 @@ async function replacePathNetwork(object, network, label) {
   }
 }
 
+async function duplicatePathNetworkObject(object) {
+  try {
+    const network = object.properties.pathNetwork;
+    const widths = network.segments
+      .map(segment => Number(segment.crossSectionProfile?.width || 2))
+      .filter(Number.isFinite);
+    const clearance = Math.max(4, ...widths) * 2;
+    const first = network.nodes[0]?.position || [0, 0, 0];
+    const last = network.nodes.at(-1)?.position || [1, 0, 0];
+    const dx = Number(last[0] || 0) - Number(first[0] || 0);
+    const dz = Number(last[2] || 0) - Number(first[2] || 0);
+    const length = Math.hypot(dx, dz);
+    const offset = length > 1e-6
+      ? [-dz / length * clearance, 0, dx / length * clearance]
+      : [clearance, 0, clearance];
+    const payload = await api(`/api/v012/path/${encodeURIComponent(object.id)}/duplicate`, {
+      method: 'POST',
+      body: {
+        expectedRevision: object.properties.pathNetwork.revision,
+        name: `${object.name} Copy`,
+        offset,
+        label: 'Duplicate path network'
+      }
+    });
+    // Creation history belongs to the source path. Keep it selected so the
+    // very next Undo removes the duplicate instead of presenting an empty
+    // history panel on the newly created object.
+    splineEditPathId = object.id;
+    pathSelectionOwnerId = object.id;
+    selectedPathNodeId = object.properties.pathNetwork.nodes[0]?.id || null;
+    selectedPathNodeIds = new Set(selectedPathNodeId ? [selectedPathNodeId] : []);
+    await applyMutation(payload, false);
+    bridge()?.showToast?.(`Duplicated ${object.name} as ${payload.path.name}`, 'success');
+    return payload;
+  } catch (error) {
+    bridge()?.showToast?.(error.message, 'error');
+    return null;
+  }
+}
+
+async function splitPathNetworkObject(object, node) {
+  if (!node?.id) return;
+  const degree = object.properties.pathNetwork.segments
+    .filter(segment => segment.fromNode === node.id || segment.toNode === node.id).length;
+  if (degree !== 2) {
+    bridge()?.showToast?.('Split requires a degree-2 path node, not an endpoint or junction.', 'error');
+    return;
+  }
+  try {
+    const payload = await api(`/api/v012/path/${encodeURIComponent(object.id)}/split`, {
+      method: 'POST',
+      body: {
+        expectedRevision: object.properties.pathNetwork.revision,
+        nodeId: node.id,
+        name: `${object.name} Split`,
+        label: 'Split path network'
+      }
+    });
+    // As with duplication, the retained path owns the atomic history entry.
+    // Leave it active so Undo/Redo remains immediately discoverable.
+    splineEditPathId = object.id;
+    pathSelectionOwnerId = object.id;
+    selectedPathNodeId = payload.splitNodeId;
+    selectedPathNodeIds = new Set([payload.splitNodeId]);
+    await applyMutation(payload, false);
+    bridge()?.showToast?.(`Split ${object.name} into two independent paths`, 'success');
+    return payload;
+  } catch (error) {
+    bridge()?.showToast?.(error.message, 'error');
+    return null;
+  }
+}
+
 async function transactPathNetwork(object, transaction) {
   try {
     const payload = await api(`/api/v012/path/${encodeURIComponent(object.id)}/transaction`, {
@@ -666,9 +827,15 @@ async function transactPathNetwork(object, transaction) {
       }
     });
     await applyMutation(payload, true);
-    if (selectedPathNodeId && !payload.network.nodes.some(node => node.id === selectedPathNodeId)) {
-      selectedPathNodeId = payload.network.nodes[Math.max(0, payload.network.nodes.length - 1)]?.id || null;
-    }
+    const selection = prunePathNodeSelection(payload.network, {
+      nodeIds: selectedPathNodeIds,
+      primaryNodeId: selectedPathNodeId
+    });
+    selectedPathNodeIds = new Set(selection.nodeIds);
+    selectedPathNodeId = selection.primaryNodeId
+      || payload.network.nodes[Math.max(0, payload.network.nodes.length - 1)]?.id
+      || null;
+    if (selectedPathNodeId && !selectedPathNodeIds.size) selectedPathNodeIds.add(selectedPathNodeId);
     bridge()?.showToast?.(`${transaction.label || 'Path edit'} · r${payload.network.revision}`, 'success');
     return payload;
   } catch (error) {
@@ -693,7 +860,9 @@ async function joinPathNetwork(target, sourceId) {
       }
     });
     splineEditPathId = target.id;
+    pathSelectionOwnerId = target.id;
     selectedPathNodeId = payload.junctionNodeId;
+    selectedPathNodeIds = new Set(payload.junctionNodeId ? [payload.junctionNodeId] : []);
     await applyMutation(payload, true);
     bridge()?.showToast?.(
       `Joined ${source.name} · ${payload.importedSegmentCount + 1} connected segments · r${payload.network.revision}`,
@@ -746,6 +915,49 @@ function applySelectedNode(object, node) {
       heightMode: $('#v012HeightMode')?.value || node.heightMode,
       heightOffset: Number($('#v012HeightOffset')?.value || 0)
     }]
+  });
+}
+
+function applySelectedNodeGroupDelta(object) {
+  const network = object?.properties?.pathNetwork;
+  const snapshot = currentSnapshot();
+  const renderer = bridge()?.renderer?.();
+  if (!network || !snapshot?.scene) return;
+  const deltaX = Number($('#v012GroupDeltaX')?.value || 0);
+  const deltaY = Number($('#v012GroupDeltaY')?.value || 0);
+  const deltaZ = Number($('#v012GroupDeltaZ')?.value || 0);
+  if (![deltaX, deltaY, deltaZ].every(Number.isFinite)) {
+    bridge()?.showToast?.('Group deltas must be finite numbers.', 'error');
+    return;
+  }
+  if (deltaX === 0 && deltaY === 0 && deltaZ === 0) {
+    bridge()?.showToast?.('Enter a non-zero group delta.', 'error');
+    return;
+  }
+  const selection = prunePathNodeSelection(network, {
+    nodeIds: selectedPathNodeIds,
+    primaryNodeId: selectedPathNodeId
+  });
+  if (selection.nodeIds.length < 2) {
+    bridge()?.showToast?.('Ctrl/Cmd-click at least two path nodes first.', 'error');
+    return;
+  }
+  const preview = createPathNodeGroupPreview(object, selection, {
+    resolveEffectivePosition: node => resolveEditorNodePosition(snapshot.scene, renderer, node)
+  });
+  if (deltaY !== 0) {
+    updatePathNodeGroupPreview(preview, { deltaY, vertical: true });
+    for (const nodeId of preview.nodeIds) {
+      const node = preview.previewPath.properties.pathNetwork.nodes.find(item => item.id === nodeId);
+      node.position[0] += deltaX;
+      node.position[2] += deltaZ;
+    }
+  } else {
+    updatePathNodeGroupPreview(preview, { deltaX, deltaZ });
+  }
+  return transactPathNetwork(object, {
+    label: `Move ${selection.nodeIds.length} path nodes`,
+    operations: pathNodeGroupMoveOperations(preview)
   });
 }
 
@@ -1125,7 +1337,10 @@ function installOverlay() {
     // Handles are reconciled continuously while the camera and scene move.
     // Keep one stable listener on the overlay instead of tying input authority
     // to the lifetime of an individual button element.
-    overlay.addEventListener('pointerdown', beginNodeDrag, true);
+    overlay.addEventListener('pointerdown', event => {
+      if (event.target?.closest?.('[data-spline-handle]')) beginPathHandleDrag(event);
+      else beginNodeDrag(event);
+    }, true);
     overlay.dataset.nodeDragDelegated = 'true';
   }
 }
@@ -1141,44 +1356,112 @@ function renderNodeOverlay() {
   }
   const authoritativePath = snapshot.scene.objects.find(object => object.id === splineEditPathId && object.type === 'path');
   const path = draggingNode?.pathId === splineEditPathId
-    ? draggingNode.previewPath
+    ? draggingNode.groupPreview?.previewPath
     : authoritativePath;
   if (!path?.properties?.pathNetwork) { overlay.replaceChildren(); return; }
+  ensurePathSelectionScope(path);
   const nodes = path.properties.pathNetwork.nodes || [];
-  const existing = new Map([...overlay.querySelectorAll('[data-spline-node]')].map(node => [Number(node.dataset.splineNode), node]));
+  const selection = prunePathNodeSelection(path.properties.pathNetwork, {
+    nodeIds: selectedPathNodeIds,
+    primaryNodeId: selectedPathNodeId
+  });
+  selectedPathNodeIds = new Set(selection.nodeIds);
+  selectedPathNodeId = selection.primaryNodeId;
+  renderEditorCurvePreview({ overlay, path, snapshot, renderer });
+  ensureHandleConnectorLayer(overlay);
+  const existing = new Map([...overlay.querySelectorAll('[data-spline-node-id]')]
+    .filter(node => !node.dataset.splineHandle)
+    .map(node => [node.dataset.splineNodeId, node]));
   nodes.forEach((node, index) => {
-    const terrainY = renderer.terrainHeightForScene?.(snapshot.scene, node.position[0], node.position[2]) ?? 0;
-    const y = node.heightMode === 'absolute' ? node.position[1] : terrainY + (node.heightMode === 'offset' ? Number(node.heightOffset || 0) : 0);
+    const y = resolveEditorNodePosition(snapshot.scene, renderer, node)[1];
     const screen = renderer.worldToScreen?.(snapshot.camera, [node.position[0], y + 0.55, node.position[2]]);
-    let handle = existing.get(index);
+    let handle = existing.get(node.id);
     if (!handle) {
       handle = document.createElement('button');
       handle.type = 'button';
       handle.className = 'spline-node-handle';
-      handle.dataset.splineNode = String(index);
       overlay.appendChild(handle);
     }
-    existing.delete(index);
+    handle.dataset.splineNodeId = node.id;
+    handle.dataset.splineNodeIndex = String(index);
+    existing.delete(node.id);
     if (!screen?.visible) { handle.hidden = true; return; }
     handle.hidden = false;
-    handle.classList.toggle('selected', node.id === selectedPathNodeId);
+    const member = selectedPathNodeIds.has(node.id);
+    const primary = node.id === selectedPathNodeId;
+    handle.classList.toggle('selected', member);
+    handle.classList.toggle('selected-member', member && !primary);
+    handle.classList.toggle('selected-primary', primary);
+    handle.setAttribute('aria-pressed', member ? 'true' : 'false');
     handle.title = `Node ${index + 1} · ${node.heightMode} · ${y.toFixed(2)} m`;
     handle.style.transform = `translate(${screen.x}px, ${screen.y}px)`;
     handle.textContent = String(index + 1);
   });
   existing.forEach(node => node.remove());
+  renderPathHandleGizmos({ overlay, path, snapshot, renderer });
+}
+
+function ensureEditorCurvePreviewLayer(overlay) {
+  let svg = overlay.querySelector('.spline-drag-preview');
+  if (svg) return svg;
+  svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.classList.add('spline-drag-preview');
+  svg.setAttribute('aria-hidden', 'true');
+  overlay.prepend(svg);
+  return svg;
+}
+
+function renderEditorCurvePreview({ overlay, path, snapshot, renderer }) {
+  const svg = ensureEditorCurvePreviewLayer(overlay);
+  if (!draggingNode || draggingNode.pathId !== path.id) {
+    svg.hidden = true;
+    svg.replaceChildren();
+    return;
+  }
+  svg.hidden = false;
+  svg.setAttribute('viewBox', `0 0 ${Math.max(1, overlay.clientWidth)} ${Math.max(1, overlay.clientHeight)}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  const curves = samplePathEditorCurvePreview(path, {
+    resolveNodePosition: node => resolveEditorNodePosition(snapshot.scene, renderer, node),
+    samplesPerSegment: 18
+  });
+  const fragment = document.createDocumentFragment();
+  const project = points => points
+    .map(point => renderer.worldToScreen?.(snapshot.camera, [point[0], point[1] + 0.08, point[2]]))
+    .filter(point => point?.visible)
+    .map(point => `${point.x.toFixed(2)},${point.y.toFixed(2)}`);
+  for (const curve of curves) {
+    const left = project(curve.left);
+    const right = project(curve.right);
+    const center = project(curve.center);
+    if (left.length > 1 && right.length > 1) {
+      const ribbon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      ribbon.classList.add('spline-drag-preview-ribbon');
+      ribbon.dataset.previewSegmentId = curve.segmentId;
+      ribbon.setAttribute('points', [...left, ...right.reverse()].join(' '));
+      fragment.appendChild(ribbon);
+    }
+    if (center.length > 1) {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      line.classList.add('spline-drag-preview-center');
+      line.dataset.previewSegmentId = curve.segmentId;
+      line.setAttribute('points', center.join(' '));
+      fragment.appendChild(line);
+    }
+  }
+  svg.replaceChildren(fragment);
 }
 
 function beginNodeDrag(event) {
   const overlay = $('#splineNodeOverlay');
-  const handle = event.target?.closest?.('[data-spline-node]');
+  const handle = event.target?.closest?.('[data-spline-node-id]:not([data-spline-handle])');
   if (!overlay || !handle || !overlay.contains(handle)) return;
-  if (event.button !== 0 || event.isPrimary === false || draggingNode) {
+  if (event.button !== 0 || event.isPrimary === false || draggingNode || draggingHandle) {
     window.__omniforgeDiagnostics?.log?.('path-node-drag-rejected', {
       button: event.button,
       isPrimary: event.isPrimary,
       pointerId: event.pointerId,
-      dragAlreadyActive: Boolean(draggingNode)
+      dragAlreadyActive: Boolean(draggingNode || draggingHandle)
     });
     return;
   }
@@ -1187,11 +1470,22 @@ function beginNodeDrag(event) {
   const snapshot = currentSnapshot();
   const path = snapshot?.scene?.objects?.find(object => object.id === splineEditPathId);
   if (!path) return;
-  selectedSplineNodeIndex = Number(handle.dataset.splineNode);
-  const node = path.properties?.pathNetwork?.nodes?.[selectedSplineNodeIndex];
+  const node = path.properties?.pathNetwork?.nodes?.find(item => item.id === handle.dataset.splineNodeId);
   if (!node) return;
-  selectedPathNodeId = node.id;
+  if (event.ctrlKey || event.metaKey) {
+    setPathNodeSelection(path, node.id, { additive: true });
+    enhanceInspector();
+    return;
+  }
+  const selection = setPathNodeSelection(path, node.id, { preserveGroup: true });
   const renderer = bridge()?.renderer?.();
+  const startSurfacePoint = renderer?.terrainPointFromScreen?.(
+    snapshot.scene,
+    snapshot.camera,
+    event.clientX,
+    event.clientY,
+    { surface: 'base' }
+  ) || resolveEditorNodePosition(snapshot.scene, renderer, node);
   draggingNode = {
     pathId: path.id,
     nodeId: node.id,
@@ -1199,9 +1493,8 @@ function beginNodeDrag(event) {
     pointerId: event.pointerId,
     captureTarget: handle,
     startClientY: event.clientY,
-    startPosition: [...node.position],
-    startHeightMode: node.heightMode,
-    startHeightOffset: node.heightOffset,
+    startSurfacePoint,
+    selectionAtStart: selection,
     vertical: event.shiftKey === true,
     gesture: createPathNodeDragGesture({
       pointerId: event.pointerId,
@@ -1209,14 +1502,16 @@ function beginNodeDrag(event) {
       clientY: event.clientY,
       vertical: event.shiftKey === true
     }),
-    previewPath: createPathNodeDragPreview(path, node.id),
-    restorePreview: renderer?.pathPreview ? structuredClone(renderer.pathPreview) : null
+    groupPreview: createPathNodeGroupPreview(path, selection, {
+      resolveEffectivePosition: item => resolveEditorNodePosition(snapshot.scene, renderer, item)
+    })
   };
   window.__omniforgeDiagnostics?.log?.('path-node-drag-begin', {
     pathId: path.id,
     nodeId: node.id,
     pointerId: event.pointerId,
-    vertical: event.shiftKey === true
+    vertical: event.shiftKey === true,
+    nodeCount: selection.nodeIds.length
   });
   enhanceInspector();
   handle.setPointerCapture?.(event.pointerId);
@@ -1226,9 +1521,85 @@ function beginNodeDrag(event) {
   handle.addEventListener('lostpointercapture', cancelNodeDragFromEvent, { once: true });
 }
 
+function ensureHandleConnectorLayer(overlay) {
+  let svg = overlay.querySelector('.spline-handle-connectors');
+  if (svg) return svg;
+  svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.classList.add('spline-handle-connectors');
+  svg.setAttribute('aria-hidden', 'true');
+  for (const side of ['incoming', 'outgoing']) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.dataset.splineHandleLine = side;
+    svg.appendChild(line);
+  }
+  overlay.prepend(svg);
+  return svg;
+}
+
+function renderPathHandleGizmos({ overlay, path, snapshot, renderer }) {
+  const network = path?.properties?.pathNetwork;
+  const primary = network?.nodes?.find(node => node.id === selectedPathNodeId);
+  const svg = ensureHandleConnectorLayer(overlay);
+  const existing = new Map([...overlay.querySelectorAll('[data-spline-handle]')]
+    .map(button => [button.dataset.splineHandle, button]));
+  if (!primary || !['free', 'aligned'].includes(primary.handleMode)) {
+    svg.hidden = true;
+    existing.forEach(button => button.remove());
+    return;
+  }
+  const suggested = suggestPathNodeHandles(network, primary.id);
+  if (suggested.degree > 2) {
+    svg.hidden = true;
+    existing.forEach(button => button.remove());
+    return;
+  }
+  const preview = draggingHandle?.pathId === path.id && draggingHandle.nodeId === primary.id
+    ? draggingHandle.preview : null;
+  const displayNode = preview ? {
+    ...primary,
+    handleMode: preview.handleMode,
+    incomingHandle: preview.incomingHandle,
+    outgoingHandle: preview.outgoingHandle
+  } : primary;
+  const endpoints = pathHandleEndpoints(displayNode, {
+    terrainHeightAt: (x, z) => renderer.terrainHeightForScene?.(snapshot.scene, x, z),
+    suggestedHandles: suggested
+  });
+  const nodeScreen = renderer.worldToScreen?.(snapshot.camera, endpoints.position);
+  svg.setAttribute('viewBox', `0 0 ${Math.max(1, overlay.clientWidth)} ${Math.max(1, overlay.clientHeight)}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.hidden = !nodeScreen?.visible;
+  for (const side of ['incoming', 'outgoing']) {
+    const endpointScreen = renderer.worldToScreen?.(snapshot.camera, endpoints[side]);
+    const line = svg.querySelector(`[data-spline-handle-line="${side}"]`);
+    let button = existing.get(side);
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = `spline-tangent-handle ${side}`;
+      button.dataset.splineHandle = side;
+      overlay.appendChild(button);
+    }
+    button.dataset.splineNodeId = primary.id;
+    existing.delete(side);
+    const visible = Boolean(nodeScreen?.visible && endpointScreen?.visible);
+    button.hidden = !visible;
+    if (line) line.hidden = !visible;
+    if (!visible) continue;
+    line?.setAttribute('x1', String(nodeScreen.x));
+    line?.setAttribute('y1', String(nodeScreen.y));
+    line?.setAttribute('x2', String(endpointScreen.x));
+    line?.setAttribute('y2', String(endpointScreen.y));
+    button.style.transform = `translate(${endpointScreen.x}px, ${endpointScreen.y}px)${side === 'outgoing' ? ' rotate(45deg)' : ''}`;
+    button.title = `${side === 'incoming' ? 'Incoming' : 'Outgoing'} ${displayNode.handleMode} tangent · drag to shape curve`;
+    button.setAttribute('aria-label', button.title);
+  }
+  existing.forEach(button => button.remove());
+}
+
 function flushNodeDragPreview() {
   pathDragPreviewFrame = 0;
-  if (!draggingNode?.previewPath) return;
+  if (!draggingNode?.groupPreview?.previewPath) return;
   // renderNodeOverlay reads previewPath directly, so the selected handle still
   // tracks the pointer each animation frame. Replacing the renderer's complete
   // path authority here forced the corridor, terrain, collision, and structural
@@ -1236,7 +1607,8 @@ function flushNodeDragPreview() {
   // Full connected-system generation now happens once on pointer release.
   window.__omniforgeDiagnostics?.log?.('path-node-drag-preview', {
     pathId: draggingNode.pathId,
-    nodeId: draggingNode.nodeId
+    nodeId: draggingNode.nodeId,
+    nodeCount: draggingNode.groupPreview.nodeIds.length
   });
 }
 
@@ -1255,14 +1627,11 @@ function dragNode(event) {
   event.preventDefault();
   const snapshot = currentSnapshot();
   const renderer = bridge()?.renderer?.();
-  const node = pathNodeFromDragPreview(draggingNode.previewPath, draggingNode.nodeId);
-  if (!node) return;
   if (draggingNode.gesture.vertical) {
     draggingNode.vertical = true;
-    updatePathNodeDragPreview(draggingNode.previewPath, draggingNode.nodeId, {
-      position: [node.position[0], draggingNode.startPosition[1] - (event.clientY - draggingNode.startClientY) * 0.15, node.position[2]],
-      heightMode: 'absolute',
-      heightOffset: 0
+    updatePathNodeGroupPreview(draggingNode.groupPreview, {
+      deltaY: -(event.clientY - draggingNode.startClientY) * 0.15,
+      vertical: true
     });
   } else {
     const point = renderer?.terrainPointFromScreen?.(
@@ -1273,8 +1642,9 @@ function dragNode(event) {
       { surface: 'base' }
     );
     if (!point) return;
-    updatePathNodeDragPreview(draggingNode.previewPath, draggingNode.nodeId, {
-      position: [point[0], node.heightMode === 'absolute' ? node.position[1] : point[1], point[2]]
+    updatePathNodeGroupPreview(draggingNode.groupPreview, {
+      deltaX: point[0] - draggingNode.startSurfacePoint[0],
+      deltaZ: point[2] - draggingNode.startSurfacePoint[2]
     });
   }
   scheduleNodeDragPreview();
@@ -1319,26 +1689,158 @@ async function finishNodeDrag(event) {
   const snapshot = currentSnapshot();
   const path = snapshot?.scene?.objects?.find(object => object.id === draggingNode.pathId);
   const drag = draggingNode;
-  const node = pathNodeFromDragPreview(drag.previewPath, drag.nodeId);
   const shouldCommit = shouldCommitPathNodeDragGesture(drag.gesture, event);
   draggingNode = null;
   releaseNodeDragListeners(drag);
   clearNodeDragPreview(drag);
-  if (!shouldCommit || !node) return;
+  if (!shouldCommit || !path || !drag.groupPreview) {
+    if (path && drag.selectionAtStart?.nodeIds?.length > 1) {
+      setPathNodeSelection(path, drag.nodeId);
+      enhanceInspector();
+    }
+    return;
+  }
   window.__omniforgeDiagnostics?.log?.('path-node-drag-commit', {
     pathId: drag.pathId,
     nodeId: drag.nodeId,
     vertical: drag.vertical,
-    position: [...node.position]
+    nodeCount: drag.groupPreview.nodeIds.length
   });
   await transactPathNetwork(path, {
-    label: drag.vertical ? 'Raise or lower path node' : 'Move path node',
+    label: drag.vertical
+      ? `Raise or lower ${drag.groupPreview.nodeIds.length} path node${drag.groupPreview.nodeIds.length === 1 ? '' : 's'}`
+      : `Move ${drag.groupPreview.nodeIds.length} path node${drag.groupPreview.nodeIds.length === 1 ? '' : 's'}`,
+    operations: pathNodeGroupMoveOperations(drag.groupPreview)
+  });
+}
+
+function beginPathHandleDrag(event) {
+  const overlay = $('#splineNodeOverlay');
+  const handle = event.target?.closest?.('[data-spline-handle]');
+  if (!overlay || !handle || !overlay.contains(handle)) return;
+  if (event.button !== 0 || event.isPrimary === false || draggingNode || draggingHandle) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const snapshot = currentSnapshot();
+  const path = snapshot?.scene?.objects?.find(object => object.id === splineEditPathId && object.type === 'path');
+  const network = path?.properties?.pathNetwork;
+  const node = network?.nodes?.find(item => item.id === handle.dataset.splineNodeId);
+  if (!path || !node || !['free', 'aligned'].includes(node.handleMode)) return;
+  const suggested = suggestPathNodeHandles(network, node.id);
+  if (suggested.degree > 2) return bridge()?.showToast?.('Junction handles remain automatic; shape each connected approach instead.', 'error');
+  setPathNodeSelection(path, node.id, { preserveGroup: true });
+  const renderer = bridge()?.renderer?.();
+  const endpoints = pathHandleEndpoints(node, {
+    terrainHeightAt: (x, z) => renderer?.terrainHeightForScene?.(snapshot.scene, x, z),
+    suggestedHandles: suggested
+  });
+  const rect = renderer?.canvas?.getBoundingClientRect?.();
+  const centerRay = rect ? renderer.rayFromScreen?.(
+    snapshot.camera,
+    rect.left + rect.width * 0.5,
+    rect.top + rect.height * 0.5
+  ) : null;
+  draggingHandle = {
+    pathId: path.id,
+    nodeId: node.id,
+    side: handle.dataset.splineHandle,
+    pointerId: event.pointerId,
+    captureTarget: handle,
+    node: structuredClone(node),
+    nodePosition: endpoints.position,
+    startEndpoint: endpoints[handle.dataset.splineHandle],
+    planeNormal: centerRay?.dir || [0, 0, -1],
+    suggested,
+    preview: null,
+    gesture: createPathNodeDragGesture({
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      vertical: event.shiftKey === true
+    })
+  };
+  enhanceInspector();
+  handle.setPointerCapture?.(event.pointerId);
+  window.addEventListener('pointermove', dragPathHandle, true);
+  window.addEventListener('pointerup', finishPathHandleDrag, true);
+  window.addEventListener('pointercancel', cancelPathHandleDragFromEvent, true);
+  handle.addEventListener('lostpointercapture', cancelPathHandleDragFromEvent, { once: true });
+}
+
+function dragPathHandle(event) {
+  if (!draggingHandle || event.pointerId !== draggingHandle.pointerId) return;
+  const decision = advancePathNodeDragGesture(draggingHandle.gesture, event);
+  if (decision.cancel) return cancelPathHandleDrag();
+  if (!decision.accepted) return;
+  event.preventDefault();
+  const snapshot = currentSnapshot();
+  const renderer = bridge()?.renderer?.();
+  let worldPoint;
+  if (draggingHandle.gesture.vertical) {
+    worldPoint = [
+      draggingHandle.startEndpoint[0],
+      draggingHandle.startEndpoint[1] - (event.clientY - draggingHandle.gesture.startClientY) * 0.15,
+      draggingHandle.startEndpoint[2]
+    ];
+  } else {
+    const ray = renderer?.rayFromScreen?.(snapshot.camera, event.clientX, event.clientY);
+    worldPoint = intersectPathHandleRayCameraPlane(ray, draggingHandle.startEndpoint, draggingHandle.planeNormal);
+  }
+  if (!worldPoint) return;
+  try {
+    draggingHandle.preview = previewPathHandleDrag({
+      node: draggingHandle.node,
+      nodePosition: draggingHandle.nodePosition,
+      side: draggingHandle.side,
+      worldPoint,
+      handleMode: draggingHandle.node.handleMode,
+      suggestedHandles: draggingHandle.suggested,
+      minimumLength: 0.01
+    });
+  } catch {
+    // Keep the last valid preview while the cursor crosses the node center.
+  }
+}
+
+function releasePathHandleDragListeners(drag) {
+  window.removeEventListener('pointermove', dragPathHandle, true);
+  window.removeEventListener('pointerup', finishPathHandleDrag, true);
+  window.removeEventListener('pointercancel', cancelPathHandleDragFromEvent, true);
+  drag?.captureTarget?.removeEventListener?.('lostpointercapture', cancelPathHandleDragFromEvent);
+  if (drag?.captureTarget?.hasPointerCapture?.(drag.pointerId)) drag.captureTarget.releasePointerCapture(drag.pointerId);
+}
+
+function cancelPathHandleDrag() {
+  if (!draggingHandle) return;
+  const drag = draggingHandle;
+  draggingHandle = null;
+  releasePathHandleDragListeners(drag);
+}
+
+function cancelPathHandleDragFromEvent(event) {
+  if (!draggingHandle || (event.pointerId !== undefined && event.pointerId !== draggingHandle.pointerId)) return;
+  cancelPathHandleDrag();
+}
+
+async function finishPathHandleDrag(event) {
+  if (!draggingHandle || event.pointerId !== draggingHandle.pointerId) return;
+  event.preventDefault();
+  const drag = draggingHandle;
+  const snapshot = currentSnapshot();
+  const path = snapshot?.scene?.objects?.find(object => object.id === drag.pathId);
+  const shouldCommit = shouldCommitPathNodeDragGesture(drag.gesture, event);
+  draggingHandle = null;
+  releasePathHandleDragListeners(drag);
+  if (!shouldCommit || !drag.preview || !path) return;
+  await transactPathNetwork(path, {
+    label: `Shape ${drag.side} spline tangent`,
     operations: [{
-      type: 'move-node',
+      type: 'set-node-handles',
       nodeId: drag.nodeId,
-      position: [...node.position],
-      heightMode: node.heightMode,
-      heightOffset: node.heightOffset
+      handleMode: drag.preview.handleMode,
+      primaryHandle: drag.preview.primaryHandle,
+      incomingHandle: drag.preview.incomingHandle,
+      outgoingHandle: drag.preview.outgoingHandle
     }]
   });
 }
@@ -1368,46 +1870,102 @@ function installViewportEditing() {
   canvas.addEventListener('mousedown', event => {
     if (!splineEditPathId) return;
     if (event.button === 0 && event.target === canvas) {
-      const handle = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-spline-node]');
+      const handle = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-spline-node-id]');
       if (handle) { event.preventDefault(); event.stopImmediatePropagation(); }
     }
+    if (event.button === 2 && event.target === canvas) {
+      pendingPathInsertGesture = {
+        pathId: splineEditPathId,
+        x: event.clientX,
+        y: event.clientY,
+        moved: false,
+        startedAt: performance.now()
+      };
+    }
   }, true);
-  canvas.addEventListener('contextmenu', async event => {
+  canvas.addEventListener('mousemove', event => {
+    if (!pendingPathInsertGesture || !(event.buttons & 2)) return;
+    if (Math.hypot(event.clientX - pendingPathInsertGesture.x, event.clientY - pendingPathInsertGesture.y) > 4) {
+      pendingPathInsertGesture.moved = true;
+    }
+  }, true);
+  const insertPathNodeFromViewport = async (event, source) => {
     if (!splineEditPathId) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    const signature = `${splineEditPathId}:${Math.round(event.clientX)}:${Math.round(event.clientY)}`;
+    if (lastPathInsertGesture?.signature === signature && performance.now() - lastPathInsertGesture.at < 400) return;
+    lastPathInsertGesture = { signature, at: performance.now(), source };
     const snapshot = currentSnapshot();
     const path = snapshot?.scene?.objects?.find(object => object.id === splineEditPathId);
     const authority = compiledPathEditAuthority(path);
     if (!authority.ready) return bridge()?.showToast?.(authority.message, 'error');
-    const point = bridge()?.renderer?.()?.terrainPointFromScreen?.(
-      snapshot.scene,
-      snapshot.camera,
-      event.clientX,
-      event.clientY,
-      { surface: 'base' }
-    );
-    if (!point) return bridge()?.showToast?.('The cursor did not hit terrain.', 'error');
-    const nearest = nearestCompiledStation(authority.runtime.compiled, point);
-    if (!nearest) return bridge()?.showToast?.('No compiled path segment was found.', 'error');
+    const renderer = bridge()?.renderer?.();
+    const viewportBounds = canvas.getBoundingClientRect();
+    const nearest = nearestCompiledScreenStation(authority.runtime.compiled, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      worldToScreen: position => {
+        const projected = renderer?.worldToScreen?.(snapshot.camera, position);
+        return projected ? { ...projected, x: viewportBounds.left + projected.x, y: viewportBounds.top + projected.y } : null;
+      },
+      maximumDistancePixels: 28
+    });
+    if (!nearest) return bridge()?.showToast?.('Right-click closer to the visible spline to insert a node.', 'error');
+    const network = path.properties.pathNetwork;
+    const segment = network.segments.find(item => item.id === nearest.segmentId);
+    const compiledSegment = authority.runtime.compiled.segments.find(item => item.id === nearest.segmentId);
+    const fromNode = network.nodes.find(item => item.id === segment?.fromNode);
+    const toNode = network.nodes.find(item => item.id === segment?.toNode);
+    const preserveCurve = segment?.curveType === 'hermite';
+    const sharedHeightMode = fromNode?.heightMode === toNode?.heightMode
+      ? fromNode.heightMode
+      : 'absolute';
+    const heightOffset = sharedHeightMode === 'offset'
+      ? Number(fromNode.heightOffset || 0) + (Number(toNode.heightOffset || 0) - Number(fromNode.heightOffset || 0)) * nearest.curveT
+      : 0;
     const nodeId = `${path.id}:node:${Date.now().toString(36)}`;
     selectedPathNodeId = nodeId;
+    selectedPathNodeIds = new Set([nodeId]);
     await transactPathNetwork(path, {
       label: 'Insert path node',
       operations: [{
         type: 'insert-node',
         segmentId: nearest.segmentId,
-        node: { id: nodeId, position: [point[0], point[1], point[2]], heightMode: 'terrain' }
+        curveT: nearest.curveT,
+        preserveCurve,
+        curveAuthority: preserveCurve ? compiledSegment?.curveAuthority : null,
+        node: {
+          id: nodeId,
+          position: [...nearest.position],
+          heightMode: sharedHeightMode,
+          heightOffset
+        }
       }]
     });
+  };
+  canvas.addEventListener('mouseup', event => {
+    if (event.button !== 2 || !pendingPathInsertGesture) return;
+    const gesture = pendingPathInsertGesture;
+    pendingPathInsertGesture = null;
+    if (gesture.pathId !== splineEditPathId || gesture.moved || performance.now() - gesture.startedAt > 900) return;
+    void insertPathNodeFromViewport(event, 'right-click-release');
   }, true);
-  document.addEventListener('pointerlockchange', cancelNodeDrag);
-  window.addEventListener('blur', cancelNodeDrag);
+  canvas.addEventListener('contextmenu', event => {
+    pendingPathInsertGesture = null;
+    void insertPathNodeFromViewport(event, 'contextmenu');
+  }, true);
+  const cancelViewportEdits = () => {
+    cancelNodeDrag();
+    cancelPathHandleDrag();
+  };
+  document.addEventListener('pointerlockchange', cancelViewportEdits);
+  window.addEventListener('blur', cancelViewportEdits);
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) cancelNodeDrag();
+    if (document.hidden) cancelViewportEdits();
   });
   document.addEventListener('keydown', event => {
-    if (event.code === 'Escape') cancelNodeDrag();
+    if (event.code === 'Escape') cancelViewportEdits();
   }, true);
 }
 
