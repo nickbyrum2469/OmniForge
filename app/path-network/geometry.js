@@ -2050,7 +2050,10 @@ export function ropeFootbridgeAttachmentPlan(sections, profile) {
     const direction = portalIndex === 0 ? -1 : 1;
     const outward = scale3(station.frame.tangent, direction);
     const posts = station.sides.map(side => {
-      const foot = add3(side.loadRopePoint, scale3(station.frame.up, -0.14));
+      // The transverse sill is a buried footing, not a speed bump across the
+      // first plank. Keep the cable tie on the exact load-rope endpoint while
+      // extending the post below the walking surface to the shared sill.
+      const foot = add3(side.loadRopePoint, scale3(station.frame.up, -0.36));
       return {
         sign: side.sign,
         foot,
@@ -2064,8 +2067,8 @@ export function ropeFootbridgeAttachmentPlan(sections, profile) {
       station,
       outward,
       posts,
-      sillLeft: posts[0].loadTie,
-      sillRight: posts[1].loadTie,
+      sillLeft: posts[0].foot,
+      sillRight: posts[1].foot,
       crossheadLeft: posts[0].top,
       crossheadRight: posts[1].top
     };
@@ -2122,10 +2125,19 @@ function appendRopeFootbridge(builder, segment, sections, baseHeightAt, profile)
   }
 
   for (const portal of plan.portals) {
+    const groundedSillPoints = portal.posts.map(post => {
+      const point = [...post.foot];
+      const terrainY = finite(baseHeightAt(point[0], point[2]), point[1]);
+      // Bury the complete sill below both the deck and authored terrain. The
+      // box thickness then remains below grade instead of bulging through the
+      // path at the bridge threshold.
+      point[1] = Math.min(point[1], terrainY - 0.3);
+      return point;
+    });
     appendBeamBetween(
       builder,
-      portal.sillLeft,
-      portal.sillRight,
+      groundedSillPoints[0],
+      groundedSillPoints[1],
       0.22,
       0.2,
       'bridge-timber-anchor-sill'
@@ -2138,8 +2150,16 @@ function appendRopeFootbridge(builder, segment, sections, baseHeightAt, profile)
       0.22,
       'bridge-timber-anchor-crosshead'
     );
-    for (const post of portal.posts) {
-      appendBeamBetween(builder, post.foot, post.top, 0.28, 0.28, 'bridge-timber-anchor-post');
+    for (let sideIndex = 0; sideIndex < portal.posts.length; sideIndex += 1) {
+      const post = portal.posts[sideIndex];
+      appendBeamBetween(
+        builder,
+        groundedSillPoints[sideIndex],
+        post.top,
+        0.28,
+        0.28,
+        'bridge-timber-anchor-post'
+      );
     }
 
     const deadmanCenter = add3(portal.station.section.center, scale3(portal.outward, 1.45));
@@ -2150,7 +2170,9 @@ function appendRopeFootbridge(builder, segment, sections, baseHeightAt, profile)
         0
       );
       const point = add3(lateral, scale3(portal.outward, 1.45));
-      point[1] = finite(baseHeightAt(point[0], point[2]), deadmanCenter[1]) + 0.12;
+      // A deadman works because it is buried. Keeping its centre below grade
+      // also makes the visible backstay disappear naturally into the bank.
+      point[1] = finite(baseHeightAt(point[0], point[2]), deadmanCenter[1]) - 0.36;
       return point;
     });
     appendBeamBetween(

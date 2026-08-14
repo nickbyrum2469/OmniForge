@@ -380,6 +380,7 @@ The branch remains blocked until the exact Windows package is tested against the
 - Deck planks deliberately overhang the two lower load cables; every vertical hanger uses an existing plank station and terminates at the exact lower and upper cable points. Both cable systems terminate inside the same timber portal posts instead of stopping at a separate lateral offset.
 - Each portal now includes a grounded timber sill, paired posts, crosshead, buried deadman, and two rope backstays. Hemp-rope material response is lighter and more legible under the shared bridge lighting while retaining a rough, non-metallic finish.
 - Permanent behavioral coverage validates the shared attachment coordinates and the complete generated structural role set. Fresh exact-commit packaged close, side, underside, elevated, and player-level inspection remains mandatory before this family can receive visual approval.
+- The portal footing is now genuinely below grade. The transverse timber sill follows the two post feet beneath authored terrain, each post extends down into that common sill while retaining the exact cable tie above, and the deadman centre is buried behind the landing rather than rendered on top of the path. Focused bridge, transition, and construction geometry coverage passes `24/24`; exact-package visual inspection is still required before this specific refinement is approved.
 
 ## Path Network v2 full graph-editing gate (source complete; packaged proof pending)
 

@@ -48,8 +48,10 @@ test('rope footbridge uses one exact attachment plan for planks, cables, hangers
       assert.ok(post.foot[1] < post.loadTie[1]);
       assert.ok(post.top[1] > post.handTie[1]);
     }
-    assert.deepEqual(portal.sillLeft, portal.posts[0].loadTie);
-    assert.deepEqual(portal.sillRight, portal.posts[1].loadTie);
+    assert.deepEqual(portal.sillLeft, portal.posts[0].foot);
+    assert.deepEqual(portal.sillRight, portal.posts[1].foot);
+    assert.ok(portal.sillLeft[1] < portal.posts[0].loadTie[1] - 0.3);
+    assert.ok(portal.sillRight[1] < portal.posts[1].loadTie[1] - 0.3);
   }
 
   for (const station of plan.slatStations) {
@@ -65,7 +67,7 @@ test('rope footbridge uses one exact attachment plan for planks, cables, hangers
 });
 
 test('rope footbridge production geometry includes connected load cables and anchored portal assemblies', () => {
-  const terrainHeightAt = () => 0;
+  const terrainHeightAt = x => (x <= 2 || x >= 22 ? 5 : 0);
   const network = normalizePathNetwork({
     id: 'rope-attachment-geometry',
     nodes: [
@@ -109,4 +111,27 @@ test('rope footbridge production geometry includes connected load cables and anc
   ]) assert.ok(roles.has(role), `missing ${role}`);
   assert.ok(geometry.meshes.structure.indices.length > 0);
   assert.ok(Array.from(geometry.meshes.structure.positions).every(Number.isFinite));
+
+  const positionsForRole = role => geometry.meshes.structure.roles
+    .flatMap((candidate, index) => candidate === role
+      ? [Array.from(geometry.meshes.structure.positions.slice(index * 3, index * 3 + 3))]
+      : []);
+  const sillVertices = positionsForRole('bridge-timber-anchor-sill');
+  const deadmanVertices = positionsForRole('bridge-timber-anchor-deadman');
+  const postVertices = positionsForRole('bridge-timber-anchor-post');
+  assert.ok(sillVertices.length > 0);
+  assert.ok(deadmanVertices.length > 0);
+  assert.ok(postVertices.length > 0);
+  assert.ok(
+    sillVertices.every(point => point[1] <= terrainHeightAt(point[0], point[2]) + 1e-6),
+    'the transverse anchor sill must remain below authored ground instead of crossing the path surface'
+  );
+  assert.ok(
+    deadmanVertices.every(point => point[1] <= terrainHeightAt(point[0], point[2]) + 1e-6),
+    'the deadman timber must remain buried instead of sitting on the approach'
+  );
+  assert.ok(
+    postVertices.some(point => point[1] < terrainHeightAt(point[0], point[2]) - 0.1),
+    'portal posts must extend below grade into the buried sill'
+  );
 });
