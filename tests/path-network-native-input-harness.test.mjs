@@ -27,6 +27,8 @@ test('native right-click insertion targets one named current compiled segment an
   assert.match(desktop, /after\.nodeIds\.length!==before\.nodeIds\.length\+1/);
   assert.match(desktop, /after\.segmentIds\.length!==before\.segmentIds\.length\+1/);
   assert.match(desktop, /insertedNodeIds\.length!==1/);
+  assert.match(desktop, /insertedNode=after\.nodes\.find/);
+  assert.match(desktop, /insertedNode\.heightMode/);
   assert.match(desktop, /splitEdges\.length!==2/);
   assert.match(desktop, /!splitEndpoints\.has\(original\.fromNode\)/);
   assert.match(desktop, /!splitEndpoints\.has\(original\.toNode\)/);

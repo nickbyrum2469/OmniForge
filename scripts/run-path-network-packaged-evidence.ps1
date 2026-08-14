@@ -794,15 +794,19 @@ try {
     network=@{
       schemaVersion=2;id="$($graphPath.id):network";revision=$graphRevision
       nodes=@(
-        @{id='graph-west';position=@(-24,2,-240);heightMode='absolute';heightOffset=0;handleMode='free';incomingHandle=@(-5,0,0);outgoingHandle=@(10,0,0)},
-        @{id='graph-middle';position=@(0,2,-240);heightMode='absolute';heightOffset=0;handleMode='free';incomingHandle=@(-8,0,0);outgoingHandle=@(8,0,0)},
-        @{id='graph-east';position=@(24,2,-240);heightMode='absolute';heightOffset=0;handleMode='free';incomingHandle=@(-10,0,0);outgoingHandle=@(5,0,0)}
+        @{id='graph-west';position=@(-24,0,-80);heightMode='terrain';heightOffset=0;handleMode='free';incomingHandle=@(-5,0,0);outgoingHandle=@(10,0,0)},
+        @{id='graph-middle';position=@(0,0,-80);heightMode='terrain';heightOffset=0;handleMode='free';incomingHandle=@(-8,0,0);outgoingHandle=@(8,0,0)},
+        @{id='graph-east';position=@(24,0,-80);heightMode='terrain';heightOffset=0;handleMode='free';incomingHandle=@(-10,0,0);outgoingHandle=@(5,0,0)}
       )
       segments=@(
         @{id='graph-west-middle';fromNode='graph-west';toNode='graph-middle';curveType='hermite';constructionMode='conform';constructionLocked=$true},
         @{id='graph-middle-east';fromNode='graph-middle';toNode='graph-east';curveType='hermite';constructionMode='conform';constructionLocked=$true}
       )
-      engineering=@{civilAssist=$false;maxGradePercent=40;minimumCurveRadius=1;maxCutDepth=2;maxFillDepth=2;bridgeThreshold=20;maximumBridgeSpan=40}
+      # This isolated route intentionally follows the authored terrain so the
+      # insertion gate exercises terrain-relative profile preservation. Its
+      # job is graph editing, not vehicle-grade validation; allow the natural
+      # slope instead of making the proof path disappear as invalid.
+      engineering=@{civilAssist=$false;maxGradePercent=100;minimumCurveRadius=1;maxCutDepth=2;maxFillDepth=2;bridgeThreshold=20;maximumBridgeSpan=40}
       editor=@{showSpline=$true;showGrade=$true;showConstruction=$true}
     }
   }
@@ -817,8 +821,8 @@ try {
   # Keep Gate 1's saved graph far outside the bridge showcase so it can remain
   # in the same real scene through Save/restart without polluting later bridge
   # captures.
-  $graphInputCamera = Get-LookCamera ([double[]]@(0,36,-198)) ([double[]]@(0,2,-240)) 62
-  $graphCaptureCamera = Get-LookCamera ([double[]]@(0,20,-204)) ([double[]]@(0,2,-240)) 58
+  $graphInputCamera = Get-LookCamera ([double[]]@(0,36,-38)) ([double[]]@(0,0,-80)) 62
+  $graphCaptureCamera = Get-LookCamera ([double[]]@(0,20,-44)) ([double[]]@(0,0,-80)) 58
   $graphReady = Request-Capture $captureDir '08e-graph-fixture-ready' @{
     camera=$graphCaptureCamera;hideGuides=$false;hideEditorReferences=$false;fullWindowCapture=$true;waitMs=900
     minimumRevision=$revision;revisionTimeoutMs=20000;expectedPathNetwork=$graphExpectation
@@ -838,6 +842,7 @@ try {
   $insertionDeviation = [double]$insertEvidence.telemetry.centerlineDeviation
   if ($insertEvidence.telemetry.resolvedBy -ne 'compiledSegmentId' -or -not $insertEvidence.telemetry.undoVerified -or
       @($insertEvidence.telemetry.after.nodeIds).Count -ne 4 -or @($insertEvidence.telemetry.after.segments).Count -ne 3 -or
+      [string]$insertEvidence.telemetry.insertedNode.heightMode -notin @('terrain','offset') -or
       [double]::IsNaN($insertionDeviation) -or [double]::IsInfinity($insertionDeviation) -or $insertionDeviation -gt 0.01) {
     throw 'Native right-click insertion did not prove one exact compiled-segment split followed by Undo.'
   }
@@ -907,11 +912,11 @@ try {
     network=@{
       schemaVersion=2;id="$($branch.id):network";revision=$branchRevision
       nodes=@(
-        @{id='branch-near';position=@(0,2,-228);heightMode='absolute';heightOffset=0;handleMode='automatic'},
-        @{id='branch-far';position=@(0,2,-250);heightMode='absolute';heightOffset=0;handleMode='automatic'}
+        @{id='branch-near';position=@(0,0,-68);heightMode='terrain';heightOffset=0;handleMode='automatic'},
+        @{id='branch-far';position=@(0,0,-90);heightMode='terrain';heightOffset=0;handleMode='automatic'}
       )
       segments=@(@{id='branch-route';fromNode='branch-near';toNode='branch-far';curveType='hermite';constructionMode='conform';constructionLocked=$true})
-      engineering=@{civilAssist=$false;maxGradePercent=40;minimumCurveRadius=1;maxCutDepth=2;maxFillDepth=2;bridgeThreshold=20;maximumBridgeSpan=40}
+      engineering=@{civilAssist=$false;maxGradePercent=100;minimumCurveRadius=1;maxCutDepth=2;maxFillDepth=2;bridgeThreshold=20;maximumBridgeSpan=40}
       editor=@{showSpline=$true;showGrade=$true;showConstruction=$true}
     }
   }

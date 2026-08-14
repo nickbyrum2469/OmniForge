@@ -30,13 +30,23 @@ test('manual tangent gizmos preview both handle modes and commit through set-nod
 
 test('stationary right click inserts once while right drag remains viewport navigation', () => {
   assert.match(editor, /pendingPathInsertGesture/);
-  assert.match(editor, /Math\.hypot\(event\.clientX - pendingPathInsertGesture\.x/);
-  assert.match(editor, /pendingPathInsertGesture\.moved = true/);
+  assert.match(editor, /createPathInsertGesture/);
+  assert.match(editor, /updatePathInsertGesture/);
+  assert.match(editor, /completePathInsertGesture/);
+  assert.match(editor, /contextMenuPathInsertDecision/);
   assert.match(editor, /event\.button !== 2 \|\| !pendingPathInsertGesture/);
-  assert.match(editor, /gesture\.moved \|\| performance\.now\(\) - gesture\.startedAt > 900/);
+  assert.match(editor, /if \(decision\.shouldInsert\) void insertPathNodeFromViewport/);
   assert.match(editor, /insertPathNodeFromViewport\(event, 'right-click-release'\)/);
   assert.match(editor, /insertPathNodeFromViewport\(event, 'contextmenu'\)/);
   assert.match(editor, /performance\.now\(\) - lastPathInsertGesture\.at < 400/);
+  const insertion = editor.slice(editor.indexOf('const insertPathNodeFromViewport'), editor.indexOf("window.addEventListener('mouseup'"));
+  assert.doesNotMatch(insertion, /stopImmediatePropagation/);
+  assert.match(editor, /window\.addEventListener\('mousemove'/);
+  assert.match(editor, /window\.addEventListener\('mouseup'/);
+  assert.match(editor, /window\.addEventListener\('blur'/);
+  assert.match(editor, /document\.addEventListener\('pointerlockchange'/);
+  assert.match(editor, /pointerLocked: document\.pointerLockElement === canvas/);
+  assert.match(editor, /updatePathInsertGesture\(pendingPathInsertGesture, event\)/);
 });
 
 test('node dragging draws a lightweight curve and width ribbon without replacing renderer authority', () => {

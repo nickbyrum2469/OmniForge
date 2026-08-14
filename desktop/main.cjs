@@ -281,6 +281,7 @@ async function visualPathNetworkSnapshot(contents,pathId) {
     return {
       revision:Number(network.revision||0),
       nodeIds:(network.nodes||[]).map(node=>String(node.id)),
+      nodes:(network.nodes||[]).map(node=>({id:String(node.id),position:(node.position||[]).map(Number),heightMode:String(node.heightMode||'terrain'),heightOffset:Number(node.heightOffset||0)})),
       segmentIds:(network.segments||[]).map(segment=>String(segment.id)),
       segments:(network.segments||[]).map(segment=>({id:String(segment.id),fromNode:String(segment.fromNode),toNode:String(segment.toNode)})),
       selectedNodeIds:selected
@@ -585,7 +586,8 @@ async function performVisualInputActions(contents, actions=[], {captureMutation=
       }
       const insertedNodeIds=after.nodeIds.filter(id=>!before.nodeIds.includes(id));
       if(insertedNodeIds.length!==1)throw new Error('Native right-click did not create exactly one stable Path Network node.');
-      const original=before.segments.find(segment=>segment.id===target.segmentId),insertedNodeId=insertedNodeIds[0];
+      const original=before.segments.find(segment=>segment.id===target.segmentId),insertedNodeId=insertedNodeIds[0],insertedNode=after.nodes.find(node=>node.id===insertedNodeId)||null;
+      if(!insertedNode||!['terrain','offset','absolute'].includes(insertedNode.heightMode))throw new Error('Native right-click did not persist a valid inserted-node height authority.');
       const replacementSegments=after.segments.filter(segment=>!before.segmentIds.includes(segment.id)||segment.id===target.segmentId);
       const splitEdges=replacementSegments.filter(segment=>[segment.fromNode,segment.toNode].includes(insertedNodeId));
       const splitEndpoints=new Set(splitEdges.flatMap(segment=>[segment.fromNode,segment.toNode]).filter(nodeId=>nodeId!==insertedNodeId));
@@ -614,7 +616,7 @@ async function performVisualInputActions(contents, actions=[], {captureMutation=
           throw new Error('The real Undo path edit control did not restore the graph after native right-click insertion.');
         }
       }
-      telemetry.push({type:'path-node-insert',pathId,segmentId:target.segmentId,nodeId:insertedNodeId,resolvedBy:'compiledSegmentId',durationMs:Date.now()-started,before,target,after,centerlineBefore,centerlineAfter,centerlineDeviation,mutationCapture,restored,undoVerified:Boolean(restored)});
+      telemetry.push({type:'path-node-insert',pathId,segmentId:target.segmentId,nodeId:insertedNodeId,insertedNode,resolvedBy:'compiledSegmentId',durationMs:Date.now()-started,before,target,after,centerlineBefore,centerlineAfter,centerlineDeviation,mutationCapture,restored,undoVerified:Boolean(restored)});
       continue;
     }
     if(actionType==='path-node-toggle-selection'){

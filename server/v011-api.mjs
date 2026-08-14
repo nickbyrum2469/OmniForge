@@ -93,6 +93,12 @@ function requirePath(state, pathId) {
   return path;
 }
 
+function authoredTerrainRevision(terrain) {
+  return terrain
+    ? Math.max(1, Math.floor(Number(terrain.properties?.generatedRevision) || 1))
+    : null;
+}
+
 function uniquePathObjectId(scene, requested, fallback) {
   const base = String(requested || fallback || 'path')
     .replace(/[^a-zA-Z0-9:_-]+/g, '-')
@@ -283,7 +289,10 @@ export async function handleV011Request(req, res) {
         const path = requirePath(state, ids[0]);
         const current = authoritativePathNetwork(path);
         requireExpectedRevision(current, input.expectedRevision);
-        const transaction = applyPathNetworkTransaction(current, input);
+        const terrain = activeScene(state).objects.find(object => object.type === 'terrain');
+        const transaction = applyPathNetworkTransaction(current, input, {
+          terrainRevision: authoredTerrainRevision(terrain)
+        });
         recordPathEdit(path, current, input.label || 'Edit path network');
         path.properties.pathNetwork = transaction.network;
         path.properties.pathNetworkSchemaVersion = transaction.network.schemaVersion;
@@ -415,6 +424,7 @@ export async function handleV011Request(req, res) {
         const compiledTarget = compilePathNetwork(current, {
           terrainHeightAt: baseHeightAt,
           terrainNormalAt: baseNormalAt,
+          terrainRevision: authoredTerrainRevision(terrain),
           spacing: 0.35
         });
         const degree = new Map(sourceNetwork.nodes.map(node => [node.id, 0]));
@@ -449,7 +459,8 @@ export async function handleV011Request(req, res) {
           curveAuthority: compiledTarget.segments.find(segment => segment.id === nearest.nearest.segmentId)?.curveAuthority,
           sourceNodeId: nearest.node.id,
           heightMode: Math.abs(heightOffset) <= 0.02 ? 'terrain' : 'offset',
-          heightOffset
+          heightOffset,
+          terrainRevision: authoredTerrainRevision(terrain)
         });
         pushPathHistory(target, 'pathNetworkUndo', current, input.label || 'Join path branch', {
           restoreObjects: [source]

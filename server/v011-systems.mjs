@@ -183,10 +183,12 @@ export function terrainDiagnostics(terrain, paths = [], grid = 18) {
 
 export function pathDiagnostics(pathObject, terrain) {
   const baseHeightAt = (x, z) => terrainBaseHeightAt(terrain, x, z);
+  const terrainRevision = Math.max(1, Math.floor(Number(terrain?.properties?.generatedRevision) || 1));
   const network = attachPathNetwork(pathObject, { terrainHeightAt: baseHeightAt }).network;
   const compiled = compilePathNetwork(network, {
     terrainHeightAt: baseHeightAt,
     terrainNormalAt: (x, z) => terrainNormalAt(terrain, x, z, []),
+    terrainRevision,
     spacing: Math.max(0.25, Number(network.defaults?.crossSectionProfile?.width || 3) * 0.2),
     generationRevision: network.revision
   });
@@ -342,6 +344,7 @@ function replaceLegacyEngineering(network, patch) {
 export function applyLegacyPathCompatibilityMutation(pathObject, terrain, command, input = {}) {
   if (!terrain) throw new Error('A terrain is required to edit a schema-v2 Path Network.');
   const baseHeightAt = (x, z) => terrainBaseHeightAt(terrain, x, z);
+  const terrainRevision = Math.max(1, Math.floor(Number(terrain?.properties?.generatedRevision) || 1));
   const current = attachPathNetwork(pathObject, { terrainHeightAt: baseHeightAt }).network;
   const expectedRevision = input.expectedRevision;
   if (expectedRevision !== undefined && Number(expectedRevision) !== current.revision) {
@@ -357,6 +360,7 @@ export function applyLegacyPathCompatibilityMutation(pathObject, terrain, comman
     const compiled = compilePathNetwork(current, {
       terrainHeightAt: baseHeightAt,
       terrainNormalAt: (sampleX, sampleZ) => terrainNormalAt(terrain, sampleX, sampleZ, []),
+      terrainRevision,
       spacing: 0.35
     });
     let segmentId;
@@ -387,7 +391,7 @@ export function applyLegacyPathCompatibilityMutation(pathObject, terrain, comman
           heightOffset: Number(input.heightOffset || 0)
         }
       }]
-    });
+    }, { terrainRevision });
     metadata.nodeId = result.network.nodes.at(-1)?.id || null;
   } else if (command === 'move-node' || command === 'delete-node') {
     const order = simplePathOrder(current);
@@ -410,13 +414,13 @@ export function applyLegacyPathCompatibilityMutation(pathObject, terrain, comman
           heightMode: hasAuthoredY ? 'absolute' : node.heightMode,
           heightOffset: node.heightOffset
         }]
-      });
+      }, { terrainRevision });
     } else {
       result = applyPathNetworkTransaction(current, {
         id: 'legacy-v011-delete-node',
         label: 'Delete Path Network node',
         operations: [{ type: 'delete-node', nodeId: node.id }]
-      });
+      }, { terrainRevision });
     }
     metadata = { index, nodeId: node.id };
   } else if (command === 'reverse') {
@@ -428,7 +432,7 @@ export function applyLegacyPathCompatibilityMutation(pathObject, terrain, comman
       // reshaped manual Hermite curves even though the user only requested a
       // direction change.
       operations: [{ type: 'reverse-network' }]
-    });
+    }, { terrainRevision });
   } else if (command === 'split') {
     throw legacyCompatibilityError('Legacy split creates a second points-based path object and is disabled. Insert/connect stable nodes or use the v2 merge route instead.');
   } else {

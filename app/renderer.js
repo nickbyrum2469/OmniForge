@@ -1013,7 +1013,7 @@ function coarseTerrainEdgeSample(object,tile,edge,t,steps){
   };
 }
 function weldedTerrainNormals(positions,indices,tolerance=1e-4){
-  const accumulated=new Float64Array(positions.length),groups=new Map();
+  const accumulated=new Float64Array(positions.length),buckets=new Map(),groups=[];
   for(let t=0;t<indices.length;t+=3){
     const ia=indices[t]*3,ib=indices[t+1]*3,ic=indices[t+2]*3;
     const A=[positions[ia],positions[ia+1],positions[ia+2]],B=[positions[ib],positions[ib+1],positions[ib+2]],C=[positions[ic],positions[ic+1],positions[ic+2]];
@@ -1024,14 +1024,32 @@ function weldedTerrainNormals(positions,indices,tolerance=1e-4){
     }
   }
   for(let offset=0;offset<positions.length;offset+=3){
-    const key=`${Math.round(positions[offset]/tolerance)}:${Math.round(positions[offset+1]/tolerance)}:${Math.round(positions[offset+2]/tolerance)}`;
-    let group=groups.get(key);
-    if(!group){group={offsets:[],sum:[0,0,0]};groups.set(key,group);}
+    const point=[positions[offset],positions[offset+1],positions[offset+2]];
+    const cell=point.map(value=>Math.floor(value/tolerance));
+    let group=null;
+    // Rounded hash keys can split two coincident chunk-edge vertices when
+    // they straddle a bucket boundary. Search the bounded neighboring cells
+    // and weld by actual distance so one physical terrain point always owns
+    // one lighting normal.
+    for(let dx=-1;dx<=1&&!group;dx+=1)for(let dy=-1;dy<=1&&!group;dy+=1)for(let dz=-1;dz<=1&&!group;dz+=1){
+      const candidates=buckets.get(`${cell[0]+dx}:${cell[1]+dy}:${cell[2]+dz}`)||[];
+      group=candidates.find(candidate=>(
+        Math.abs(candidate.position[0]-point[0])<=tolerance
+        && Math.abs(candidate.position[1]-point[1])<=tolerance
+        && Math.abs(candidate.position[2]-point[2])<=tolerance
+      ))||null;
+    }
+    if(!group){
+      group={position:point,offsets:[],sum:[0,0,0]};groups.push(group);
+      const key=`${cell[0]}:${cell[1]}:${cell[2]}`;
+      if(!buckets.has(key))buckets.set(key,[]);
+      buckets.get(key).push(group);
+    }
     group.offsets.push(offset);
     group.sum[0]+=accumulated[offset];group.sum[1]+=accumulated[offset+1];group.sum[2]+=accumulated[offset+2];
   }
   const normals=new Float32Array(positions.length);
-  for(const group of groups.values()){
+  for(const group of groups){
     const normal=length(group.sum)>1e-12?normalize(group.sum):[0,1,0];
     for(const offset of group.offsets){normals[offset]=normal[0];normals[offset+1]=normal[1];normals[offset+2]=normal[2];}
   }
@@ -1516,7 +1534,7 @@ export class Renderer3D{
     return diagnostics;
   }
   cameraMatrices(camera){const forward=cameraForward(camera),target=add(camera.position,forward),view=mat4LookAt(camera.position,target),proj=mat4Perspective((camera.fov||62)*DEG,this.canvas.width/this.canvas.height,.08,12000),viewProj=mat4Multiply(proj,view);return {view,proj,viewProj,inverse:mat4Invert(viewProj)};}
-  worldToScreen(camera,point){const rect=this.canvas.getBoundingClientRect(),{viewProj}=this.cameraMatrices(camera),x=point[0],y=point[1],z=point[2],cx=viewProj[0]*x+viewProj[4]*y+viewProj[8]*z+viewProj[12],cy=viewProj[1]*x+viewProj[5]*y+viewProj[9]*z+viewProj[13],cz=viewProj[2]*x+viewProj[6]*y+viewProj[10]*z+viewProj[14],cw=viewProj[3]*x+viewProj[7]*y+viewProj[11]*z+viewProj[15];if(cw<=.001)return {visible:false,x:0,y:0};const nx=cx/cw,ny=cy/cw;return {visible:cz/cw>=-1&&cz/cw<=1&&nx>=-1.2&&nx<=1.2&&ny>=-1.2&&ny<=1.2,x:(nx*.5+.5)*rect.width,y:(1-(ny*.5+.5))*rect.height};}
+  worldToScreen(camera,point){const rect=this.canvas.getBoundingClientRect(),{viewProj}=this.cameraMatrices(camera),x=point[0],y=point[1],z=point[2],cx=viewProj[0]*x+viewProj[4]*y+viewProj[8]*z+viewProj[12],cy=viewProj[1]*x+viewProj[5]*y+viewProj[9]*z+viewProj[13],cz=viewProj[2]*x+viewProj[6]*y+viewProj[10]*z+viewProj[14],cw=viewProj[3]*x+viewProj[7]*y+viewProj[11]*z+viewProj[15];if(cw<=.001)return {visible:false,x:0,y:0,depth:Number.POSITIVE_INFINITY};const nx=cx/cw,ny=cy/cw,nz=cz/cw;return {visible:nz>=-1&&nz<=1&&nx>=-1.2&&nx<=1.2&&ny>=-1.2&&ny<=1.2,x:(nx*.5+.5)*rect.width,y:(1-(ny*.5+.5))*rect.height,depth:nz};}
   terrainBaseHeightForScene(scene,x,z){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);return terrain?terrainBaseHeightAt(terrain,x,z):0;}
   terrainHeightForScene(scene,x,z){const terrain=scene.objects.find(object=>object.type==='terrain'&&object.visible!==false);if(!terrain)return 0;const baseY=terrainBaseHeightAt(terrain,x,z);return sampleScenePathTerrain(this.scenePathRuntimes(scene),baseY,x,z).height;}
   scenePathConsumers(scene){

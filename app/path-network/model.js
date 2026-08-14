@@ -16,6 +16,7 @@ export const PATH_CONSTRUCTION_MODES = Object.freeze([
 
 export const PATH_HEIGHT_MODES = Object.freeze(['terrain', 'offset', 'absolute']);
 export const PATH_HANDLE_MODES = Object.freeze(['automatic', 'aligned', 'free']);
+export const PATH_VERTICAL_PROFILE_MODES = Object.freeze(['absolute', 'terrain-relative']);
 export { PATH_BRIDGE_STYLES };
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -33,6 +34,50 @@ function vec3(value, fallback = [0, 0, 0]) {
 
 function nullableVec3(value) {
   return Array.isArray(value) && value.length >= 3 ? vec3(value) : null;
+}
+
+function normalizeVerticalProfile(value, segmentId = 'segment') {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== 'object') {
+    throw new Error(`Stored Path Network v2 segment ${segmentId} contains an invalid vertical curve profile.`);
+  }
+  const mode = String(value.mode || '');
+  if (!PATH_VERTICAL_PROFILE_MODES.includes(mode)) {
+    throw new Error(`Stored Path Network v2 segment ${segmentId} contains unknown vertical profile mode ${mode || '<missing>'}.`);
+  }
+  if (!Array.isArray(value.samples) || value.samples.length < 2 || value.samples.length > 16384) {
+    throw new Error(`Stored Path Network v2 segment ${segmentId} vertical profile requires between 2 and 16384 samples.`);
+  }
+  const samples = value.samples.map((sample, index) => {
+    const t = Number(sample?.t);
+    const profileValue = Number(sample?.value);
+    if (!Number.isFinite(t) || !Number.isFinite(profileValue)) {
+      throw new Error(`Stored Path Network v2 segment ${segmentId} vertical profile sample ${index} is not finite.`);
+    }
+    if (t < 0 || t > 1) {
+      throw new Error(`Stored Path Network v2 segment ${segmentId} vertical profile sample ${index} has t outside [0, 1].`);
+    }
+    return { t, value: profileValue };
+  });
+  if (Math.abs(samples[0].t) > 1e-8 || Math.abs(samples.at(-1).t - 1) > 1e-8) {
+    throw new Error(`Stored Path Network v2 segment ${segmentId} vertical profile must include exact t=0 and t=1 endpoints.`);
+  }
+  for (let index = 1; index < samples.length; index += 1) {
+    if (samples[index].t - samples[index - 1].t <= 1e-8) {
+      throw new Error(`Stored Path Network v2 segment ${segmentId} vertical profile samples must have strictly increasing t values.`);
+    }
+  }
+  const terrainRevision = value.terrainRevision === undefined || value.terrainRevision === null
+    ? null
+    : Number(value.terrainRevision);
+  if (terrainRevision !== null && (!Number.isFinite(terrainRevision) || terrainRevision < 0)) {
+    throw new Error(`Stored Path Network v2 segment ${segmentId} vertical profile terrain revision is invalid.`);
+  }
+  return {
+    mode,
+    samples,
+    ...(terrainRevision === null ? {} : { terrainRevision })
+  };
 }
 
 function uniqueId(requested, used, fallback) {
@@ -72,6 +117,7 @@ function assertRawV2IdentityIntegrity(input) {
             throw new Error(`Stored Path Network v2 segment ${id} contains an invalid ${handleName} curve control.`);
           }
         }
+        normalizeVerticalProfile(item.curveControl.profile, id);
       }
     }
   }
@@ -161,7 +207,10 @@ export function normalizePathNetwork(input = {}, options = {}) {
       && Array.isArray(source.curveControl.toHandle)
       ? {
           fromHandle: vec3(source.curveControl.fromHandle),
-          toHandle: vec3(source.curveControl.toHandle)
+          toHandle: vec3(source.curveControl.toHandle),
+          ...(source.curveControl.profile === undefined || source.curveControl.profile === null
+            ? {}
+            : { profile: normalizeVerticalProfile(source.curveControl.profile, cleanId(source?.id) || `${pathId}:segment:${index}`) })
         }
       : null,
     constructionMode: PATH_CONSTRUCTION_MODES.includes(source?.constructionMode) ? source.constructionMode : 'auto',

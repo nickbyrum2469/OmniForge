@@ -81,12 +81,14 @@ export function compilePathObjectRuntime(pathObject, terrain, options = {}) {
   }
 
   const terrainService = options.terrainService || createTerrainQueryService({ terrain });
+  const terrainRevision = Number(terrainService.describe?.()?.revisions?.authoredNatural);
   const baseHeightAt = (x, z) => terrainService.elevationAt(x, z, { view: 'authored-natural' });
   const baseNormalAt = (x, z) => terrainService.normalAt(x, z, { view: 'authored-natural' });
   const migration = migrateLegacyPathObject(pathObject, { terrainHeightAt: baseHeightAt });
   const compiled = compilePathNetwork(migration.network, {
     terrainHeightAt: baseHeightAt,
     terrainNormalAt: baseNormalAt,
+    terrainRevision: Number.isFinite(terrainRevision) && terrainRevision > 0 ? terrainRevision : null,
     generationRevision: options.generationRevision ?? migration.network.revision,
     spacing: options.spacing,
     tolerance: options.tolerance,

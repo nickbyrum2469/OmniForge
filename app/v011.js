@@ -2,6 +2,12 @@ import { sharedPathGenerationWorkerPool } from './path-network/generation-pool.j
 import { trailArchetypes } from './path-network/archetypes.js';
 import { trailCandidateToPathNetwork } from './path-network/trail-solver.js';
 import { nearestCompiledScreenStation } from './path-network/editor-screen-picking.js';
+import {
+  completePathInsertGesture,
+  contextMenuPathInsertDecision,
+  createPathInsertGesture,
+  updatePathInsertGesture
+} from './path-network/editor-insert-gesture.js';
 import { PATH_BRIDGE_STYLES } from './path-network/model.js';
 import { pathCrossSectionProfiles } from './path-network/cross-section-profiles.js';
 import { pathSurfaceDetailProfiles } from './path-network/surface-detail-profiles.js';
@@ -50,6 +56,7 @@ let routeGenerationRevision = 0;
 let routeGenerationPool = null;
 let pathDragPreviewFrame = 0;
 let pendingPathInsertGesture = null;
+let completedPathInsertGesture = null;
 let lastPathInsertGesture = null;
 let routeGenerationState = {
   status: 'idle',
@@ -1874,28 +1881,29 @@ function installViewportEditing() {
       if (handle) { event.preventDefault(); event.stopImmediatePropagation(); }
     }
     if (event.button === 2 && event.target === canvas) {
-      pendingPathInsertGesture = {
+      pendingPathInsertGesture = createPathInsertGesture({
         pathId: splineEditPathId,
-        x: event.clientX,
-        y: event.clientY,
-        moved: false,
-        startedAt: performance.now()
-      };
+        clientX: event.clientX,
+        clientY: event.clientY,
+        now: performance.now(),
+        pointerLocked: document.pointerLockElement === canvas
+      });
+      completedPathInsertGesture = null;
     }
   }, true);
-  canvas.addEventListener('mousemove', event => {
+  window.addEventListener('mousemove', event => {
     if (!pendingPathInsertGesture || !(event.buttons & 2)) return;
-    if (Math.hypot(event.clientX - pendingPathInsertGesture.x, event.clientY - pendingPathInsertGesture.y) > 4) {
-      pendingPathInsertGesture.moved = true;
+    pendingPathInsertGesture = updatePathInsertGesture(pendingPathInsertGesture, event);
+  }, true);
+  canvas.addEventListener('mouseleave', event => {
+    if (pendingPathInsertGesture && (event.buttons & 2)) {
+      pendingPathInsertGesture = updatePathInsertGesture(pendingPathInsertGesture, { ...event, forceMoved: true });
     }
   }, true);
   const insertPathNodeFromViewport = async (event, source) => {
     if (!splineEditPathId) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
     const signature = `${splineEditPathId}:${Math.round(event.clientX)}:${Math.round(event.clientY)}`;
     if (lastPathInsertGesture?.signature === signature && performance.now() - lastPathInsertGesture.at < 400) return;
-    lastPathInsertGesture = { signature, at: performance.now(), source };
     const snapshot = currentSnapshot();
     const path = snapshot?.scene?.objects?.find(object => object.id === splineEditPathId);
     const authority = compiledPathEditAuthority(path);
@@ -1905,6 +1913,7 @@ function installViewportEditing() {
     const nearest = nearestCompiledScreenStation(authority.runtime.compiled, {
       clientX: event.clientX,
       clientY: event.clientY,
+      rayFromScreen: (clientX, clientY) => renderer?.rayFromScreen?.(snapshot.camera, clientX, clientY),
       worldToScreen: position => {
         const projected = renderer?.worldToScreen?.(snapshot.camera, position);
         return projected ? { ...projected, x: viewportBounds.left + projected.x, y: viewportBounds.top + projected.y } : null;
@@ -1912,6 +1921,7 @@ function installViewportEditing() {
       maximumDistancePixels: 28
     });
     if (!nearest) return bridge()?.showToast?.('Right-click closer to the visible spline to insert a node.', 'error');
+    lastPathInsertGesture = { signature, at: performance.now(), source };
     const network = path.properties.pathNetwork;
     const segment = network.segments.find(item => item.id === nearest.segmentId);
     const compiledSegment = authority.runtime.compiled.segments.find(item => item.id === nearest.segmentId);
@@ -1929,6 +1939,7 @@ function installViewportEditing() {
     selectedPathNodeIds = new Set([nodeId]);
     await transactPathNetwork(path, {
       label: 'Insert path node',
+      terrainRevision: compiledSegment?.curveAuthority?.terrainRevision,
       operations: [{
         type: 'insert-node',
         segmentId: nearest.segmentId,
@@ -1944,17 +1955,38 @@ function installViewportEditing() {
       }]
     });
   };
-  canvas.addEventListener('mouseup', event => {
+  window.addEventListener('mouseup', event => {
     if (event.button !== 2 || !pendingPathInsertGesture) return;
-    const gesture = pendingPathInsertGesture;
+    const releasedGesture = updatePathInsertGesture(pendingPathInsertGesture, event);
+    const decision = completePathInsertGesture(releasedGesture, {
+      pathId: splineEditPathId,
+      now: performance.now()
+    });
     pendingPathInsertGesture = null;
-    if (gesture.pathId !== splineEditPathId || gesture.moved || performance.now() - gesture.startedAt > 900) return;
-    void insertPathNodeFromViewport(event, 'right-click-release');
+    completedPathInsertGesture = decision.gesture;
+    if (decision.shouldInsert) void insertPathNodeFromViewport(event, 'right-click-release');
   }, true);
   canvas.addEventListener('contextmenu', event => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const decision = contextMenuPathInsertDecision({
+      pendingGesture: updatePathInsertGesture(pendingPathInsertGesture, event),
+      completedGesture: completedPathInsertGesture,
+      pathId: splineEditPathId,
+      now: performance.now()
+    });
     pendingPathInsertGesture = null;
-    void insertPathNodeFromViewport(event, 'contextmenu');
+    completedPathInsertGesture = decision.gesture;
+    if (decision.shouldInsert) void insertPathNodeFromViewport(event, 'contextmenu');
   }, true);
+  window.addEventListener('blur', () => {
+    pendingPathInsertGesture = null;
+    completedPathInsertGesture = null;
+  });
+  document.addEventListener('pointerlockchange', () => {
+    pendingPathInsertGesture = null;
+    completedPathInsertGesture = null;
+  });
   const cancelViewportEdits = () => {
     cancelNodeDrag();
     cancelPathHandleDrag();

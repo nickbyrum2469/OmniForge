@@ -279,6 +279,8 @@ test('packaged graph gate drives stable-ID native insertion, grouping, handles, 
   assert.match(script, /id='graph-middle'/);
   assert.match(script, /id='graph-east'/);
   assert.match(script, /type='path-node-insert';pathId=\$graphPath\.id;segmentId='graph-west-middle'/);
+  assert.match(script, /heightMode='terrain'/);
+  assert.match(script, /insertedNode\.heightMode -notin @\('terrain','offset'\)/);
   assert.match(script, /type='path-node-toggle-selection';pathId=\$graphPath\.id;nodeId='graph-west'/);
   assert.match(script, /type='path-node-group-drag';pathId=\$graphPath\.id;nodeId='graph-middle';nodeIds=@\('graph-west','graph-middle'\)/);
   assert.match(script, /type='path-handle-drag';pathId=\$graphPath\.id;nodeId='graph-middle';side='outgoing'/);

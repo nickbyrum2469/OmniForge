@@ -37,6 +37,76 @@ function nodePosition(node, terrainHeightAt) {
   return [x, terrainY + (node.heightMode === 'offset' ? node.heightOffset : 0), z];
 }
 
+function authoritativeTerrainRevision(network, options = {}) {
+  const revision = Number(options.terrainRevision ?? network?.sourceRevisions?.terrain);
+  return Number.isFinite(revision) && revision > 0 ? revision : null;
+}
+
+function verticalProfileValue(profile, t) {
+  const samples = profile?.samples || [];
+  if (!samples.length) return null;
+  const amount = clamp(t, 0, 1);
+  if (amount <= samples[0].t) return samples[0].value;
+  if (amount >= samples.at(-1).t) return samples.at(-1).value;
+  let low = 0;
+  let high = samples.length - 1;
+  while (high - low > 1) {
+    const midpoint = Math.floor((low + high) / 2);
+    if (samples[midpoint].t <= amount) low = midpoint;
+    else high = midpoint;
+  }
+  const start = samples[low];
+  const end = samples[high];
+  const local = clamp((amount - start.t) / Math.max(EPSILON, end.t - start.t), 0, 1);
+  return start.value + (end.value - start.value) * local;
+}
+
+function positionWithVerticalProfile(position, profile, t, terrainHeightAt) {
+  if (!profile) return position;
+  const result = [...position];
+  const value = verticalProfileValue(profile, t);
+  if (profile.mode === 'terrain-relative') {
+    if (typeof terrainHeightAt !== 'function') {
+      throw new Error('A terrain-relative path profile requires the authoritative terrain height query.');
+    }
+    result[1] = finite(terrainHeightAt(result[0], result[2]), result[1]) + value;
+  } else {
+    result[1] = value;
+  }
+  return result;
+}
+
+function visibleProfileFromSamples(samples, { preferTerrain, terrainRevision }) {
+  const terrainRelative = preferTerrain && terrainRevision !== null;
+  const raw = samples.map(sample => ({
+    t: clamp(sample.t, 0, 1),
+    value: terrainRelative ? sample.position[1] - sample.baseY : sample.position[1]
+  }));
+  const profileSamples = [];
+  for (const sample of raw) {
+    const previous = profileSamples.at(-1);
+    if (!previous || sample.t - previous.t > 1e-8) profileSamples.push(sample);
+    else previous.value = sample.value;
+  }
+  const firstValue = profileSamples[0]?.value ?? 0;
+  const lastValue = profileSamples.at(-1)?.value ?? firstValue;
+  if (!profileSamples.length || profileSamples[0].t > 1e-8) {
+    profileSamples.unshift({ t: 0, value: firstValue });
+  } else {
+    profileSamples[0].t = 0;
+  }
+  if (profileSamples.length < 2 || profileSamples.at(-1).t < 1 - 1e-8) {
+    profileSamples.push({ t: 1, value: lastValue });
+  } else {
+    profileSamples.at(-1).t = 1;
+  }
+  return {
+    mode: terrainRelative ? 'terrain-relative' : 'absolute',
+    samples: profileSamples,
+    ...(terrainRelative ? { terrainRevision } : {})
+  };
+}
+
 function adjacencyFor(network) {
   const adjacency = new Map(network.nodes.map(node => [node.id, []]));
   for (const segment of network.segments) {
@@ -173,6 +243,28 @@ function arcLengthResample(raw, spacing) {
   return output;
 }
 
+function exactCurvePositionsAtResampledParameters(raw, spacing, evaluate) {
+  const samples = arcLengthResample(raw, spacing);
+  const chordStart = raw[0]?.position;
+  const chordEnd = raw.at(-1)?.position;
+  const exactlyStraight = chordStart && chordEnd && raw.every(sample => (
+    distancePointToLine(sample.position, chordStart, chordEnd) <= 1e-9
+  ));
+  // A Catmull/Hermite segment can be mathematically straight even though its
+  // parameter speed is non-linear. In that case the chord interpolation is
+  // already the exact curve and preserves exact metre stations (important at
+  // terrain/bridge threshold boundaries) without numerical t-inversion noise.
+  if (exactlyStraight) return samples;
+  let distance = 0;
+  for (let index = 0; index < samples.length; index += 1) {
+    const position = evaluate(samples[index].t);
+    if (index > 0) distance += distance3(samples[index - 1].position, position);
+    samples[index].position = position;
+    samples[index].distance = distance;
+  }
+  return samples;
+}
+
 function profileTerrainData(samples, terrainHeightAt, terrainNormalAt) {
   return samples.map(sample => {
     const [x, y, z] = sample.position;
@@ -206,7 +298,7 @@ function enforceVerticalLimits(samples, engineering, endpoints) {
     cumulative.push(horizontalDistance);
   }
 
-  for (let index = 0; index < samples.length; index += 1) {
+  for (let index = 0; !endpoints.preserveProfile && index < samples.length; index += 1) {
     const fraction = horizontalDistance > EPSILON ? cumulative[index] / horizontalDistance : 0;
     const anchorLine = startY + (endY - startY) * fraction;
     // Terrain-mode nodes author a corridor on the terrain, not a chord suspended
@@ -237,7 +329,7 @@ function enforceVerticalLimits(samples, engineering, endpoints) {
     samples[index].position[1] = index === 0 ? startY : index === samples.length - 1 ? endY : smooth;
   }
 
-  for (let pass = 0; feasible && pass < 4; pass += 1) {
+  for (let pass = 0; !endpoints.preserveProfile && feasible && pass < 4; pass += 1) {
     for (let index = 1; index < samples.length; index += 1) {
       const horizontal = Math.max(EPSILON, cumulative[index] - cumulative[index - 1]);
       const limit = horizontal * maximumGrade;
@@ -268,7 +360,12 @@ function enforceVerticalLimits(samples, engineering, endpoints) {
       Math.abs(samples[index].position[1] - samples[index - 1].position[1]) / horizontal * 100
     );
   }
-  return { samples, feasible, unavoidableGradePercent: unavoidableGrade * 100, maximumGradePercent };
+  return {
+    samples,
+    feasible: feasible && maximumGradePercent <= engineering.maxGradePercent + 1e-5,
+    unavoidableGradePercent: unavoidableGrade * 100,
+    maximumGradePercent
+  };
 }
 
 function assignParallelTransportFrames(samples) {
@@ -733,30 +830,73 @@ function compileSegment(segment, network, positions, adjacency, nodeMap, options
   const end = positions.get(toNode.id);
   const tension = clamp(options.tension ?? 0.5, 0, 1);
   const { startTangent, endTangent } = segmentTangents(segment, fromNode, toNode, positions, adjacency, tension);
-  const evaluate = segment.curveType === 'linear'
+  const evaluateHorizontal = segment.curveType === 'linear'
     ? t => lerp3(start, end, t)
     : t => hermitePoint(start, end, startTangent, endTangent, t);
+  const terrainRevision = authoritativeTerrainRevision(network, options);
+  const storedVerticalProfile = segment.curveControl?.profile || null;
+  if (storedVerticalProfile?.mode === 'terrain-relative' && terrainRevision === null) {
+    throw new Error(
+      `Segment ${segment.id} has terrain-relative visible-profile authority but no current authored-terrain revision.`
+    );
+  }
+  // Terrain-relative visible profiles are exact only for the authored-natural
+  // terrain revision they were compiled against. A terrain edit invalidates
+  // that cached shape without mutating the saved graph; this compile rebuilds
+  // the profile from the segment and current terrain instead of rendering a
+  // stale road above or below the edited land.
+  const verticalProfile = storedVerticalProfile?.mode === 'terrain-relative'
+    && Number(storedVerticalProfile.terrainRevision) !== terrainRevision
+    ? null
+    : storedVerticalProfile;
+  const evaluate = verticalProfile
+    ? t => positionWithVerticalProfile(evaluateHorizontal(t), verticalProfile, t, options.terrainHeightAt)
+    : evaluateHorizontal;
+  if (verticalProfile) {
+    const profileStart = evaluate(0);
+    const profileEnd = evaluate(1);
+    if (Math.abs(profileStart[1] - start[1]) > 0.001 || Math.abs(profileEnd[1] - end[1]) > 0.001) {
+      throw new Error(
+        `Segment ${segment.id} visible-profile endpoints no longer match their node height authority; rebuild the profile before compiling.`
+      );
+    }
+  }
   const derivative = segment.curveType === 'linear'
     ? () => sub3(end, start)
     : t => hermiteDerivative(start, end, startTangent, endTangent, t);
   const width = segment.crossSectionProfile.width;
   const spacing = clamp(options.spacing ?? Math.min(0.75, width * 0.18), 0.05, 10);
   const raw = adaptiveCurveSamples(evaluate, {
-    tolerance: Math.min(width * 0.01, options.tolerance ?? 0.04),
+    // Exact station positions need a finer arc-length integration polyline
+    // than the final render spacing. A coarse lookup can move a station far
+    // enough to break uniform spacing and shift Civil Assist by one sample.
+    tolerance: Math.min(width * 0.0025, options.tolerance ?? 0.01),
     maximumAngleRadians: clamp(options.maximumAngleDegrees ?? 4, 0.25, 45) * Math.PI / 180,
-    maximumChord: Math.max(spacing * 2, width * 0.35),
+    maximumChord: Math.max(spacing * 0.5, width * 0.1),
     maximumDepth: options.maximumDepth
   });
-  let samples = profileTerrainData(arcLengthResample(raw, spacing), options.terrainHeightAt, options.terrainNormalAt);
+  // Arc-length interpolation chooses the station parameters, but the station
+  // itself must be evaluated on the curve at that exact t. Keeping the chord-
+  // interpolated position here made the published visible profile and its
+  // curveT disagree by up to the adaptive tolerance, which reintroduced a
+  // small insertion jump on steep terrain even after Y became authoritative.
+  let samples = profileTerrainData(
+    exactCurvePositionsAtResampledParameters(raw, spacing, evaluate),
+    options.terrainHeightAt,
+    options.terrainNormalAt
+  );
   const vertical = enforceVerticalLimits(samples, network.engineering, {
     start,
     end,
-    preferTerrain: fromNode.heightMode === 'terrain' && toNode.heightMode === 'terrain'
+    preferTerrain: fromNode.heightMode !== 'absolute' && toNode.heightMode !== 'absolute',
+    preserveProfile: Boolean(verticalProfile)
   });
   samples = assignParallelTransportFrames(vertical.samples);
   for (let index = 0; index < samples.length; index += 1) {
     samples[index].segmentId = segment.id;
-    samples[index].curveTangent = normalize3(derivative(samples[index].t), samples[index].tangent);
+    samples[index].curveTangent = verticalProfile
+      ? [...samples[index].tangent]
+      : normalize3(derivative(samples[index].t), samples[index].tangent);
     samples[index].curvature = curvatureAt(samples, index);
   }
   const metrics = {
@@ -767,6 +907,15 @@ function compileSegment(segment, network, positions, adjacency, nodeMap, options
   };
   const constructionIntervals = constructionIntervalsFor(segment, samples, network.engineering, metrics);
   const construction = representativeConstruction(constructionIntervals);
+  const visibleProfile = verticalProfile
+    ? {
+        ...structuredClone(verticalProfile),
+        ...(verticalProfile.mode === 'terrain-relative' ? { terrainRevision } : {})
+      }
+    : visibleProfileFromSamples(samples, {
+        preferTerrain: fromNode.heightMode !== 'absolute' && toNode.heightMode !== 'absolute',
+        terrainRevision
+      });
   return {
     id: segment.id,
     fromNode: segment.fromNode,
@@ -791,7 +940,9 @@ function compileSegment(segment, network, positions, adjacency, nodeMap, options
       end: [...end],
       fromHandle: scale3(startTangent, 1 / 3),
       toHandle: scale3(endTangent, -1 / 3),
-      source: segment.curveControl ? 'segment-local' : 'node-derived'
+      source: segment.curveControl ? 'segment-local' : 'node-derived',
+      profile: visibleProfile,
+      terrainRevision: visibleProfile.mode === 'terrain-relative' ? terrainRevision : null
     }
   };
 }
