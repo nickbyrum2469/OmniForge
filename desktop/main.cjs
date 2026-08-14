@@ -151,6 +151,32 @@ async function visualPathNodeSnapshot(contents, pathId, reference, options={}) {
   })()`, true);
 }
 
+async function ensureVisualPathNodeSnapshot(contents,pathId,reference,timeoutMs=5000) {
+  const deadline=Date.now()+Math.max(1000,Math.min(12000,Number(timeoutMs||5000)));
+  let lastError=null,editRequested=false,lastStatus=null;
+  while(Date.now()<deadline){
+    try{return await visualPathNodeSnapshot(contents,pathId,reference);}
+    catch(error){lastError=error;}
+    lastStatus=await contents.executeJavaScript(`(()=>({
+      editing:document.body.classList.contains('v011-spline-editing'),
+      button:Boolean(document.querySelector('#v011SplineEdit')),
+      buttonText:String(document.querySelector('#v011SplineEdit')?.textContent||'').trim(),
+      pathSelected:String(document.querySelector('#inspectorTitle')?.textContent||'').trim()
+    }))()`,true);
+    // Evidence synchronization selects the authoritative Path Network first.
+    // A capture-state restore may deliberately leave viewport edit mode off;
+    // re-enter it through the real packaged control rather than synthesizing
+    // an internal flag or accepting a missing HTML handle.
+    if(!lastStatus.editing&&lastStatus.button&&!editRequested){
+      await sendVisualControlClick(contents,'#v011SplineEdit');
+      editRequested=true;
+    }
+    await visualInputDelay(80);
+  }
+  const detail=lastStatus?` editing=${lastStatus.editing}; button=${lastStatus.buttonText||'missing'}; inspector=${lastStatus.pathSelected||'unknown'}`:'';
+  throw new Error(`${lastError?.message||`Visual input spline handle did not become ready for ${String(reference?.nodeId||reference?.nodeIndex||'unknown node')}.`}${detail}`);
+}
+
 async function dismissVisualFirstUseTutorial(contents) {
   const status=()=>contents.executeJavaScript(`(async()=>{
     const response=await fetch('/api/state');
@@ -748,7 +774,7 @@ async function performVisualInputActions(contents, actions=[], {captureMutation=
       const pathId=String(action.pathId||'path-main');
       const reference=normalizedVisualNodeReference(action);
       const normalized={...action,type:'path-undo',pathId,...reference};
-      const before=await visualPathNodeSnapshot(contents,pathId,reference);
+      const before=await ensureVisualPathNodeSnapshot(contents,pathId,reference);
       const started=Date.now();
       await sendVisualClick(contents,await visualElementBounds(contents,'#v012UndoPath'));
       const after=await waitForVisualPathRevision(contents,normalized,reference,before.revision);
@@ -767,7 +793,7 @@ async function performVisualInputActions(contents, actions=[], {captureMutation=
     if(!['path-node-drag','path-node-group-drag'].includes(actionType))throw new Error(`Unsupported packaged native input action: ${actionType||'missing type'}.`);
     const pathId=String(action.pathId||'path-main');
     const reference=normalizedVisualNodeReference(action),normalized={...action,pathId,...reference};
-    const before=await visualPathNodeSnapshot(contents,pathId,reference);
+    const before=await ensureVisualPathNodeSnapshot(contents,pathId,reference);
     if(!before.hitTargetMatches){
       const blocker=before.openDialog?`open dialog #${before.openDialog}`:`element ${String(before.topElement||'unknown')}`;
       throw new Error(`Visual input spline handle is covered by ${blocker}.`);

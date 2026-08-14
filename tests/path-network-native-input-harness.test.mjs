@@ -15,6 +15,14 @@ test('native graph evidence is stable-id-first and keeps index lookup only as an
   assert.match(desktop, /nodeId\.length>512/);
 });
 
+test('consecutive native node edits re-enter viewport spline editing through the real packaged control', () => {
+  assert.match(desktop, /async function ensureVisualPathNodeSnapshot/);
+  assert.match(desktop, /document\.body\.classList\.contains\('v011-spline-editing'\)/);
+  assert.match(desktop, /sendVisualControlClick\(contents,'#v011SplineEdit'\)/);
+  assert.match(desktop, /const before=await ensureVisualPathNodeSnapshot\(contents,pathId,reference\)/);
+  assert.doesNotMatch(desktop, /splineEditPathId\s*=/);
+});
+
 test('native right-click insertion targets one named current compiled segment and proves its graph delta', () => {
   assert.match(desktop, /actionType==='path-node-insert'/);
   assert.match(desktop, /function visualCompiledPathTarget/);
