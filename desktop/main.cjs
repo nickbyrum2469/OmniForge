@@ -348,14 +348,14 @@ function visualPolylineDeviation(left,right) {
 
 async function visualCompiledSegmentPolyline(contents,pathId,segmentIds) {
   const input=JSON.stringify({pathId,segmentIds:[...new Set((segmentIds||[]).map(value=>String(value||'')).filter(Boolean))]});
-  return contents.executeJavaScript(`(()=>{
+  const result=await contents.executeJavaScript(`(()=>{
     const input=${input},bridge=window.__omniforgeV011Bridge,snapshot=bridge?.snapshot?.(),renderer=bridge?.renderer?.();
     const path=snapshot?.scene?.objects?.find(item=>item.id===input.pathId&&item.type==='path');
     const runtime=renderer?.scenePathRuntimes?.(snapshot.scene)?.find(item=>item.pathObjectId===input.pathId);
-    if(!path?.properties?.pathNetwork||!runtime?.compiled)throw new Error('Exact compiled Path Network segment evidence is unavailable.');
-    if(Number(runtime.sourceRevision)!==Number(path.properties.pathNetwork.revision))throw new Error('Compiled Path Network segment evidence is stale.');
+    if(!path?.properties?.pathNetwork||!runtime?.compiled)return {ready:false,error:'Exact compiled Path Network segment evidence is unavailable.'};
+    if(Number(runtime.sourceRevision)!==Number(path.properties.pathNetwork.revision))return {ready:false,error:'Compiled Path Network segment evidence is stale.'};
     const segments=input.segmentIds.map(id=>runtime.compiled.segments.find(item=>String(item.id)===id));
-    if(segments.some(segment=>!segment?.samples?.length))throw new Error('One or more exact compiled Path Network segments are unavailable.');
+    if(segments.some(segment=>!segment?.samples?.length))return {ready:false,error:'One or more exact compiled Path Network segments are unavailable.'};
     const points=[];
     for(const segment of segments){
       for(const sample of segment.samples){
@@ -363,8 +363,10 @@ async function visualCompiledSegmentPolyline(contents,pathId,segmentIds) {
         if(!previous||Math.hypot(...position.map((value,index)=>value-previous[index]))>1e-8)points.push(position);
       }
     }
-    return {sourceRevision:Number(runtime.sourceRevision),segmentIds:segments.map(segment=>String(segment.id)),points};
+    return {ready:true,sourceRevision:Number(runtime.sourceRevision),segmentIds:segments.map(segment=>String(segment.id)),points};
   })()`,true);
+  if(!result?.ready)throw new Error(String(result?.error||'Exact compiled Path Network segment evidence is unavailable.'));
+  return result;
 }
 
 async function waitForVisualCompiledSegmentPolyline(contents,pathId,segmentIds,timeoutMs=12000) {

@@ -18,6 +18,8 @@ test('native graph evidence is stable-id-first and keeps index lookup only as an
 test('native right-click insertion targets one named current compiled segment and proves its graph delta', () => {
   assert.match(desktop, /actionType==='path-node-insert'/);
   assert.match(desktop, /function visualCompiledPathTarget/);
+  assert.match(desktop, /return \{ready:false,error:'Exact compiled Path Network segment evidence is unavailable\.'/);
+  assert.match(desktop, /if\(!result\?\.ready\)throw new Error\(String\(result\?\.error/);
   assert.match(desktop, /requires an allow-listed compiled segmentId/);
   assert.match(desktop, /runtime\.compiled\.segments\.find\(item=>String\(item\.id\)===input\.segmentId\)/);
   assert.match(desktop, /Number\(runtime\.sourceRevision\)!==Number\(path\.properties\.pathNetwork\.revision\)/);

@@ -296,6 +296,7 @@ test('packaged graph gate drives stable-ID native insertion, grouping, handles, 
   assert.match(script, /resolvedBy -ne 'compiledSegmentId'/);
   assert.match(script, /\$insertionDeviation -gt 0\.01/);
   assert.match(desktop, /centerlineDeviation>0\.01/);
+  assert.match(desktop, /return \{ready:false,error:'Compiled Path Network segment evidence is stale\.'/);
   assert.match(script, /resolvedBy -ne 'nodeId'/);
   assert.match(script, /undoVerified/);
   assert.match(script, /redoVerified/);
