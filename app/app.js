@@ -419,6 +419,28 @@ function validateVisualCaptureRenderFixture(expected,renderTelemetry,sceneFixtur
   };
 }
 
+async function waitForVisualCaptureRenderFixture(expected,sceneFixture,timeoutMs=8000){
+  const deadline=performance.now()+Math.max(1000,Math.min(20000,Number(timeoutMs||8000)));
+  let latestError=null;
+  while(performance.now()<deadline){
+    const renderTelemetry=renderer?.getRenderDiagnostics?.()||null;
+    try{
+      return {
+        renderTelemetry,
+        fixtureTelemetry:validateVisualCaptureRenderFixture(expected,renderTelemetry,sceneFixture)
+      };
+    }catch(error){
+      latestError=error;
+    }
+    // Path generation is revisioned and asynchronous. During interaction the
+    // renderer deliberately retains the previous valid terrain/path bundle
+    // until the exact new bundle can be uploaded atomically. Evidence must
+    // wait for that generation instead of grading the retained frame as stale.
+    await new Promise(resolve=>requestAnimationFrame(resolve));
+  }
+  throw latestError||new Error('Visual capture timed out waiting for the exact renderer generation.');
+}
+
 async function captureVisualTestFrame(options={}) {
   if(!ui.viewport||!camera||!scene)throw new Error('Viewport is not ready for visual capture.');
   if(pendingVisualCaptureRestore)throw new Error('A previous full-window visual capture is still awaiting restoration.');
@@ -442,11 +464,14 @@ async function captureVisualTestFrame(options={}) {
     const waitMs=Math.max(80,Math.min(3000,Number(options.waitMs||500)));
     await sleep(waitMs);
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-    const renderTelemetry=renderer?.getRenderDiagnostics?.()||null;
     // Actions can change the network revision and geometry. Validate the frame
     // against the post-action authority rather than the earlier sync snapshot.
     const currentFixture=visualCaptureSceneFixture(options.expectedPathNetwork);
-    const fixtureTelemetry=validateVisualCaptureRenderFixture(options.expectedPathNetwork,renderTelemetry,currentFixture);
+    const {renderTelemetry,fixtureTelemetry}=await waitForVisualCaptureRenderFixture(
+      options.expectedPathNetwork,
+      currentFixture,
+      options.revisionTimeoutMs
+    );
     const result={
       dataUrl:ui.viewport.toDataURL('image/png'),
       renderTelemetry,

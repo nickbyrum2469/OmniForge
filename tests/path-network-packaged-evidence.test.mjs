@@ -143,7 +143,7 @@ test('packaged evidence renders every bridge family at a compatible span and wid
   assert.match(app, /expected drawn bridge structure geometry/);
   assert.match(app, /bridge structure was last drawn in frame/);
   assert.match(app, /const currentFixture=visualCaptureSceneFixture\(options\.expectedPathNetwork\)/);
-  assert.match(app, /validateVisualCaptureRenderFixture\(options\.expectedPathNetwork,renderTelemetry,currentFixture\)/);
+  assert.match(app, /waitForVisualCaptureRenderFixture\([\s\S]*options\.expectedPathNetwork,[\s\S]*currentFixture,[\s\S]*options\.revisionTimeoutMs/);
   assert.match(app, /function applyVisualTestCamera/);
   assert.match(app, /function visualTestNeedsInputCamera/);
   for (const action of [
@@ -390,7 +390,8 @@ test('failure cleanup kills the process tree and proves the exact port remains o
 
 test('every semantic path edit validates the exact post-action renderer revision', () => {
   assert.match(app, /const currentFixture=visualCaptureSceneFixture\(options\.expectedPathNetwork\)/);
-  assert.match(app, /validateVisualCaptureRenderFixture\(options\.expectedPathNetwork,renderTelemetry,currentFixture\)/);
+  assert.match(app, /waitForVisualCaptureRenderFixture\([\s\S]*options\.expectedPathNetwork,[\s\S]*currentFixture,[\s\S]*options\.revisionTimeoutMs/);
+  assert.match(app, /renderer deliberately retains the previous valid terrain\/path bundle/);
   assert.match(script, /pathActionTelemetry\[0\]\.result\.afterRevision -ne \$postActionRevision/);
   assert.match(script, /fixtureExpectation\.minimumNetworkRevision = \$postActionRevision/);
   assert.match(script, /Assert-ExactPathRenderRevision \$record \$path\.id \$postActionRevision/);
