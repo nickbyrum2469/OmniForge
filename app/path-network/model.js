@@ -48,6 +48,10 @@ function normalizeVerticalProfile(value, segmentId = 'segment') {
   if (!Array.isArray(value.samples) || value.samples.length < 2 || value.samples.length > 16384) {
     throw new Error(`Stored Path Network v2 segment ${segmentId} vertical profile requires between 2 and 16384 samples.`);
   }
+  const positionFlags = value.samples.map(sample => sample?.position !== undefined && sample?.position !== null);
+  if (positionFlags.some(Boolean) && !positionFlags.every(Boolean)) {
+    throw new Error(`Stored Path Network v2 segment ${segmentId} vertical profile positions must be present on every sample or none.`);
+  }
   const samples = value.samples.map((sample, index) => {
     const t = Number(sample?.t);
     const profileValue = Number(sample?.value);
@@ -57,7 +61,15 @@ function normalizeVerticalProfile(value, segmentId = 'segment') {
     if (t < 0 || t > 1) {
       throw new Error(`Stored Path Network v2 segment ${segmentId} vertical profile sample ${index} has t outside [0, 1].`);
     }
-    return { t, value: profileValue };
+    let position;
+    if (positionFlags[index]) {
+      if (!Array.isArray(sample.position) || sample.position.length < 3
+        || sample.position.slice(0, 3).some(component => !Number.isFinite(Number(component)))) {
+        throw new Error(`Stored Path Network v2 segment ${segmentId} vertical profile sample ${index} has an invalid 3D position.`);
+      }
+      position = sample.position.slice(0, 3).map(Number);
+    }
+    return { t, value: profileValue, ...(position ? { position } : {}) };
   });
   if (Math.abs(samples[0].t) > 1e-8 || Math.abs(samples.at(-1).t - 1) > 1e-8) {
     throw new Error(`Stored Path Network v2 segment ${segmentId} vertical profile must include exact t=0 and t=1 endpoints.`);

@@ -219,13 +219,25 @@ function normalizedCurveAuthority(value) {
     if (!Array.isArray(value.profile.samples) || value.profile.samples.length < 2 || value.profile.samples.length > 16384) {
       throw new Error('Compiled curve authority vertical profile requires between 2 and 16384 samples.');
     }
+    const positionFlags = value.profile.samples.map(sample => sample?.position !== undefined && sample?.position !== null);
+    if (positionFlags.some(Boolean) && !positionFlags.every(Boolean)) {
+      throw new Error('Compiled curve authority vertical profile positions must be present on every sample or none.');
+    }
     const samples = value.profile.samples.map((sample, index) => {
       const sampleT = Number(sample?.t);
       const sampleValue = Number(sample?.value);
       if (!Number.isFinite(sampleT) || !Number.isFinite(sampleValue) || sampleT < 0 || sampleT > 1) {
         throw new Error(`Compiled curve authority vertical profile sample ${index} is invalid.`);
       }
-      return { t: sampleT, value: sampleValue };
+      let position;
+      if (positionFlags[index]) {
+        if (!Array.isArray(sample.position) || sample.position.length < 3
+          || sample.position.slice(0, 3).some(component => !Number.isFinite(Number(component)))) {
+          throw new Error(`Compiled curve authority vertical profile sample ${index} has an invalid 3D position.`);
+        }
+        position = vec3(sample.position);
+      }
+      return { t: sampleT, value: sampleValue, ...(position ? { position } : {}) };
     });
     if (Math.abs(samples[0].t) > 1e-8 || Math.abs(samples.at(-1).t - 1) > 1e-8) {
       throw new Error('Compiled curve authority vertical profile must include exact t=0 and t=1 endpoints.');
@@ -261,20 +273,48 @@ function verticalProfileValue(profile, t) {
   return start.value + (end.value - start.value) * local;
 }
 
+function verticalProfilePosition(profile, t) {
+  const samples = profile?.samples || [];
+  if (samples.length < 2 || samples.some(sample => !Array.isArray(sample.position))) return null;
+  if (t <= samples[0].t) return [...samples[0].position];
+  if (t >= samples.at(-1).t) return [...samples.at(-1).position];
+  let low = 0;
+  let high = samples.length - 1;
+  while (high - low > 1) {
+    const midpoint = Math.floor((low + high) / 2);
+    if (samples[midpoint].t <= t) low = midpoint;
+    else high = midpoint;
+  }
+  const start = samples[low];
+  const end = samples[high];
+  const local = (t - start.t) / (end.t - start.t);
+  return lerp3(start.position, end.position, local);
+}
+
+function profileSample(sample, t = sample.t) {
+  return {
+    t,
+    value: sample.value,
+    ...(Array.isArray(sample.position) ? { position: [...sample.position] } : {})
+  };
+}
+
 function splitVerticalProfile(profile, splitT) {
   if (!profile) return [null, null];
   const splitValue = verticalProfileValue(profile, splitT);
-  const firstSamples = [{ t: 0, value: profile.samples[0].value }];
-  const secondSamples = [{ t: 0, value: splitValue }];
+  const splitPosition = verticalProfilePosition(profile, splitT);
+  const splitSample = { t: 0, value: splitValue, ...(splitPosition ? { position: splitPosition } : {}) };
+  const firstSamples = [profileSample(profile.samples[0], 0)];
+  const secondSamples = [splitSample];
   for (const sample of profile.samples.slice(1, -1)) {
     if (sample.t < splitT - 1e-8) {
-      firstSamples.push({ t: sample.t / splitT, value: sample.value });
+      firstSamples.push(profileSample(sample, sample.t / splitT));
     } else if (sample.t > splitT + 1e-8) {
-      secondSamples.push({ t: (sample.t - splitT) / (1 - splitT), value: sample.value });
+      secondSamples.push(profileSample(sample, (sample.t - splitT) / (1 - splitT)));
     }
   }
-  firstSamples.push({ t: 1, value: splitValue });
-  secondSamples.push({ t: 1, value: profile.samples.at(-1).value });
+  firstSamples.push({ ...splitSample, t: 1, ...(splitPosition ? { position: [...splitPosition] } : {}) });
+  secondSamples.push(profileSample(profile.samples.at(-1), 1));
   const common = profile.mode === 'terrain-relative' && profile.terrainRevision !== undefined
     ? { mode: profile.mode, terrainRevision: profile.terrainRevision }
     : { mode: profile.mode };
@@ -287,7 +327,7 @@ function splitVerticalProfile(profile, splitT) {
 function reverseVerticalProfile(profile) {
   if (!profile) return;
   profile.samples = profile.samples
-    .map(sample => ({ t: 1 - sample.t, value: sample.value }))
+    .map(sample => profileSample(sample, 1 - sample.t))
     .reverse();
   profile.samples[0].t = 0;
   profile.samples.at(-1).t = 1;
@@ -335,15 +375,22 @@ function subdivideCompiledHermiteSegment(network, segment, node, curveT, authori
   const r1 = lerp3(q1, q2, t);
   const split = lerp3(r0, r1, t);
   const visibleY = node.position[1];
-  node.position = split;
+  node.position = verticalProfilePosition(authority.profile, t) || split;
   const [firstProfile, secondProfile] = splitVerticalProfile(authority.profile, t);
   if (authority.profile?.mode === 'absolute') {
     node.position[1] = verticalProfileValue(authority.profile, t);
     node.heightMode = 'absolute';
     node.heightOffset = 0;
   } else if (authority.profile?.mode === 'terrain-relative') {
-    const offset = verticalProfileValue(authority.profile, t);
-    node.position[1] = visibleY;
+    if (typeof context.terrainHeightAt !== 'function') {
+      throw new Error('Terrain-relative exact curve insertion requires the authoritative authored-terrain height query.');
+    }
+    node.position[1] = Number.isFinite(node.position[1]) ? node.position[1] : visibleY;
+    const baseY = finite(context.terrainHeightAt(node.position[0], node.position[2]), Number.NaN);
+    if (!Number.isFinite(baseY)) {
+      throw new Error('Terrain-relative exact curve insertion could not resolve authored terrain at the inserted node.');
+    }
+    const offset = node.position[1] - baseY;
     node.heightMode = Math.abs(offset) <= 1e-6 ? 'terrain' : 'offset';
     node.heightOffset = node.heightMode === 'terrain' ? 0 : offset;
   } else {
@@ -735,7 +782,8 @@ export function applyPathNetworkTransaction(input, transaction = {}, options = {
   const operations = Array.isArray(transaction.operations) ? transaction.operations : [];
   if (!operations.length) throw new Error('A path transaction requires at least one operation.');
   const context = {
-    terrainRevision: options.terrainRevision ?? transaction.terrainRevision ?? null
+    terrainRevision: options.terrainRevision ?? transaction.terrainRevision ?? null,
+    terrainHeightAt: typeof options.terrainHeightAt === 'function' ? options.terrainHeightAt : null
   };
   for (const operation of operations) applyOperation(network, operation, context);
   network.revision = before.revision + 1;
@@ -793,11 +841,17 @@ export function duplicatePathNetwork(input, options = {}) {
         fromNode: nodeIds.get(segment.fromNode),
         toNode: nodeIds.get(segment.toNode)
       };
-      if (duplicate.curveControl?.profile?.mode === 'absolute' && Math.abs(offset[1]) > HANDLE_EPSILON) {
+      if (duplicate.curveControl?.profile?.mode === 'absolute') {
         duplicate.curveControl.profile.samples = duplicate.curveControl.profile.samples.map(sample => ({
           ...sample,
-          value: sample.value + offset[1]
+          value: sample.value + offset[1],
+          ...(Array.isArray(sample.position)
+            ? { position: sample.position.map((value, axis) => value + offset[axis]) }
+            : {})
         }));
+      } else if (duplicate.curveControl?.profile?.mode === 'terrain-relative'
+        && offset.some(component => Math.abs(component) > HANDLE_EPSILON)) {
+        delete duplicate.curveControl.profile;
       }
       return duplicate;
     })
@@ -926,7 +980,10 @@ export function mergePathNetworksAtSegment(targetInput, sourceInput, options = {
         heightMode: PATH_HEIGHT_MODES.includes(options.heightMode) ? options.heightMode : 'terrain',
         heightOffset: finite(options.heightOffset)
       }
-    }, { terrainRevision: options.terrainRevision ?? null });
+    }, {
+      terrainRevision: options.terrainRevision ?? null,
+      terrainHeightAt: typeof options.terrainHeightAt === 'function' ? options.terrainHeightAt : null
+    });
   }
 
   const sourceDegrees = pathNetworkDegrees(source);

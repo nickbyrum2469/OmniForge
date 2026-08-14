@@ -291,7 +291,8 @@ export async function handleV011Request(req, res) {
         requireExpectedRevision(current, input.expectedRevision);
         const terrain = activeScene(state).objects.find(object => object.type === 'terrain');
         const transaction = applyPathNetworkTransaction(current, input, {
-          terrainRevision: authoredTerrainRevision(terrain)
+          terrainRevision: authoredTerrainRevision(terrain),
+          terrainHeightAt: (x, z) => terrainHeightAt(terrain, x, z, [])
         });
         recordPathEdit(path, current, input.label || 'Edit path network');
         path.properties.pathNetwork = transaction.network;
@@ -460,7 +461,8 @@ export async function handleV011Request(req, res) {
           sourceNodeId: nearest.node.id,
           heightMode: Math.abs(heightOffset) <= 0.02 ? 'terrain' : 'offset',
           heightOffset,
-          terrainRevision: authoredTerrainRevision(terrain)
+          terrainRevision: authoredTerrainRevision(terrain),
+          terrainHeightAt: baseHeightAt
         });
         pushPathHistory(target, 'pathNetworkUndo', current, input.label || 'Join path branch', {
           restoreObjects: [source]

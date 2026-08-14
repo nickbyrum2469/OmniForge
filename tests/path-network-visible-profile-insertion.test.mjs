@@ -46,7 +46,7 @@ function splitAndCompile(network, {
       curveAuthority: beforeSegment.curveAuthority,
       node: { id: 'inserted', position: visibleSplit }
     }]
-  }, { terrainRevision }).network;
+  }, { terrainRevision, terrainHeightAt }).network;
   const after = compilePathNetwork(edited, compileOptions);
   const first = after.segments.find(segment => segment.id === segmentId);
   const second = after.segments.find(segment => segment.fromNode === 'inserted');
@@ -99,11 +99,16 @@ test('terrain-following exact insertion preserves the final visible centerline a
   const authorityProfile = result.beforeSegment.curveAuthority.profile;
   assert.equal(authorityProfile.mode, 'terrain-relative');
   assert.equal(result.beforeSegment.curveAuthority.terrainRevision, terrainRevision);
+  assert.equal(
+    authorityProfile.samples.every(sample => sample.position?.length === 3),
+    true,
+    'compiled insertion authority must retain every final 3D centerline breakpoint'
+  );
   assert.ok(
     authorityProfile.samples.some(sample => Math.abs(sample.value) > 0.25),
     'fixture must exercise a terrain profile that the vertical solver visibly adjusted'
   );
-  assert.ok(result.maximumDeviation <= 0.01, `terrain visible centerline deviated ${result.maximumDeviation} m`);
+  assert.ok(result.maximumDeviation <= 1e-6, `terrain visible centerline deviated ${result.maximumDeviation} m`);
   const inserted = result.edited.nodes.find(node => node.id === 'inserted');
   const resolved = result.after.nodes.find(node => node.id === 'inserted').resolvedPosition;
   assert.ok(['terrain', 'offset'].includes(inserted.heightMode));
@@ -121,7 +126,7 @@ test('terrain-following exact insertion preserves the final visible centerline a
       curveAuthority: result.beforeSegment.curveAuthority,
       node: { id: 'stale', position: result.visibleSplit }
     }]
-  }, { terrainRevision: terrainRevision + 1 }), /does not match current authored terrain revision/);
+  }, { terrainRevision: terrainRevision + 1, terrainHeightAt }), /does not match current authored terrain revision/);
 });
 
 test('absolute strongly curved insertion preserves final visible Y instead of restoring raw Hermite Y', () => {
@@ -151,7 +156,7 @@ test('absolute strongly curved insertion preserves final visible Y instead of re
   });
   assert.equal(result.beforeSegment.curveAuthority.profile.mode, 'absolute');
   assert.equal(result.beforeSegment.curveAuthority.terrainRevision, null);
-  assert.ok(result.maximumDeviation <= 0.01, `absolute visible centerline deviated ${result.maximumDeviation} m`);
+  assert.ok(result.maximumDeviation <= 1e-6, `absolute visible centerline deviated ${result.maximumDeviation} m`);
   const inserted = result.edited.nodes.find(node => node.id === 'inserted');
   assert.equal(inserted.heightMode, 'absolute');
   assert.ok(Math.abs(inserted.position[1] - result.visibleSplit[1]) <= 0.01);
@@ -186,7 +191,11 @@ test('visible profiles reverse exactly, invalidate on node edits, and reject mal
         toHandle: [-3, -2, 2],
         profile: {
           mode: 'absolute',
-          samples: [{ t: 0, value: 2 }, { t: 0.3, value: 4 }, { t: 1, value: 7 }]
+          samples: [
+            { t: 0, value: 2, position: [0, 2, 0] },
+            { t: 0.3, value: 4, position: [3, 4, 1] },
+            { t: 1, value: 7, position: [12, 7, 4] }
+          ]
         }
       }
     }]
@@ -195,9 +204,9 @@ test('visible profiles reverse exactly, invalidate on node edits, and reject mal
     operations: [{ type: 'reverse-network' }]
   }).network;
   assert.deepEqual(reversed.segments[0].curveControl.profile.samples, [
-    { t: 0, value: 7 },
-    { t: 0.7, value: 4 },
-    { t: 1, value: 2 }
+    { t: 0, value: 7, position: [12, 7, 4] },
+    { t: 0.7, value: 4, position: [3, 4, 1] },
+    { t: 1, value: 2, position: [0, 2, 0] }
   ]);
   const moved = applyPathNetworkTransaction(network, {
     operations: [{ type: 'move-node', nodeId: 'a', delta: [1, 0, 0] }]
@@ -211,6 +220,11 @@ test('visible profiles reverse exactly, invalidate on node edits, and reject mal
     duplicated.segments[0].curveControl.profile.samples.map(sample => sample.value),
     [11, 13, 16],
     'an absolute visible profile must move vertically with its duplicated absolute nodes'
+  );
+  assert.deepEqual(
+    duplicated.segments[0].curveControl.profile.samples.map(sample => sample.position),
+    [[20, 11, -4], [23, 13, -3], [32, 16, 0]],
+    'duplicating an absolute path must translate its exact compiled centerline authority'
   );
   const engineeringEdit = replacePathNetwork(network, {
     ...structuredClone(network),
@@ -237,6 +251,20 @@ test('visible profiles reverse exactly, invalidate on node edits, and reject mal
       }
     }]
   }), /strictly increasing/);
+  assert.throws(() => normalizePathNetwork({
+    ...structuredClone(network),
+    schemaVersion: 2,
+    segments: [{
+      ...structuredClone(network.segments[0]),
+      curveControl: {
+        ...structuredClone(network.segments[0].curveControl),
+        profile: {
+          mode: 'absolute',
+          samples: [{ t: 0, value: 2, position: [0, 2, 0] }, { t: 1, value: 7 }]
+        }
+      }
+    }]
+  }), /positions must be present on every sample or none/);
 });
 
 test('runtime supplies the current authored-natural terrain revision and terrain edits invalidate old profiles', () => {
@@ -274,7 +302,10 @@ test('runtime supplies the current authored-natural terrain revision and terrain
       curveAuthority: authority,
       node: { id: 'inserted', position: stationAtCurveT(runtime.compiled.segments[0], 0.5) }
     }]
-  }, { terrainRevision: 73 }).network;
+  }, {
+    terrainRevision: 73,
+    terrainHeightAt: (x, z) => runtime.terrainService.elevationAt(x, z, { view: 'authored-natural' })
+  }).network;
   const changedTerrain = structuredClone(terrain);
   changedTerrain.properties.generatedRevision = 74;
   changedTerrain.properties.seed = 9;

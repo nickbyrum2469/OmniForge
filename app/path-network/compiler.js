@@ -61,8 +61,29 @@ function verticalProfileValue(profile, t) {
   return start.value + (end.value - start.value) * local;
 }
 
+function verticalProfilePosition(profile, t) {
+  const samples = profile?.samples || [];
+  if (samples.length < 2 || samples.some(sample => !Array.isArray(sample.position))) return null;
+  const amount = clamp(t, 0, 1);
+  if (amount <= samples[0].t) return [...samples[0].position];
+  if (amount >= samples.at(-1).t) return [...samples.at(-1).position];
+  let low = 0;
+  let high = samples.length - 1;
+  while (high - low > 1) {
+    const midpoint = Math.floor((low + high) / 2);
+    if (samples[midpoint].t <= amount) low = midpoint;
+    else high = midpoint;
+  }
+  const start = samples[low];
+  const end = samples[high];
+  const local = clamp((amount - start.t) / Math.max(EPSILON, end.t - start.t), 0, 1);
+  return lerp3(start.position, end.position, local);
+}
+
 function positionWithVerticalProfile(position, profile, t, terrainHeightAt) {
   if (!profile) return position;
+  const authoritativePosition = verticalProfilePosition(profile, t);
+  if (authoritativePosition) return authoritativePosition;
   const result = [...position];
   const value = verticalProfileValue(profile, t);
   if (profile.mode === 'terrain-relative') {
@@ -80,23 +101,27 @@ function visibleProfileFromSamples(samples, { preferTerrain, terrainRevision }) 
   const terrainRelative = preferTerrain && terrainRevision !== null;
   const raw = samples.map(sample => ({
     t: clamp(sample.t, 0, 1),
-    value: terrainRelative ? sample.position[1] - sample.baseY : sample.position[1]
+    value: terrainRelative ? sample.position[1] - sample.baseY : sample.position[1],
+    position: [...sample.position]
   }));
   const profileSamples = [];
   for (const sample of raw) {
     const previous = profileSamples.at(-1);
     if (!previous || sample.t - previous.t > 1e-8) profileSamples.push(sample);
-    else previous.value = sample.value;
+    else {
+      previous.value = sample.value;
+      previous.position = [...sample.position];
+    }
   }
   const firstValue = profileSamples[0]?.value ?? 0;
   const lastValue = profileSamples.at(-1)?.value ?? firstValue;
   if (!profileSamples.length || profileSamples[0].t > 1e-8) {
-    profileSamples.unshift({ t: 0, value: firstValue });
+    profileSamples.unshift({ t: 0, value: firstValue, position: [...profileSamples[0].position] });
   } else {
     profileSamples[0].t = 0;
   }
   if (profileSamples.length < 2 || profileSamples.at(-1).t < 1 - 1e-8) {
-    profileSamples.push({ t: 1, value: lastValue });
+    profileSamples.push({ t: 1, value: lastValue, position: [...profileSamples.at(-1).position] });
   } else {
     profileSamples.at(-1).t = 1;
   }
@@ -263,6 +288,30 @@ function exactCurvePositionsAtResampledParameters(raw, spacing, evaluate) {
     samples[index].distance = distance;
   }
   return samples;
+}
+
+function resamplePolylinePreservingBreakpoints(raw, spacing) {
+  if (raw.length < 2) return raw.map(sample => ({ ...sample, position: [...sample.position], distance: 0 }));
+  const output = [{ ...raw[0], position: [...raw[0].position], distance: 0 }];
+  let distance = 0;
+  const step = Math.max(0.05, spacing);
+  for (let index = 1; index < raw.length; index += 1) {
+    const start = raw[index - 1];
+    const end = raw[index];
+    const length = distance3(start.position, end.position);
+    const count = Math.max(1, Math.ceil(length / step));
+    for (let subdivision = 1; subdivision <= count; subdivision += 1) {
+      const local = subdivision / count;
+      const position = lerp3(start.position, end.position, local);
+      distance += distance3(output.at(-1).position, position);
+      output.push({
+        t: start.t + (end.t - start.t) * local,
+        position,
+        distance
+      });
+    }
+  }
+  return output;
 }
 
 function profileTerrainData(samples, terrainHeightAt, terrainNormalAt) {
@@ -849,6 +898,10 @@ function compileSegment(segment, network, positions, adjacency, nodeMap, options
     && Number(storedVerticalProfile.terrainRevision) !== terrainRevision
     ? null
     : storedVerticalProfile;
+  const fullCenterlineProfile = Boolean(
+    verticalProfile?.samples?.length >= 2
+    && verticalProfile.samples.every(sample => Array.isArray(sample.position))
+  );
   const evaluate = verticalProfile
     ? t => positionWithVerticalProfile(evaluateHorizontal(t), verticalProfile, t, options.terrainHeightAt)
     : evaluateHorizontal;
@@ -866,22 +919,26 @@ function compileSegment(segment, network, positions, adjacency, nodeMap, options
     : t => hermiteDerivative(start, end, startTangent, endTangent, t);
   const width = segment.crossSectionProfile.width;
   const spacing = clamp(options.spacing ?? Math.min(0.75, width * 0.18), 0.05, 10);
-  const raw = adaptiveCurveSamples(evaluate, {
-    // Exact station positions need a finer arc-length integration polyline
-    // than the final render spacing. A coarse lookup can move a station far
-    // enough to break uniform spacing and shift Civil Assist by one sample.
-    tolerance: Math.min(width * 0.0025, options.tolerance ?? 0.01),
-    maximumAngleRadians: clamp(options.maximumAngleDegrees ?? 4, 0.25, 45) * Math.PI / 180,
-    maximumChord: Math.max(spacing * 0.5, width * 0.1),
-    maximumDepth: options.maximumDepth
-  });
+  const raw = fullCenterlineProfile
+    ? verticalProfile.samples.map(sample => ({ t: sample.t, position: [...sample.position] }))
+    : adaptiveCurveSamples(evaluate, {
+        // Exact station positions need a finer arc-length integration polyline
+        // than the final render spacing. A coarse lookup can move a station far
+        // enough to break uniform spacing and shift Civil Assist by one sample.
+        tolerance: Math.min(width * 0.0025, options.tolerance ?? 0.01),
+        maximumAngleRadians: clamp(options.maximumAngleDegrees ?? 4, 0.25, 45) * Math.PI / 180,
+        maximumChord: Math.max(spacing * 0.5, width * 0.1),
+        maximumDepth: options.maximumDepth
+      });
   // Arc-length interpolation chooses the station parameters, but the station
   // itself must be evaluated on the curve at that exact t. Keeping the chord-
   // interpolated position here made the published visible profile and its
   // curveT disagree by up to the adaptive tolerance, which reintroduced a
   // small insertion jump on steep terrain even after Y became authoritative.
   let samples = profileTerrainData(
-    exactCurvePositionsAtResampledParameters(raw, spacing, evaluate),
+    fullCenterlineProfile
+      ? resamplePolylinePreservingBreakpoints(raw, spacing)
+      : exactCurvePositionsAtResampledParameters(raw, spacing, evaluate),
     options.terrainHeightAt,
     options.terrainNormalAt
   );
