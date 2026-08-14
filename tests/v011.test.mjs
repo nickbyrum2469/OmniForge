@@ -21,8 +21,20 @@ import {
   splitPath
 } from '../app/worldgen.js';
 import { terrainDiagnostics, pathDiagnostics } from '../server/v011-systems.mjs';
+import { pathNetworkDegrees } from '../app/path-network/transactions.js';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+
+test('v0.11 runtime-facing server and marketplace identities match the packaged product version',()=>{
+  const packageVersion=JSON.parse(fs.readFileSync(path.join(ROOT,'package.json'),'utf8')).version;
+  const serverSource=fs.readFileSync(path.join(ROOT,'server','server.mjs'),'utf8');
+  const marketplaceSource=fs.readFileSync(path.join(ROOT,'server','marketplace.mjs'),'utf8');
+  assert.equal(packageVersion,'0.11.0');
+  assert.match(serverSource,new RegExp(`OmniForge ${packageVersion.replaceAll('.','\\.')} running at`));
+  assert.match(marketplaceSource,new RegExp(`OmniForge/${packageVersion.replaceAll('.','\\.')}`));
+  assert.doesNotMatch(serverSource,/OmniForge 0\.9\.0 running at/);
+  assert.doesNotMatch(marketplaceSource,/OmniForge\/0\.9\.0/);
+});
 
 function terrain(overrides={}){
   return {id:'terrain-test',type:'terrain',name:'Terrain',visible:true,locked:false,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},properties:normalizeTerrainProperties({preset:'mountainValley',sizeX:240,sizeZ:200,resolution:96,height:42,macroScale:190,detailScale:32,octaves:6,warpStrength:38,ridgeStrength:.75,valleyStrength:.65,valleyRadius:62,seed:17,...overrides},{position:[0,0,0],scale:[1,1,1]})};
@@ -129,14 +141,23 @@ test('v0.11 editor, renderer, runtime, desktop, and MCP expose the connected wor
   assert.match(html,/id="splineToggle"/);
   assert.match(html,/v011\.css/);
   assert.match(html,/v011\.js/);
-  assert.match(editor,/Right-click terrain to insert a node/);
+  assert.match(editor,/Shift-drag raises or lowers it/);
+  assert.match(editor,/Right-click inserts a node into the nearest compiled segment/);
+  assert.match(editor,/sharedPathGenerationWorkerPool/);
+  assert.doesNotMatch(editor,/Math\.min\(4,\s*logicalProcessors\s*-\s*1\)/);
+  assert.match(editor,/\/api\/v012\/path\//);
+  assert.match(editor,/Join nearest branch/);
+  assert.match(editor,/expectedSourceRevision/);
   assert.match(editor,/terrainPointFromScreen/);
   assert.match(editor,/data-v011-expand/);
-  assert.match(renderer,/buildPathGuideSegmentsFromCorridor/);
+  assert.doesNotMatch(renderer,/buildPathGuideSegmentsFromCorridor/);
+  assert.match(renderer,/runtime\.geometry\.guides/);
   assert.match(renderer,/scene\.settings\.splinesVisible!==false/);
   assert.match(renderer,/Spline guides are editor overlays, not world geometry/);
   assert.match(renderer,/if\(scene\.settings\.splinesVisible!==false\)\{\s*\/\/[\s\S]*?gl\.disable\(gl\.DEPTH_TEST\)/);
   assert.match(renderer,/terrainPointFromScreen/);
+  assert.match(renderer,/setPathPreview/);
+  assert.match(renderer,/pathRuntimeFrameCache/);
   assert.match(app,/__omniforgeV011Bridge/);
   assert.match(mcp,/v011Tools, callV011Tool/);
   assert.equal(packageJson.version,'0.11.0');
@@ -163,15 +184,315 @@ test('v0.11 bootstrap persists terrain expansion and spline node editing through
     assert.equal(inserted.status,201);const index=inserted.body.index;
     const moved=await requestJson(port,`/api/v011/path/${pathId}/node/${index}`,{method:'PATCH',body:JSON.stringify({x:13,z:17})});
     assert.equal(moved.status,200);assert.deepEqual(moved.body.path.properties.points[index],[13,17]);
-    const grade=await requestJson(port,`/api/v011/path/${pathId}`,{method:'PATCH',body:JSON.stringify({properties:{carveTerrain:true,maxGradePercent:6,maxCutDepth:4,maxFillDepth:1.5}})});
-    assert.equal(grade.status,200);assert.equal(grade.body.path.properties.carveTerrain,true);
+    const grade=await requestJson(port,`/api/v011/path/${pathId}`,{method:'PATCH',body:JSON.stringify({properties:{maxGradePercent:6,maxCutDepth:4,maxFillDepth:1.5}})});
+    assert.equal(grade.status,200);assert.equal(grade.body.compatibility.authority,'path-network-v2');
     assert.equal(grade.body.diagnostics.validation,grade.body.diagnostics.gameplayReady?'passed':'failed');
     if(grade.body.diagnostics.gameplayReady)assert.ok(grade.body.diagnostics.compiledMaxGradePercent<=6.15);
-    else assert.equal(grade.body.diagnostics.constraintStatus,'blocked-infeasible-profile');
+    else assert.equal(grade.body.diagnostics.constraintStatus,'blocked-invalid-construction');
+    const rejectedLegacyField=await requestJson(port,`/api/v011/path/${pathId}`,{method:'PATCH',body:JSON.stringify({properties:{splineTension:.9}})});
+    assert.equal(rejectedLegacyField.status,400);assert.match(rejectedLegacyField.body.error,/not schema-v2 authorities: splineTension.*\/api\/v012\/path\/\{pathId\}\/transaction/);
+    const rejectedLegacySplit=await requestJson(port,`/api/v011/path/${pathId}/split`,{method:'POST',body:JSON.stringify({index:1})});
+    assert.equal(rejectedLegacySplit.status,400);assert.match(rejectedLegacySplit.body.error,/Legacy split creates a second points-based path object and is disabled/);
+    const v2Initial=await requestJson(port,`/api/v012/path/${pathId}/network`);
+    assert.equal(v2Initial.status,200);
+    assert.equal(v2Initial.body.network.schemaVersion,2);
+    const rejectedGenericPathDuplicate=await requestJson(port,'/api/object/duplicate',{
+      method:'POST',
+      body:JSON.stringify({objectId:pathId})
+    });
+    assert.equal(rejectedGenericPathDuplicate.status,500);
+    assert.match(rejectedGenericPathDuplicate.body.error,/cannot use generic scene cloning.*\/api\/v012\/path\/.*\/duplicate/);
+    const networkRevision=v2Initial.body.network.revision;
+    const node=v2Initial.body.network.nodes[1];
+    const v2Moved=await requestJson(port,`/api/v012/path/${pathId}/transaction`,{
+      method:'POST',
+      body:JSON.stringify({
+        expectedRevision:networkRevision,
+        label:'Raise trail node',
+        operations:[{
+          type:'move-node',
+          nodeId:node.id,
+          position:[node.position[0],node.position[1]+4,node.position[2]],
+          heightMode:'absolute'
+        }]
+      })
+    });
+    assert.equal(v2Moved.status,200);
+    assert.equal(v2Moved.body.network.revision,networkRevision+1);
+    assert.equal(v2Moved.body.network.nodes.find(item=>item.id===node.id).position[1],node.position[1]+4);
+    assert.equal(v2Moved.body.network.nodes.find(item=>item.id===node.id).heightMode,'absolute');
+    const conflict=await requestJson(port,`/api/v012/path/${pathId}/transaction`,{
+      method:'POST',
+      body:JSON.stringify({
+        expectedRevision:networkRevision,
+        operations:[{type:'move-node',nodeId:node.id,position:node.position}]
+      })
+    });
+    assert.equal(conflict.status,400);
+    assert.match(conflict.body.error,/revision conflict/);
+    const undone=await requestJson(port,`/api/v012/path/${pathId}/undo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+1})
+    });
+    assert.equal(undone.status,200);
+    assert.deepEqual(undone.body.network.nodes.find(item=>item.id===node.id).position,node.position);
+    assert.equal(undone.body.redoDepth,1);
+    const redone=await requestJson(port,`/api/v012/path/${pathId}/redo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+2})
+    });
+    assert.equal(redone.status,200);
+    assert.equal(redone.body.network.revision,networkRevision+3);
+    assert.equal(redone.body.network.nodes.find(item=>item.id===node.id).position[1],node.position[1]+4);
+    assert.equal(redone.body.redoDepth,0);
+    const branchNetwork={
+      schemaVersion:2,
+      id:'path-branch-test',
+      revision:1,
+      purpose:'API merge regression branch',
+      pathClass:'dirt-road',
+      nodes:[
+        {id:'branch-open',position:[0,0,0],heightMode:'terrain'},
+        {id:'branch-far',position:[0,0,-20],heightMode:'terrain'}
+      ],
+      segments:[{id:'branch-segment',fromNode:'branch-open',toNode:'branch-far'}]
+    };
+    const createdBranch=await requestJson(port,'/api/object',{
+      method:'POST',
+      body:JSON.stringify({
+        id:'path-branch-test',
+        type:'path',
+        name:'Terrain Path Branch',
+        properties:{pathNetwork:branchNetwork,pathNetworkSchemaVersion:2}
+      })
+    });
+    assert.equal(createdBranch.status,201);
+    const farBranchNetwork={
+      ...structuredClone(branchNetwork),
+      id:'path-far-branch-test',
+      nodes:branchNetwork.nodes.map(node=>({...node,id:`far-${node.id}`,position:[node.position[0]+500,node.position[1],node.position[2]+500]})),
+      segments:[{id:'far-branch-segment',fromNode:'far-branch-open',toNode:'far-branch-far'}]
+    };
+    const createdFarBranch=await requestJson(port,'/api/object',{
+      method:'POST',
+      body:JSON.stringify({
+        id:'path-far-branch-test',
+        type:'path',
+        name:'Far Terrain Path Branch',
+        properties:{pathNetwork:farBranchNetwork,pathNetworkSchemaVersion:2}
+      })
+    });
+    assert.equal(createdFarBranch.status,201);
+    const rejectedFarMerge=await requestJson(port,`/api/v012/path/${pathId}/merge/path-far-branch-test`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+3,expectedSourceRevision:1})
+    });
+    assert.equal(rejectedFarMerge.status,400);
+    assert.match(rejectedFarMerge.body.error,/Nearest branch join is .* exceeding the .* safety limit/);
+    const merged=await requestJson(port,`/api/v012/path/${pathId}/merge/path-branch-test`,{
+      method:'POST',
+      body:JSON.stringify({
+        expectedRevision:networkRevision+3,
+        expectedSourceRevision:1,
+        label:'Join API branch'
+      })
+    });
+    assert.equal(merged.status,200);
+    assert.equal(merged.body.removedPathId,'path-branch-test');
+    assert.equal(pathNetworkDegrees(merged.body.network).get(merged.body.junctionNodeId),3);
+    assert.equal(merged.body.sourceEndpointId,'branch-open');
+    assert.equal(typeof merged.body.targetSegmentId,'string');
+    assert.equal(Number.isFinite(merged.body.curveT),true);
+    assert.equal(Number.isFinite(merged.body.distance),true);
+    assert.equal(Number.isFinite(merged.body.maxJoinDistance),true);
+    assert.equal(merged.body.state.scenes[0].objects.some(item=>item.id==='path-branch-test'),false);
+    const mergeRestoreCollision=await requestJson(port,'/api/object',{
+      method:'POST',body:JSON.stringify({id:'path-branch-test',type:'box',name:'Occupied merge history id'})
+    });
+    assert.equal(mergeRestoreCollision.status,201);
+    const rejectedDuplicateSceneId=await requestJson(port,'/api/object',{
+      method:'POST',body:JSON.stringify({id:'path-branch-test',type:'box',name:'Duplicate occupied id'})
+    });
+    assert.equal(rejectedDuplicateSceneId.status,500);
+    assert.match(rejectedDuplicateSceneId.body.error,/Scene object id path-branch-test already exists/);
+    const rejectedMergeUndo=await requestJson(port,`/api/v012/path/${pathId}/undo`,{
+      method:'POST',body:JSON.stringify({expectedRevision:networkRevision+4})
+    });
+    assert.equal(rejectedMergeUndo.status,400);
+    assert.match(rejectedMergeUndo.body.error,/cannot restore Path Network history object path-branch-test.*already occupied/i);
+    const afterRejectedMergeUndo=await requestJson(port,`/api/v012/path/${pathId}/network`);
+    assert.equal(afterRejectedMergeUndo.body.network.revision,networkRevision+4);
+    const removedMergeCollision=await requestJson(port,'/api/object/path-branch-test',{method:'DELETE'});
+    assert.equal(removedMergeCollision.status,200);
+    const mergeUndo=await requestJson(port,`/api/v012/path/${pathId}/undo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+4})
+    });
+    assert.equal(mergeUndo.status,200);
+    assert.equal(mergeUndo.body.state.scenes[0].objects.some(item=>item.id==='path-branch-test'),true);
+    const mergeRedo=await requestJson(port,`/api/v012/path/${pathId}/redo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+5})
+    });
+    assert.equal(mergeRedo.status,200);
+    assert.equal(mergeRedo.body.state.scenes[0].objects.some(item=>item.id==='path-branch-test'),false);
+
+    const duplicated=await requestJson(port,`/api/v012/path/${pathId}/duplicate`,{
+      method:'POST',
+      body:JSON.stringify({
+        expectedRevision:networkRevision+6,
+        newPathId:'path-duplicate-api-test',
+        name:'Independent API Path Copy',
+        offset:[7,2,-3],
+        label:'Duplicate API path network'
+      })
+    });
+    assert.equal(duplicated.status,201);
+    assert.equal(duplicated.body.path.id,'path-duplicate-api-test');
+    assert.equal(duplicated.body.network.id,'path-duplicate-api-test');
+    assert.equal(duplicated.body.network.revision,1);
+    assert.equal(duplicated.body.undoPathId,pathId);
+    assert.deepEqual(
+      duplicated.body.network.nodes[0].position,
+      mergeRedo.body.network.nodes[0].position.map((value,index)=>value+[7,2,-3][index])
+    );
+    assert.notEqual(duplicated.body.network.nodes[0].id,mergeRedo.body.network.nodes[0].id);
+    assert.deepEqual(duplicated.body.path.transform,{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});
+    assert.deepEqual(duplicated.body.path.properties.pathNetworkUndo,[]);
+    const duplicateCollision=await requestJson(port,`/api/v012/path/${pathId}/duplicate`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+6,newPathId:'path-duplicate-api-test'})
+    });
+    assert.equal(duplicateCollision.status,400);
+    assert.match(duplicateCollision.body.error,/already exists/);
+    const duplicateUndo=await requestJson(port,`/api/v012/path/${pathId}/undo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+6})
+    });
+    assert.equal(duplicateUndo.status,200);
+    assert.equal(duplicateUndo.body.network.revision,networkRevision+7);
+    assert.equal(duplicateUndo.body.state.scenes[0].objects.some(item=>item.id==='path-duplicate-api-test'),false);
+    const duplicateRestoreCollision=await requestJson(port,'/api/object',{
+      method:'POST',body:JSON.stringify({id:'path-duplicate-api-test',type:'box',name:'Occupied duplicate history id'})
+    });
+    assert.equal(duplicateRestoreCollision.status,201);
+    const rejectedDuplicateRedo=await requestJson(port,`/api/v012/path/${pathId}/redo`,{
+      method:'POST',body:JSON.stringify({expectedRevision:networkRevision+7})
+    });
+    assert.equal(rejectedDuplicateRedo.status,400);
+    assert.match(rejectedDuplicateRedo.body.error,/cannot restore Path Network history object path-duplicate-api-test.*already occupied/i);
+    const afterRejectedDuplicateRedo=await requestJson(port,`/api/v012/path/${pathId}/network`);
+    assert.equal(afterRejectedDuplicateRedo.body.network.revision,networkRevision+7);
+    const removedDuplicateCollision=await requestJson(port,'/api/object/path-duplicate-api-test',{method:'DELETE'});
+    assert.equal(removedDuplicateCollision.status,200);
+    const duplicateRedo=await requestJson(port,`/api/v012/path/${pathId}/redo`,{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:networkRevision+7})
+    });
+    assert.equal(duplicateRedo.status,200);
+    assert.equal(duplicateRedo.body.network.revision,networkRevision+8);
+    assert.equal(duplicateRedo.body.state.scenes[0].objects.some(item=>item.id==='path-duplicate-api-test'),true);
+
+    const splitNetwork={
+      schemaVersion:2,
+      id:'path-split-api-test',
+      revision:1,
+      purpose:'API split regression route',
+      pathClass:'dirt-road',
+      nodes:['a','b','c','d'].map((id,index)=>({id,position:[index*12,index,30],heightMode:index===1?'absolute':'terrain'})),
+      segments:[
+        {id:'ab',fromNode:'a',toNode:'b'},
+        {id:'bc',fromNode:'b',toNode:'c',constructionMode:'bridge',constructionLocked:true},
+        {id:'cd',fromNode:'c',toNode:'d'}
+      ]
+    };
+    const createdSplitPath=await requestJson(port,'/api/object',{
+      method:'POST',
+      body:JSON.stringify({
+        id:'path-split-api-test',
+        type:'path',
+        name:'API Split Path',
+        properties:{pathNetwork:splitNetwork,pathNetworkSchemaVersion:2}
+      })
+    });
+    assert.equal(createdSplitPath.status,201);
+    const splitResult=await requestJson(port,'/api/v012/path/path-split-api-test/split',{
+      method:'POST',
+      body:JSON.stringify({
+        expectedRevision:1,
+        nodeId:'b',
+        extractedSegmentId:'bc',
+        newPathId:'path-split-api-extracted',
+        name:'API Extracted Path',
+        label:'Split API path network'
+      })
+    });
+    assert.equal(splitResult.status,201);
+    assert.equal(splitResult.body.network.id,'path-split-api-test');
+    assert.equal(splitResult.body.network.revision,2);
+    assert.deepEqual(splitResult.body.network.nodes.map(item=>item.id).sort(),['a','b']);
+    assert.equal(splitResult.body.extractedPath.id,'path-split-api-extracted');
+    assert.equal(splitResult.body.extractedNetwork.nodes.length,3);
+    assert.ok(splitResult.body.extractedNetwork.segments.some(segment=>segment.constructionMode==='bridge'&&segment.constructionLocked));
+    const splitUndo=await requestJson(port,'/api/v012/path/path-split-api-test/undo',{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:2})
+    });
+    assert.equal(splitUndo.status,200);
+    assert.equal(splitUndo.body.network.revision,3);
+    assert.equal(splitUndo.body.network.nodes.length,4);
+    assert.equal(splitUndo.body.state.scenes[0].objects.some(item=>item.id==='path-split-api-extracted'),false);
+    const splitRestoreCollision=await requestJson(port,'/api/object',{
+      method:'POST',body:JSON.stringify({id:'path-split-api-extracted',type:'box',name:'Occupied split history id'})
+    });
+    assert.equal(splitRestoreCollision.status,201);
+    const rejectedSplitRedo=await requestJson(port,'/api/v012/path/path-split-api-test/redo',{
+      method:'POST',body:JSON.stringify({expectedRevision:3})
+    });
+    assert.equal(rejectedSplitRedo.status,400);
+    assert.match(rejectedSplitRedo.body.error,/cannot restore Path Network history object path-split-api-extracted.*already occupied/i);
+    const afterRejectedSplitRedo=await requestJson(port,'/api/v012/path/path-split-api-test/network');
+    assert.equal(afterRejectedSplitRedo.body.network.revision,3);
+    const removedSplitCollision=await requestJson(port,'/api/object/path-split-api-extracted',{method:'DELETE'});
+    assert.equal(removedSplitCollision.status,200);
+    const splitRedo=await requestJson(port,'/api/v012/path/path-split-api-test/redo',{
+      method:'POST',
+      body:JSON.stringify({expectedRevision:3})
+    });
+    assert.equal(splitRedo.status,200);
+    assert.equal(splitRedo.body.network.revision,4);
+    assert.deepEqual(splitRedo.body.network.nodes.map(item=>item.id).sort(),['a','b']);
+    assert.equal(splitRedo.body.state.scenes[0].objects.some(item=>item.id==='path-split-api-extracted'),true);
     const settings=await requestJson(port,'/api/v011/scene-settings',{method:'PATCH',body:JSON.stringify({splinesVisible:false})});
     assert.equal(settings.status,200);assert.equal(settings.body.settings.splinesVisible,false);
     const persisted=JSON.parse(fs.readFileSync(path.join(runtime,'data','engine-state.json'),'utf8'));
     assert.equal(persisted.schemaVersion,9);assert.equal(persisted.engine.version,'0.11.0');assert.equal(persisted.scenes[0].settings.splinesVisible,false);
+    assert.equal(persisted.scenes[0].objects.some(item=>item.id==='path-duplicate-api-test'),true);
+    assert.equal(persisted.scenes[0].objects.some(item=>item.id==='path-split-api-extracted'),true);
+
+    const missingRemovalDuplicate=await requestJson(port,`/api/v012/path/${pathId}/duplicate`,{
+      method:'POST',
+      body:JSON.stringify({
+        expectedRevision:networkRevision+8,
+        newPathId:'path-history-missing-removal',
+        name:'History removal preflight path'
+      })
+    });
+    assert.equal(missingRemovalDuplicate.status,201);
+    const externallyDeletedDuplicate=await requestJson(port,'/api/object/path-history-missing-removal',{method:'DELETE'});
+    assert.equal(externallyDeletedDuplicate.status,200);
+    const rejectedMissingRemovalUndo=await requestJson(port,`/api/v012/path/${pathId}/undo`,{
+      method:'POST',body:JSON.stringify({expectedRevision:networkRevision+8})
+    });
+    assert.equal(rejectedMissingRemovalUndo.status,400);
+    assert.match(rejectedMissingRemovalUndo.body.error,/cannot remove Path Network history object path-history-missing-removal because it is missing.*not consumed/i);
+    const afterRejectedMissingRemoval=await requestJson(port,`/api/v012/path/${pathId}/network`);
+    assert.equal(afterRejectedMissingRemoval.body.network.revision,networkRevision+8);
+    const rejectedMissingRemovalUndoAgain=await requestJson(port,`/api/v012/path/${pathId}/undo`,{
+      method:'POST',body:JSON.stringify({expectedRevision:networkRevision+8})
+    });
+    assert.equal(rejectedMissingRemovalUndoAgain.status,400);
+    assert.match(rejectedMissingRemovalUndoAgain.body.error,/history object path-history-missing-removal.*missing/i);
   }finally{child.kill('SIGTERM');await Promise.race([new Promise(resolve=>child.once('exit',resolve)),new Promise(resolve=>setTimeout(resolve,2500))]);fs.rmSync(runtime,{recursive:true,force:true});}
   assert.equal(stderr,'',stderr);
 });

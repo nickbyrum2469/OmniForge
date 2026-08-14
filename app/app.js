@@ -143,52 +143,370 @@ function showToast(message, type='') {
   toastTimer = setTimeout(()=>ui.viewportToast.className='viewport-toast',2400);
 }
 
+const visualTestClickTargets=Object.freeze({
+  hierarchy:'[data-left-tab="hierarchy"]',
+  create:'[data-left-tab="create"]',
+  assets:'[data-left-tab="assets"]',
+  integrations:'[data-left-tab="integrations"]',
+  // World is installed by the connected v0.10 workspace after bootstrap, so
+  // target its permanent ownership marker rather than a nonexistent core tab.
+  world:'[data-v010-world-tab]',
+  ai:'[data-dock-tab="codex"]',
+  console:'[data-dock-tab="console"]',
+  jobs:'[data-dock-tab="jobs"]',
+  worldSettings:'[data-dock-tab="scene"]',
+  pathEdit:'#v011SplineEdit',
+  save:'#saveButton'
+});
+
+function visualTestKeyboardEvent(type,code){
+  const key=({KeyW:'w',KeyA:'a',KeyS:'s',KeyD:'d',Space:' ',ControlLeft:'Control',ShiftLeft:'Shift'})[code]||code;
+  document.dispatchEvent(new KeyboardEvent(type,{bubbles:true,cancelable:true,code,key,shiftKey:code==='ShiftLeft',ctrlKey:code==='ControlLeft'}));
+}
+
+async function runVisualTestActions(actions=[]){
+  const telemetry=[];
+  for(const rawAction of Array.isArray(actions)?actions:[]){
+    const action=rawAction&&typeof rawAction==='object'?rawAction:{};
+    const type=String(action.type||'').trim();
+    const started=performance.now();
+    let result={};
+    if(type==='wait'){
+      await sleep(clamp(Number(action.ms||100),0,5000));
+    }else if(type==='click'){
+      const selector=visualTestClickTargets[String(action.target||'')];
+      const element=selector?$(selector):null;
+      if(!element)throw new Error(`Visual test click target is unavailable: ${String(action.target||'unknown')}.`);
+      element.click();
+      await sleep(clamp(Number(action.waitMs||120),40,2000));
+      result={target:String(action.target),selectedLeftTab:state?.editor?.leftTab||null,selectedBottomTab:state?.editor?.bottomTab||null};
+    }else if(type==='select'){
+      const objectId=String(action.objectId||'');
+      if(!scene.objects.some(object=>object.id===objectId))throw new Error(`Visual test object is unavailable: ${objectId}.`);
+      await selectObject(objectId,false);
+      await sleep(clamp(Number(action.waitMs||120),40,2000));
+      result={objectId:selectedId};
+    }else if(type==='viewport-navigate'){
+      const before=cloneCamera(camera);
+      const rect=ui.viewport.getBoundingClientRect();
+      const centerX=rect.left+rect.width*.5,centerY=rect.top+rect.height*.5;
+      const codes=(Array.isArray(action.keys)?action.keys:['KeyW']).map(String).slice(0,4);
+      const durationMs=clamp(Number(action.durationMs||450),80,3000);
+      ui.viewport.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,button:2,buttons:2,clientX:centerX,clientY:centerY}));
+      await sleep(40);
+      for(const code of codes)visualTestKeyboardEvent('keydown',code);
+      document.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,cancelable:true,buttons:2,clientX:centerX+clamp(Number(action.lookX||24),-240,240),clientY:centerY+clamp(Number(action.lookY||-8),-180,180)}));
+      await sleep(durationMs);
+      for(const code of codes)visualTestKeyboardEvent('keyup',code);
+      window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,button:2,buttons:0,clientX:centerX,clientY:centerY}));
+      await sleep(80);
+      const moved=Math.hypot(...camera.position.map((value,index)=>value-before.position[index]));
+      const looked=Math.hypot(camera.yaw-before.yaw,camera.pitch-before.pitch);
+      if(moved<.001&&looked<.0001)throw new Error('Visual test viewport navigation did not change the live camera.');
+      result={before,after:cloneCamera(camera),moved,looked};
+    }else if(type==='path-transaction'){
+      const path=scene.objects.find(object=>object.id===String(action.pathId||'path-main')&&object.type==='path');
+      if(!path?.properties?.pathNetwork)throw new Error('Visual test Path Network is unavailable.');
+      const beforeRevision=Number(path.properties.pathNetwork.revision||0);
+      const payload=await api(`/api/v012/path/${encodeURIComponent(path.id)}/transaction`,{method:'POST',body:{
+        label:String(action.label||'Packaged interaction evidence').slice(0,120),
+        expectedRevision:beforeRevision,
+        operations:Array.isArray(action.operations)?action.operations:[]
+      }});
+      applyState(payload.state,{forceSelection:true,preserveCamera:true});
+      result={pathId:path.id,beforeRevision,afterRevision:Number(payload.network?.revision||0),validation:payload.validation||null};
+    }else if(type==='path-undo'){
+      const path=scene.objects.find(object=>object.id===String(action.pathId||'path-main')&&object.type==='path');
+      if(!path?.properties?.pathNetwork)throw new Error('Visual test Path Network is unavailable for Undo.');
+      const beforeRevision=Number(path.properties.pathNetwork.revision||0);
+      const payload=await api(`/api/v012/path/${encodeURIComponent(path.id)}/undo`,{method:'POST',body:{expectedRevision:beforeRevision}});
+      applyState(payload.state,{forceSelection:true,preserveCamera:true});
+      result={pathId:path.id,beforeRevision,afterRevision:Number(payload.network?.revision||0)};
+    }else if(type==='save'){
+      const beforeRevision=Number(state?.engine?.revision||0);
+      await saveScene(String(action.message||'Packaged interaction evidence saved'));
+      result={beforeRevision,afterRevision:Number(state?.engine?.revision||0),saveState:ui.saveState?.textContent||''};
+    }else{
+      throw new Error(`Unsupported visual test action: ${type||'missing type'}.`);
+    }
+    telemetry.push({type,durationMs:performance.now()-started,result});
+  }
+  return telemetry;
+}
+
+function visualCaptureSceneFixture(expected={}) {
+  const pathId=String(expected?.pathId||'');
+  if(!pathId)return null;
+  const activeScene=(state?.scenes||[]).find(item=>item.id===state.activeSceneId);
+  const path=(activeScene?.objects||[]).find(item=>item.id===pathId&&item.type==='path');
+  const network=path?.properties?.pathNetwork;
+  if(!network)throw new Error(`Visual capture fixture path is unavailable: ${pathId}.`);
+  const fail=message=>{throw new Error(`Visual capture fixture mismatch for ${pathId}: ${message}`);};
+  const actualNodeIds=(network.nodes||[]).map(node=>String(node.id));
+  const actualSegmentIds=(network.segments||[]).map(segment=>String(segment.id));
+  const expectedNodeIds=(expected.nodeIds||[]).map(String);
+  const expectedSegmentIds=(expected.segmentIds||[]).map(String);
+  if(expected.networkId&&String(network.id)!==String(expected.networkId))fail(`expected network ${expected.networkId}, received ${network.id}.`);
+  if(expectedNodeIds.length&&JSON.stringify(actualNodeIds)!==JSON.stringify(expectedNodeIds))fail(`expected nodes ${expectedNodeIds.join(', ')}, received ${actualNodeIds.join(', ')}.`);
+  if(expectedSegmentIds.length&&JSON.stringify(actualSegmentIds)!==JSON.stringify(expectedSegmentIds))fail(`expected segments ${expectedSegmentIds.join(', ')}, received ${actualSegmentIds.join(', ')}.`);
+  const minimumNetworkRevision=Math.max(0,Number(expected.minimumNetworkRevision||0));
+  if(Number(network.revision||0)<minimumNetworkRevision)fail(`expected network revision >= ${minimumNetworkRevision}, received ${Number(network.revision||0)}.`);
+  const expectedBridgeStyle=String(expected.bridgeStyle||'');
+  const expectedSurfaceProfileId=String(expected.surfaceProfileId||'');
+  const expectedWidth=Number(expected.width);
+  if(expectedBridgeStyle){
+    const segment=(network.segments||[]).find(item=>String(item.id)===String(expectedSegmentIds[0]||actualSegmentIds[0]||''));
+    const actualBridgeStyle=String(segment?.structureProfile?.bridgeStyle||'');
+    if(actualBridgeStyle!==expectedBridgeStyle)fail(`expected bridge style ${expectedBridgeStyle}, received ${actualBridgeStyle||'none'}.`);
+    if(expectedSurfaceProfileId&&String(segment?.surfaceDetailProfile?.profileId||'')!==expectedSurfaceProfileId){
+      fail(`expected surface profile ${expectedSurfaceProfileId}, received ${String(segment?.surfaceDetailProfile?.profileId||'none')}.`);
+    }
+    if(Number.isFinite(expectedWidth)&&Math.abs(Number(segment?.crossSectionProfile?.width||0)-expectedWidth)>.001){
+      fail(`expected width ${expectedWidth}, received ${Number(segment?.crossSectionProfile?.width||0)}.`);
+    }
+  }
+  return {
+    pathId,
+    networkId:String(network.id||''),
+    networkRevision:Number(network.revision||0),
+    nodeIds:actualNodeIds,
+    segmentIds:actualSegmentIds,
+    bridgeStyle:expectedBridgeStyle,
+    surfaceProfileId:expectedSurfaceProfileId,
+    width:Number.isFinite(expectedWidth)?expectedWidth:null
+  };
+}
+
+function normalizedVisualTestCamera(requestedCamera,fallback=camera){
+  if(!requestedCamera||!fallback)return null;
+  const next=cloneCamera(fallback);
+  if(Array.isArray(requestedCamera.position)&&requestedCamera.position.length===3)next.position=requestedCamera.position.map(Number);
+  for(const key of ['yaw','pitch','fov'])if(Number.isFinite(Number(requestedCamera[key])))next[key]=Number(requestedCamera[key]);
+  return sanitizeCameraState(next,fallback);
+}
+
+function applyVisualTestCamera(requestedCamera){
+  const next=normalizedVisualTestCamera(requestedCamera);
+  if(!next)return false;
+  camera=next;
+  return true;
+}
+
+function visualTestNeedsInputCamera(options={}){
+  const cameraBoundActions=new Set([
+    'path-node-drag',
+    'path-node-group-drag',
+    'path-node-toggle-selection',
+    'path-node-insert',
+    'path-handle-drag',
+    'path-network-split',
+    'path-undo'
+  ]);
+  return Array.isArray(options.nativeInputActions)&&options.nativeInputActions.some(action=>cameraBoundActions.has(String(action?.type||'')));
+}
+
+let visualCaptureHoldSequence=0;
+let pendingVisualCaptureRestore=null;
+
+async function restoreVisualCaptureState(snapshot){
+  if(!snapshot)return;
+  camera=snapshot.camera;
+  scene.settings.gridVisible=snapshot.gridVisible;
+  scene.settings.splinesVisible=snapshot.splinesVisible;
+  visualCaptureHideEditorReferences=snapshot.hideEditorReferences;
+  const restoredSelection=snapshot.selectedId&&scene.objects.some(object=>object.id===snapshot.selectedId)?snapshot.selectedId:null;
+  // Restore the local render authority before the optional server selection
+  // write so even a transient API failure cannot leave the viewport captured
+  // in evidence-only state.
+  selectedId=restoredSelection;
+  await selectObject(restoredSelection,false);
+}
+
+async function finishVisualCaptureHold(token){
+  const pending=pendingVisualCaptureRestore;
+  if(!pending||pending.token!==String(token||''))throw new Error('Visual capture restore token is missing or stale.');
+  if(!pending.restoring){
+    clearTimeout(pending.timeout);
+    pending.restoring=restoreVisualCaptureState(pending.snapshot).finally(()=>{
+      if(pendingVisualCaptureRestore===pending)pendingVisualCaptureRestore=null;
+    });
+  }
+  await pending.restoring;
+  return true;
+}
+
+async function synchronizeVisualTestState(options={}) {
+  const minimumRevision=Math.max(0,Number(options.minimumRevision||0));
+  const requiresAuthoritativeState=minimumRevision>0||Boolean(options.expectedPathNetwork?.pathId);
+  if(requiresAuthoritativeState){
+    const deadline=performance.now()+Math.max(1000,Math.min(20000,Number(options.revisionTimeoutMs||8000)));
+    let authoritativeState=null;
+    while(performance.now()<deadline){
+      const remote=await api('/api/state');
+      if(Number(remote?.engine?.revision||0)>=minimumRevision){authoritativeState=remote;break;}
+      await sleep(80);
+    }
+    if(!authoritativeState){
+      throw new Error(`Visual capture timed out waiting for authoritative revision ${minimumRevision}.`);
+    }
+    // Global revision ordering cannot prove that a renderer contains the same
+    // scene payload. Always apply the fetched authority before native input or
+    // visual evidence instead of trusting a numerically newer local revision.
+    const expectedPathId=String(options.expectedPathNetwork?.pathId||'');
+    applyState(authoritativeState,{forceSelection:Boolean(expectedPathId),preserveCamera:true});
+    if(expectedPathId)await selectObject(expectedPathId,false);
+  }
+  // Native spline input runs before the PNG capture. Frame its requested
+  // camera now, then let two real animation frames reconcile HTML handles to
+  // the WebGL projection before Electron hit-tests and drags them.
+  if(visualTestNeedsInputCamera(options)&&applyVisualTestCamera(options.inputCamera||options.camera)){
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  }
+  const fixture=visualCaptureSceneFixture(options.expectedPathNetwork);
+  return {engineRevision:Number(state?.engine?.revision||0),fixture};
+}
+
+function validateVisualCaptureRenderFixture(expected,renderTelemetry,sceneFixture) {
+  if(!expected?.pathId)return sceneFixture||null;
+  const corridor=(renderTelemetry?.pathwayCorridors||[]).find(item=>String(item.id)===String(expected.pathId));
+  if(!corridor)throw new Error(`Visual capture renderer did not compile expected path ${expected.pathId}.`);
+  const fail=message=>{throw new Error(`Visual capture render fixture mismatch for ${expected.pathId}: ${message}`);};
+  if(Number(corridor.compiler?.nodeCount||0)!==Number(sceneFixture?.nodeIds?.length||0))fail('compiled node count differs from authoritative scene.');
+  if(Number(corridor.compiler?.segmentCount||0)!==Number(sceneFixture?.segmentIds?.length||0))fail('compiled segment count differs from authoritative scene.');
+  if(String(corridor.sourceNetworkId||'')!==String(sceneFixture?.networkId||''))fail(`expected compiled network ${sceneFixture?.networkId}, received ${corridor.sourceNetworkId||'none'}.`);
+  if(Number(corridor.sourceRevision||0)!==Number(sceneFixture?.networkRevision||0))fail(`compiled revision ${Number(corridor.sourceRevision||0)} differs from authoritative revision ${Number(sceneFixture?.networkRevision||0)}.`);
+  if(JSON.stringify(corridor.nodeIds||[])!==JSON.stringify(sceneFixture?.nodeIds||[]))fail('compiled node identities differ from authoritative scene.');
+  if(JSON.stringify(corridor.segmentIds||[])!==JSON.stringify(sceneFixture?.segmentIds||[]))fail('compiled segment identities differ from authoritative scene.');
+  const rendererCorridor=corridor.renderer||{};
+  if(String(rendererCorridor.sourceNetworkId||'')!==String(sceneFixture?.networkId||''))fail(`uploaded network is ${rendererCorridor.sourceNetworkId||'none'}, expected ${sceneFixture?.networkId}.`);
+  if(Number(rendererCorridor.sourceRevision||0)!==Number(sceneFixture?.networkRevision||0))fail(`uploaded revision ${Number(rendererCorridor.sourceRevision||0)} differs from authoritative revision ${Number(sceneFixture?.networkRevision||0)}.`);
+  if(JSON.stringify(rendererCorridor.nodeIds||[])!==JSON.stringify(sceneFixture?.nodeIds||[]))fail('uploaded node identities differ from authoritative scene.');
+  if(JSON.stringify(rendererCorridor.segmentIds||[])!==JSON.stringify(sceneFixture?.segmentIds||[]))fail('uploaded segment identities differ from authoritative scene.');
+  if(Object.hasOwn(expected,'valid')&&Boolean(corridor.valid)!==Boolean(expected.valid))fail(`expected valid=${Boolean(expected.valid)}, received ${Boolean(corridor.valid)}.`);
+  const minimumBridgeIntervalCount=Math.max(0,Number(expected.minimumBridgeIntervalCount||0));
+  if(Number(corridor.terrain?.bridgeIntervalCount||0)<minimumBridgeIntervalCount){
+    fail(`expected at least ${minimumBridgeIntervalCount} bridge interval(s), received ${Number(corridor.terrain?.bridgeIntervalCount||0)}.`);
+  }
+  const segmentId=String(sceneFixture?.segmentIds?.[0]||'');
+  const compiledSegment=(rendererCorridor.segments||[]).find(item=>String(item.id)===segmentId);
+  if(!compiledSegment)fail(`compiled segment evidence is unavailable for ${segmentId||'expected segment'}.`);
+  if(expected.bridgeStyle&&String(compiledSegment.bridgeStyle)!==String(expected.bridgeStyle))fail(`compiled bridge style is ${compiledSegment.bridgeStyle||'none'}, expected ${expected.bridgeStyle}.`);
+  if(expected.surfaceProfileId&&String(compiledSegment.surfaceProfileId)!==String(expected.surfaceProfileId))fail(`compiled surface profile is ${compiledSegment.surfaceProfileId||'none'}, expected ${expected.surfaceProfileId}.`);
+  if(Number.isFinite(Number(expected.width))&&Math.abs(Number(compiledSegment.width||0)-Number(expected.width))>.001)fail(`compiled width is ${Number(compiledSegment.width||0)}, expected ${Number(expected.width)}.`);
+  const bridgeSelection=(rendererCorridor.bridgeSelections||[]).find(item=>String(item.segmentId)===segmentId);
+  if(minimumBridgeIntervalCount>0&&!bridgeSelection)fail(`compiled bridge selection is unavailable for ${segmentId}.`);
+  if(bridgeSelection&&expected.bridgeStyle&&String(bridgeSelection.bridgeStyle)!==String(expected.bridgeStyle))fail(`resolved bridge family is ${bridgeSelection.bridgeStyle||'none'}, expected ${expected.bridgeStyle}.`);
+  const structureVertexCount=Number(corridor.meshStats?.structure?.vertexCount||0);
+  const uploadedStructure=rendererCorridor.uploadedMeshes?.structure;
+  const drawnStructure=rendererCorridor.drawnMeshes?.structure;
+  const capturedFrameIndex=Number(renderTelemetry?.lastFrameReport?.frameIndex||0);
+  if(minimumBridgeIntervalCount>0&&(!uploadedStructure?.present||Number(uploadedStructure.indexCount||0)<3))fail(`expected uploaded bridge structure geometry, received ${Number(uploadedStructure?.indexCount||0)} uploaded indices.`);
+  if(minimumBridgeIntervalCount>0&&(!drawnStructure?.present||Number(drawnStructure.indexCount||0)<3))fail(`expected drawn bridge structure geometry, received ${Number(drawnStructure?.indexCount||0)} drawn indices.`);
+  if(minimumBridgeIntervalCount>0&&Number(drawnStructure?.frameIndex||0)!==capturedFrameIndex)fail(`bridge structure was last drawn in frame ${Number(drawnStructure?.frameIndex||0)}, expected captured frame ${capturedFrameIndex}.`);
+  return {
+    ...sceneFixture,
+    valid:Boolean(corridor.valid),
+    compiledNodeCount:Number(corridor.compiler?.nodeCount||0),
+    compiledSegmentCount:Number(corridor.compiler?.segmentCount||0),
+    bridgeIntervalCount:Number(corridor.terrain?.bridgeIntervalCount||0),
+    sourceRevision:Number(corridor.sourceRevision||0),
+    bridgeStyle:String(bridgeSelection?.bridgeStyle||compiledSegment.bridgeStyle||''),
+    surfaceProfileId:String(compiledSegment.surfaceProfileId||''),
+    width:Number(compiledSegment.width||0),
+    structureVertexCount,
+    uploadedStructureIndexCount:Number(uploadedStructure?.indexCount||0),
+    drawnStructureIndexCount:Number(drawnStructure?.indexCount||0)
+  };
+}
+
+async function waitForVisualCaptureRenderFixture(expected,sceneFixture,timeoutMs=8000){
+  const deadline=performance.now()+Math.max(1000,Math.min(20000,Number(timeoutMs||8000)));
+  let latestError=null;
+  while(performance.now()<deadline){
+    const renderTelemetry=renderer?.getRenderDiagnostics?.()||null;
+    try{
+      return {
+        renderTelemetry,
+        fixtureTelemetry:validateVisualCaptureRenderFixture(expected,renderTelemetry,sceneFixture)
+      };
+    }catch(error){
+      latestError=error;
+    }
+    // Path generation is revisioned and asynchronous. During interaction the
+    // renderer deliberately retains the previous valid terrain/path bundle
+    // until the exact new bundle can be uploaded atomically. Evidence must
+    // wait for that generation instead of grading the retained frame as stale.
+    await new Promise(resolve=>requestAnimationFrame(resolve));
+  }
+  throw latestError||new Error('Visual capture timed out waiting for the exact renderer generation.');
+}
+
 async function captureVisualTestFrame(options={}) {
   if(!ui.viewport||!camera||!scene)throw new Error('Viewport is not ready for visual capture.');
-  const originalCamera=cloneCamera(camera);
-  const originalGrid=scene.settings.gridVisible;
-  const originalSplines=scene.settings.splinesVisible;
-  const originalSelectedId=selectedId;
+  if(pendingVisualCaptureRestore)throw new Error('A previous full-window visual capture is still awaiting restoration.');
+  // Native input is preceded by a camera-framing synchronization. Desktop
+  // passes the camera from before that synchronization so the evidence camera
+  // cannot leak into later editing or the persisted editor camera.
+  const restoreSnapshot={
+    camera:normalizedVisualTestCamera(options.restoreCamera,camera)||cloneCamera(camera),
+    gridVisible:scene.settings.gridVisible,
+    splinesVisible:scene.settings.splinesVisible,
+    selectedId,
+    hideEditorReferences:visualCaptureHideEditorReferences
+  };
+  let captureHoldToken=null;
   try{
-    const minimumRevision=Math.max(0,Number(options.minimumRevision||0));
-    if(minimumRevision>Number(state?.engine?.revision||0)){
-      const deadline=performance.now()+Math.max(1000,Math.min(12000,Number(options.revisionTimeoutMs||8000)));
-      while(performance.now()<deadline){
-        const remote=await api('/api/state');
-        if(Number(remote?.engine?.revision||0)>=minimumRevision){
-          applyState(remote,{forceSelection:false,preserveCamera:true});
-          break;
-        }
-        await sleep(80);
-      }
-      if(Number(state?.engine?.revision||0)<minimumRevision){
-        throw new Error(`Visual capture timed out waiting for authoritative revision ${minimumRevision}; renderer has ${Number(state?.engine?.revision||0)}.`);
-      }
-    }
-    if(options.camera){
-      const next=cloneCamera(camera);
-      if(Array.isArray(options.camera.position)&&options.camera.position.length===3)next.position=options.camera.position.map(Number);
-      for(const key of ['yaw','pitch','fov'])if(Number.isFinite(Number(options.camera[key])))next[key]=Number(options.camera[key]);
-      camera=sanitizeCameraState(next,originalCamera);
-    }
+    const synchronizationTelemetry=await synchronizeVisualTestState(options);
+    const interactionTelemetry=await runVisualTestActions(options.actions);
+    applyVisualTestCamera(options.camera);
     if(options.hideGuides!==false){scene.settings.gridVisible=false;scene.settings.splinesVisible=false;selectedId=null;}
     visualCaptureHideEditorReferences=options.hideEditorReferences!==false;
     const waitMs=Math.max(80,Math.min(3000,Number(options.waitMs||500)));
     await sleep(waitMs);
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-    return {
+    // Actions can change the network revision and geometry. Validate the frame
+    // against the post-action authority rather than the earlier sync snapshot.
+    const currentFixture=visualCaptureSceneFixture(options.expectedPathNetwork);
+    const {renderTelemetry,fixtureTelemetry}=await waitForVisualCaptureRenderFixture(
+      options.expectedPathNetwork,
+      currentFixture,
+      options.revisionTimeoutMs
+    );
+    const result={
       dataUrl:ui.viewport.toDataURL('image/png'),
-      renderTelemetry:renderer?.getRenderDiagnostics?.()||null
+      renderTelemetry,
+      synchronizationTelemetry,
+      fixtureTelemetry,
+      interactionTelemetry
     };
+    if(options.fullWindowCapture===true){
+      captureHoldToken=`visual-capture-${Date.now().toString(36)}-${(++visualCaptureHoldSequence).toString(36)}`;
+      const timeout=setTimeout(()=>{
+        if(pendingVisualCaptureRestore?.token===captureHoldToken){
+          finishVisualCaptureHold(captureHoldToken).catch(error=>console.error('Visual capture state restore timed out.',error));
+        }
+      },30000);
+      pendingVisualCaptureRestore={token:captureHoldToken,snapshot:restoreSnapshot,timeout};
+      result.captureHoldToken=captureHoldToken;
+    }
+    return result;
   }finally{
-    camera=originalCamera;
-    scene.settings.gridVisible=originalGrid;
-    scene.settings.splinesVisible=originalSplines;
-    selectedId=originalSelectedId;
-    visualCaptureHideEditorReferences=false;
+    // A full-window proof must be captured while the exact same camera,
+    // selection, guide visibility, and reference visibility used for the
+    // paired canvas PNG are still active. Desktop releases this hold after
+    // capturePage(), and the timeout is a final safety net if that handshake
+    // is interrupted. Ordinary canvas-only captures restore immediately.
+    if(!captureHoldToken)await restoreVisualCaptureState(restoreSnapshot);
   }
 }
 window.__omniforgeVisualTestCapture=captureVisualTestFrame;
+window.__omniforgeVisualTestSynchronize=synchronizeVisualTestState;
+window.__omniforgeVisualTestCameraSnapshot=()=>cloneCamera(camera);
+window.__omniforgeVisualTestRestoreCamera=requestedCamera=>{
+  applyVisualTestCamera(requestedCamera);
+  return cloneCamera(camera);
+};
+window.__omniforgeVisualTestFinishCapture=finishVisualCaptureHold;
 
 function objectIcon(type) {
   return ({box:'▣',sphere:'●',cylinder:'⬭',plane:'▱',terrain:'⌁',path:'⌇',model:'◆',decal:'◫',directionalLight:'☀',pointLight:'✦',empty:'＋'})[type] || '◇';
@@ -504,7 +822,9 @@ function objectPropertiesHtml(object) {
   const p=object.properties || {};
   if (['box','sphere','cylinder','plane'].includes(object.type)) return materialSelect(p.materialId)+propColor('Material color','color',p.color)+propNumber('Metallic','metallic',p.metallic||0,'0.01',0,1)+propNumber('Roughness','roughness',p.roughness??.7,'0.01',0,1)+propCheck('Cast shadows','castsShadows',p.castsShadows!==false)+propCheck('Receive shadows','receivesShadows',p.receivesShadows!==false)+propCheck('Collision','collider',p.collider!==false);
   if (object.type==='terrain') return materialSelect(p.materialId)+propColor('Fallback color','color',p.color)+propNumber('Mesh resolution','resolution',p.resolution||128,'1',8,256)+propCheck('Receive shadows','receivesShadows',p.receivesShadows!==false)+propCheck('Collision','collider',p.collider!==false)+`<div class="surface-blend-callout"><strong>Stable world bounds</strong><p>Terrain scale is locked. Use the v0.11 Terrain Generator below to change landforms or expand north, south, east, west, or all directions without stretching paths.</p></div>`;
-  if (object.type==='path') return renderPathwayInspector(object,scene?.objects.find(item=>item.type==='terrain'&&item.visible!==false),scene?.objects.filter(item=>item.type==='path'&&item.visible!==false)||[],{materialSelect,propColor,propNumber,propCheck,escapeHtml});
+  if (object.type==='path') return object.properties?.pathNetwork?.schemaVersion===2
+    ? `<div class="surface-blend-callout"><strong>Path Network v2 authority</strong><p>Geometry, terrain queries, collision, navigation, foliage exclusion, and editing use the same compiled network. Use Path Network Studio below for node, construction, and route-generation controls.</p></div>`
+    : renderPathwayInspector(object,scene?.objects.find(item=>item.type==='terrain'&&item.visible!==false),scene?.objects.filter(item=>item.type==='path'&&item.visible!==false)||[],{materialSelect,propColor,propNumber,propCheck,escapeHtml});
   if (object.type==='decal') return materialSelect(p.materialId)+propColor('Tint','color',p.color)+propNumber('Opacity','opacity',p.opacity??.85,'0.05',0,1)+propNumber('Projection depth','projectionDepth',p.projectionDepth??.25,'0.05',.001,20)+propNumber('Sort order','sortOrder',p.sortOrder||0,'1',-1000,1000)+`<div class="surface-blend-callout">This is an authored surface decal. Keep projection depth narrow and inspect nearby geometry before approval.</div>`;
   if (p.celestialProxy) { const role=String(p.celestialRole||'celestial'); return `<div class="surface-blend-callout celestial-proxy-callout"><strong>Authoritative ${escapeHtml(role === 'sun' ? 'Sun' : 'Moon')} proxy</strong><p>This hierarchy entry is a protected view of the shared Celestial Studio authority. It cannot be duplicated or deleted, and it survives save/reload with a stable identity.</p><div class="property-row"><label>Azimuth</label><span>${Number(p.azimuth ?? 0).toFixed(2)}°</span></div><div class="property-row"><label>Elevation</label><span>${Number(p.elevation ?? 0).toFixed(2)}°</span></div><div class="property-row"><label>Angular size</label><span>${Number(p.angularSize ?? 1).toFixed(2)}×</span></div><button id="openCelestialStudioButton" class="button primary" type="button">Open Celestial Studio</button></div>`; }
   if (object.type==='directionalLight') return propColor('Light color','color',p.color)+propNumber('Intensity','intensity',p.intensity||1,'0.05',0,12)+propCheck('Cast shadows','castsShadows',p.castsShadows!==false);
@@ -533,7 +853,7 @@ function renderInspector() {
     if(type==='Rotator')fields=`<div class="component-fields">${propNumber('X speed',`component.${index}.x`,item.x??0,'1',-720,720)}${propNumber('Y speed',`component.${index}.y`,item.y??30,'1',-720,720)}${propNumber('Z speed',`component.${index}.z`,item.z??0,'1',-720,720)}</div>`;
     return `<div class="component-card"><div class="component-pill"><span>${escapeHtml(type)}</span><button data-remove-component="${index}" type="button">Remove</button></div>${fields}</div>`;
   }).join('');
-  const pathPoints=object.type==='path'?section('Spline control points',`<div class="path-points">${(object.properties.points||[]).map((point,index)=>`<div class="path-point"><span>${index+1}</span><input data-path-point="${index}.0" type="number" step=".5" value="${point[0]}"><input data-path-point="${index}.1" type="number" step=".5" value="${point[1]}"><button data-remove-point="${index}" type="button">×</button></div>`).join('')}<button id="addPathPoint" class="path-add" type="button">Add control point</button></div>`,`${object.properties.points?.length||0} points`):'';
+  const pathPoints=object.type==='path'&&object.properties?.pathNetwork?.schemaVersion!==2?section('Spline control points',`<div class="path-points">${(object.properties.points||[]).map((point,index)=>`<div class="path-point"><span>${index+1}</span><input data-path-point="${index}.0" type="number" step=".5" value="${point[0]}"><input data-path-point="${index}.1" type="number" step=".5" value="${point[1]}"><button data-remove-point="${index}" type="button">×</button></div>`).join('')}<button id="addPathPoint" class="path-add" type="button">Add control point</button></div>`,`${object.properties.points?.length||0} points`):'';
   ui.inspectorContent.innerHTML=`
     <div class="object-summary"><div class="object-type-icon">${objectIcon(object.type)}</div><div><input id="objectNameInput" value="${escapeHtml(object.name)}" ${celestialProxy?'readonly':''}><div class="object-meta">${escapeHtml(celestialProxy?'Celestial Authority Proxy':typeLabel(object.type))} · ${escapeHtml(object.id)}</div></div></div>
     ${object.properties?.prefabId?`<div class="prefab-pill"><span>Prefab instance</span><span>${escapeHtml(object.properties.prefabId)}</span></div>`:''}
@@ -547,63 +867,66 @@ function renderInspector() {
 
 function setNested(arrayRoot,index,value){ arrayRoot[Number(index)] = Number(value); }
 function bindInspector(object) {
+  const container = ui.inspectorContent;
+  const find = selector => container.querySelector(selector);
+  const findAll = selector => container.querySelectorAll(selector);
   if(object.properties?.celestialProxy)return;
-  if(object.type==='path'){
-    $$('[data-pathway-live]').forEach(input=>input.addEventListener('input',()=>{
+  if(object.type==='path'&&object.properties?.pathNetwork?.schemaVersion!==2){
+    findAll('[data-pathway-live]').forEach(input=>input.addEventListener('input',()=>{
       const key=input.dataset.propertyKey;if(!key)return;
       object.properties[key]=input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value;
       markLocalMutation();
     }));
-    $('#applyPathwayPresetButton')?.addEventListener('click',()=>{
-      const preset=$('[data-pathway-preset]')?.value||'dirtRoad';
+    find('#applyPathwayPresetButton')?.addEventListener('click',()=>{
+      const preset=find('[data-pathway-preset]')?.value||'dirtRoad';
       patchObject(object.id,{properties:applyPathwayPreset(object.properties,preset)});
     });
-    $('#fitPathwayLanesButton')?.addEventListener('click',()=>{
+    find('#fitPathwayLanesButton')?.addEventListener('click',()=>{
       const laneCount=Math.max(1,Number(object.properties.laneCount||2)),laneWidth=Math.max(.5,Number(object.properties.laneWidth||2.4));
       patchObject(object.id,{properties:{width:laneCount*laneWidth,profileRevision:Number(object.properties.profileRevision||1)+1}});
     });
-    $('#reversePathwayButton')?.addEventListener('click',()=>{
+    find('#reversePathwayButton')?.addEventListener('click',()=>{
       const points=deepClone(object.properties.points||[]).reverse();
       patchObject(object.id,{properties:{points,profileRevision:Number(object.properties.profileRevision||1)+1}});
     });
-    $('#rebuildPathwayButton')?.addEventListener('click',()=>patchObject(object.id,{properties:{profileRevision:Number(object.properties.profileRevision||1)+1}}));
+    find('#rebuildPathwayButton')?.addEventListener('click',()=>patchObject(object.id,{properties:{profileRevision:Number(object.properties.profileRevision||1)+1}}));
   }
-  $('#objectNameInput')?.addEventListener('change',event=>patchObject(object.id,{name:event.target.value.trim()||object.name}));
-  $$('[data-number-path]').forEach(input=>input.addEventListener('change',event=>{
+  find('#objectNameInput')?.addEventListener('change',event=>patchObject(object.id,{name:event.target.value.trim()||object.name}));
+  findAll('[data-number-path]').forEach(input=>input.addEventListener('change',event=>{
     const [root,index]=input.dataset.numberPath.split('.');
     const transform=deepClone(object.transform); setNested(transform[root],index,event.target.value);
     if(root==='scale') transform[root][Number(index)] = Math.max(.01,transform[root][Number(index)]);
     patchObject(object.id,{transform});
   }));
-  $('[data-material-id]')?.addEventListener('change',event=>patchObject(object.id,{properties:{materialId:event.target.value||null}}));
-  $$('[data-property-key]').forEach(input=>input.addEventListener('change',event=>{
+  find('[data-material-id]')?.addEventListener('change',event=>patchObject(object.id,{properties:{materialId:event.target.value||null}}));
+  findAll('[data-property-key]').forEach(input=>input.addEventListener('change',event=>{
     const key=input.dataset.propertyKey;if(key.startsWith('component.'))return;
     if(key==='__visible') return patchObject(object.id,{visible:input.checked});
     if(key==='__locked') return patchObject(object.id,{locked:input.checked});
     const value=input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value;
     patchObject(object.id,{properties:{[key]:value}});
   }));
-  $$('[data-property-key^="component."]').forEach(input=>input.addEventListener('change',event=>{
+  findAll('[data-property-key^="component."]').forEach(input=>input.addEventListener('change',event=>{
     event.stopImmediatePropagation();
     const [,index,field]=input.dataset.propertyKey.split('.'),components=deepClone(object.components||[]),component=typeof components[Number(index)]==='string'?{type:components[Number(index)]}:components[Number(index)];
     component[field]=input.type==='checkbox'?input.checked:Number(input.value);components[Number(index)]=component;patchObject(object.id,{components});
   }));
-  $$('[data-component-path]').forEach(input=>input.addEventListener('change',()=>{const [index,field]=input.dataset.componentPath.split('.'),components=deepClone(object.components||[]),component=typeof components[Number(index)]==='string'?{type:components[Number(index)]}:components[Number(index)];component[field]=input.value;components[Number(index)]=component;patchObject(object.id,{components});}));
-  $$('[data-path-point]').forEach(input=>input.addEventListener('change',event=>{
+  findAll('[data-component-path]').forEach(input=>input.addEventListener('change',()=>{const [index,field]=input.dataset.componentPath.split('.'),components=deepClone(object.components||[]),component=typeof components[Number(index)]==='string'?{type:components[Number(index)]}:components[Number(index)];component[field]=input.value;components[Number(index)]=component;patchObject(object.id,{components});}));
+  findAll('[data-path-point]').forEach(input=>input.addEventListener('change',event=>{
     const [index,axis]=input.dataset.pathPoint.split('.');const points=deepClone(object.properties.points||[]);points[Number(index)][Number(axis)]=Number(input.value);patchObject(object.id,{properties:{points}});
   }));
-  $$('[data-remove-point]').forEach(button=>button.addEventListener('click',()=>{
+  findAll('[data-remove-point]').forEach(button=>button.addEventListener('click',()=>{
     const points=deepClone(object.properties.points||[]);if(points.length<=2)return showToast('A path needs at least two points.','error');points.splice(Number(button.dataset.removePoint),1);patchObject(object.id,{properties:{points}});
   }));
-  $('#addPathPoint')?.addEventListener('click',()=>{
+  find('#addPathPoint')?.addEventListener('click',()=>{
     const points=deepClone(object.properties.points||[]),last=points.at(-1)||[0,0],prev=points.at(-2)||[last[0]-8,last[1]];points.push([last[0]+(last[0]-prev[0]||8),last[1]+(last[1]-prev[1])]);patchObject(object.id,{properties:{points}});
   });
-  $('#addRigidbody')?.addEventListener('click',()=>{
+  find('#addRigidbody')?.addEventListener('click',()=>{
     const components=deepClone(object.components||[]);if(components.some(c=>(c.type||c)==='RigidBody'))return showToast('Rigidbody already added.');components.push({type:'RigidBody',mass:1,useGravity:true,kinematic:false,restitution:.18});patchObject(object.id,{components});
   });
-  $('#addCollider')?.addEventListener('click',()=>{const components=deepClone(object.components||[]);if(components.some(c=>(c.type||c)==='Collider'))return showToast('Collider already added.');components.push({type:'Collider',shape:object.type==='sphere'?'sphere':'box',trigger:false});patchObject(object.id,{components});});
-  $('#addRotator')?.addEventListener('click',()=>{const components=deepClone(object.components||[]);if(components.some(c=>(c.type||c)==='Rotator'))return showToast('Rotator already added.');components.push({type:'Rotator',x:0,y:30,z:0});patchObject(object.id,{components});});
-  $$('[data-remove-component]').forEach(button=>button.addEventListener('click',()=>{const components=deepClone(object.components||[]);components.splice(Number(button.dataset.removeComponent),1);patchObject(object.id,{components});}));
+  find('#addCollider')?.addEventListener('click',()=>{const components=deepClone(object.components||[]);if(components.some(c=>(c.type||c)==='Collider'))return showToast('Collider already added.');components.push({type:'Collider',shape:object.type==='sphere'?'sphere':'box',trigger:false});patchObject(object.id,{components});});
+  find('#addRotator')?.addEventListener('click',()=>{const components=deepClone(object.components||[]);if(components.some(c=>(c.type||c)==='Rotator'))return showToast('Rotator already added.');components.push({type:'Rotator',x:0,y:30,z:0});patchObject(object.id,{components});});
+  findAll('[data-remove-component]').forEach(button=>button.addEventListener('click',()=>{const components=deepClone(object.components||[]);components.splice(Number(button.dataset.removeComponent),1);patchObject(object.id,{components});}));
 }
 
 
@@ -1190,7 +1513,12 @@ function physicsStep(dt) {
     if(component?.useGravity!==false)body.velocity[1]+=gravity*dt;
     object.transform.position[0]+=body.velocity[0]*dt;object.transform.position[1]+=body.velocity[1]*dt;object.transform.position[2]+=body.velocity[2]*dt;
     if(terrain&&hasCollider(object)){
-      const floor=terrainHeight(terrain,object.transform.position[0],object.transform.position[2],scene.objects.filter(item=>item.type==='path'&&item.visible!==false)),half=objectHalfExtents(object)[1];
+      const half=objectHalfExtents(object)[1],referenceY=object.transform.position[1]-half;
+      const floorSample=renderer?.groundSurfaceForScene?.(scene,object.transform.position[0],object.transform.position[2],{
+        referenceY,
+        snapTolerance:Math.max(.25,Math.abs(body.velocity[1])*dt+.08)
+      });
+      const floor=Number.isFinite(Number(floorSample?.height))?Number(floorSample.height):terrainHeight(terrain,object.transform.position[0],object.transform.position[2]);
       if(object.transform.position[1]-half<floor){const restitution=clamp(Number(component?.restitution??.18),0,1);object.transform.position[1]=floor+half;body.velocity[1]=Math.abs(body.velocity[1])>.35?-body.velocity[1]*restitution:0;}
     }
     if(hasCollider(object))for(const other of scene.objects)resolveStaticAabb(object,body,other);

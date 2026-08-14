@@ -93,5 +93,37 @@ if (enabled) {
     });
     expected = now + 100;
   }, 100);
+  let rafWindowStartedAt = performance.now();
+  let previousRafAt = rafWindowStartedAt;
+  let rafFrames = 0;
+  let rafDeltas = [];
+  const sampleAnimationFrame = now => {
+    const delta = Math.max(0, now - previousRafAt);
+    previousRafAt = now;
+    rafFrames += 1;
+    if (delta < 5000) rafDeltas.push(delta);
+    if (now - rafWindowStartedAt >= 5000) {
+      const ordered = [...rafDeltas].sort((left, right) => left - right);
+      const percentile = amount => ordered.length ? ordered[Math.min(ordered.length - 1, Math.floor((ordered.length - 1) * amount))] : 0;
+      const memory = performance.memory ? {
+        usedJSHeapBytes: Number(performance.memory.usedJSHeapSize || 0),
+        totalJSHeapBytes: Number(performance.memory.totalJSHeapSize || 0),
+        jsHeapLimitBytes: Number(performance.memory.jsHeapSizeLimit || 0)
+      } : null;
+      log('runtime-sample', {
+        windowMs: Number((now - rafWindowStartedAt).toFixed(3)),
+        frameCount: rafFrames,
+        framesPerSecond: Number((rafFrames * 1000 / Math.max(1, now - rafWindowStartedAt)).toFixed(3)),
+        rafP95Ms: Number(percentile(.95).toFixed(3)),
+        rafMaximumMs: Number((ordered.at(-1) || 0).toFixed(3)),
+        memory
+      });
+      rafWindowStartedAt = now;
+      rafFrames = 0;
+      rafDeltas = [];
+    }
+    requestAnimationFrame(sampleAnimationFrame);
+  };
+  requestAnimationFrame(sampleAnimationFrame);
   log('diagnostics-ready', { href: location.href });
 }

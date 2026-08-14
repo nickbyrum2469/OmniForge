@@ -115,7 +115,10 @@ test('source contracts cover crash recovery, proxy suppression, readable stars, 
   assert.match(app, /finally\{[\s\S]*requestAnimationFrame\(animationLoop\)/);
   assert.match(app, /sanitizeCameraState/);
   assert.match(app, /selectedId=null/);
-  assert.match(app, /selectedId=originalSelectedId/);
+  assert.match(app, /async function restoreVisualCaptureState\(snapshot\)/);
+  assert.match(app, /selectedId=restoredSelection;[\s\S]*await selectObject\(restoredSelection,false\)/);
+  assert.match(app, /pendingVisualCaptureRestore/);
+  assert.match(app, /__omniforgeVisualTestFinishCapture=finishVisualCaptureHold/);
   assert.match(desktop, /INCIDENT_DIR/);
   assert.match(desktop, /recoverRendererProcess/);
   assert.match(desktop, /gpu-process-gone/);

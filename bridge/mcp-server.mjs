@@ -478,7 +478,7 @@ async function callTool(name,args={}){
 function send(message){process.stdout.write(`${JSON.stringify(message)}\n`);}
 async function handle(message){const {id,method,params}=message;try{if(method==='initialize'){mutateState(state=>{state.editor.codexStatus='connected';state.editor.lastCodexConnectionAt=now();addActivity(state,'connection','Codex connected through the OmniForge MCP bridge.');});return send({jsonrpc:'2.0',id,result:{protocolVersion:params?.protocolVersion||'2025-03-26',capabilities:{tools:{listChanged:false}},serverInfo:SERVER_INFO,instructions:'Operate on the authoritative OmniForge scene through structured object and batch tools. Claim queued user commands before changing the world. Request viewport captures instead of inventing visual evidence. Do not assume a genre, project, or engine architecture that is not present.'}});}if(method==='ping')return send({jsonrpc:'2.0',id,result:{}});if(method==='tools/list')return send({jsonrpc:'2.0',id,result:{tools}});if(method==='tools/call')return send({jsonrpc:'2.0',id,result:await callTool(params?.name,params?.arguments||{})});if(method?.startsWith('notifications/'))return;send({jsonrpc:'2.0',id,error:{code:-32601,message:`Method not found: ${method}`}});}catch(error){if(id!==undefined)send({jsonrpc:'2.0',id,error:{code:-32000,message:error.message}});}}
 
-console.error('OmniForge 0.9.0 MCP server started.');
+console.error('OmniForge 0.11.0 MCP server started.');
 const rl=readline.createInterface({input:process.stdin,crlfDelay:Infinity});
 rl.on('line',line=>{if(!line.trim())return;try{handle(JSON.parse(line));}catch(error){console.error(`Invalid MCP message: ${error.message}`);}});
 

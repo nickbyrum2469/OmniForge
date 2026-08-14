@@ -1,6 +1,8 @@
 import { terrainHeightAt as sharedTerrainHeightAt, terrainNormalAt as sharedTerrainNormalAt, distanceToPaths as sharedDistanceToPaths } from '../app/worldgen.js';
 import { evaluateCelestialSystem } from '../app/celestial-mechanics.js';
 import { atmosphereVisibilityRange } from '../app/world-units.js';
+import { createScenePathRuntimeContext } from '../app/path-network/runtime.js';
+import { scenePathFoliageExcluded } from '../app/path-network/consumers.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
 const smoothstep = (edge0, edge1, value) => { const t = clamp((Number(value) - edge0) / ((edge1 - edge0) || 1), 0, 1); return t * t * (3 - 2 * t); };
@@ -389,7 +391,7 @@ export function fitGroundContact({ object, asset, terrain, maxTilt = 35 }) {
 export function generateFoliagePlacements({ scene, species, center = [0, 0, 0], radius = 24, density = 0.035, seed = 1, maxInstances = 1500 }) {
   const terrain = scene.objects.find(object => object.type === 'terrain');
   if (!terrain) throw new Error('Foliage placement requires an authoritative terrain.');
-  const paths = scene.objects.filter(object => object.type === 'path' && object.visible !== false);
+  const pathContext = createScenePathRuntimeContext(scene);
   const structures = scene.objects.filter(object => ['box', 'model', 'cylinder'].includes(object.type) && !object.properties?.foliageInstance);
   const random = seededRandom(seed);
   const area = Math.PI * radius * radius;
@@ -402,8 +404,7 @@ export function generateFoliagePlacements({ scene, species, center = [0, 0, 0], 
     const dist = Math.sqrt(random()) * radius;
     const x = center[0] + Math.cos(angle) * dist;
     const z = center[2] + Math.sin(angle) * dist;
-    const pathDistance = distanceToPaths(paths, x, z);
-    if (pathDistance < Math.max(Number(species.pathExclusion || 2.5), 0)) continue;
+    if (scenePathFoliageExcluded(pathContext.sceneConsumers, x, z, Math.max(Number(species.pathExclusion || 2.5), 0))) continue;
 
     let blocked = false;
     for (const object of structures) {
@@ -417,11 +418,11 @@ export function generateFoliagePlacements({ scene, species, center = [0, 0, 0], 
     if (blocked) continue;
     if (placements.some(item => Math.hypot(item.position[0] - x, item.position[2] - z) < spacing)) continue;
 
-    const normal = terrainNormalAt(terrain, x, z, paths);
+    const normal = pathContext.terrainService.normalAt(x, z, { view: 'final-construction' });
     const slope = Math.acos(clamp(normal[1], -1, 1)) * 180 / Math.PI;
     if (slope > Number(species.maxSlope || 42)) continue;
     const scale = Number(species.scaleMin || 0.85) + random() * (Number(species.scaleMax || 1.2) - Number(species.scaleMin || 0.85));
-    const y = terrainHeightAt(terrain, x, z, paths) - Number(species.rootBurial || 0.08);
+    const y = pathContext.terrainService.elevationAt(x, z, { view: 'final-construction' }) - Number(species.rootBurial || 0.08);
     placements.push({
       position: [x, y, z],
       rotation: [0, random() * 360, 0],

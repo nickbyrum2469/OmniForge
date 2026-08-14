@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { RUNTIME_ROOT, ROOT, readState } from './state-store.mjs';
 
 const now=()=>new Date().toISOString();
-const USER_AGENT='OmniForge/0.9.0 (+https://openai.com; asset marketplace)';
+const USER_AGENT='OmniForge/0.11.0 (+https://openai.com; asset marketplace)';
 const CACHE_ROOT=path.join(RUNTIME_ROOT,'cache','providers');
 const STAGING_ROOT=path.join(RUNTIME_ROOT,'downloads','marketplace');
 const CURATED_ROOT=path.join(ROOT,'data','catalogs');

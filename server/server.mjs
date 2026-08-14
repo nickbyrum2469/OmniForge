@@ -14,7 +14,8 @@ import {
 import { normalizeProvider, normalizeIntegrationSettings } from './provider-framework.mjs';
 import { initializeJobManager, createJob, cancelJob, retryJob, clearCompletedJobs, shutdownJobs } from './job-manager.mjs';
 import { searchMarketplace, marketplaceDetails, prepareMarketplaceDownload, resolveMarketplaceImportFiles, createMaterialFromMarketplaceDownload, inspectDownloadedJob } from './marketplace.mjs';
-import { terrainHeightAt as sharedTerrainHeightAt } from '../app/worldgen.js';
+import { createScenePathRuntimeContext } from '../app/path-network/runtime.js';
+import { sampleSceneGroundSurface } from '../app/path-network/consumers.js';
 import { defaultWorldSettings, applyWorldToScene } from './v010-systems.mjs';
 import { celestialAuthorityNeedsRepair, isCelestialProxy, patchCelestialWorldFromProxy, repairCelestialAuthority } from './celestial-authority.mjs';
 
@@ -156,10 +157,14 @@ function decalObjectFromRecipe(recipe,material,body={}) {
 function rgbToHex(color=[.65,.68,.74]) {
   return `#${color.slice(0,3).map(value=>Math.max(0,Math.min(255,Math.round(Number(value||0)*255))).toString(16).padStart(2,'0')).join('')}`;
 }
-function terrainHeightAt(terrain,x,z,paths=[]){return sharedTerrainHeightAt(terrain,x,z,paths);}
+function sceneGroundSurfaceAt(scene,x,z,referenceY=null){
+  const context=createScenePathRuntimeContext(scene);if(!context.terrain||!context.terrainService)return 0;
+  const terrainHeight=context.terrainService.elevationAt(x,z,{view:'final-construction'});
+  return sampleSceneGroundSurface(context.sceneConsumers,terrainHeight,x,z,{referenceY,snapTolerance:.25}).height;
+}
 function modelObjectFromAsset(asset,body={}){
   const size=asset.bounds?.size||[1,1,1],position=Array.isArray(body.position)?body.position.map(Number):[0,0,0],scene=body.scene||null;
-  const terrain=scene?.objects?.find(object=>object.type==='terrain'),paths=scene?.objects?.filter(object=>object.type==='path'&&object.visible!==false)||[];if(!Array.isArray(body.position))position[1]=terrainHeightAt(terrain,position[0],position[2],paths)+Math.max(0,size[1]/2-(asset.bounds?.center?.[1]||0));
+  if(!Array.isArray(body.position))position[1]=sceneGroundSurfaceAt(scene,position[0],position[2])+Math.max(0,size[1]/2-(asset.bounds?.center?.[1]||0));
   return createSceneObject('model',{name:body.name||asset.name,position,scale:Array.isArray(body.scale)?body.scale.map(Number):[1,1,1],rotation:Array.isArray(body.rotation)?body.rotation.map(Number):[0,0,0],properties:{assetId:asset.id,color:rgbToHex(asset.material?.baseColor),metallic:Number(asset.material?.metallic||0),roughness:Number(asset.material?.roughness??.8),collider:asset.collisionStatus==='generated',collision:asset.collision||null,castsShadows:true,receivesShadows:true,previewOnly:Boolean(body.previewOnly),previewTransactionId:body.previewTransactionId||null}});
 }
 
@@ -444,7 +449,11 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const { state, result } = mutateState(state => {
       const object = createSceneObject(body.type, body);
-      activeScene(state).objects.push(object);
+      const scene = activeScene(state);
+      if (scene.objects.some(item => item.id === object.id)) {
+        throw new Error(`Scene object id ${object.id} already exists.`);
+      }
+      scene.objects.push(object);
       state.selection.objectId = object.id;
       state.editor.lastFocusObjectId = object.id;
       addActivity(state, 'object', `Created ${object.type}: ${object.name}`);
@@ -494,6 +503,12 @@ async function handleApi(req, res, url) {
       const object = findObject(state, body.objectId);
       if (!object) throw new Error('Object not found.');
       if (isCelestialProxy(object)) throw new Error('Celestial proxies cannot be duplicated. Configure additional celestial bodies through Celestial Studio.');
+      if (object.type === 'path' && object.properties?.pathNetwork?.schemaVersion === 2) {
+        throw new Error(
+          `Path Network v2 object ${object.id} cannot use generic scene cloning because that would duplicate internal node and segment authority. `
+          + `Use POST /api/v012/path/${encodeURIComponent(object.id)}/duplicate.`
+        );
+      }
       const clone = structuredClone(object);
       clone.id = `${object.type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
       clone.name = `${object.name} Copy`;
@@ -852,7 +867,7 @@ initializeJobManager();
 await assertProjectUnlocked(readState().project.id);
 server.listen(port, host, () => {
   acquireActiveProjectLock(readState());
-  console.log(`OmniForge 0.9.0 running at http://${host}:${port}`);
+  console.log(`OmniForge 0.11.0 running at http://${host}:${port}`);
   console.log('Press Ctrl+C to stop.');
 });
 

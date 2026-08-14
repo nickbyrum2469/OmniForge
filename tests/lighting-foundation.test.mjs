@@ -83,7 +83,7 @@ test('authored texture albedo is not unintentionally darkened by a fallback obje
   assert.match(renderer, /uBaseTextureTintStrength/);
   assert.match(renderer, /baseLinear=srgbToLinear\(max\(tex,vec3\(0\.0\)\)\)\*mix\(vec3\(1\.0\),baseFactor/);
   assert.match(renderer, /set1\('uBaseTextureTintStrength',Number\(baseSettings\.tintStrength\?\?0\)\)/);
-  assert.match(renderer, /set1\('uBaseTextureTintStrength',1\)/);
+  assert.match(renderer, /set1\('uBaseTextureTintStrength',Number\(material\.textureTintStrength\?\?1\)\)/);
   assert.doesNotMatch(renderer, /baseLinear\*=srgbToLinear/);
   assert.doesNotMatch(renderer, /pathLinear\*=srgbToLinear/);
 });
