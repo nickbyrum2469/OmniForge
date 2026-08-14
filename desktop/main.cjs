@@ -468,7 +468,7 @@ async function visualPathHandleSnapshot(contents,pathId,reference,side) {
     if(!element)throw new Error('Visual '+input.side+' spline tangent handle is unavailable for stable node '+String(node.id)+'.');
     const rect=element.getBoundingClientRect(),style=getComputedStyle(element),top=document.elementFromPoint(rect.x+rect.width*.5,rect.y+rect.height*.5);
     if(element.hidden||style.display==='none'||style.visibility==='hidden'||rect.width<1||rect.height<1)throw new Error('Visual spline tangent handle is not visible.');
-    return {revision:Number(network.revision||0),nodeId:String(node.id),nodeIndex,side:input.side,vector:(input.side==='incoming'?node.incomingHandle:node.outgoingHandle)?.map(Number)||null,rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},hitTargetMatches:top===element||element.contains(top),topElement:top?.id||top?.className||top?.tagName||null};
+    return {revision:Number(network.revision||0),nodeId:String(node.id),nodeIndex,side:input.side,handleMode:String(node.handleMode||'automatic'),vector:(input.side==='incoming'?node.incomingHandle:node.outgoingHandle)?.map(Number)||null,rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},hitTargetMatches:top===element||element.contains(top),topElement:top?.id||top?.className||top?.tagName||null};
   })()`,true);
 }
 

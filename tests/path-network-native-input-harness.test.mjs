@@ -43,6 +43,7 @@ test('native right-click insertion targets one named current compiled segment an
 test('native tangent and multi-node actions remain allow-listed semantic gestures without arbitrary selectors', () => {
   assert.match(desktop, /actionType==='path-handle-drag'/);
   assert.match(desktop, /ensureVisualPathNodePrimary/);
+  assert.match(desktop, /handleMode:String\(node\.handleMode\|\|'automatic'\)/);
   assert.match(desktop, /did not make stable node .* primary for spline-handle editing/);
   assert.match(desktop, /\['incoming','outgoing'\]\.includes\(side\)/);
   assert.match(desktop, /#splineNodeOverlay \[data-spline-handle\]/);
