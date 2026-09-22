@@ -49,7 +49,7 @@ Remove-Item (Join-Path $Resources 'default_app.asar') -Force -ErrorAction Silent
 $AppDir = Join-Path $Resources 'app'
 New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
 
-$Folders = @('app','server','bridge','desktop','workers','assets','data','workspace','captures','logs','docs','scripts','tests','resources')
+$Folders = @('app','engine','server','bridge','desktop','workers','assets','data','workspace','captures','logs','docs','scripts','tests','resources')
 foreach ($Folder in $Folders) {
   $Source = Join-Path $PSScriptRoot $Folder
   if (Test-Path $Source) { Copy-Item $Source (Join-Path $AppDir $Folder) -Recurse -Force }

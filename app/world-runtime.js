@@ -35,7 +35,8 @@ export function resolveViewportLighting(settings = {}, editorMode = 'edit', auth
   const ambient = Number(settings.ambientIntensity ?? 0.3);
   const exposure = Number(settings.exposure ?? 1);
   const sun = Number(authoredSunIntensity || 0);
-  if (!editing) return { ambientIntensity: ambient, exposure, sunIntensity: sun, editorFill: 0 };
+  const pulseLighting = settings.lightingMode === 'pulse' || settings.pulseLighting?.enabled === true;
+  if (!editing || pulseLighting) return { ambientIntensity: ambient, exposure, sunIntensity: sun, editorFill: 0 };
   const editorFill = 0.18 + night * 0.18;
   return {
     ambientIntensity: Math.max(ambient, 0.3 + night * 0.12),
