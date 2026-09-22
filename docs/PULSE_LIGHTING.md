@@ -162,3 +162,20 @@ Current intentional limitations:
 10. A global Lighting Work Auction across GI, shadows, reflections, and volumetrics.
 
 The design goal is that steady-state cost approaches the cost of sampling already-solved lighting, while world-lighting work scales primarily with meaningful lighting changes rather than with camera movement or a fixed 3D probe volume.
+
+
+## 0.2 Atlas Hall many-light benchmark
+
+PULSE 0.2 adds the first engine-native many-light validation path.
+
+The legacy WebGL2 forward shader shades four point lights directly. In PULSE mode, point-light diffuse visibility is now evaluated against surface cells in the Worker and aggregated per object face. That lets the renderer consume dozens of shadow-aware authored lights without expanding the fragment shader into dozens of per-pixel light loops.
+
+The **PULSE Atlas Hall** scene template contains 48 shadow-casting point lights, black occlusion shutters and fins, colored bounce walls, neutral receivers, metallic receivers, and a long indirect gallery. Ambient light is intentionally very low so direct/indirect changes are visible.
+
+Create it from **New Scene -> PULSE Atlas Hall - 48-light benchmark**.
+
+Viewport diagnostics show PULSE solve time plus active light and surface-cell counts.
+
+Run the headless validation with `npm run pulse:benchmark`. The command prints graph build time, solve time, light count, surface cells, transport links, direct energy, and indirect energy.
+
+This remains a surface-state benchmark, not a final MegaLights-equivalent renderer. Direct lighting is surface aggregated rather than per-pixel, and point-light visibility still uses Worker-side AABB segment tests. The purpose is to validate the core scaling idea inside OmniForge's real WebGL2 architecture.
