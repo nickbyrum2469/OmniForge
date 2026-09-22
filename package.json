@@ -11,7 +11,8 @@
     "mcp": "node bridge/mcp-server.mjs",
     "reset": "node scripts/reset-state.mjs",
     "desktop": "electron desktop/main.cjs",
-    "desktop:build:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File ./BUILD_DESKTOP_WINDOWS.ps1"
+    "desktop:build:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File ./BUILD_DESKTOP_WINDOWS.ps1",
+    "pulse:benchmark": "node scripts/pulse-benchmark.mjs"
   },
   "engines": {
     "node": ">=20"

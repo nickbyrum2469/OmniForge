@@ -1,0 +1,33 @@
+OmniForge Windows verification exit code: 1
+Generated: 2026-09-22T05:49:42.5825758+00:00
+
+--- STDOUT ---
+
+> omniforge-3d-engine@0.11.0 verify
+> node scripts/verify.mjs
+
+Syntax: server: passed
+Syntax: provider framework: passed
+Syntax: job manager: passed
+Syntax: marketplace: passed
+Syntax: local worker: passed
+Syntax: MCP bridge: passed
+Syntax: editor: passed
+Syntax: runtime diagnostics: passed
+Syntax: renderer: passed
+Syntax: PULSE controller: passed
+Syntax: PULSE worker: passed
+Syntax: PULSE core: passed
+
+
+--- STDERR ---
+D:\a\OmniForge\OmniForge\engine\lighting\pulse-benchmark.js:106
+  gallery.forEach((v,i)=>o.push(light('pulse-gallery-'+i,'Deep Gallery '+(i+1),v.slice(0,3),v[3],7.4,16));
+                                                                                                        ^
+
+SyntaxError: missing ) after argument list
+    at checkSyntax (node:internal/main/check_syntax:72:5)
+
+Node.js v24.20.0
+Syntax: PULSE benchmark failed.
+

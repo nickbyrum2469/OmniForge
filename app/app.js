@@ -1129,7 +1129,7 @@ function updateCamera(dt) {
 function animationLoop(now) {
   const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('animationLoop',{},20)||(()=>{});
   const dt=Math.min(.05,(now-lastFrame)/1000);lastFrame=now;updateCamera(dt);if(state?.editor.mode==='play'){behaviorStep(dt);physicsAccumulator=Math.min(.2,physicsAccumulator+dt);while(physicsAccumulator>=1/60){physicsStep(1/60);physicsAccumulator-=1/60;}}if(renderer&&scene)renderer.render(scene,camera,selectedId,{editorMode:state?.editor?.mode||'edit'});
-  frameCounter++;fpsTimer+=dt;if(fpsTimer>=.5){ui.fpsStatus.textContent=`${Math.round(frameCounter/fpsTimer)} FPS`;frameCounter=0;fpsTimer=0;ui.cameraPositionBadge.textContent=`X ${camera.position[0].toFixed(1)} · Y ${camera.position[1].toFixed(1)} · Z ${camera.position[2].toFixed(1)}`;}
+  frameCounter++;fpsTimer+=dt;if(fpsTimer>=.5){const pulse=renderer?.pulseStats?.(),pulseText=pulse?.enabled?(pulse.ready?` · PULSE ${Number(pulse.solveMs||0).toFixed(1)}ms · ${Number(pulse.pointLights||0)}L/${Number(pulse.cells||0)}C`:' · PULSE warming'):'';ui.fpsStatus.textContent=`${Math.round(frameCounter/fpsTimer)} FPS${pulseText}`;frameCounter=0;fpsTimer=0;ui.cameraPositionBadge.textContent=`X ${camera.position[0].toFixed(1)} · Y ${camera.position[1].toFixed(1)} · Z ${camera.position[2].toFixed(1)}`;}
   finishDiagnostic({dtMs:Number((dt*1000).toFixed(3))});
   requestAnimationFrame(animationLoop);
 }
@@ -1241,7 +1241,7 @@ function bindEvents() {
   $$('.prompt-examples button').forEach(button=>button.addEventListener('click',()=>{ui.commandInput.value=button.textContent;ui.commandInput.focus();}));
   ui.openProjectFolder.addEventListener('click',async()=>{try{if(window.omniforgeDesktop?.openPath)await window.omniforgeDesktop.openPath(state.project.root);else await api('/api/open-folder',{method:'POST',body:{projectRoot:true}});}catch(error){handleError(error,'Project folder could not be opened');}});
   ui.projectButton.addEventListener('click',()=>loadProjects({openHub:true}));
-  ui.newSceneButton.addEventListener('click',()=>ui.newSceneDialog.showModal());ui.viewportSettingsButton.addEventListener('click',()=>{ui.lookSensitivityInput.value=String(camera.lookSensitivity||.0023);ui.invertHorizontalInput.checked=Boolean(camera.invertHorizontal);ui.invertVerticalInput.checked=Boolean(camera.invertVertical);ui.moveSpeedInput.value=String(camera.moveSpeed||12);ui.fovInput.value=String(camera.fov||62);ui.helpDialog.showModal();});
+  ui.newSceneButton.addEventListener('click',()=>ui.newSceneDialog.showModal());ui.newSceneTemplateInput?.addEventListener('change',()=>{if(ui.newSceneTemplateInput.value==='pulse-benchmark'&&(!ui.newSceneNameInput.value.trim()||ui.newSceneNameInput.value==='New Scene'))ui.newSceneNameInput.value='PULSE Atlas Hall';});ui.viewportSettingsButton.addEventListener('click',()=>{ui.lookSensitivityInput.value=String(camera.lookSensitivity||.0023);ui.invertHorizontalInput.checked=Boolean(camera.invertHorizontal);ui.invertVerticalInput.checked=Boolean(camera.invertVertical);ui.moveSpeedInput.value=String(camera.moveSpeed||12);ui.fovInput.value=String(camera.fov||62);ui.helpDialog.showModal();});
   $$('[data-close-dialog]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog').close()));
   ui.applyProjectButton.addEventListener('click',async()=>{
     try{const payload=await api('/api/projects/create',{method:'POST',body:{name:ui.projectNameInput.value,template:ui.projectTemplateInput.value}});projects=payload.projects||projects;applyState(payload.state,{forceSelection:true});ui.projectDialog.close();ui.projectHubDialog.close();showToast('Project created','success');}
@@ -1324,11 +1324,11 @@ async function bootstrap() {
   try{
     const [initialState,projectPayload]=await Promise.all([api('/api/state'),api('/api/projects')]);state=initialState;projects=projectPayload.projects||[];scene=activeScene();
     renderer=new Renderer3D(ui.viewport);renderer.setAssets(state.assets);applyState(state,{forceSelection:true});bindEvents();renderProjectHub();loading=false;
-    window.__omniforgeV011Bridge=Object.freeze({snapshot:()=>({state,scene,camera,selectedId}),renderer:()=>renderer,api,applyState,selectObject,showToast,markLocalMutation,renderInspector});
+    window.__omniforgeV011Bridge=Object.freeze({snapshot:()=>({state,scene,camera,selectedId}),renderer:()=>renderer,pulse:()=>renderer?.pulseStats?.()||null,api,applyState,selectObject,showToast,markLocalMutation,renderInspector});
     window.__omniforgeDebug=Object.freeze({
       snapshot:()=>deepClone({state,scene,camera,selectedId,playMode:state?.editor?.mode||'edit',projects,layout:state?.editor?.layout}),
       setCamera:patch=>{if(patch&&typeof patch==='object'){if(Array.isArray(patch.position))camera.position=patch.position.map(Number);for(const key of ['yaw','pitch','fov','moveSpeed'])if(Number.isFinite(Number(patch[key])))camera[key]=Number(patch[key]);scene.editorCamera={...camera,position:[...camera.position]};}},
-      select:id=>selectObject(id,false),togglePlay:()=>enterPlayMode(),capture:title=>captureViewport(title||'Automated viewport inspection'),openProjectHub:()=>loadProjects({openHub:true}),applyLayout:patch=>applyLayout(patch,false)
+      select:id=>selectObject(id,false),togglePlay:()=>enterPlayMode(),capture:title=>captureViewport(title||'Automated viewport inspection'),openProjectHub:()=>loadProjects({openHub:true}),applyLayout:patch=>applyLayout(patch,false),pulse:()=>renderer?.pulseStats?.()||null
     });
     window.addEventListener('omniforge:apply-state',event=>{const nextState=event.detail?.state;if(nextState?.engine&&Array.isArray(nextState.scenes))applyState(nextState,{forceSelection:false});});
     window.addEventListener('error',event=>handleError(event.error||event.message,'Unexpected editor error'));window.addEventListener('unhandledrejection',event=>handleError(event.reason,'Unexpected editor error'));

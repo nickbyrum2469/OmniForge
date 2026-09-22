@@ -16,6 +16,11 @@ const checks=[
   ['Syntax: editor', [process.execPath,'--check','app/app.js']],
   ['Syntax: runtime diagnostics', [process.execPath,'--check','app/runtime-diagnostics.js']],
   ['Syntax: renderer', [process.execPath,'--check','app/renderer.js']],
+  ['Syntax: PULSE controller', [process.execPath,'--check','app/pulse-lighting.js']],
+  ['Syntax: PULSE worker', [process.execPath,'--check','app/pulse-worker.js']],
+  ['Syntax: PULSE core', [process.execPath,'--check','engine/lighting/pulse-core.js']],
+  ['Syntax: PULSE benchmark', [process.execPath,'--check','engine/lighting/pulse-benchmark.js']],
+  ['PULSE Atlas benchmark', [process.execPath,'scripts/pulse-benchmark.mjs']],
   ['Syntax: desktop shell', [process.execPath,'--check','desktop/main.cjs']],
   ['Automated tests', [process.execPath,'--test',...testFiles]]
 ];
@@ -31,7 +36,7 @@ for(const [label,command] of checks){
 }
 
 for(const required of [
-  'app/index.html','app/renderer.js','app/app.js','bridge/mcp-server.mjs',
+  'app/index.html','app/renderer.js','app/app.js','app/pulse-lighting.js','app/pulse-worker.js','engine/lighting/pulse-core.js','engine/lighting/pulse-benchmark.js','docs/PULSE_LIGHTING.md','bridge/mcp-server.mjs',
   'desktop/main.cjs','desktop/preload.cjs','resources/omniforge-icon.png','resources/omniforge-icon.ico',
   'BUILD_DESKTOP_WINDOWS.ps1','START_ENGINE.bat','START_DESKTOP.bat','START_BROWSER_DEV.bat','STOP_ENGINE.bat','CONNECT_CODEX.bat',
   'data/engine-state.json','data/project-catalog.json','data/catalogs/kenney.json','data/catalogs/quaternius.json','data/catalogs/quaternius-animations.json',

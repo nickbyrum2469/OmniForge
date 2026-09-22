@@ -6,6 +6,7 @@ import {
 import { terrainHeightAt as sharedTerrainHeightAt, pathBlendAt as sharedPathBlendAt, samplePathSpline, normalizeTerrainProperties, normalizePathProperties, terrainBounds } from './worldgen.js';
 import { buildPathGuideSegments } from './path-visuals.js';
 import { resolveViewportLighting } from './world-runtime.js';
+import { PulseLightingController } from './pulse-lighting.js';
 
 function compile(gl,type,source){
   const shader=gl.createShader(type); gl.shaderSource(shader,source); gl.compileShader(shader);
@@ -158,6 +159,11 @@ uniform vec3 uWindDirection;
 uniform int uStructureCount;
 uniform vec3 uStructurePos[4];
 uniform float uOpacity;
+uniform float uPulseEnabled;
+uniform float uPulseIntensity;
+uniform vec3 uPulseFaceNormal[6];
+uniform vec3 uPulseFaceIrradiance[6];
+uniform vec3 uPulseFaceDirect[6];
 
 float hash21(vec2 p){
   p=fract(p*vec2(123.34,456.21));
@@ -194,6 +200,32 @@ float nearestStructureMask(){
   float nearest=9999.0;
   for(int i=0;i<4;i++){if(i>=uStructureCount)break;nearest=min(nearest,length(vWorld.xz-uStructurePos[i].xz));}
   return 1.0-smoothstep(0.0,12.0,nearest);
+}
+vec3 samplePulseGI(vec3 n){
+  if(uPulseEnabled<.5)return vec3(0);
+  vec3 sum=vec3(0);float wsum=0.0;
+  for(int i=0;i<6;i++){
+    float nl=length(uPulseFaceNormal[i]);
+    if(nl<.25)continue;
+    vec3 fn=uPulseFaceNormal[i]/nl;
+    float w=pow(max(dot(n,fn),0.0),10.0);
+    sum+=uPulseFaceIrradiance[i]*w;
+    wsum+=w;
+  }
+  return wsum>.0001?(sum/wsum)*uPulseIntensity:vec3(0);
+}
+vec3 samplePulseDirect(vec3 n){
+  if(uPulseEnabled<.5)return vec3(0);
+  vec3 sum=vec3(0);float wsum=0.0;
+  for(int i=0;i<6;i++){
+    float nl=length(uPulseFaceNormal[i]);
+    if(nl<.25)continue;
+    vec3 fn=uPulseFaceNormal[i]/nl;
+    float w=pow(max(dot(n,fn),0.0),10.0);
+    sum+=uPulseFaceDirect[i]*w;
+    wsum+=w;
+  }
+  return wsum>.0001?(sum/wsum)*uPulseIntensity:vec3(0);
 }
 vec3 applySurfaceRecipe(vec3 color, vec4 layers, vec4 extra, vec4 masks, vec4 masks2, vec4 masks3, vec4 weatherResponse, vec4 advanced, vec3 dirtColor, vec3 mossColor, vec3 snowColor, vec3 damageColor, vec3 n, vec2 uv, float lightAmount){
   float rawUp=smoothstep(.12,.92,n.y),upward=rawUp*masks.x;
@@ -299,14 +331,21 @@ void main(){
   float spec=pow(max(dot(n,halfDir),0.0),specPower)*f0*(1.05-roughness*.52)*shadow;
   vec3 color=(baseLinear*(ambient+diffuse)+editorAmbient)*slopeCavity+uLightColor*spec*uLightIntensity;
 
-  for(int i=0;i<4;i++){
-    if(i>=uPointCount)break;
-    vec3 toL=uPointPos[i]-vWorld;
-    float dist=length(toL),range=uPointData[i].y;
-    float att=max(0.0,1.0-dist/max(range,0.001));
-    float d=max(dot(n,normalize(toL)),0.0);
-    color+=baseLinear*uPointColor[i]*d*uPointData[i].x*att*att*materialAO;
+  if(uPulseEnabled<.5){
+    for(int i=0;i<4;i++){
+      if(i>=uPointCount)break;
+      vec3 toL=uPointPos[i]-vWorld;
+      float dist=length(toL),range=uPointData[i].y;
+      float att=max(0.0,1.0-dist/max(range,0.001));
+      float d=max(dot(n,normalize(toL)),0.0);
+      color+=baseLinear*uPointColor[i]*d*uPointData[i].x*att*att*materialAO;
+    }
   }
+
+  vec3 pulseDirect=samplePulseDirect(n);
+  color+=baseLinear*pulseDirect*materialAO*slopeCavity;
+  vec3 pulseGI=samplePulseGI(n);
+  color+=baseLinear*pulseGI*materialAO*slopeCavity;
 
   float rim=pow(1.0-max(dot(viewDir,n),0.0),4.0)*.028;
   color+=rim;
@@ -429,6 +468,7 @@ export class Renderer3D{
     this.canvas=canvas;this.gl=canvas.getContext('webgl2',{antialias:true,alpha:true,preserveDrawingBuffer:true,premultipliedAlpha:false});
     if(!this.gl)throw new Error('WebGL 2 is required.');
     const gl=this.gl;this.meshProgram=program(gl,meshVS,meshFS);this.depthProgram=program(gl,depthVS,depthFS);this.lineProgram=program(gl,lineVS,lineFS);
+    this.pulse=new PulseLightingController();
     this.staticMeshes={cube:createBufferMesh(gl,cubeMesh()),plane:createBufferMesh(gl,planeMesh()),sphere:createBufferMesh(gl,sphereMesh()),cylinder:createBufferMesh(gl,cylinderMesh())};
     this.dynamic=new Map();this.pathLines=new Map();this.textureCache=new Map();this.instanceBuffers=new Set();this.renderStart=performance.now();this.assets=[];this.modelMeshes=new Map();this.modelLoads=new Map();this.modelRevisions=new Map();this.modelLoadRevisions=new Map();this.grid=null;this.gridKey='';this.selectionBox=createLineBuffer(gl,this.boxLines());this.whiteTexture=this.createSolidTexture([255,255,255,255]);this.flatNormalTexture=this.createSolidTexture([128,128,255,255]);
     this.createShadowResources(2048);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
@@ -571,6 +611,11 @@ export class Renderer3D{
     set3('uPathDirtColor',recipeColor(pathRecipe,'dirt','#4b2c18'));set3('uPathMossColor',recipeColor(pathRecipe,'moss','#245b29'));set3('uPathSnowColor',recipeColor(pathRecipe,'snow','#dbe7f0'));set3('uPathDamageColor',recipeColor(pathRecipe,'damage','#17100d'));
     const wind=Array.isArray(scene.settings.windDirection)?scene.settings.windDirection:[1,0,.25];gl.uniform4fv(gl.getUniformLocation(p,'uEnvironmentState'),new Float32Array([Number(scene.settings.waterLevel??-100),Number(scene.settings.weatherWetness??0),Number(scene.settings.weatherSnow??0),Number(scene.settings.windStrength??.35)]));set3('uWindDirection',new Float32Array(wind));
     const structures=scene.objects.filter(item=>item.visible&&['box','model','cylinder'].includes(item.type)).slice(0,4),sp=new Float32Array(12);structures.forEach((item,index)=>sp.set(item.transform.position,index*3));gl.uniform1i(gl.getUniformLocation(p,'uStructureCount'),structures.length);gl.uniform3fv(gl.getUniformLocation(p,'uStructurePos[0]'),sp);
+    const pulseSample=this.pulse?.sampleObject(object.id),pulseActive=Boolean((scene.settings?.lightingMode==='pulse'||scene.settings?.pulseLighting?.enabled===true)&&pulseSample?.ready&&!instanced);
+    set1('uPulseEnabled',pulseActive?1:0);set1('uPulseIntensity',this.pulse?.strength(scene)??1);
+    gl.uniform3fv(gl.getUniformLocation(p,'uPulseFaceNormal[0]'),pulseActive?pulseSample.normals:new Float32Array(18));
+    gl.uniform3fv(gl.getUniformLocation(p,'uPulseFaceIrradiance[0]'),pulseActive?pulseSample.irradiance:new Float32Array(18));
+    gl.uniform3fv(gl.getUniformLocation(p,'uPulseFaceDirect[0]'),pulseActive?pulseSample.directIrradiance:new Float32Array(18));
     set1('uOpacity',Number(object.properties?.opacity??1));
     set1('uBaseTextureScale',baseMaps.baseColor.scale);set1('uPathTextureScale',pathMaps.baseColor.scale);set1('uBaseNormalStrength',Number(baseSettings.normalStrength??1)*Number(baseRecipe?.layers?.detailAmount??1));set1('uPathNormalStrength',Number(pathSettings.normalStrength??1)*Number(pathRecipe?.layers?.detailAmount??1));
     set1('uBaseTextureRotation',Number(baseSettings.uvRotation||0)*DEG);set1('uPathTextureRotation',Number(pathSettings.uvRotation||0)*DEG);
@@ -598,7 +643,7 @@ export class Renderer3D{
   drawLines(buffer,model,viewProj,color,width=1){if(!buffer?.count)return;const gl=this.gl,p=this.lineProgram;gl.useProgram(p);gl.bindVertexArray(buffer.vao);gl.uniformMatrix4fv(gl.getUniformLocation(p,'uModel'),false,model);gl.uniformMatrix4fv(gl.getUniformLocation(p,'uViewProj'),false,viewProj);gl.uniform4fv(gl.getUniformLocation(p,'uColor'),color);gl.lineWidth(width);gl.drawArrays(gl.LINES,0,buffer.count);gl.bindVertexArray(null);}
   render(scene,camera,selectedId,options={}){
     const finishDiagnostic=window.__omniforgeDiagnostics?.begin?.('Renderer3D.render',{objects:scene.objects.length},12)||(()=>{});
-    this.resize();const gl=this.gl,{viewProj}=this.cameraMatrices(camera),lights=this.lightState(scene,options.editorMode||'edit'),lightViewProj=this.lightMatrix(scene,lights);if(lights.shadows)this.renderShadow(scene,lightViewProj);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.cullFace(gl.BACK);
+    this.resize();const gl=this.gl,{viewProj}=this.cameraMatrices(camera),lights=this.lightState(scene,options.editorMode||'edit'),lightViewProj=this.lightMatrix(scene,lights);this.pulse?.sync(scene);if(lights.shadows)this.renderShadow(scene,lightViewProj);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.cullFace(gl.BACK);
     const foliageGroups=this.foliageGroups(scene,camera),foliageIds=new Set([...foliageGroups.values()].flat().map(item=>item.id));
     const objects=scene.objects.filter(o=>o.visible&&!['empty','path'].includes(o.type)&&!foliageIds.has(o.id));objects.sort((a,b)=>{const rank=o=>o.type==='terrain'?-20:o.type==='decal'?20+Number(o.properties?.sortOrder||0):0;return rank(a)-rank(b);});for(const object of objects){const mesh=this.meshFor(object,scene);if(!mesh)continue;if(object.type==='decal'){gl.enable(gl.BLEND);gl.depthMask(false);gl.disable(gl.CULL_FACE);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);}this.drawMesh(object,mesh,viewProj,lightViewProj,scene,object.id===selectedId,camera,lights);if(object.type==='decal'){gl.disable(gl.POLYGON_OFFSET_FILL);gl.depthMask(true);gl.enable(gl.CULL_FACE);}}
     for(const instances of foliageGroups.values()){const object=instances[0],mesh=this.meshFor(object,scene);if(mesh)this.drawMesh(object,mesh,viewProj,lightViewProj,scene,false,camera,lights,instances);}
@@ -614,4 +659,5 @@ export class Renderer3D{
   }
   rayFromScreen(camera,x,y){const rect=this.canvas.getBoundingClientRect(),nx=((x-rect.left)/rect.width)*2-1,ny=1-((y-rect.top)/rect.height)*2,{inverse}=this.cameraMatrices(camera),near=transformPoint(inverse,[nx,ny,-1]),far=transformPoint(inverse,[nx,ny,1]);return {origin:[...camera.position],dir:normalize(sub(far,near))};}
   pick(scene,camera,x,y){const ray=this.rayFromScreen(camera,x,y);let best=null,bestT=Infinity;for(const object of scene.objects){if(!object.visible||object.locked||['terrain','path','empty'].includes(object.type))continue;let center=object.transform.position,s=object.transform.scale;let radius=.5*Math.hypot(s[0],s[1],s[2]);if(object.type==='model'){const asset=this.assets.find(item=>item.type==='model'&&item.id===object.properties?.assetId),bounds=asset?.bounds;if(bounds){center=[object.transform.position[0]+(bounds.center?.[0]||0)*s[0],object.transform.position[1]+(bounds.center?.[1]||0)*s[1],object.transform.position[2]+(bounds.center?.[2]||0)*s[2]];radius=Math.max(.15,(bounds.radius||Math.hypot(...(bounds.size||[1,1,1]))*.5)*Math.max(...s.map(Math.abs)));}}if(object.type.includes('Light'))radius=1;const oc=sub(ray.origin,center),b=dot(oc,ray.dir),c=dot(oc,oc)-radius*radius,disc=b*b-c;if(disc<0)continue;const t=-b-Math.sqrt(disc);if(t>0&&t<bestT){bestT=t;best=object;}}return best;}
+  pulseStats(){return this.pulse?.snapshot?.()||{enabled:false,ready:false};}
 }
