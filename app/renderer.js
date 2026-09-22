@@ -163,6 +163,7 @@ uniform float uPulseEnabled;
 uniform float uPulseIntensity;
 uniform vec3 uPulseFaceNormal[6];
 uniform vec3 uPulseFaceIrradiance[6];
+uniform vec3 uPulseFaceDirect[6];
 
 float hash21(vec2 p){
   p=fract(p*vec2(123.34,456.21));
@@ -209,6 +210,19 @@ vec3 samplePulseGI(vec3 n){
     vec3 fn=uPulseFaceNormal[i]/nl;
     float w=pow(max(dot(n,fn),0.0),10.0);
     sum+=uPulseFaceIrradiance[i]*w;
+    wsum+=w;
+  }
+  return wsum>.0001?(sum/wsum)*uPulseIntensity:vec3(0);
+}
+vec3 samplePulseDirect(vec3 n){
+  if(uPulseEnabled<.5)return vec3(0);
+  vec3 sum=vec3(0);float wsum=0.0;
+  for(int i=0;i<6;i++){
+    float nl=length(uPulseFaceNormal[i]);
+    if(nl<.25)continue;
+    vec3 fn=uPulseFaceNormal[i]/nl;
+    float w=pow(max(dot(n,fn),0.0),10.0);
+    sum+=uPulseFaceDirect[i]*w;
     wsum+=w;
   }
   return wsum>.0001?(sum/wsum)*uPulseIntensity:vec3(0);
@@ -317,15 +331,19 @@ void main(){
   float spec=pow(max(dot(n,halfDir),0.0),specPower)*f0*(1.05-roughness*.52)*shadow;
   vec3 color=(baseLinear*(ambient+diffuse)+editorAmbient)*slopeCavity+uLightColor*spec*uLightIntensity;
 
-  for(int i=0;i<4;i++){
-    if(i>=uPointCount)break;
-    vec3 toL=uPointPos[i]-vWorld;
-    float dist=length(toL),range=uPointData[i].y;
-    float att=max(0.0,1.0-dist/max(range,0.001));
-    float d=max(dot(n,normalize(toL)),0.0);
-    color+=baseLinear*uPointColor[i]*d*uPointData[i].x*att*att*materialAO;
+  if(uPulseEnabled<.5){
+    for(int i=0;i<4;i++){
+      if(i>=uPointCount)break;
+      vec3 toL=uPointPos[i]-vWorld;
+      float dist=length(toL),range=uPointData[i].y;
+      float att=max(0.0,1.0-dist/max(range,0.001));
+      float d=max(dot(n,normalize(toL)),0.0);
+      color+=baseLinear*uPointColor[i]*d*uPointData[i].x*att*att*materialAO;
+    }
   }
 
+  vec3 pulseDirect=samplePulseDirect(n);
+  color+=baseLinear*pulseDirect*materialAO*slopeCavity;
   vec3 pulseGI=samplePulseGI(n);
   color+=baseLinear*pulseGI*materialAO*slopeCavity;
 
@@ -597,6 +615,7 @@ export class Renderer3D{
     set1('uPulseEnabled',pulseActive?1:0);set1('uPulseIntensity',this.pulse?.strength(scene)??1);
     gl.uniform3fv(gl.getUniformLocation(p,'uPulseFaceNormal[0]'),pulseActive?pulseSample.normals:new Float32Array(18));
     gl.uniform3fv(gl.getUniformLocation(p,'uPulseFaceIrradiance[0]'),pulseActive?pulseSample.irradiance:new Float32Array(18));
+    gl.uniform3fv(gl.getUniformLocation(p,'uPulseFaceDirect[0]'),pulseActive?pulseSample.directIrradiance:new Float32Array(18));
     set1('uOpacity',Number(object.properties?.opacity??1));
     set1('uBaseTextureScale',baseMaps.baseColor.scale);set1('uPathTextureScale',pathMaps.baseColor.scale);set1('uBaseNormalStrength',Number(baseSettings.normalStrength??1)*Number(baseRecipe?.layers?.detailAmount??1));set1('uPathNormalStrength',Number(pathSettings.normalStrength??1)*Number(pathRecipe?.layers?.detailAmount??1));
     set1('uBaseTextureRotation',Number(baseSettings.uvRotation||0)*DEG);set1('uPathTextureRotation',Number(pathSettings.uvRotation||0)*DEG);
