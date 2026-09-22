@@ -1,4 +1,4 @@
-export const PULSE_VERSION = '0.1.0';
+export const PULSE_VERSION = '0.2.0';
 
 export const PULSE_DEFAULTS = Object.freeze({
   enabled: false,
@@ -9,7 +9,7 @@ export const PULSE_DEFAULTS = Object.freeze({
   minLinkWeight: 0.00045,
   maxLinkWeight: 0.32,
   bounceRetention: 0.72,
-  pointLightLimit: 8,
+  pointLightLimit: 64,
   maxIrradiance: 8
 });
 
@@ -126,7 +126,8 @@ export function normalizePulseSettings(settings={}){
     maxBounces:clamp(Math.round(Number(authored.maxBounces??PULSE_DEFAULTS.maxBounces)),1,6),
     maxLinks:clamp(Math.round(Number(authored.maxLinks??PULSE_DEFAULTS.maxLinks)),2,24),
     maxDistance:clamp(Number(authored.maxDistance??PULSE_DEFAULTS.maxDistance),4,120),
-    bounceRetention:clamp(Number(authored.bounceRetention??PULSE_DEFAULTS.bounceRetention),.1,.95)
+    bounceRetention:clamp(Number(authored.bounceRetention??PULSE_DEFAULTS.bounceRetention),.1,.95),
+    pointLightLimit:clamp(Math.round(Number(authored.pointLightLimit??PULSE_DEFAULTS.pointLightLimit)),1,128)
   };
 }
 
@@ -176,15 +177,18 @@ function pointStates(scene,limit){
   }));
 }
 
-export function computePulseSource(model,scene){
-  const source=new Float32Array(model.cells.length*3),sun=sunState(scene),points=pointStates(scene,model.settings.pointLightLimit);
+function computePulseInputs(model,scene){
+  const source=new Float32Array(model.cells.length*3);
+  const directPoint=new Float32Array(model.cells.length*3);
+  const sun=sunState(scene),points=pointStates(scene,model.settings.pointLightLimit);
   for(let i=0;i<model.cells.length;i++){
-    const cell=model.cells[i];let E=[0,0,0];
+    const cell=model.cells[i];
+    let sunE=[0,0,0],pointE=[0,0,0];
     if(sun&&sun.intensity>0){
       const toSun=mul(sun.dir,-1),ndl=Math.max(0,dot(cell.normal,toSun));
       if(ndl>0){
         const visible=!sun.castsShadows||visibleSegment(add(cell.position,mul(cell.normal,.025)),add(cell.position,mul(toSun,240)),model.occluders,cell.objectId,null);
-        if(visible)E=add(E,mul(sun.color,sun.intensity*ndl));
+        if(visible)sunE=add(sunE,mul(sun.color,sun.intensity*ndl));
       }
     }
     for(const light of points){
@@ -194,16 +198,22 @@ export function computePulseSource(model,scene){
       if(ndl<=0)continue;
       if(!visibleSegment(add(cell.position,mul(cell.normal,.025)),light.position,model.occluders,cell.objectId,light.id))continue;
       const falloff=Math.max(0,1-distance/light.range),power=light.intensity*falloff*falloff;
-      E=add(E,mul(light.color,power*ndl));
+      pointE=add(pointE,mul(light.color,power*ndl));
     }
-    const reflected=mul(had(E,cell.albedo),1/PI);
-    source[i*3]=reflected[0];source[i*3+1]=reflected[1];source[i*3+2]=reflected[2];
+    const s=i*3;
+    directPoint[s]=pointE[0];directPoint[s+1]=pointE[1];directPoint[s+2]=pointE[2];
+    const E=add(sunE,pointE),reflected=mul(had(E,cell.albedo),1/PI);
+    source[s]=reflected[0];source[s+1]=reflected[1];source[s+2]=reflected[2];
   }
-  return source;
+  return {source,directPoint,pointLights:points.length};
+}
+
+export function computePulseSource(model,scene){
+  return computePulseInputs(model,scene).source;
 }
 
 export function solvePulseLighting(model,scene,previousIndirect=null){
-  const source=computePulseSource(model,scene),n=model.cells.length,indirect=new Float32Array(n*3);
+  const inputs=computePulseInputs(model,scene),source=inputs.source,directPoint=inputs.directPoint,n=model.cells.length,indirect=new Float32Array(n*3);
   let front=new Float32Array(source);
   for(let bounce=0;bounce<model.settings.maxBounces;bounce++){
     const next=new Float32Array(n*3);
@@ -224,18 +234,25 @@ export function solvePulseLighting(model,scene,previousIndirect=null){
   const previous=previousIndirect&&previousIndirect.length===indirect.length?previousIndirect:new Float32Array(indirect.length);
   const delta=new Float32Array(indirect.length);let deltaEnergy=0,maxDelta=0;
   for(let i=0;i<indirect.length;i++){delta[i]=indirect[i]-previous[i];const a=Math.abs(delta[i]);deltaEnergy+=a;maxDelta=Math.max(maxDelta,a);}
-  return {source,indirect,delta,stats:{cells:n,links:model.links.reduce((sum,list)=>sum+list.length,0),deltaEnergy,maxDelta,bounces:model.settings.maxBounces}};
+  return {source,directPoint,indirect,delta,stats:{cells:n,links:model.links.reduce((sum,list)=>sum+list.length,0),deltaEnergy,maxDelta,bounces:model.settings.maxBounces,pointLights:inputs.pointLights}};
 }
 
-export function aggregatePulseObjects(model,indirect){
+export function aggregatePulseObjects(model,indirect,directPoint=null){
   const objects={};
   for(let i=0;i<model.cells.length;i++){
     const cell=model.cells[i];
     let entry=objects[cell.objectId];
-    if(!entry)entry=objects[cell.objectId]={normals:new Array(18).fill(0),irradiance:new Array(18).fill(0)};
+    if(!entry)entry=objects[cell.objectId]={
+      normals:new Array(18).fill(0),
+      irradiance:new Array(18).fill(0),
+      directIrradiance:new Array(18).fill(0)
+    };
     const o=cell.faceIndex*3,s=i*3;
     entry.normals[o]=cell.normal[0];entry.normals[o+1]=cell.normal[1];entry.normals[o+2]=cell.normal[2];
     entry.irradiance[o]=indirect[s];entry.irradiance[o+1]=indirect[s+1];entry.irradiance[o+2]=indirect[s+2];
+    if(directPoint){
+      entry.directIrradiance[o]=directPoint[s];entry.directIrradiance[o+1]=directPoint[s+1];entry.directIrradiance[o+2]=directPoint[s+2];
+    }
   }
   return objects;
 }
