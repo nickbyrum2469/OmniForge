@@ -30,7 +30,7 @@ self.onmessage=event=>{
     }
     const solved=solvePulseLighting(model,scene,lastIndirect);
     lastIndirect=solved.indirect;
-    const objects=aggregatePulseObjects(model,solved.indirect);
+    const objects=aggregatePulseObjects(model,solved.indirect,solved.directPoint);
     post('result',{
       generation,
       version:PULSE_VERSION,
@@ -43,6 +43,7 @@ self.onmessage=event=>{
         bounces:solved.stats.bounces,
         deltaEnergy:solved.stats.deltaEnergy,
         maxDelta:solved.stats.maxDelta,
+        pointLights:solved.stats.pointLights,
         solveMs:performance.now()-started
       }
     });
