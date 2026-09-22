@@ -394,7 +394,7 @@ async function handleApi(req, res, url) {
       const pulseTemplate = body.template === 'pulse-benchmark';
       const scene = {
         id: body.id || `scene-${Date.now().toString(36)}`,
-        name: String(body.name || (pulseTemplate ? 'PULSE Foundry' : 'New Scene')).slice(0,100),
+        name: String(body.name || (pulseTemplate ? 'PULSE Atlas Hall' : 'New Scene')).slice(0,100),
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         settings: pulseTemplate ? structuredClone(PULSE_BENCHMARK_SETTINGS) : {
           skyTop: '#17243d', skyBottom: '#8ca6b8', ambientColor: '#b8c6d8', ambientIntensity: 0.34,
