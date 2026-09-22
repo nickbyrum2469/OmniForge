@@ -20,6 +20,7 @@ const checks=[
   ['Syntax: PULSE worker', [process.execPath,'--check','app/pulse-worker.js']],
   ['Syntax: PULSE core', [process.execPath,'--check','engine/lighting/pulse-core.js']],
   ['Syntax: PULSE benchmark', [process.execPath,'--check','engine/lighting/pulse-benchmark.js']],
+  ['PULSE Atlas benchmark', [process.execPath,'scripts/pulse-benchmark.mjs']],
   ['Syntax: desktop shell', [process.execPath,'--check','desktop/main.cjs']],
   ['Automated tests', [process.execPath,'--test',...testFiles]]
 ];
