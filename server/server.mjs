@@ -15,6 +15,7 @@ import { normalizeProvider, normalizeIntegrationSettings } from './provider-fram
 import { initializeJobManager, createJob, cancelJob, retryJob, clearCompletedJobs, shutdownJobs } from './job-manager.mjs';
 import { searchMarketplace, marketplaceDetails, prepareMarketplaceDownload, resolveMarketplaceImportFiles, createMaterialFromMarketplaceDownload, inspectDownloadedJob } from './marketplace.mjs';
 import { terrainHeightAt as sharedTerrainHeightAt } from '../app/worldgen.js';
+import { createPulseBenchmarkSceneObjects, PULSE_BENCHMARK_SETTINGS, PULSE_BENCHMARK_CAMERA } from '../engine/lighting/pulse-benchmark.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.join(ROOT, 'app');
@@ -390,16 +391,17 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/scene/new') {
     const body = await readBody(req);
     const { state, result } = mutateState(state => {
+      const pulseTemplate = body.template === 'pulse-benchmark';
       const scene = {
         id: body.id || `scene-${Date.now().toString(36)}`,
-        name: String(body.name || 'New Scene').slice(0,100),
+        name: String(body.name || (pulseTemplate ? 'PULSE Foundry' : 'New Scene')).slice(0,100),
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-        settings: {
+        settings: pulseTemplate ? structuredClone(PULSE_BENCHMARK_SETTINGS) : {
           skyTop: '#17243d', skyBottom: '#8ca6b8', ambientColor: '#b8c6d8', ambientIntensity: 0.34,
           gravity: -9.81, gridVisible: true, gridSize: 100, gridStep: 5, fogNear:90, fogFar:280, exposure:1
         },
-        editorCamera: { position: [16,12,22], yaw: -2.5, pitch: -0.3, moveSpeed: 12, fastMultiplier: 3.5, fov: 62, lookSensitivity:.0023, invertHorizontal:false, invertVertical:false },
-        objects: body.template === 'starter-3d' ? createDefaultState().scenes[0].objects : [
+        editorCamera: pulseTemplate ? structuredClone(PULSE_BENCHMARK_CAMERA) : { position: [16,12,22], yaw: -2.5, pitch: -0.3, moveSpeed: 12, fastMultiplier: 3.5, fov: 62, lookSensitivity:.0023, invertHorizontal:false, invertVertical:false },
+        objects: pulseTemplate ? createPulseBenchmarkSceneObjects(createSceneObject) : body.template === 'starter-3d' ? createDefaultState().scenes[0].objects : [
           createSceneObject('directionalLight', { id: 'sun-main', name: 'Sun', position:[0,15,0], rotation:[-45,35,0] })
         ]
       };
@@ -799,6 +801,9 @@ function serveStatic(req, res, url) {
   } else if (url.pathname.startsWith('/assets/')) {
     filePath = path.join(RUNTIME_ROOT, decodeURIComponent(url.pathname.slice(1)));
     allowedRoot = ASSET_ROOT;
+  } else if (url.pathname.startsWith('/engine/')) {
+    filePath = path.join(ROOT, decodeURIComponent(url.pathname.slice(1)));
+    allowedRoot = path.join(ROOT, 'engine');
   } else {
     const requested = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
     filePath = path.join(appDir, requested);
