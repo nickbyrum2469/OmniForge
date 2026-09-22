@@ -67,13 +67,34 @@ test('PULSE aggregates face irradiance per object for cheap WebGL2 sampling',()=
   const objects=aggregatePulseObjects(model,solved.indirect);
   assert.equal(objects.receiver.normals.length,18);
   assert.equal(objects.receiver.irradiance.length,18);
+  assert.equal(objects.receiver.directIrradiance.length,18);
 });
 
-test('PULSE benchmark enables authored dark levels and a substantial test environment',()=>{
+test('PULSE many-light direct lane includes lights beyond the legacy four-light forward path',()=>{
+  const lights=Array.from({length:12},(_,i)=>object('pointLight','lamp-'+i,[-5+i,4,0],[1,1,1],i%2?'#ff8040':'#4080ff',{intensity:i<4?0:4.5,range:14}));
+  const scene={
+    settings:{lightingMode:'pulse',pulseLighting:{enabled:true,pointLightLimit:16,maxDistance:18,maxLinks:8,maxBounces:2}},
+    objects:[object('box','receiver',[0,1,0],[5,2,5],'#ffffff'),...lights]
+  };
+  const model=buildPulseModel(scene);
+  const solved=solvePulseLighting(model,scene);
+  const directEnergy=[...solved.directPoint].reduce((sum,value)=>sum+value,0);
+  assert.equal(solved.stats.pointLights,12);
+  assert.ok(directEnergy>0,'lights 5-12 should still illuminate PULSE even when the first four are disabled');
+  const aggregated=aggregatePulseObjects(model,solved.indirect,solved.directPoint);
+  assert.ok(aggregated.receiver.directIrradiance.some(value=>value>0));
+});
+
+test('PULSE Atlas Hall is a dark 48-light stress environment',()=>{
   const settings=normalizePulseSettings(PULSE_BENCHMARK_SETTINGS);
+  const pointLights=PULSE_BENCHMARK_OBJECT_SPECS.filter(item=>item.type==='pointLight');
+  const geometry=PULSE_BENCHMARK_OBJECT_SPECS.filter(item=>['box','plane','cylinder','model'].includes(item.type));
   assert.equal(settings.enabled,true);
-  assert.ok(PULSE_BENCHMARK_SETTINGS.ambientIntensity<.1);
-  assert.ok(PULSE_BENCHMARK_OBJECT_SPECS.length>=30);
-  assert.ok(PULSE_BENCHMARK_OBJECT_SPECS.some(item=>item.name==='Black Occlusion Wall L'));
-  assert.ok(PULSE_BENCHMARK_OBJECT_SPECS.filter(item=>item.type==='pointLight').length>=4);
+  assert.ok(PULSE_BENCHMARK_SETTINGS.ambientIntensity<.05);
+  assert.ok(settings.pointLightLimit>=48);
+  assert.equal(pointLights.length,48);
+  assert.ok(geometry.length>=35);
+  assert.ok(PULSE_BENCHMARK_OBJECT_SPECS.some(item=>item.name==='Movable Shutter Left'));
+  assert.ok(PULSE_BENCHMARK_OBJECT_SPECS.some(item=>item.name==='Red Bounce Wall'));
+  assert.ok(PULSE_BENCHMARK_OBJECT_SPECS.some(item=>item.name==='Blue Bounce Wall'));
 });
