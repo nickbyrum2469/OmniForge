@@ -65,6 +65,7 @@ function serializeScene(scene){
 const ZERO_SAMPLE=Object.freeze({
   normals:new Float32Array(18),
   irradiance:new Float32Array(18),
+  directIrradiance:new Float32Array(18),
   ready:false
 });
 
@@ -106,6 +107,7 @@ export class PulseLightingController{
       this.objects.set(objectId,{
         normals:new Float32Array(entry.normals||18),
         irradiance:new Float32Array(entry.irradiance||18),
+        directIrradiance:new Float32Array(entry.directIrradiance||18),
         ready:true
       });
     }
